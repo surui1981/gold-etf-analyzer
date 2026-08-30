@@ -100,6 +100,17 @@
   .source-ok { background: #e6f4ea; color: #2f9e44; border: 1px solid #b7e4c7; }
   .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
   .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
+  /* 今日操作清单 */
+  .cl-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed #eceef1; }
+  .cl-item:last-child { border-bottom: none; }
+  .cl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .cl-dot.done { background: #2f9e44; }
+  .cl-dot.todo { background: #f59f00; }
+  .cl-main { flex: 1; }
+  .cl-title { font-size: 13.5px; font-weight: 600; }
+  .cl-value { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .cl-btn { font-size: 12px; padding: 4px 13px; border-radius: 999px; background: #1f2329; color: #fff; text-decoration: none; white-space: nowrap; }
+  .cl-btn.warn { background: #f59f00; }
 </style>
 </head>
 <body>
@@ -166,6 +177,12 @@
       <div class="t">📚 API 文档</div>
       <div class="d">全部 REST 接口参考（OpenAPI / Swagger UI）</div>
     </a>
+  </div>
+
+  <!-- 今日操作清单 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:2px">📋 今日操作清单 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="clSum">加载中…</span></div>
+    <div id="checklistItems"><div class="loading" style="padding:12px 0">加载中…</div></div>
   </div>
 
   <!-- 市场趋势评估追踪指数（置顶） -->
@@ -245,6 +262,70 @@ async function init() {
     document.getElementById("chartArea").innerHTML =
       '<div class="error">数据加载失败：' + e.message +
       '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
+  }
+}
+
+// 今日操作清单：看指数 → 打消息面分 → 看决策仓位 → 记录交易
+async function loadChecklist() {
+  try {
+    const [t, dec, pos] = await Promise.all([
+      fetch(API).then(r => r.json()),
+      fetch(API_BASE + "/api/v1/decision/etf").then(r => r.json()),
+      fetch(API_BASE + "/api/v1/positions").then(r => r.json()),
+    ]);
+    const list = Array.isArray(pos) ? pos : (pos.positions || []);
+    const scored = !!(t.news && t.news.scored);
+    const levelTxt = {
+      strong_up: "强势上升", up: "上升", sideways: "震荡整理",
+      down: "下降", strong_down: "弱势下降",
+    }[t.index.level] || t.index.level;
+
+    const items = [
+      {
+        done: true,
+        title: "① 查看综合趋势指数",
+        value: `${t.index.score.toFixed(1)} / 100（${levelTxt}）`,
+        btn: null,
+      },
+      {
+        done: scored,
+        title: "② 消息面打分（占 30% 权重）",
+        value: scored
+          ? `已打分 ${t.news.score}（${t.news.direction === "bullish" ? "看多" : t.news.direction === "bearish" ? "看空" : "中性"}）`
+          : "待完成 · 当前按中性 50 计入评估",
+        btn: { label: scored ? "去调整" : "去打分", href: "/news", warn: !scored },
+      },
+      {
+        done: false,
+        title: "③ 查看决策与建议仓位",
+        value: `${dec.action_label} · 建议黄金仓位 ${dec.suggested_position}%（${dec.position_level}）`,
+        btn: { label: "去查看", href: "/portfolio", warn: false },
+      },
+      {
+        done: list.length > 0,
+        title: "④ 记录 / 管理交易",
+        value: list.length > 0
+          ? `当前 ${list.length} 笔持仓${dec.position && dec.position.pnl_pct !== undefined ? `（浮盈 ${dec.position.pnl_pct >= 0 ? "+" : ""}${dec.position.pnl_pct.toFixed(2)}%）` : ""}`
+          : "当前空仓 · 可按建议仓位建仓",
+        btn: { label: list.length > 0 ? "去管理" : "去开仓", href: "/portfolio", warn: false },
+      },
+    ];
+
+    document.getElementById("checklistItems").innerHTML = items.map(i => `
+      <div class="cl-item">
+        <span class="cl-dot ${i.done ? "done" : "todo"}"></span>
+        <div class="cl-main">
+          <div class="cl-title">${i.title}</div>
+          <div class="cl-value">${i.value}</div>
+        </div>
+        ${i.btn ? `<a class="cl-btn ${i.btn.warn ? "warn" : ""}" href="${i.btn.href}">${i.btn.label}</a>` : '<span style="font-size:12px;color:#2f9e44">已完成</span>'}
+      </div>`).join("");
+
+    const todo = items.filter(i => !i.done).length;
+    document.getElementById("clSum").textContent = todo === 0 ? "今日事项已全部完成" : `${todo} 项待处理`;
+  } catch (e) {
+    document.getElementById("checklistItems").innerHTML =
+      `<div class="error" style="padding:10px 0">清单加载失败：${e.message}</div>`;
   }
 }
 
@@ -504,7 +585,7 @@ async function loadSnapshots() {
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
-  await Promise.allSettled([init(), loadCompare(), loadNy(), loadSnapshots()]);
+  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadNy(), loadSnapshots()]);
   bar.style.display = "none";
 })();
 </script>

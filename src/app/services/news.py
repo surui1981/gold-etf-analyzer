@@ -23,8 +23,14 @@ class NewsScoreService:
         self._repo = repo
 
     async def get_today(self) -> NewsScoreOut:
-        """当日打分；未打返回中性参考（scored=False）。"""
-        record = await self._repo.get_by_date(date.today())
+        """当日打分；未打返回中性参考（scored=False）并附带上一次打分。"""
+        today = date.today()
+        record = await self._repo.get_by_date(today)
+        prev = await self._repo.get_latest_before(today)
+
+        last_score = float(prev.score) if prev is not None else None
+        last_date = prev.score_date if prev is not None else None
+        last_notes = prev.notes if prev is not None else ""
         if record is None:
             return NewsScoreOut(
                 score_date=date.today(),
@@ -32,6 +38,9 @@ class NewsScoreService:
                 direction=DirectionSignal.NEUTRAL,
                 notes="",
                 scored=False,
+                last_score=last_score,
+                last_date=last_date,
+                last_notes=last_notes,
             )
         return NewsScoreOut(
             score_date=record.score_date,
@@ -39,6 +48,9 @@ class NewsScoreService:
             direction=DirectionSignal(record.direction),
             notes=record.notes,
             scored=True,
+            last_score=last_score,
+            last_date=last_date,
+            last_notes=last_notes,
         )
 
     async def get_today_score(self) -> float:

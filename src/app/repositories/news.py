@@ -18,6 +18,16 @@ class NewsScoreRepository:
         stmt = select(NewsScore).where(NewsScore.score_date == score_date)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_latest_before(self, score_date: date) -> NewsScore | None:
+        """查询指定日期之前最近一次打分（供「沿用上次」使用）。"""
+        stmt = (
+            select(NewsScore)
+            .where(NewsScore.score_date < score_date)
+            .order_by(NewsScore.score_date.desc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def upsert(
         self,
         *,

@@ -24,6 +24,11 @@
   .badge { display: inline-block; padding: 4px 14px; border-radius: 999px; font-size: 16px; font-weight: 700; color: #fff; }
   .conf { font-size: 12px; color: var(--muted); }
   .decision-summary { margin-top: 10px; font-size: 14px; color: #374151; line-height: 1.7; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 3px; }
+  .quick-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 10px 0 14px; }
+  .quick-row .ql { font-size: 12.5px; color: var(--muted); }
+  .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; color: var(--text); }
+  .chip:hover { border-color: var(--accent); background: #fffaf0; }
   .reasons { margin-top: 8px; list-style: none; }
   .reasons li { font-size: 13px; color: #4b5563; padding: 3px 0; border-left: 3px solid var(--border); padding-left: 10px; margin: 4px 0; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -108,8 +113,18 @@
   <div class="card">
     <h2>开仓买入（518880 黄金ETF华安）</h2>
     <form id="openForm">
-      <div class="field"><label>数量（份）</label><input id="qty" type="number" min="0.01" step="0.01" required></div>
-      <div class="field"><label>成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required></div>
+      <div class="field"><label>成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
+      <div class="field"><label>买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" oninput="qtyFromAmount()"></div>
+      <div class="field"><label>数量（份）</label><input id="qty" type="number" min="100" step="100" required oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
+      <div class="field"><label>可用资金（元，选填 · 用于快捷比例）</label><input id="capital" type="number" min="0" step="1" placeholder="如 100000"></div>
+      <div class="quick-row">
+        <span class="ql">快捷：</span>
+        <button type="button" class="chip" onclick="applyRatio(0.25)">1/4 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(0.5)">1/2 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(0.75)">3/4 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(1)">全仓</button>
+        <button type="button" class="chip" id="chipSuggest" style="display:none" onclick="applySuggest()">按建议仓位</button>
+      </div>
       <div class="field"><label>手续费（元）</label><input id="fee" type="number" min="0" step="0.01" value="0"></div>
       <button type="submit">买入开仓</button>
     </form>
@@ -141,11 +156,70 @@ async function json(url, opts) {
   return r.json();
 }
 
+// ---------- 持仓录入简化 ----------
+let suggestRatio = null;
+
+async function fillPrice() {
+  try {
+    const q = await json(API.quote);
+    if (q && q.price_usd) {
+      document.getElementById("price").value = q.price_usd;
+      document.getElementById("priceHint").textContent =
+        `当前市价 ${q.price_usd} 元（已自动填入，可修改）`;
+    }
+  } catch (e) {
+    document.getElementById("priceHint").textContent = "市价获取失败，请手动填写成交价";
+  }
+}
+
+function currentPrice() {
+  return parseFloat(document.getElementById("price").value) || 0;
+}
+
+function qtyFromAmount() {
+  const p = currentPrice();
+  const a = parseFloat(document.getElementById("amount").value) || 0;
+  if (p > 0 && a > 0) {
+    const lots = Math.floor(a / p / 100) * 100;  // ETF 最小 100 份
+    document.getElementById("qty").value = lots > 0 ? lots : "";
+  }
+}
+
+function amountFromQty() {
+  const p = currentPrice();
+  const q = parseFloat(document.getElementById("qty").value) || 0;
+  if (p > 0 && q > 0) {
+    document.getElementById("amount").value = Math.round(q * p);
+  }
+}
+
+function applyRatio(r) {
+  const c = parseFloat(document.getElementById("capital").value) || 0;
+  if (c <= 0) {
+    document.getElementById("openErr").textContent = "请先填写「可用资金」再使用快捷比例";
+    return;
+  }
+  document.getElementById("openErr").textContent = "";
+  document.getElementById("amount").value = Math.round(c * r);
+  qtyFromAmount();
+}
+
+function applySuggest() {
+  if (suggestRatio === null) return;
+  applyRatio(suggestRatio / 100);
+}
+
 async function loadDecision() {
   try {
     const d = await json(API.decision);
     const s = ACTION_STYLE[d.action] || ACTION_STYLE.WAIT;
     document.getElementById("signalInfo").textContent = d.signal_summary;
+    suggestRatio = d.suggested_position;
+    const chip = document.getElementById("chipSuggest");
+    if (chip && d.suggested_position !== undefined) {
+      chip.style.display = "inline-block";
+      chip.textContent = `按建议仓位 ${d.suggested_position}%`;
+    }
     document.getElementById("decisionArea").innerHTML = `
       <span class="badge" style="background:${s.color}">${s.action_label}</span>
       <span class="conf" style="margin-left:8px">置信度：${d.confidence === "high" ? "高" : d.confidence === "medium" ? "中" : "低"}</span>
@@ -219,6 +293,8 @@ async function trade(id, side) {
     loadPositions(); loadDecision();
   } catch (e) { alert("操作失败：" + e.message); }
 }
+
+fillPrice();
 
 async function closePos(id) {
   if (!confirm("确认按最新市价清仓？")) return;

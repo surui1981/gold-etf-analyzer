@@ -37,6 +37,9 @@
   .msg { margin-top:10px; font-size:13px; min-height:18px; }
   .msg.ok { color:var(--down); } .msg.err { color:var(--up); }
   .dir-tag { display:inline-block; padding:2px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:600; }
+  .chip { border:1px solid var(--border); background:#fff; border-radius:999px; padding:5px 14px; font-size:12.5px; cursor:pointer; color:var(--text); }
+  .chip:hover { border-color:var(--accent); background:#fffaf0; }
+  .chip.on { background:#1f2329; color:#fff; border-color:#1f2329; }
   footer { text-align:center; color:var(--muted); font-size:12px; margin-top:20px; }
   /* 顶部导航（统一） */
   .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
@@ -93,6 +96,7 @@
   <!-- 客户打分 -->
   <div class="card">
     <h2>✍️ 今日消息面打分 <span id="statusTag"></span></h2>
+    <div id="scoreAlert" style="display:none;margin:8px 0 4px;padding:9px 14px;border-radius:8px;font-size:13px;line-height:1.6"></div>
     <div class="desc">综合投行展望后打分：<b>50 中性</b> ｜ &gt;55 看多（利多黄金） ｜ &lt;45 看空（利空黄金）。</div>
     <div class="score-row">
       <span style="font-size:13px;color:var(--muted)">看空 0</span>
@@ -102,6 +106,13 @@
     </div>
     <div class="gauge"><i id="gaugeMark" style="left:50%"></i></div>
     <div class="markers"><span>看空展望</span><span>中性</span><span>看多展望</span></div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12.5px;color:var(--muted)">快捷档位：</span>
+      <button class="chip" onclick="setScore(30)">看空 30</button>
+      <button class="chip" onclick="setScore(50)">中性 50</button>
+      <button class="chip" onclick="setScore(70)">看多 70</button>
+      <button class="chip" id="btnReuse" style="display:none" onclick="reuseLast()"></button>
+    </div>
     <div style="margin-top:12px" id="dirBox"></div>
     <div style="margin-top:12px">
       <div class="desc" style="margin-bottom:6px">研判备注（记录您参考的投行观点 / 链接）：</div>
@@ -121,6 +132,19 @@ const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
 const API = API_BASE + "/api/v1/news-score";
 
 let saved = null;
+let lastScore = null;
+
+function setScore(v) {
+  document.getElementById("score").value = v;
+  updateScore();
+}
+
+function reuseLast() {
+  if (lastScore === null) return;
+  setScore(Math.round(lastScore));
+  document.getElementById("msg").className = "msg ok";
+  document.getElementById("msg").textContent = "已填入上次打分 " + Math.round(lastScore) + "，确认后点击保存。";
+}
 
 function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
 function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
@@ -155,13 +179,35 @@ async function save() {
     const r = await fetch(API);
     if (!r.ok) throw new Error("HTTP " + r.status);
     const d = await r.json();
-    document.getElementById("statusTag").innerHTML = d.scored
-      ? `<span class="dir-tag" style="background:${dirColor(d.direction)}">今日已打分 ${d.score}</span>`
-      : '<span style="font-size:12px;color:var(--muted)">今日未打分（中性 50）</span>';
-    if (d.scored) {
+    const alert = document.getElementById("scoreAlert");
+
+    if (!d.scored) {
+      alert.style.display = "block";
+      alert.style.background = "#fff4e5";
+      alert.style.color = "#b26a00";
+      alert.style.border = "1px solid #ffd8a8";
+      alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。建议查阅上方投行展望后完成打分。";
+      document.getElementById("statusTag").innerHTML =
+        '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
+    } else {
+      alert.style.display = "block";
+      alert.style.background = "#e6f4ea";
+      alert.style.color = "#2f9e44";
+      alert.style.border = "1px solid #b7e4c7";
+      alert.innerHTML = "今日已完成打分，消息面已汇入综合评估指数与购买决策。";
+      document.getElementById("statusTag").innerHTML =
+        `<span class="dir-tag" style="background:${dirColor(d.direction)}">今日已打分 ${d.score}</span>`;
       document.getElementById("score").value = Math.round(d.score);
       document.getElementById("notes").value = d.notes || "";
       updateScore();
+    }
+
+    // 上次打分 → 沿用按钮
+    lastScore = d.last_score;
+    if (d.last_score !== null && d.last_score !== undefined) {
+      const btn = document.getElementById("btnReuse");
+      btn.style.display = "inline-block";
+      btn.textContent = `沿用上次（${d.last_date}：${Math.round(d.last_score)}）`;
     }
   } catch (e) {
     document.getElementById("statusTag").innerHTML = `<span style="color:var(--up);font-size:12px">加载失败：${e.message}</span>`;

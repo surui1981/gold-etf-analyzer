@@ -31,3 +31,7 @@ class NewsScoreOut(BaseModel):
     notes: str
     # 是否已打分（未打分时 score 为中性参考 50）
     scored: bool = True
+    # 上一次打分（供「沿用上次」），无历史则为 None
+    last_score: float | None = None
+    last_date: date | None = None
+    last_notes: str = ""
