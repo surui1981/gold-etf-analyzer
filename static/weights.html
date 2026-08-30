@@ -38,10 +38,28 @@
   .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
   .msg.ok { color: var(--down); } .msg.err { color: var(--up); }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent, #c9a227); color: #1f2329; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 顶部导航（统一，置顶） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/weights" class="active">权重配置</a>
+      <a href="/news">消息面评估</a>
+    </div>
+  </nav>
+
   <div class="warn-banner">
     <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
@@ -49,17 +67,13 @@
       <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
       <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
       <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
     </ol>
   </div>
 
   <div class="hero">
     <h1>权重配置 · 黄金价格投资辅助工具</h1>
-    <p class="intro">调整<b>趋势评估指数</b>的计算权重：技术面各维度、宏观面各因子、以及技术/宏观合成占比。保存后立即影响综合指数与购买决策（默认值为典型经验配置）。</p>
-    <nav>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
-    </nav>
+    <p class="intro">调整<b>综合趋势评估指数</b>的计算权重：技术面各维度、宏观面各因子、以及技术/宏观/消息面合成占比。保存后立即影响综合指数与购买决策（默认值为典型经验配置）。</p>
   </div>
 
   <!-- 技术面权重 -->

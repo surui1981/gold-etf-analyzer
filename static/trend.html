@@ -88,10 +88,28 @@
   .loading { text-align: center; color: var(--muted); padding: 60px 0; }
   .error { color: var(--up); text-align: center; padding: 40px 0; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 顶部导航（统一，置顶） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html" class="active">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+    </div>
+  </nav>
+
   <!-- 投资警示（醒目置顶） -->
   <div class="warn-banner">
     <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
@@ -100,6 +118,7 @@
       <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
       <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
       <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
     </ol>
   </div>
 
@@ -110,12 +129,6 @@
       <div class="tagline">三市场对照 · 趋势评估指数 · 个人持仓跟踪 · ETF 购买决策</div>
       <p class="intro">汇聚<b>纽约金、上海金、黄金ETF</b>三大市场价格数据，量化评估黄金投资窗口——以趋势评估指数量化多空、以持仓盈亏跟踪投资进度、以参数面×交易面辅助 ETF 购买决策，为个人黄金投资者提供一站式数据参考。</p>
       <div class="sub" id="subtitle" style="margin-top:8px">加载中…</div>
-      <nav>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/news'">消息面评估</button>
-      </nav>
       <div class="notice">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
     </div>
   </header>

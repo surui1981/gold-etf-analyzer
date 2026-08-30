@@ -77,7 +77,7 @@ class PositionSummary(BaseModel):
 
 
 class DecisionOut(BaseModel):
-    """购买决策输出：行动 + 置信度 + 理由明细。"""
+    """购买决策输出：行动 + 置信度 + 仓位推荐 + 理由明细。"""
 
     action: str = Field(..., description="BUY/ADD/HOLD/REDUCE/SELL/WAIT")
     action_label: str = Field(..., description="中文行动名")
@@ -85,5 +85,7 @@ class DecisionOut(BaseModel):
     signal_summary: str = Field(..., description="参数面信号摘要")
     trend_index: TrendIndexOut = Field(..., description="当前趋势评估指数")
     position: PositionSummary = Field(..., description="当前持仓摘要")
+    suggested_position: float = Field(..., ge=0, le=100, description="建议黄金仓位比例 0-100%（由评估指数映射）")
+    position_level: str = Field(..., description="仓位等级：重仓/中高仓位/中性仓位/轻仓/观望空仓")
     reasons: list[str] = Field(..., description="决策理由明细（面向客户）")
     summary: str = Field(..., description="决策总结")

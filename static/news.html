@@ -38,10 +38,28 @@
   .msg.ok { color:var(--down); } .msg.err { color:var(--up); }
   .dir-tag { display:inline-block; padding:2px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:600; }
   footer { text-align:center; color:var(--muted); font-size:12px; margin-top:20px; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent, #c9a227); color: #1f2329; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 顶部导航（统一，置顶） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news" class="active">消息面评估</a>
+    </div>
+  </nav>
+
   <div class="warn-banner">
     <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
@@ -49,18 +67,13 @@
       <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
       <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
       <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
     </ol>
   </div>
 
   <div class="hero">
     <h1>消息面评估 · 黄金价格投资辅助工具</h1>
     <p class="intro">综合趋势指数 = <b>技术面 30%</b> + <b>宏观面 40%</b> + <b>消息面 30%</b>。消息面由<b>您本人</b>基于主流财经网站的<b>投行黄金走势展望与预期</b>研判打分（0-100 看多强度），保存后立即汇入当日评估与购买决策。</p>
-    <nav>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
-      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
-      <button style="background:#1f2329;color:#fff" onclick="location.href='/news'">消息面评估</button>
-    </nav>
   </div>
 
   <!-- 参考信息来源 -->

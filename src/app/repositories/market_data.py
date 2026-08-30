@@ -155,7 +155,7 @@ class AkshareGoldDataProvider:
 
             raise RuntimeError(f"AKShare 全部数据源失败: {'; '.join(errors)}")
 
-        return await asyncio.to_thread(_fetch)
+        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
     async def get_gram_history(
         self,
@@ -200,7 +200,7 @@ class AkshareGoldDataProvider:
                 for _, row in df.iterrows()
             ]
 
-        return await asyncio.to_thread(_fetch)
+        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
     async def get_us_gold_history(
         self,
@@ -245,7 +245,7 @@ class AkshareGoldDataProvider:
                 for _, row in df.iterrows()
             ]
 
-        return await asyncio.to_thread(_fetch)
+        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
 
 class MarketDataRepository:

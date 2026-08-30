@@ -54,10 +54,28 @@
   .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
   .warn-banner li b { color: #ffffff; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 顶部导航（统一，置顶） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio" class="active">持仓与决策</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+    </div>
+  </nav>
+
   <!-- 投资警示（醒目置顶） -->
   <div class="warn-banner">
     <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
@@ -66,6 +84,7 @@
       <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
       <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
       <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
     </ol>
   </div>
 
@@ -75,12 +94,6 @@
       <div class="tagline">个人持仓跟踪 · 盈亏管理 · 参数面 × 交易面 购买决策</div>
       <p class="intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；结合<b>趋势评估指数</b>与持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细。</p>
       <div class="sub" id="subtitle" style="margin-top:6px">加载中…</div>
-      <nav>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
-        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/news'">消息面评估</button>
-      </nav>
       <div class="notice">仅供研究参考，不构成投资建议</div>
     </div>
   </header>
@@ -137,6 +150,12 @@ async function loadDecision() {
       <span class="badge" style="background:${s.color}">${s.action_label}</span>
       <span class="conf" style="margin-left:8px">置信度：${d.confidence === "high" ? "高" : d.confidence === "medium" ? "中" : "低"}</span>
       <div class="decision-summary">${d.summary}</div>
+      <div class="position-rec" style="margin-top:10px;padding:10px 14px;background:#fffaf0;border:1px solid #f0e2b6;border-radius:8px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span style="font-weight:600">建议黄金仓位</span>
+        <b style="font-size:22px;color:#c9a227">${d.suggested_position}%</b>
+        <span class="badge" style="background:#1f2329;color:#f5d97a;font-size:12px">${d.position_level}</span>
+        <span style="color:var(--muted);font-size:12px">评估指数 ${d.trend_index.score.toFixed(1)}/100 映射</span>
+      </div>
       <ul class="reasons">${d.reasons.map(r => `<li>${r}</li>`).join("")}</ul>`;
     // 预填开仓价格
     document.getElementById("price").value = d.trend_index ? "" : "";

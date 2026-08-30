@@ -56,12 +56,16 @@ class DecisionService:
         pos = await self._position.summary()
 
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)
+        suggested_position, position_level = self._suggest_position(trend.index.score)
         reasons = self._build_reasons(action, trend, pos)
+        reasons.append(
+            f"仓位建议：评估指数 {trend.index.score:.1f}/100 → 建议黄金仓位 {suggested_position:.0f}%（{position_level}）"
+        )
         summary = self._summarize(action, confidence, trend, pos)
 
         logger.info(
-            "Decision: %s (conf=%s) idx=%.1f has_pos=%s pnl=%.1f%%",
-            action, confidence, trend.index.score, pos.has_position, pos.pnl_pct,
+            "Decision: %s (conf=%s) idx=%.1f pos_ratio=%.0f%% has_pos=%s pnl=%.1f%%",
+            action, confidence, trend.index.score, suggested_position, pos.has_position, pos.pnl_pct,
         )
         return DecisionOut(
             action=action,
@@ -70,9 +74,29 @@ class DecisionService:
             signal_summary=f"趋势评估指数 {trend.index.score:.1f}/100 · {_LEVEL_LABELS[trend.index.level.value]}",
             trend_index=trend.index,
             position=pos,
+            suggested_position=suggested_position,
+            position_level=position_level,
             reasons=reasons,
             summary=summary,
         )
+
+    # ---------------- 仓位推荐 ----------------
+
+    @staticmethod
+    def _suggest_position(idx: float) -> tuple[float, str]:
+        """由综合评估指数映射建议黄金仓位（0-100%）与等级。
+
+        分段：≥75 重仓 80% ｜ ≥55 中高 60% ｜ ≥45 中性 40% ｜ ≥25 轻仓 20% ｜ <25 观望 10%。
+        """
+        if idx >= 75:
+            return 80.0, "重仓"
+        if idx >= 55:
+            return 60.0, "中高仓位"
+        if idx >= 45:
+            return 40.0, "中性仓位"
+        if idx >= 25:
+            return 20.0, "轻仓"
+        return 10.0, "观望空仓"
 
     # ---------------- 规则判定 ----------------
 

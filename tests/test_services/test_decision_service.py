@@ -93,3 +93,20 @@ async def test_position_neutral_hold() -> None:
     """持仓 + 指数 45-55 → 持有。"""
     out = await _svc(50.0, _pos(3.0)).evaluate()
     assert out.action == "HOLD"
+
+
+async def test_suggested_position_mapping() -> None:
+    """评估指数 → 建议仓位映射（80/60/40/20/10 + 等级）。"""
+    assert _svc(80.0, _empty())._suggest_position(80.0) == (80.0, "重仓")
+    assert _svc(80.0, _empty())._suggest_position(60.0) == (60.0, "中高仓位")
+    assert _svc(80.0, _empty())._suggest_position(50.0) == (40.0, "中性仓位")
+    assert _svc(80.0, _empty())._suggest_position(30.0) == (20.0, "轻仓")
+    assert _svc(80.0, _empty())._suggest_position(10.0) == (10.0, "观望空仓")
+
+
+async def test_decision_includes_position_rec() -> None:
+    """决策输出包含仓位推荐字段与理由。"""
+    out = await _svc(68.0, _empty()).evaluate()
+    assert out.suggested_position == 60.0
+    assert out.position_level == "中高仓位"
+    assert any("仓位建议" in r for r in out.reasons)
