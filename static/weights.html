@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>权重配置 · 黄金价格投资辅助工具</title>
+<style>
+  :root {
+    --up: #e03131; --down: #2f9e44;
+    --bg: #f7f8fa; --card: #ffffff; --border: #e6e8eb;
+    --text: #1f2329; --muted: #8a919f; --accent: #c9a227;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); }
+  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 6px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12px; line-height: 1.9; color: #d6d9dd; }
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
+  .hero h1 { font-size: 22px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; margin-top: 6px; max-width: 760px; }
+  .hero nav { margin-top: 10px; display: flex; gap: 8px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin-bottom: 4px; }
+  .card .desc { font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+  .w-row { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+  .w-row .nm { width: 130px; font-size: 13px; flex-shrink: 0; }
+  .w-row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .w-row .pct { width: 52px; text-align: right; font-weight: 700; font-size: 13px; }
+  .sum-line { font-size: 12px; color: var(--muted); text-align: right; margin-top: 8px; }
+  .sum-line b { font-size: 13px; }
+  .sum-ok { color: var(--down); } .sum-bad { color: var(--up); }
+  .actions { display: flex; gap: 10px; margin-top: 4px; }
+  button { border: none; border-radius: 8px; padding: 10px 22px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  .btn-save { background: #1f2329; color: #fff; }
+  .btn-reset { background: #eef0f3; color: var(--text); }
+  .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
+  .msg.ok { color: var(--down); } .msg.err { color: var(--up); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+    </ol>
+  </div>
+
+  <div class="hero">
+    <h1>权重配置 · 黄金价格投资辅助工具</h1>
+    <p class="intro">调整<b>趋势评估指数</b>的计算权重：技术面各维度、宏观面各因子、以及技术/宏观合成占比。保存后立即影响综合指数与购买决策（默认值为典型经验配置）。</p>
+    <nav>
+      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
+      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
+      <button style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
+    </nav>
+  </div>
+
+  <!-- 技术面权重 -->
+  <div class="card">
+    <h2>📈 技术面权重（趋势 5 维度）</h2>
+    <div class="desc">综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配</div>
+    <div id="trendRows"></div>
+    <div class="sum-line">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
+  </div>
+
+  <!-- 宏观面权重 -->
+  <div class="card">
+    <h2>🌐 宏观面权重（5 大参考因子）</h2>
+    <div class="desc">美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重</div>
+    <div id="macroRows"></div>
+    <div class="sum-line">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
+  </div>
+
+  <!-- 合成权重 -->
+  <div class="card">
+    <h2>⚖️ 合成权重（技术面 vs 宏观面）</h2>
+    <div class="desc">综合趋势评估指数 = 技术面评分 × 占比 + 宏观参考评分 × 占比</div>
+    <div id="combineRows"></div>
+    <div class="sum-line">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-save" onclick="save()">💾 保存权重</button>
+    <button class="btn-reset" onclick="resetAll()">恢复默认</button>
+  </div>
+  <div class="msg" id="msg"></div>
+
+  <footer>gold-etf-analyzer · 权重修改仅影响本机评估计算 · 不构成投资建议</footer>
+</div>
+
+<script>
+const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+const API = API_BASE + "/api/v1/settings/weights";
+
+const TREND_FIELDS = [
+  ["structure", "结构（均线排列+MA20斜率）"],
+  ["momentum", "动量（近20日涨幅）"],
+  ["support", "支撑（MA20/40乖离）"],
+  ["momentum_rsi", "动能（RSI14）"],
+  ["drawdown", "回撤（距高点回撤）"],
+];
+const MACRO_FIELDS = [
+  ["dxy", "美元指数"],
+  ["us10y", "美债10Y收益率"],
+  ["us30y", "美债30Y收益率"],
+  ["vix", "VIX恐慌指数"],
+  ["cb_gold", "国际央行购金量"],
+];
+const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"]];
+
+let state = null;
+
+function rowHtml(id, label, value) {
+  return `<div class="w-row">
+    <span class="nm">${label}</span>
+    <input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round(value * 100)}" oninput="update()">
+    <span class="pct" id="${id}-pct">${Math.round(value * 100)}%</span>
+  </div>`;
+}
+
+function render() {
+  document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l]) => rowHtml("t_" + k, l, state.trend[k])).join("");
+  document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l]) => rowHtml("m_" + k, l, state.macro[k])).join("");
+  document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l]) => rowHtml("c_" + k, l, state.combine[k])).join("");
+  update();
+}
+
+function update() {
+  const sumOf = (prefix, fields) => fields.reduce((s, [k]) => s + (parseInt(document.getElementById(prefix + k).value) || 0), 0);
+  const setSum = (id, v) => {
+    const el = document.getElementById(id);
+    el.textContent = v + "%";
+    el.className = v === 100 ? "sum-ok" : "sum-bad";
+  };
+  setSum("trendSum", sumOf("t_", TREND_FIELDS));
+  setSum("macroSum", sumOf("m_", MACRO_FIELDS));
+  setSum("combineSum", sumOf("c_", COMBINE_FIELDS));
+  TREND_FIELDS.forEach(([k]) => document.getElementById("t_" + k + "-pct").textContent = document.getElementById("t_" + k).value + "%");
+  MACRO_FIELDS.forEach(([k]) => document.getElementById("m_" + k + "-pct").textContent = document.getElementById("m_" + k).value + "%");
+  COMBINE_FIELDS.forEach(([k]) => document.getElementById("c_" + k + "-pct").textContent = document.getElementById("c_" + k).value + "%");
+}
+
+function collect() {
+  const pick = (prefix, fields) => Object.fromEntries(fields.map(([k]) => [k, (parseInt(document.getElementById(prefix + k).value) || 0) / 100]));
+  return { trend: pick("t_", TREND_FIELDS), macro: pick("m_", MACRO_FIELDS), combine: pick("c_", COMBINE_FIELDS) };
+}
+
+async function save() {
+  const msg = document.getElementById("msg");
+  const body = collect();
+  const sums = [
+    Object.values(body.trend).reduce((a, b) => a + b, 0),
+    Object.values(body.macro).reduce((a, b) => a + b, 0),
+    Object.values(body.combine).reduce((a, b) => a + b, 0),
+  ];
+  if (sums.some(s => Math.abs(s - 1) > 0.001)) { msg.className = "msg err"; msg.textContent = "各组权重之和必须为 100%，请调整后再保存。"; return; }
+  try {
+    const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);
+    msg.className = "msg ok"; msg.textContent = "✅ 权重已保存，趋势页与决策将立即按新权重计算。";
+  } catch (e) { msg.className = "msg err"; msg.textContent = "保存失败：" + e.message; }
+}
+
+async function resetAll() {
+  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .60, macro: .40 } };
+  const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (r.ok) { state = body; render(); document.getElementById("msg").className = "msg ok"; document.getElementById("msg").textContent = "✅ 已恢复默认权重并保存。"; }
+}
+
+(async function init() {
+  try {
+    const r = await fetch(API);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    state = await r.json();
+    render();
+  } catch (e) {
+    document.getElementById("trendRows").innerHTML = `<div class="desc">配置加载失败：${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>

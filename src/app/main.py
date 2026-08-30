@@ -67,6 +67,12 @@ async def portfolio_page() -> RedirectResponse:
     return RedirectResponse("/static/portfolio.html")
 
 
+@app.get("/weights", include_in_schema=False)
+async def weights_page() -> RedirectResponse:
+    """评估权重配置页。"""
+    return RedirectResponse("/static/weights.html")
+
+
 # 静态资源（趋势追踪页面等）
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

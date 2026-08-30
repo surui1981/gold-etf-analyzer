@@ -49,11 +49,33 @@
   .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
   .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
   .hero nav { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  /* 投资警示横幅 */
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
   .index-info { flex: 1; min-width: 240px; }
   .index-info .badge { font-size: 14px; padding: 4px 14px; }
   .index-info .txt { font-size: 14px; color: #374151; line-height: 1.7; margin-top: 8px; }
   .method { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; border-top: 1px dashed var(--border); padding-top: 8px; }
   .method b { color: #4b5563; }
+  .macro-box { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .macro-title { font-size: 12.5px; font-weight: 600; color: #4b5563; margin-bottom: 6px; }
+  .macro-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 12px; }
+  .macro-row .nm { width: 110px; color: var(--muted); flex-shrink: 0; }
+  .macro-row .val { width: 110px; font-weight: 600; flex-shrink: 0; text-align: right; }
+  .macro-row .bar { flex: 1; height: 7px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
+  .macro-row .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .macro-row .dt { width: 66px; font-size: 10.5px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  /* 应用导航卡片 */
+  .nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .nav-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; transition: box-shadow .15s, transform .15s; text-decoration: none; color: var(--text); display: block; }
+  .nav-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); transform: translateY(-1px); border-color: var(--accent); }
+  .nav-card .t { font-size: 14.5px; font-weight: 700; margin-bottom: 4px; }
+  .nav-card .t span { float: right; color: var(--muted); font-size: 12px; font-weight: 400; }
+  .nav-card .d { font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .nav-card.active { border-color: var(--accent); background: linear-gradient(135deg, #fffaf0, #ffffff); }
   .bar { height: 10px; background: #eef0f3; border-radius: 999px; overflow: hidden; margin: 8px 0 2px; }
   .bar > i { display: block; height: 100%; border-radius: 999px; }
   .ind-row { margin-bottom: 14px; }
@@ -70,6 +92,17 @@
 </head>
 <body>
 <div class="wrap">
+  <!-- 投资警示（醒目置顶） -->
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+    </ol>
+  </div>
+
   <header class="hero">
     <div>
       <h1>黄金价格投资辅助工具 <span id="badge"></span></h1>
@@ -80,10 +113,31 @@
       <nav>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
+        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
       </nav>
       <div class="notice">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
     </div>
   </header>
+
+  <!-- 应用导航 -->
+  <div class="nav-grid">
+    <a class="nav-card active" href="/static/trend.html">
+      <div class="t">📈 趋势追踪 <span>当前页</span></div>
+      <div class="d">三市场行情 · 综合趋势指数 · 纽约金60天曲线 · 宏观参考因子</div>
+    </a>
+    <a class="nav-card" href="/portfolio">
+      <div class="t">💼 持仓与决策</div>
+      <div class="d">个人持仓跟踪 · 实时盈亏 · 参数面×交易面 购买决策建议</div>
+    </a>
+    <a class="nav-card" href="/weights">
+      <div class="t">⚖️ 权重配置</div>
+      <div class="d">调整技术面/宏观面/合成比权重，评估指数实时重算</div>
+    </a>
+    <a class="nav-card" href="/docs">
+      <div class="t">📚 API 文档</div>
+      <div class="d">全部 REST 接口参考（OpenAPI / Swagger UI）</div>
+    </a>
+  </div>
 
   <!-- 市场趋势评估追踪指数（置顶） -->
   <div class="index-panel">
@@ -95,10 +149,21 @@
       <span class="badge" id="idxBadge" style="display:none"></span>
       <div class="txt" id="idxSummary"></div>
       <div class="method" id="idxMethod"></div>
+      <div class="macro-box">
+        <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
+        <div id="macroFactors"></div>
+      </div>
     </div>
   </div>
 
   <div class="cards" id="cards"></div>
+
+  <!-- 每日评估历史（本地快照） -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">📅 每日评估历史（本地快照） <span style="font-weight:400;font-size:12px;color:var(--muted)" id="snapSub"></span></div>
+    <canvas id="snapChart" style="max-height:240px"></canvas>
+    <div class="summary" id="snapSummary" style="font-size:12px"></div>
+  </div>
 
   <!-- 纽约金 60 天价格曲线 -->
   <div class="panel" style="margin-bottom:16px">
@@ -187,8 +252,22 @@ function render(d) {
   badge.textContent = lvlTxt;
   document.getElementById("idxSummary").textContent = idx.summary;
   document.getElementById("idxMethod").innerHTML =
-    "📐 <b>运算方法</b>：指数 = " + d.indicators.map(i => `${i.name}评分 × ${(i.weight * 100).toFixed(0)}%`).join(" + ") +
-    "（各维度 0-100 分加权求和）。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
+    "📐 <b>运算方法</b>：综合指数 = 技术面评分×60% + 宏观参考评分×40%；技术面 = " +
+    d.indicators.map(i => `${i.name}×${(i.weight * 100).toFixed(0)}%`).join("+") +
+    "，宏观因子见下方明细。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
+
+  // 宏观参考因子明细
+  document.getElementById("macroInfo").textContent =
+    `宏观参考指数 ${d.macro.score.toFixed(1)}/100 · ${d.macro.direction === "bullish" ? "利多黄金" : d.macro.direction === "bearish" ? "利空黄金" : "中性"}`;
+  document.getElementById("macroFactors").innerHTML = d.macro.factors.map(f => {
+    const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "#868e96";
+    return `<div class="macro-row">
+      <span class="nm">${f.name}</span>
+      <span class="val" style="color:${c}">${f.value} ${f.unit}</span>
+      <span class="bar"><i style="width:${f.score}%;background:${c}"></i></span>
+      <span class="dt">${f.data_date}</span>
+    </div>`;
+  }).join("");
 
   // 趋势参数维度
   document.getElementById("indicators").innerHTML = d.indicators.map(ind => {
@@ -327,9 +406,43 @@ async function loadNy() {
   }
 }
 
+// 每日评估历史（本地快照）
+async function loadSnapshots() {
+  try {
+    const s = await fetch(API_BASE + "/api/v1/snapshots?days=30")
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    if (!s.snapshots.length) { document.getElementById("snapSub").textContent = "暂无快照数据"; return; }
+    const list = [...s.snapshots].reverse(); // 时间升序
+    document.getElementById("snapSub").textContent = `${s.total} 条 · 每日参数与评估值本地持久化`;
+    new Chart(document.getElementById("snapChart"), {
+      type: "line",
+      data: {
+        labels: list.map(x => x.snapshot_date),
+        datasets: [
+          { label: "综合趋势指数", data: list.map(x => x.trend_index), borderColor: "#c9a227", borderWidth: 2.2, pointRadius: 2, tension: 0.2 },
+          { label: "技术面", data: list.map(x => x.tech_index), borderColor: "#1971c2", borderWidth: 1.2, pointRadius: 0 },
+          { label: "宏观参考", data: list.map(x => x.macro_index), borderColor: "#868e96", borderWidth: 1.2, pointRadius: 0 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
+        scales: { x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } }, y: { min: 0, max: 100, ticks: { font: { size: 10 } } } },
+      },
+    });
+    const last = list[list.length - 1];
+    document.getElementById("snapSummary").textContent =
+      `最近快照 ${last.snapshot_date}：综合 ${last.trend_index.toFixed(1)}（${last.index_level}）· 技术 ${last.tech_index.toFixed(1)} · 宏观 ${last.macro_index.toFixed(1)} · 收盘 ${last.close}`;
+  } catch (e) {
+    document.getElementById("snapSub").textContent = "快照加载失败：" + e.message;
+  }
+}
+
 init();
 loadCompare();
 loadNy();
+loadSnapshots();
 </script>
 </body>
 </html>

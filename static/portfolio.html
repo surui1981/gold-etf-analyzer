@@ -47,11 +47,28 @@
   .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
   .hero .notice { font-size: 11px; color: var(--muted); margin-top: 6px; }
   .hero nav { margin-top: 8px; display: flex; gap: 8px; }
+  /* 投资警示横幅 */
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
 </style>
 </head>
 <body>
 <div class="wrap">
+  <!-- 投资警示（醒目置顶） -->
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+    </ol>
+  </div>
+
   <header class="hero">
     <div>
       <h1>黄金价格投资辅助工具 · 持仓与决策</h1>
@@ -61,6 +78,7 @@
       <nav>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
+        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
       </nav>
       <div class="notice">仅供研究参考，不构成投资建议</div>
     </div>

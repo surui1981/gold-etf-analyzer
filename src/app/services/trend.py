@@ -20,11 +20,13 @@ from app.schemas.market import (
     GoldTrendMetrics,
     GoldTrendOut,
     GoldTrendPoint,
+    MacroIndexOut,
     TrendDirection,
     TrendIndicatorOut,
     TrendIndexLevel,
     TrendIndexOut,
 )
+from app.services.macro import MACRO_WEIGHT, TECH_WEIGHT, MacroFactorService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -94,10 +96,20 @@ def _rsi(closes: list[float], period: int = 14) -> float:
 
 
 class TrendService:
-    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数。"""
+    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数（技术面×宏观面合成）。"""
 
-    def __init__(self, repo: MarketDataRepository) -> None:
+    def __init__(
+        self,
+        repo: MarketDataRepository,
+        macro: MacroFactorService | None = None,
+        settings=None,
+    ) -> None:
         self._repo = repo
+        self._macro = macro or MacroFactorService(settings=settings)
+        # 延迟导入避免循环依赖
+        from app.services.settings import WeightService
+
+        self._settings: WeightService | None = settings
 
     async def analyze(self, days: int = 60, target: str = "etf") -> GoldTrendOut:
         """分析黄金近 N 个交易日趋势并合成追踪指数。
@@ -151,10 +163,33 @@ class TrendService:
             summary=self._summarize(direction, change_pct, end_price, _TARGET_UNITS.get(target, "元")),
         )
 
-        indicators, index = self._build_index(closes, highs, ma20, ma40)
+        # 权重：用户配置优先（趋势维度 + 技术/宏观合成比），否则内置默认
+        if self._settings is not None:
+            tech_weights = await self._settings.trend_weights()
+            tech_w, macro_w = await self._settings.combine_weights()
+        else:
+            tech_weights = TREND_WEIGHTS
+            tech_w, macro_w = TECH_WEIGHT, MACRO_WEIGHT
+
+        indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights)
+        macro_index = await self._macro.evaluate()
+
+        # 综合趋势指数 = 技术面 × tech_w + 宏观面 × macro_w（随宏观参数与权重动态变化）
+        combined = round(tech_index.score * tech_w + macro_index.score * macro_w, 1)
+        level, level_dir = self._to_level(combined)
+        final_index = TrendIndexOut(
+            score=combined,
+            level=level,
+            direction=level_dir,
+            summary=(
+                f"综合趋势评估指数 {combined:.1f}/100，等级【{self._level_label(level)}】；"
+                f"= 技术面 {tech_index.score:.1f}×{tech_w:.0%} + 宏观参考 {macro_index.score:.1f}×{macro_w:.0%}"
+            ),
+        )
         logger.info(
-            "Trend analyzed: %s days, %s (%+.2f%%), index=%.1f",
-            len(klines), direction.value, change_pct, index.score,
+            "Trend analyzed: %s days, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%)",
+            len(klines), direction.value, change_pct,
+            combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100,
         )
         return GoldTrendOut(
             symbol=symbol,
@@ -163,8 +198,21 @@ class TrendService:
             points=points,
             metrics=metrics,
             indicators=indicators,
-            index=index,
+            index=final_index,
+            macro=macro_index,
         )
+
+    @staticmethod
+    def _level_label(level: TrendIndexLevel) -> str:
+        """指数等级中文名。"""
+        labels = {
+            TrendIndexLevel.STRONG_UP: "强势上升",
+            TrendIndexLevel.UP: "上升",
+            TrendIndexLevel.SIDEWAYS: "震荡整理",
+            TrendIndexLevel.DOWN: "下降",
+            TrendIndexLevel.STRONG_DOWN: "弱势下降",
+        }
+        return labels[level]
 
     async def _load_klines(
         self,
@@ -189,8 +237,10 @@ class TrendService:
         highs: list[float],
         ma20: list[float | None],
         ma40: list[float | None],
+        weights: dict[str, float] | None = None,
     ) -> tuple[list[TrendIndicatorOut], TrendIndexOut]:
-        """计算 5 个趋势维度并加权合成追踪指数。"""
+        """计算 5 个趋势维度并加权合成追踪指数（技术面）。"""
+        weights = weights or TREND_WEIGHTS
         now_close = closes[-1]
         scores: dict[str, tuple[float, str, DirectionSignal, str]] = {}
 
@@ -252,7 +302,7 @@ class TrendService:
         total = 0.0
         indicators: list[TrendIndicatorOut] = []
         for name, (score, value, direction, detail) in scores.items():
-            weight = TREND_WEIGHTS[name]
+            weight = weights.get(name, TREND_WEIGHTS[name])
             contribution = round(score * weight, 2)
             total += contribution
             indicators.append(

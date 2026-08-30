@@ -94,16 +94,41 @@ class TrendIndexOut(BaseModel):
     summary: str
 
 
+class MacroFactorOut(BaseModel):
+    """单宏观因子：当前值 + 黄金友好度评分 + 方向。"""
+
+    key: str = Field(..., description="因子标识 dxy/us10y/us30y/vix/cb_gold")
+    name: str
+    value: str = Field(..., description="当前值（文本）")
+    unit: str
+    data_date: str = Field(..., description="数据日期（实时或静态标注）")
+    score: float = Field(..., ge=0, le=100, description="黄金友好度 0-100")
+    direction: DirectionSignal
+    weight: float = Field(..., ge=0, le=1)
+    contribution: float = Field(..., ge=0, le=100)
+    detail: str
+
+
+class MacroIndexOut(BaseModel):
+    """宏观参考指数（5 因子加权合成）。"""
+
+    score: float = Field(..., ge=0, le=100, description="宏观参考指数 0-100")
+    direction: DirectionSignal
+    factors: list[MacroFactorOut] = Field(..., description="宏观因子明细")
+    summary: str
+
+
 class GoldTrendOut(BaseModel):
-    """黄金趋势追踪输出：序列 + 指标 + 参数 + 追踪指数。"""
+    """黄金趋势追踪输出：序列 + 指标 + 参数 + 追踪指数 + 宏观参考。"""
 
     symbol: str
     name: str = Field(..., description="品种名称")
     days: int = Field(..., description="覆盖交易日数")
     points: list[GoldTrendPoint]
     metrics: GoldTrendMetrics
-    indicators: list[TrendIndicatorOut] = Field(..., description="趋势参数明细")
-    index: TrendIndexOut = Field(..., description="市场趋势评估追踪指数")
+    indicators: list[TrendIndicatorOut] = Field(..., description="趋势参数明细（技术面）")
+    index: TrendIndexOut = Field(..., description="市场趋势评估追踪指数（综合）")
+    macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
 
 
 class GoldCompareSeries(BaseModel):

@@ -5,8 +5,18 @@ from datetime import date, timedelta
 import pytest
 from httpx import AsyncClient
 
-from app.dependencies import get_market_data_repository
+from app.dependencies import get_market_data_repository, get_trend_service
 from app.repositories.market_data import GoldKline
+from app.schemas.common import DirectionSignal
+from app.schemas.market import MacroIndexOut
+from app.services.trend import TrendService
+
+
+class FakeMacro:
+    """假宏观服务：固定中性分，避免 API 测试依赖网络。"""
+
+    async def evaluate(self) -> MacroIndexOut:
+        return MacroIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary="测试宏观")
 
 
 class FakeMarketRepo:
@@ -62,10 +72,11 @@ class FakeMarketRepo:
 
 @pytest.fixture(autouse=True)
 def _override_market_repo():
-    """所有行情用例注入假数据源。"""
+    """所有行情用例注入假数据源（行情 + 宏观）。"""
     from app.main import app
 
     app.dependency_overrides[get_market_data_repository] = lambda: FakeMarketRepo()
+    app.dependency_overrides[get_trend_service] = lambda: TrendService(FakeMarketRepo(), macro=FakeMacro())
     yield
     app.dependency_overrides.clear()
 
@@ -94,6 +105,9 @@ async def test_gold_trend(client: AsyncClient) -> None:
     assert len(body["indicators"]) == 5
     assert 0 <= body["index"]["score"] <= 100
     assert body["index"]["level"] in {"strong_up", "up", "sideways", "down", "strong_down"}
+    # 宏观参考指数
+    assert body["macro"]["score"] == 50.0
+    assert "宏观" in body["index"]["summary"]
 
 
 async def test_gold_trend_days_validation(client: AsyncClient) -> None:

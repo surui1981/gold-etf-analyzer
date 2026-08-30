@@ -5,8 +5,25 @@ from datetime import date, timedelta
 import pytest
 
 from app.repositories.market_data import GoldKline
-from app.schemas.market import TrendDirection, TrendIndexLevel
+from app.schemas.common import DirectionSignal
+from app.schemas.market import MacroIndexOut, TrendDirection, TrendIndexLevel
 from app.services.trend import TREND_WEIGHTS, TrendService, moving_average
+
+
+class FakeMacro:
+    """假宏观服务：固定中性 50 分，避免测试依赖网络。"""
+
+    async def evaluate(self) -> MacroIndexOut:
+        return MacroIndexOut(
+            score=50.0,
+            direction=DirectionSignal.NEUTRAL,
+            factors=[],
+            summary="测试宏观",
+        )
+
+
+def _service(klines: list[GoldKline]) -> TrendService:
+    return TrendService(FakeRepo(klines), macro=FakeMacro())
 
 
 class FakeRepo:
@@ -49,7 +66,7 @@ def test_moving_average_window() -> None:
 async def test_upward_trend_detected() -> None:
     """持续上行序列应判定为上升趋势。"""
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
-    service = TrendService(FakeRepo(_mk_klines(closes)))
+    service = _service(_mk_klines(closes))
     result = await service.analyze(days=60)
 
     assert result.metrics.direction == TrendDirection.UP
@@ -64,7 +81,7 @@ async def test_upward_trend_detected() -> None:
 async def test_downward_trend_detected() -> None:
     """持续下行序列应判定为下降趋势。"""
     closes = [round(2 - i * 0.01, 3) for i in range(60)]
-    service = TrendService(FakeRepo(_mk_klines(closes)))
+    service = _service(_mk_klines(closes))
     result = await service.analyze(days=60)
 
     assert result.metrics.direction == TrendDirection.DOWN
@@ -73,7 +90,7 @@ async def test_downward_trend_detected() -> None:
 
 async def test_insufficient_data_raises() -> None:
     """数据不足 2 个交易日应报错。"""
-    service = TrendService(FakeRepo(_mk_klines([1.0])))
+    service = _service(_mk_klines([1.0]))
     try:
         await service.analyze(days=60)
     except ValueError:
@@ -87,16 +104,20 @@ def test_trend_weights_sum_to_one() -> None:
 
 
 async def test_trend_index_components() -> None:
-    """上升序列应输出 5 个参数维度 + 偏多追踪指数。"""
+    """上升序列应输出 5 个参数维度 + 偏多综合指数。"""
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
-    service = TrendService(FakeRepo(_mk_klines(closes)))
+    service = _service(_mk_klines(closes))
     result = await service.analyze(days=60)
 
     assert len(result.indicators) == 5
     assert result.index.score >= 55
     assert result.index.level in (TrendIndexLevel.UP, TrendIndexLevel.STRONG_UP)
-    # 各维度贡献求和 ≈ 指数总分
-    assert sum(i.contribution for i in result.indicators) == pytest.approx(result.index.score, abs=0.5)
+    # 技术面维度贡献求和 = 技术面分；综合指数 = 技术×0.6 + 宏观×0.4
+    tech_sum = sum(i.contribution for i in result.indicators)
+    assert tech_sum == pytest.approx(98.5, abs=0.5)
+    assert result.index.score == pytest.approx(tech_sum * 0.6 + 50.0 * 0.4, abs=0.5)
+    # 宏观参考
+    assert result.macro.score == 50.0
     # 全部维度分数在 0-100
     assert all(0 <= i.score <= 100 for i in result.indicators)
 
@@ -104,7 +125,7 @@ async def test_trend_index_components() -> None:
 async def test_weak_trend_index_low_score() -> None:
     """单边下行序列应输出偏空指数。"""
     closes = [round(2 - i * 0.01, 3) for i in range(60)]
-    service = TrendService(FakeRepo(_mk_klines(closes)))
+    service = _service(_mk_klines(closes))
     result = await service.analyze(days=60)
 
     assert result.index.score < 45
@@ -114,7 +135,7 @@ async def test_weak_trend_index_low_score() -> None:
 async def test_multi_target_symbols() -> None:
     """多标的支持：ny/gram/etf 返回对应 symbol 与名称。"""
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
-    service = TrendService(FakeRepo(_mk_klines(closes)))
+    service = _service(_mk_klines(closes))
 
     ny = await service.analyze(days=60, target="ny")
     assert ny.symbol == "GC"
