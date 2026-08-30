@@ -41,15 +41,16 @@ class MacroWeightConfig(BaseModel):
 
 
 class CombineWeightConfig(BaseModel):
-    """综合指数合成权重：技术面 vs 宏观面。"""
+    """综合指数合成权重：技术面 vs 宏观面 vs 消息面（中短期 ETF 波段操作）。"""
 
-    tech: float = Field(0.60, ge=0, le=1, description="技术面占比")
-    macro: float = Field(0.40, ge=0, le=1, description="宏观面占比")
+    tech: float = Field(0.30, ge=0, le=1, description="技术面占比（默认 30%）")
+    macro: float = Field(0.40, ge=0, le=1, description="宏观面占比（默认 40%）")
+    news: float = Field(0.30, ge=0, le=1, description="消息面占比（默认 30%，客户评估）")
 
     @model_validator(mode="after")
     def _sum_to_one(self) -> "CombineWeightConfig":
-        if abs(self.tech + self.macro - 1.0) > 0.001:
-            raise ValueError(f"合成权重之和须为 1，当前 {self.tech + self.macro:.3f}")
+        if abs(self.tech + self.macro + self.news - 1.0) > 0.001:
+            raise ValueError(f"合成权重之和须为 1，当前 {self.tech + self.macro + self.news:.3f}")
         return self
 
 

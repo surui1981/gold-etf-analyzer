@@ -80,8 +80,8 @@
 
   <!-- 合成权重 -->
   <div class="card">
-    <h2>⚖️ 合成权重（技术面 vs 宏观面）</h2>
-    <div class="desc">综合趋势评估指数 = 技术面评分 × 占比 + 宏观参考评分 × 占比</div>
+    <h2>⚖️ 合成权重（技术面 / 宏观面 / 消息面）</h2>
+    <div class="desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）</div>
     <div id="combineRows"></div>
     <div class="sum-line">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
@@ -113,7 +113,7 @@ const MACRO_FIELDS = [
   ["vix", "VIX恐慌指数"],
   ["cb_gold", "国际央行购金量"],
 ];
-const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"]];
+const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"], ["news", "消息面（客户评估）"]];
 
 let state = null;
 
@@ -169,7 +169,7 @@ async function save() {
 }
 
 async function resetAll() {
-  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .60, macro: .40 } };
+  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 } };
   const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   if (r.ok) { state = body; render(); document.getElementById("msg").className = "msg ok"; document.getElementById("msg").textContent = "✅ 已恢复默认权重并保存。"; }
 }

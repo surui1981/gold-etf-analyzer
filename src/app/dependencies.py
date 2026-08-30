@@ -8,12 +8,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.db import async_session_factory
 from app.repositories.market_data import MarketDataRepository
+from app.repositories.news import NewsScoreRepository
 from app.repositories.position import PositionRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.services.analysis import AnalysisService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
+from app.services.news import NewsScoreService
 from app.services.position import PositionService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
@@ -66,12 +68,27 @@ def get_weight_service(
     return WeightService(repo)
 
 
+async def get_news_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> NewsScoreRepository:
+    """消息面打分仓储依赖。"""
+    return NewsScoreRepository(session)
+
+
+def get_news_score_service(
+    repo: NewsScoreRepository = Depends(get_news_repository),
+) -> NewsScoreService:
+    """消息面评估服务依赖。"""
+    return NewsScoreService(repo)
+
+
 def get_trend_service(
     repo: MarketDataRepository = Depends(get_market_data_repository),
     settings: WeightService = Depends(get_weight_service),
+    news: NewsScoreService = Depends(get_news_score_service),
 ) -> TrendService:
-    """黄金趋势追踪服务依赖（行情仓储 + 权重配置）。"""
-    return TrendService(repo=repo, settings=settings)
+    """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估）。"""
+    return TrendService(repo=repo, settings=settings, news=news)
 
 
 async def get_snapshot_repository(
@@ -79,6 +96,20 @@ async def get_snapshot_repository(
 ) -> SnapshotRepository:
     """每日快照仓储依赖。"""
     return SnapshotRepository(session)
+
+
+async def get_news_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> NewsScoreRepository:
+    """消息面打分仓储依赖。"""
+    return NewsScoreRepository(session)
+
+
+def get_news_score_service(
+    repo: NewsScoreRepository = Depends(get_news_repository),
+) -> NewsScoreService:
+    """消息面评估服务依赖。"""
+    return NewsScoreService(repo)
 
 
 def get_snapshot_service(

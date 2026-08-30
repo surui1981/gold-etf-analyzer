@@ -35,6 +35,7 @@ class DailySnapshot(Base):
     # 评估值
     tech_index: Mapped[float] = mapped_column(Float, comment="技术面指数")
     macro_index: Mapped[float] = mapped_column(Float, comment="宏观参考指数")
+    news_index: Mapped[float] = mapped_column(Float, default=50.0, comment="消息面指数（客户评估）")
     trend_index: Mapped[float] = mapped_column(Float, comment="综合趋势评估指数")
     index_level: Mapped[str] = mapped_column(String(16), comment="指数等级")
 

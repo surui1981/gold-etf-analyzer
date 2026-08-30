@@ -22,6 +22,7 @@ class SnapshotOut(BaseModel):
     direction: str
     tech_index: float
     macro_index: float
+    news_index: float = 50.0
     trend_index: float
     index_level: str
 

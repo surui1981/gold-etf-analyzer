@@ -73,6 +73,12 @@ async def weights_page() -> RedirectResponse:
     return RedirectResponse("/static/weights.html")
 
 
+@app.get("/news", include_in_schema=False)
+async def news_page() -> RedirectResponse:
+    """消息面评估页（客户打分）。"""
+    return RedirectResponse("/static/news.html")
+
+
 # 静态资源（趋势追踪页面等）
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

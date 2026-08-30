@@ -20,8 +20,9 @@ async def test_default_weights(db_session: AsyncSession) -> None:
     assert w.trend.structure == 0.30
     assert w.trend.momentum == 0.20
     assert w.macro.dxy == 0.25
-    assert w.combine.tech == 0.60
+    assert w.combine.tech == 0.30
     assert w.combine.macro == 0.40
+    assert w.combine.news == 0.30
 
 
 async def test_save_and_read(db_session: AsyncSession) -> None:
@@ -30,7 +31,7 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
     custom = WeightConfig(
         trend={"structure": 0.40, "momentum": 0.20, "support": 0.20, "momentum_rsi": 0.10, "drawdown": 0.10},
         macro={"dxy": 0.30, "us10y": 0.20, "us30y": 0.10, "vix": 0.20, "cb_gold": 0.20},
-        combine={"tech": 0.50, "macro": 0.50},
+        combine={"tech": 0.50, "macro": 0.30, "news": 0.20},
     )
     await svc.save_weights(custom)
 
@@ -44,7 +45,7 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
     assert trend["结构"] == 0.40
     macro = await svc.macro_weights()
     assert macro["dxy"] == 0.30
-    assert await svc.combine_weights() == (0.50, 0.50)
+    assert await svc.combine_weights() == (0.50, 0.30, 0.20)
 
     # 持久化验证
     raw = await SettingRepository(db_session).get(WEIGHTS_KEY)

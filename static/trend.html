@@ -114,6 +114,7 @@
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
         <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/weights'">权重配置</button>
+        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/news'">消息面评估</button>
       </nav>
       <div class="notice">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
     </div>
@@ -131,7 +132,11 @@
     </a>
     <a class="nav-card" href="/weights">
       <div class="t">⚖️ 权重配置</div>
-      <div class="d">调整技术面/宏观面/合成比权重，评估指数实时重算</div>
+      <div class="d">调整技术/宏观/消息面权重（默认 30/40/30），指数实时重算</div>
+    </a>
+    <a class="nav-card" href="/news">
+      <div class="t">🗞️ 消息面评估</div>
+      <div class="d">基于投行黄金展望研判打分（0-100），汇入每日评估</div>
     </a>
     <a class="nav-card" href="/docs">
       <div class="t">📚 API 文档</div>
@@ -152,6 +157,8 @@
       <div class="macro-box">
         <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
         <div id="macroFactors"></div>
+        <div class="macro-title" style="margin-top:8px">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
+        <div id="newsFactor"></div>
       </div>
     </div>
   </div>
@@ -252,9 +259,9 @@ function render(d) {
   badge.textContent = lvlTxt;
   document.getElementById("idxSummary").textContent = idx.summary;
   document.getElementById("idxMethod").innerHTML =
-    "📐 <b>运算方法</b>：综合指数 = 技术面评分×60% + 宏观参考评分×40%；技术面 = " +
+    "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
     d.indicators.map(i => `${i.name}×${(i.weight * 100).toFixed(0)}%`).join("+") +
-    "，宏观因子见下方明细。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
+    "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
 
   // 宏观参考因子明细
   document.getElementById("macroInfo").textContent =
@@ -268,6 +275,20 @@ function render(d) {
       <span class="dt">${f.data_date}</span>
     </div>`;
   }).join("");
+
+  // 消息面评估
+  const news = d.news;
+  const nc = news.direction === "bullish" ? "var(--up)" : news.direction === "bearish" ? "var(--down)" : "#868e96";
+  document.getElementById("newsInfo").textContent =
+    `消息面指数 ${news.score.toFixed(1)}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
+  document.getElementById("newsFactor").innerHTML = `
+    <div class="macro-row">
+      <span class="nm"><a href="/news" style="color:var(--accent);text-decoration:none">投行展望打分</a></span>
+      <span class="val" style="color:${nc}">${news.score.toFixed(0)}</span>
+      <span class="bar"><i style="width:${news.score}%;background:${nc}"></i></span>
+      <span class="dt">${news.direction}</span>
+    </div>
+    ${news.note ? `<div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">💬 ${news.note}</div>` : ""}`;
 
   // 趋势参数维度
   document.getElementById("indicators").innerHTML = d.indicators.map(ind => {

@@ -112,12 +112,14 @@ async def test_trend_index_components() -> None:
     assert len(result.indicators) == 5
     assert result.index.score >= 55
     assert result.index.level in (TrendIndexLevel.UP, TrendIndexLevel.STRONG_UP)
-    # 技术面维度贡献求和 = 技术面分；综合指数 = 技术×0.6 + 宏观×0.4
+    # 技术面维度贡献求和 = 技术面分；综合指数 = 技术×0.3 + 宏观×0.4 + 消息面×0.3（未打分中性50）
     tech_sum = sum(i.contribution for i in result.indicators)
     assert tech_sum == pytest.approx(98.5, abs=0.5)
-    assert result.index.score == pytest.approx(tech_sum * 0.6 + 50.0 * 0.4, abs=0.5)
-    # 宏观参考
+    assert result.index.score == pytest.approx(tech_sum * 0.3 + 50.0 * 0.4 + 50.0 * 0.3, abs=0.5)
+    # 宏观参考 + 消息面
     assert result.macro.score == 50.0
+    assert result.news.score == 50.0
+    assert result.news.scored is False
     # 全部维度分数在 0-100
     assert all(0 <= i.score <= 100 for i in result.indicators)
 

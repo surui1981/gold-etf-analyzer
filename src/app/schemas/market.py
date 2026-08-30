@@ -118,8 +118,17 @@ class MacroIndexOut(BaseModel):
     summary: str
 
 
+class NewsIndexOut(BaseModel):
+    """消息面指数（客户对投行黄金展望的评估打分）。"""
+
+    score: float = Field(..., ge=0, le=100, description="消息面指数 0-100（>55 看多）")
+    direction: DirectionSignal
+    note: str = Field("", description="客户研判备注")
+    scored: bool = Field(False, description="今日是否已打分")
+
+
 class GoldTrendOut(BaseModel):
-    """黄金趋势追踪输出：序列 + 指标 + 参数 + 追踪指数 + 宏观参考。"""
+    """黄金趋势追踪输出：序列 + 指标 + 参数 + 追踪指数（三面合成）+ 宏观/消息面。"""
 
     symbol: str
     name: str = Field(..., description="品种名称")
@@ -127,8 +136,9 @@ class GoldTrendOut(BaseModel):
     points: list[GoldTrendPoint]
     metrics: GoldTrendMetrics
     indicators: list[TrendIndicatorOut] = Field(..., description="趋势参数明细（技术面）")
-    index: TrendIndexOut = Field(..., description="市场趋势评估追踪指数（综合）")
+    index: TrendIndexOut = Field(..., description="综合趋势评估指数（技术+宏观+消息面）")
     macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
+    news: NewsIndexOut = Field(..., description="消息面指数（客户评估）")
 
 
 class GoldCompareSeries(BaseModel):

@@ -57,15 +57,16 @@ class DailySnapshotService:
             direction=m.direction.value,
             tech_index=tech_index,
             macro_index=macro.score,
+            news_index=trend.news.score,
             trend_index=trend.index.score,
             index_level=trend.index.level.value,
             macro_detail=macro_detail,
         )
         await self._repo.upsert(snapshot)
         logger.info(
-            "Snapshot captured: %s, close=%.3f, trend=%.1f (%s), tech=%.1f, macro=%.1f",
+            "Snapshot captured: %s, close=%.3f, trend=%.1f (%s), tech=%.1f, macro=%.1f, news=%.1f",
             snapshot.snapshot_date, snapshot.close,
-            snapshot.trend_index, snapshot.index_level, snapshot.tech_index, snapshot.macro_index,
+            snapshot.trend_index, snapshot.index_level, snapshot.tech_index, snapshot.macro_index, snapshot.news_index,
         )
         return SnapshotOut.model_validate(snapshot)
 

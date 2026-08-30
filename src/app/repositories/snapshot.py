@@ -27,7 +27,7 @@ class SnapshotRepository:
         else:
             for field in (
                 "close", "change_pct", "high", "low", "ma20", "ma40", "direction",
-                "tech_index", "macro_index", "trend_index", "index_level", "macro_detail",
+                "tech_index", "macro_index", "news_index", "trend_index", "index_level", "macro_detail",
             ):
                 setattr(existing, field, getattr(snapshot, field))
         await self._session.commit()

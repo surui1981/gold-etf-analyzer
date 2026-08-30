@@ -45,9 +45,10 @@ MACRO_FACTOR_RULES: list[dict] = [
     },
 ]
 
-# 技术面与宏观面合成权重（典型经验，可调）
-TECH_WEIGHT = 0.6
-MACRO_WEIGHT = 0.4
+# 技术面/宏观面/消息面合成权重（默认 30/40/30，中短期 ETF 波段操作）
+TECH_WEIGHT = 0.30
+MACRO_WEIGHT = 0.40
+NEWS_WEIGHT = 0.30
 
 # 静态参考值（沙箱无实时源的因子；标注数据日期，后续可接实时 provider）
 STATIC_REF: dict[str, dict] = {

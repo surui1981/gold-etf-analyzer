@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     decision,
     health,
     market,
+    news,
     position,
     settings,
     snapshot,
@@ -20,3 +21,4 @@ api_router.include_router(position.router)
 api_router.include_router(decision.router)
 api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)
+api_router.include_router(news.router)

@@ -11,7 +11,8 @@ async def test_get_weights_default(client: AsyncClient) -> None:
 
     assert body["trend"]["structure"] == 0.30
     assert body["macro"]["dxy"] == 0.25
-    assert body["combine"]["tech"] == 0.60
+    assert body["combine"]["tech"] == 0.30
+    assert body["combine"]["news"] == 0.30
 
 
 async def test_put_and_get_weights(client: AsyncClient) -> None:
@@ -19,7 +20,7 @@ async def test_put_and_get_weights(client: AsyncClient) -> None:
     payload = {
         "trend": {"structure": 0.4, "momentum": 0.2, "support": 0.2, "momentum_rsi": 0.1, "drawdown": 0.1},
         "macro": {"dxy": 0.3, "us10y": 0.2, "us30y": 0.1, "vix": 0.2, "cb_gold": 0.2},
-        "combine": {"tech": 0.5, "macro": 0.5},
+        "combine": {"tech": 0.5, "macro": 0.3, "news": 0.2},
     }
     resp = await client.put("/api/v1/settings/weights", json=payload)
     assert resp.status_code == 200
@@ -34,7 +35,7 @@ async def test_put_invalid_sum_422(client: AsyncClient) -> None:
     payload = {
         "trend": {"structure": 0.5, "momentum": 0.5, "support": 0.2, "momentum_rsi": 0.1, "drawdown": 0.1},
         "macro": {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.15, "cb_gold": 0.25},
-        "combine": {"tech": 0.6, "macro": 0.4},
+        "combine": {"tech": 0.6, "macro": 0.4, "news": 0.2},
     }
     resp = await client.put("/api/v1/settings/weights", json=payload)
     assert resp.status_code == 422

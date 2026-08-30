@@ -61,7 +61,7 @@ class WeightService:
             "cb_gold": w.cb_gold,
         }
 
-    async def combine_weights(self) -> tuple[float, float]:
-        """综合指数合成权重：(技术面, 宏观面)。"""
+    async def combine_weights(self) -> tuple[float, float, float]:
+        """综合指数合成权重：(技术面, 宏观面, 消息面)。"""
         w = (await self.get_weights()).combine
-        return w.tech, w.macro
+        return w.tech, w.macro, w.news

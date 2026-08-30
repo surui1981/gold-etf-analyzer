@@ -21,12 +21,13 @@ from app.schemas.market import (
     GoldTrendOut,
     GoldTrendPoint,
     MacroIndexOut,
+    NewsIndexOut,
     TrendDirection,
     TrendIndicatorOut,
     TrendIndexLevel,
     TrendIndexOut,
 )
-from app.services.macro import MACRO_WEIGHT, TECH_WEIGHT, MacroFactorService
+from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -96,13 +97,14 @@ def _rsi(closes: list[float], period: int = 14) -> float:
 
 
 class TrendService:
-    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数（技术面×宏观面合成）。"""
+    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数（技术×30% + 宏观×40% + 消息面×30%）。"""
 
     def __init__(
         self,
         repo: MarketDataRepository,
         macro: MacroFactorService | None = None,
         settings=None,
+        news=None,
     ) -> None:
         self._repo = repo
         self._macro = macro or MacroFactorService(settings=settings)
@@ -110,6 +112,10 @@ class TrendService:
         from app.services.settings import WeightService
 
         self._settings: WeightService | None = settings
+        # 消息面评估（客户打分）；未注入时消息面按中性 50 处理
+        from app.services.news import NewsScoreService
+
+        self._news: NewsScoreService | None = news
 
     async def analyze(self, days: int = 60, target: str = "etf") -> GoldTrendOut:
         """分析黄金近 N 个交易日趋势并合成追踪指数。
@@ -163,19 +169,35 @@ class TrendService:
             summary=self._summarize(direction, change_pct, end_price, _TARGET_UNITS.get(target, "元")),
         )
 
-        # 权重：用户配置优先（趋势维度 + 技术/宏观合成比），否则内置默认
+        # 权重：用户配置优先（趋势维度 + 技术/宏观/消息面合成比），否则内置默认
         if self._settings is not None:
             tech_weights = await self._settings.trend_weights()
-            tech_w, macro_w = await self._settings.combine_weights()
+            tech_w, macro_w, news_w = await self._settings.combine_weights()
         else:
             tech_weights = TREND_WEIGHTS
-            tech_w, macro_w = TECH_WEIGHT, MACRO_WEIGHT
+            tech_w, macro_w, news_w = TECH_WEIGHT, MACRO_WEIGHT, NEWS_WEIGHT
 
         indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights)
         macro_index = await self._macro.evaluate()
 
-        # 综合趋势指数 = 技术面 × tech_w + 宏观面 × macro_w（随宏观参数与权重动态变化）
-        combined = round(tech_index.score * tech_w + macro_index.score * macro_w, 1)
+        # 消息面：客户当日打分（未打分 → 中性 50）
+        news_score = 50.0
+        news_direction = DirectionSignal.NEUTRAL
+        news_note, news_scored = "", False
+        if self._news is not None:
+            news_out = await self._news.get_today()
+            news_score = news_out.score
+            news_direction = news_out.direction
+            news_note = news_out.notes
+            news_scored = news_out.scored
+
+        # 综合趋势指数 = 技术×tech_w + 宏观×macro_w + 消息面×news_w
+        combined = round(
+            tech_index.score * tech_w
+            + macro_index.score * macro_w
+            + news_score * news_w,
+            1,
+        )
         level, level_dir = self._to_level(combined)
         final_index = TrendIndexOut(
             score=combined,
@@ -184,12 +206,19 @@ class TrendService:
             summary=(
                 f"综合趋势评估指数 {combined:.1f}/100，等级【{self._level_label(level)}】；"
                 f"= 技术面 {tech_index.score:.1f}×{tech_w:.0%} + 宏观参考 {macro_index.score:.1f}×{macro_w:.0%}"
+                f" + 消息面 {news_score:.1f}×{news_w:.0%}"
             ),
         )
+        news_index = NewsIndexOut(
+            score=news_score,
+            direction=news_direction,
+            note=news_note,
+            scored=news_scored,
+        )
         logger.info(
-            "Trend analyzed: %s days, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%)",
+            "Trend analyzed: %s days, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%, news=%.1f×%.0f%%)",
             len(klines), direction.value, change_pct,
-            combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100,
+            combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100, news_score, news_w * 100,
         )
         return GoldTrendOut(
             symbol=symbol,
@@ -200,6 +229,7 @@ class TrendService:
             indicators=indicators,
             index=final_index,
             macro=macro_index,
+            news=news_index,
         )
 
     @staticmethod
