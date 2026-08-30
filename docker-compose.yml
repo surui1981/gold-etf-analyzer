@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    container_name: gold-etf-analyzer
+    ports:
+      - "8888:8888"
+    environment:
+      - APP_ENV=prod
+      - DATABASE_URL=sqlite+aiosqlite:///./data/gold_etf.db
+    volumes:
+      # 持久化 SQLite 数据文件
+      - ./data:/app/data
+    restart: unless-stopped
