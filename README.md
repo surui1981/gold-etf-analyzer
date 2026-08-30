@@ -5,6 +5,7 @@
 延续 PM-Evaluator 的预期评估架构：各因子/维度按典型经验赋权加权评分，输出机会窗口与多空信号（红绿着色，面向客户展示）。**消息面由客户基于主流财经网站的投行黄金走势展望研判打分**（独立评估页），汇入每日评估。
 
 > 📖 完整说明文档（架构 / API 参考 / 核心模型 / 改进计划）：[docs/application-guide.md](docs/application-guide.md)
+> 🧭 易用性改善路径（现状评估 + P0-P3 改善方案与版本规划）：[docs/improvement-path.md](docs/improvement-path.md)
 
 ## 快速开始
 
@@ -134,3 +135,4 @@ ruff format src tests
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）
 
 > 完整三阶段改进计划见 [docs/application-guide.md](docs/application-guide.md) 第 11 章。
+> 易用性专项改善路径（P0 稳定性/可信度优先）见 [docs/improvement-path.md](docs/improvement-path.md)。
