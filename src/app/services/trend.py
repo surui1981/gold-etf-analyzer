@@ -220,6 +220,12 @@ class TrendService:
             len(klines), direction.value, change_pct,
             combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100, news_score, news_w * 100,
         )
+        status = getattr(self._repo, "source_status", None)
+        sources: dict[str, str] = status() if callable(status) else {}
+        degraded = any(v == "mock" for v in sources.values())
+        if degraded:
+            logger.warning("Data source degraded to mock: %s", sources)
+
         return GoldTrendOut(
             symbol=symbol,
             name=name,
@@ -230,6 +236,8 @@ class TrendService:
             index=final_index,
             macro=macro_index,
             news=news_index,
+            data_sources=sources,
+            degraded=degraded,
         )
 
     @staticmethod

@@ -32,3 +32,9 @@ htmlcov/
 # 系统
 .DS_Store
 Thumbs.db
+# 看门狗日志
+watchdog.log
+watchdog.out.log
+watchdog.err.log
+server_wd.log
+server_wd.log.err

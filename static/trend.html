@@ -95,6 +95,11 @@
   .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
   .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
   .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  /* 数据源状态条（降级可感知） */
+  .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
+  .source-ok { background: #e6f4ea; color: #2f9e44; border: 1px solid #b7e4c7; }
+  .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
+  .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
 </style>
 </head>
 <body>
@@ -109,6 +114,12 @@
       <a href="/news">消息面评估</a>
     </div>
   </nav>
+
+  <!-- 数据源状态（降级可感知） -->
+  <div id="sourceBar" class="source-bar" style="display:none"></div>
+
+  <!-- 加载进度提示（首屏不再空白） -->
+  <div id="loadBar" class="source-bar source-warn">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
 
   <!-- 投资警示（醒目置顶） -->
   <div class="warn-banner">
@@ -228,12 +239,29 @@ async function init() {
     const resp = await fetch(API);
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
+    renderSourceBar(data);
     render(data);
   } catch (e) {
     document.getElementById("chartArea").innerHTML =
       '<div class="error">数据加载失败：' + e.message +
       '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
   }
+}
+
+function renderSourceBar(d) {
+  const bar = document.getElementById("sourceBar");
+  const names = { etf: "黄金ETF（新浪/东财）", sge: "上海金（SGE）", ny: "纽约金（英为财情）" };
+  const src = d.data_sources || {};
+  const keys = Object.keys(src);
+  if (!keys.length) { bar.style.display = "none"; return; }
+
+  const bad = keys.filter(k => src[k] === "mock");
+  const detail = keys.map(k => `${names[k] || k}：${src[k] === "live" ? "实时" : "演示"}`).join(" ｜ ");
+  bar.className = "source-bar " + (bad.length === 0 ? "source-ok" : bad.length === keys.length ? "source-bad" : "source-warn");
+  bar.innerHTML = bad.length === 0
+    ? `● 数据源正常：全部为实时行情 — ${detail}`
+    : `▲ ${bad.map(k => names[k] || k).join("、")} 当前为<b>演示数据（非真实行情）</b>，请勿据此决策 — ${detail}`;
+  bar.style.display = "block";
 }
 
 function render(d) {
@@ -473,10 +501,12 @@ async function loadSnapshots() {
   }
 }
 
-init();
-loadCompare();
-loadNy();
-loadSnapshots();
+// 统一启动：并行加载各区块，全部结束后隐藏进度提示
+(async function boot() {
+  const bar = document.getElementById("loadBar");
+  await Promise.allSettled([init(), loadCompare(), loadNy(), loadSnapshots()]);
+  bar.style.display = "none";
+})();
 </script>
 </body>
 </html>

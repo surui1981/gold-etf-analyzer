@@ -139,6 +139,11 @@ class GoldTrendOut(BaseModel):
     index: TrendIndexOut = Field(..., description="综合趋势评估指数（技术+宏观+消息面）")
     macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
     news: NewsIndexOut = Field(..., description="消息面指数（客户评估）")
+    data_sources: dict[str, str] = Field(
+        default_factory=dict,
+        description="数据源状态：etf/sge/ny → live（真实）或 mock（降级演示）",
+    )
+    degraded: bool = Field(False, description="是否存在数据源降级为演示数据")
 
 
 class GoldCompareSeries(BaseModel):
