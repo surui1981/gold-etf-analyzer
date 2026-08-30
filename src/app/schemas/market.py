@@ -59,6 +59,8 @@ class GoldTrendMetrics(BaseModel):
     low: float = Field(..., description="区间最低价")
     ma20: float | None = Field(None, description="最新 20 日均线")
     ma40: float | None = Field(None, description="最新 40 日均线")
+    change_pct_1d: float = Field(0.0, description="昨日（最近 1 个交易日）涨跌幅 %")
+    change_pct_5d: float = Field(0.0, description="近 5 个交易日涨跌幅 %")
     direction: TrendDirection
     summary: str
 

@@ -153,6 +153,7 @@ class TrendService:
 
         start_price, end_price = closes[0], closes[-1]
         change_pct = (end_price - start_price) / start_price * 100 if start_price else 0.0
+        change_1d, change_5d = self._recent_changes(closes)
         direction = self._detect_direction(closes, ma20)
         metrics = GoldTrendMetrics(
             start_date=klines[0].date,
@@ -165,6 +166,8 @@ class TrendService:
             low=round(min(k.low for k in klines), 3),
             ma20=ma20[-1],
             ma40=ma40[-1],
+            change_pct_1d=change_1d,
+            change_pct_5d=change_5d,
             direction=direction,
             summary=self._summarize(direction, change_pct, end_price, _TARGET_UNITS.get(target, "元")),
         )
@@ -457,6 +460,21 @@ class TrendService:
         )
 
     # ---------------- 方向与摘要（沿用） ----------------
+
+    @staticmethod
+    def _recent_changes(closes: list[float]) -> tuple[float, float]:
+        """近期涨跌幅：(昨日 1 日涨跌 %, 近 5 个交易日涨跌 %)。"""
+        if len(closes) < 2:
+            return 0.0, 0.0
+
+        last, prev = closes[-1], closes[-2]
+        change_1d = (last - prev) / prev * 100 if prev else 0.0
+
+        # 近 5 个交易日：与 5 根 K 线之前的收盘比较（含当根共 6 个点）
+        base_5d = closes[-6] if len(closes) >= 6 else closes[0]
+        change_5d = (last - base_5d) / base_5d * 100 if base_5d else 0.0
+
+        return round(change_1d, 2), round(change_5d, 2)
 
     @staticmethod
     def _detect_direction(closes: list[float], ma20: list[float | None]) -> TrendDirection:

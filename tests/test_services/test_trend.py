@@ -103,6 +103,25 @@ def test_trend_weights_sum_to_one() -> None:
     assert sum(TREND_WEIGHTS.values()) == pytest.approx(1.0)
 
 
+async def test_recent_changes_1d_and_5d() -> None:
+    """指标摘要含昨日涨跌（1 日）与近 5 个交易日涨跌。"""
+    closes = [round(100 + i * 1.0, 3) for i in range(60)]  # 每日 +1
+    result = await _service(_mk_klines(closes)).analyze(days=60)
+    m = result.metrics
+
+    # closes[-1]=159, [-2]=158, [-6]=154
+    assert m.change_pct_1d == pytest.approx((159 - 158) / 158 * 100, abs=0.05)
+    assert m.change_pct_5d == pytest.approx((159 - 154) / 154 * 100, abs=0.05)
+
+
+async def test_recent_changes_short_series() -> None:
+    """数据不足时近期涨跌返回 0，不报错。"""
+    assert TrendService._recent_changes([]) == (0.0, 0.0)
+    assert TrendService._recent_changes([10.0]) == (0.0, 0.0)
+    # 不足 6 根时，5 日涨跌退化为与首根比较
+    assert TrendService._recent_changes([100.0, 101.0, 102.0])[1] == pytest.approx(2.0, abs=0.01)
+
+
 async def test_trend_index_components() -> None:
     """上升序列应输出 5 个参数维度 + 偏多综合指数。"""
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
