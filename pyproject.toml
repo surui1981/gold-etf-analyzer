@@ -1,7 +1,7 @@
 [project]
 name = "gold-etf-analyzer"
-version = "0.10.0"
-description = "黄金ETF交易机会分析 REST API —— 基于宏观因子（美元指数/美债收益率/实际利率）加权评分，输出投资机会窗口"
+version = "0.11.0"
+description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,6 +11,7 @@ dependencies = [
     "pydantic-settings>=2.6,<3.0",
     "sqlalchemy>=2.0.36,<3.0",
     "aiosqlite>=0.20,<1.0",
+    "akshare>=1.14,<2.0",
 ]
 
 [project.optional-dependencies]

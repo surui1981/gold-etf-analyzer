@@ -1,7 +1,10 @@
-# Gold ETF Analyzer · 黄金ETF交易机会分析 API
+# Gold Price Investment Assistant · 黄金价格投资辅助工具
 
-基于 **FastAPI + Pydantic v2** 的分层架构 REST API 骨架，专注于黄金ETF交易机会分析。
-延续 PM-Evaluator 的预期评估架构：以宏观因子（美元指数 / 美债收益率 / 实际利率 / 通胀预期 / 避险情绪）加权评分，输出**投资机会窗口**与**逐因子多空明细**（供前端红绿着色）。
+面向**个人黄金投资者**的一站式数据参考平台：汇聚 **纽约金（COMEX）、上海金（Au99.99）、黄金ETF（518880）** 三大市场价格，提供趋势评估指数（0-100 量化多空）、个人持仓跟踪与盈亏管理、以及参数面 × 交易面驱动的 **ETF 购买决策**。
+
+延续 PM-Evaluator 的预期评估架构：各因子/维度按典型经验赋权加权评分，输出机会窗口与多空信号（红绿着色，面向客户展示）。
+
+> 📖 完整说明文档（架构 / API 参考 / 核心模型 / 改进计划）：[docs/application-guide.md](docs/application-guide.md)
 
 ## 快速开始
 
@@ -35,10 +38,30 @@ uv run ruff format src tests  # 格式化
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET  | `/` | 黄金趋势追踪页（浏览器直接打开） |
 | GET  | `/api/v1/health` | 健康检查 |
 | POST | `/api/v1/analysis/opportunity` | 提交宏观因子，返回机会评分与窗口 |
 | GET  | `/api/v1/analysis/history?limit=20` | 历史分析记录（倒序） |
-| GET  | `/api/v1/market/gold` | 黄金现货报价（当前 Mock） |
+| GET  | `/api/v1/market/gold` | 黄金ETF最新报价（AKShare 实时） |
+| GET  | `/api/v1/market/gold/trend?days=60` | 黄金2个月趋势追踪：价格序列 + MA5/20/40 + **趋势参数维度 + 市场趋势评估追踪指数** |
+
+> 数据源：**AKShare**（新浪 `fund_etf_hist_sina` 主源，东财 `fund_etf_hist_em` 备选），
+> 采集失败自动降级为内置 Mock，保证离线可用。
+
+### 市场趋势评估追踪指数
+
+基于 PM-Evaluator 加权评分法，对价格趋势 5 个维度赋权合成 0-100 指数：
+
+| 维度 | 权重 | 说明 |
+|------|------|------|
+| 结构 | 30% | 均线排列（MA5/20/40 多空）+ MA20 斜率 |
+| 动量 | 20% | 近 20 日涨跌幅 |
+| 支撑 | 20% | 收盘价相对 MA20/MA40 乖离 |
+| 动能 | 15% | RSI(14) |
+| 回撤 | 15% | 距区间高点回撤 |
+
+等级：`≥75 强势上升` / `≥55 上升` / `≥45 震荡` / `≥25 下降` / `<25 弱势下降`。
+权重与阈值集中在 `services/trend.py::TREND_WEIGHTS`，可按经验调整。
 
 ### 调用示例
 

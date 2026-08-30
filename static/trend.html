@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黄金ETF 2个月趋势追踪</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --up: #e03131;      /* 涨 → 红（中国习惯） */
+    --down: #2f9e44;    /* 跌 → 绿 */
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --border: #e6e8eb;
+    --text: #1f2329;
+    --muted: #8a919f;
+    --accent: #c9a227;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 20px; font-weight: 600; }
+  .card .extra { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
+  .summary b { color: var(--text); }
+  /* 追踪指数 */
+  .index-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  .index-score { text-align: center; min-width: 120px; }
+  .index-score .num { font-size: 44px; font-weight: 700; line-height: 1; }
+  .index-score .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  /* 网站 hero 介绍区 */
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 25px; letter-spacing: .5px; }
+  .hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .hero nav { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  .index-info { flex: 1; min-width: 240px; }
+  .index-info .badge { font-size: 14px; padding: 4px 14px; }
+  .index-info .txt { font-size: 14px; color: #374151; line-height: 1.7; margin-top: 8px; }
+  .method { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .method b { color: #4b5563; }
+  .bar { height: 10px; background: #eef0f3; border-radius: 999px; overflow: hidden; margin: 8px 0 2px; }
+  .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .ind-row { margin-bottom: 14px; }
+  .ind-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+  .ind-head .nm { font-weight: 600; }
+  .ind-head .vl { color: var(--muted); }
+  .ind-head .sc { font-weight: 700; }
+  .ind-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  canvas { max-height: 420px; }
+  .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+  .error { color: var(--up); text-align: center; padding: 40px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="hero">
+    <div>
+      <h1>黄金价格投资辅助工具 <span id="badge"></span></h1>
+      <div class="en">Gold Price Investment Assistant</div>
+      <div class="tagline">三市场对照 · 趋势评估指数 · 个人持仓跟踪 · ETF 购买决策</div>
+      <p class="intro">汇聚<b>纽约金、上海金、黄金ETF</b>三大市场价格数据，量化评估黄金投资窗口——以趋势评估指数量化多空、以持仓盈亏跟踪投资进度、以参数面×交易面辅助 ETF 购买决策，为个人黄金投资者提供一站式数据参考。</p>
+      <div class="sub" id="subtitle" style="margin-top:8px">加载中…</div>
+      <nav>
+        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/static/trend.html'">趋势追踪</button>
+        <button class="ghost" style="background:#f3f4f6;border:1px solid var(--border);color:var(--text)" onclick="location.href='/portfolio'">持仓与决策</button>
+      </nav>
+      <div class="notice">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
+    </div>
+  </header>
+
+  <!-- 市场趋势评估追踪指数（置顶） -->
+  <div class="index-panel">
+    <div class="index-score">
+      <div class="num" id="idxNum">--</div>
+      <div class="lbl">趋势评估指数 (0-100)</div>
+    </div>
+    <div class="index-info">
+      <span class="badge" id="idxBadge" style="display:none"></span>
+      <div class="txt" id="idxSummary"></div>
+      <div class="method" id="idxMethod"></div>
+    </div>
+  </div>
+
+  <div class="cards" id="cards"></div>
+
+  <!-- 纽约金 60 天价格曲线 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">纽约金（COMEX GC）60天价格曲线 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="nySub"></span></div>
+    <div class="cards" id="nyCards" style="margin-bottom:12px"></div>
+    <canvas id="nyChart" style="max-height:260px"></canvas>
+    <div class="summary" id="nySummary"></div>
+  </div>
+
+  <!-- 趋势参数维度 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px">趋势参数维度 <span style="font-weight:400;font-size:12px;color:var(--muted)">加权合成 · 红=利多 绿=利空</span></div>
+    <div id="indicators"></div>
+  </div>
+
+  <!-- ETF vs 黄金克价 对照 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">黄金ETF vs 黄金克价 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
+    <div class="cards" id="cmpCards" style="margin-bottom:12px"></div>
+    <table id="cmpTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"></table>
+    <canvas id="compareChart" style="max-height:260px"></canvas>
+    <div class="summary" id="cmpSummary"></div>
+  </div>
+
+  <div class="panel">
+    <div id="chartArea"><div class="loading">正在加载行情数据…</div></div>
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <footer>gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
+</div>
+
+<script>
+// API 基础地址：同源（8888 直开）用相对路径；跨源（如预览通道 3455）用绝对地址，
+// 避免 fetch 根相对路径打到错误端口。
+const API_BASE =
+  location.port === "8888" ? "" : "http://127.0.0.1:8888";
+const API = API_BASE + "/api/v1/market/gold/trend?days=60";
+
+async function init() {
+  try {
+    const resp = await fetch(API);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const data = await resp.json();
+    render(data);
+  } catch (e) {
+    document.getElementById("chartArea").innerHTML =
+      '<div class="error">数据加载失败：' + e.message +
+      '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
+  }
+}
+
+function render(d) {
+  const m = d.metrics;
+  const isUp = m.change_pct >= 0;
+
+  // 标题与徽章
+  document.getElementById("badge").outerHTML =
+    `<span class="badge" style="background:${isUp ? "var(--up)" : "var(--down)"};vertical-align:middle">${m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡"}</span>`;
+  document.getElementById("subtitle").textContent =
+    `${d.name}（${d.symbol}） · ${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日`;
+
+  // 指标卡
+  const cards = [
+    { label: "最新价", value: m.end_price.toFixed(3), extra: "元" },
+    { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + m.change_pct.toFixed(2) + "%", cls: isUp ? "up" : "down" },
+    { label: "区间最高", value: m.high.toFixed(3), extra: "元" },
+    { label: "区间最低", value: m.low.toFixed(3), extra: "元" },
+    { label: "MA20", value: m.ma20 ? m.ma20.toFixed(3) : "—" },
+    { label: "MA40", value: m.ma40 ? m.ma40.toFixed(3) : "—" },
+  ];
+  document.getElementById("cards").innerHTML = cards.map(c =>
+    `<div class="card"><div class="label">${c.label}</div>
+     <div class="value ${c.cls || ""}">${c.value}</div>
+     <div class="extra">${c.extra || ""}</div></div>`).join("");
+
+  // 追踪指数
+  const idx = d.index;
+  const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "#868e96";
+  document.getElementById("idxNum").textContent = idx.score.toFixed(1);
+  document.getElementById("idxNum").style.color = idxColor;
+  const lvlTxt = { strong_up: "🚀 强势上升", up: "↗ 上升", sideways: "→ 震荡整理", down: "↘ 下降", strong_down: "📉 弱势下降" }[idx.level] || idx.level;
+  const badge = document.getElementById("idxBadge");
+  badge.style.display = "inline-block";
+  badge.style.background = idxColor;
+  badge.textContent = lvlTxt;
+  document.getElementById("idxSummary").textContent = idx.summary;
+  document.getElementById("idxMethod").innerHTML =
+    "📐 <b>运算方法</b>：指数 = " + d.indicators.map(i => `${i.name}评分 × ${(i.weight * 100).toFixed(0)}%`).join(" + ") +
+    "（各维度 0-100 分加权求和）。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
+
+  // 趋势参数维度
+  document.getElementById("indicators").innerHTML = d.indicators.map(ind => {
+    const c = ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "#868e96";
+    return `<div class="ind-row">
+      <div class="ind-head">
+        <span class="nm">${ind.name}</span>
+        <span class="vl">${ind.value}</span>
+        <span class="sc" style="color:${c}">${ind.score.toFixed(0)}<span style="font-weight:400;color:var(--muted);font-size:11px"> / 贡献${ind.contribution.toFixed(1)}</span></span>
+      </div>
+      <div class="bar"><i style="width:${ind.score}%;background:${c}"></i></div>
+      <div class="ind-sub">权重 ${(ind.weight * 100).toFixed(0)}% · ${ind.detail}</div>
+    </div>`;
+  }).join("");
+
+  // 图表
+  const labels = d.points.map(p => p.date);
+  const colors = { close: "#c9a227", ma5: "#e8590c", ma20: "#1971c2", ma40: "#6741d9" };
+  const datasets = [
+    { label: "收盘价", data: d.points.map(p => p.close), borderColor: colors.close, borderWidth: 2, pointRadius: 0, tension: 0.15 },
+    { label: "MA5", data: d.points.map(p => p.ma5), borderColor: colors.ma5, borderWidth: 1.2, pointRadius: 0 },
+    { label: "MA20", data: d.points.map(p => p.ma20), borderColor: colors.ma20, borderWidth: 1.2, pointRadius: 0 },
+    { label: "MA40", data: d.points.map(p => p.ma40), borderColor: colors.ma40, borderWidth: 1.2, pointRadius: 0 },
+  ];
+  document.getElementById("chartArea").innerHTML = '<canvas id="trendChart"></canvas>';
+  new Chart(document.getElementById("trendChart"), {
+    type: "line",
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } },
+        tooltip: { callbacks: { label: ctx => ctx.dataset.label + ": " + (ctx.parsed.y ?? "—") } },
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, font: { size: 11 } } },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+
+  // 摘要
+  document.getElementById("summary").innerHTML = m.summary;
+}
+
+// ETF vs 克价对照
+async function loadCompare() {
+  try {
+    const c = await fetch(API_BASE + "/api/v1/market/gold/compare?days=60")
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 起点归一化=100`;
+    const e = c.etf, g = c.gram;
+    const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
+    document.getElementById("cmpCards").innerHTML = [
+      { label: e.name, value: (e.change_pct >= 0 ? "+" : "") + e.change_pct.toFixed(2) + "%", extra: e.start_price + " → " + e.end_price, cls: e.change_pct >= 0 ? "up" : "down" },
+      { label: g.name + "（元/克）", value: (g.change_pct >= 0 ? "+" : "") + g.change_pct.toFixed(2) + "%", extra: g.start_price + " → " + g.end_price, cls: g.change_pct >= 0 ? "up" : "down" },
+      { label: "区间领先", value: leaderTxt, extra: "涨跌幅差 " + c.lead_gap.toFixed(2) + " 个百分点" },
+    ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra}</div></div>`).join("");
+
+    // 数据对照表：ETF vs 上海金 完整指标
+    const fmtPct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    const dirTxt = d => d === "up" ? '<span class="up">↗ 上升</span>' : d === "down" ? '<span class="down">↘ 下降</span>' : "→ 震荡";
+    const cells = [
+      ["最新价", e.end_price.toFixed(3) + " 元", g.end_price.toFixed(2) + " 元/克", e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
+      ["区间涨跌", fmtPct(e.change_pct), fmtPct(g.change_pct), e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
+      ["区间最高", e.high.toFixed(3), g.high.toFixed(2), "", ""],
+      ["区间最低", e.low.toFixed(3), g.low.toFixed(2), "", ""],
+      ["MA20", e.ma20 ? e.ma20.toFixed(3) : "—", g.ma20 ? g.ma20.toFixed(2) : "—", "", ""],
+      ["MA40", e.ma40 ? e.ma40.toFixed(3) : "—", g.ma40 ? g.ma40.toFixed(2) : "—", "", ""],
+      ["区间方向", dirTxt(e.direction), dirTxt(g.direction), "", ""],
+    ];
+    document.getElementById("cmpTable").innerHTML =
+      `<tr style="background:#f3f4f6"><th style="text-align:left;padding:7px 8px">指标</th><th style="text-align:right;padding:7px 8px">${e.name}</th><th style="text-align:right;padding:7px 8px">${g.name}</th></tr>` +
+      cells.map(r => `<tr style="border-bottom:1px solid var(--border)">` +
+        `<td style="padding:7px 8px;color:var(--muted)">${r[0]}</td>` +
+        `<td class="${r[3]}" style="text-align:right;padding:7px 8px">${r[1]}</td>` +
+        `<td class="${r[4]}" style="text-align:right;padding:7px 8px">${r[2]}</td></tr>`).join("");
+
+    new Chart(document.getElementById("compareChart"), {
+      type: "line",
+      data: {
+        labels: c.points.map(p => p.date),
+        datasets: [
+          { label: e.name, data: c.points.map(p => p.etf), borderColor: "#c9a227", borderWidth: 2, pointRadius: 0, tension: 0.15 },
+          { label: g.name, data: c.points.map(p => p.gram), borderColor: "#1971c2", borderWidth: 2, pointRadius: 0, tension: 0.15 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
+        scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
+      },
+    });
+    document.getElementById("cmpSummary").textContent = c.summary;
+  } catch (e) {
+    document.getElementById("cmpSub").textContent = "对照加载失败：" + e.message;
+  }
+}
+
+// 纽约金 60 天曲线
+async function loadNy() {
+  try {
+    const n = await fetch(API_BASE + "/api/v1/market/gold/ny-trend?days=60")
+      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    const m = n.metrics;
+    const isUp = m.change_pct >= 0;
+    document.getElementById("nySub").textContent = `${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · 美元/盎司`;
+    document.getElementById("nyCards").innerHTML = [
+      { label: "最新价", value: m.end_price.toFixed(1), extra: "美元/盎司" },
+      { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + m.change_pct.toFixed(2) + "%", cls: isUp ? "up" : "down" },
+      { label: "区间最高", value: m.high.toFixed(1), extra: "美元/盎司" },
+      { label: "区间最低", value: m.low.toFixed(1), extra: "美元/盎司" },
+    ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("");
+    new Chart(document.getElementById("nyChart"), {
+      type: "line",
+      data: {
+        labels: n.points.map(p => p.date),
+        datasets: [
+          { label: "纽约金收盘", data: n.points.map(p => p.close), borderColor: "#c9a227", borderWidth: 2, pointRadius: 0, tension: 0.15 },
+          { label: "MA20", data: n.points.map(p => p.ma20), borderColor: "#1971c2", borderWidth: 1.2, pointRadius: 0 },
+          { label: "MA40", data: n.points.map(p => p.ma40), borderColor: "#6741d9", borderWidth: 1.2, pointRadius: 0 },
+        ],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
+        scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
+      },
+    });
+    document.getElementById("nySummary").textContent = m.summary;
+  } catch (e) {
+    document.getElementById("nySub").textContent = "纽约金数据加载失败：" + e.message;
+  }
+}
+
+init();
+loadCompare();
+loadNy();
+</script>
+</body>
+</html>

@@ -15,7 +15,7 @@ from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 from app.main import app  # noqa: E402
 from app.models.base import Base  # noqa: E402
-from app.repositories.db import engine  # noqa: E402
+from app.repositories.db import async_session_factory, engine  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -25,6 +25,13 @@ async def _reset_db() -> None:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
     yield
+
+
+@pytest.fixture
+async def db_session():
+    """服务层测试用的独立数据库会话。"""
+    async with async_session_factory() as session:
+        yield session
 
 
 @pytest.fixture

@@ -3,9 +3,12 @@
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.config import get_settings
@@ -14,6 +17,7 @@ from app.repositories.db import engine
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
+STATIC_DIR = Path(__file__).resolve().parents[2] / "static"  # src/app/../.. = 项目根/static
 
 
 @asynccontextmanager
@@ -31,9 +35,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title=settings.app_name,
-    version="0.10.0",
-    description="黄金ETF交易机会分析 API —— 宏观因子加权评分，输出投资机会窗口",
+    title="黄金价格投资辅助工具",
+    version="0.11.0",
+    description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
 )
@@ -49,3 +53,20 @@ app.add_middleware(
 
 # 统一挂载 v1 路由
 app.include_router(api_router, prefix="/api/v1")
+
+
+@app.get("/", include_in_schema=False)
+async def index() -> RedirectResponse:
+    """根路径直接进入趋势追踪页。"""
+    return RedirectResponse("/static/trend.html")
+
+
+@app.get("/portfolio", include_in_schema=False)
+async def portfolio_page() -> RedirectResponse:
+    """个人交易跟踪与购买决策页。"""
+    return RedirectResponse("/static/portfolio.html")
+
+
+# 静态资源（趋势追踪页面等）
+if STATIC_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
