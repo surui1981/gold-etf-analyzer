@@ -7,12 +7,16 @@
 """
 
 import asyncio
+import json
+import os
+import sqlite3
 import threading
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Protocol
 
+from app.config import get_settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,19 +31,117 @@ QUOTE_CACHE_TTL = 300  # 5 分钟
 _CACHE: dict[tuple, tuple[float, list]] = {}
 _CACHE_LOCK = threading.Lock()
 
+# 持久化缓存：独立 SQLite 文件（quote_cache.db），与主库分开避免并发写锁冲突；
+# 内存缓存 + 磁盘双写，服务重启后仍可命中，冷启动首屏 < 1s。
+_settings = get_settings()
+_CACHE_DB = os.path.join(
+    os.path.dirname(_settings.database_url.split("///", 1)[-1]), "quote_cache.db"
+)
+_db_initialized = False
+
+
+def _kline_to_dict(k: "GoldKline") -> dict:
+    return {
+        "date": k.date.isoformat(),
+        "open": k.open,
+        "close": k.close,
+        "high": k.high,
+        "low": k.low,
+        "volume": k.volume,
+    }
+
+
+def _dict_to_kline(d: dict) -> "GoldKline":
+    return GoldKline(
+        date=date.fromisoformat(d["date"]),
+        open=float(d["open"]),
+        close=float(d["close"]),
+        high=float(d["high"]),
+        low=float(d["low"]),
+        volume=float(d.get("volume", 0) or 0),
+    )
+
+
+def _cache_db_init() -> None:
+    """初始化持久化缓存表（幂等），并清理过期行。"""
+    global _db_initialized
+    if _db_initialized:
+        return
+    os.makedirs(os.path.dirname(_CACHE_DB), exist_ok=True)
+    conn = sqlite3.connect(_CACHE_DB, timeout=5)
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS cache_quotes ("
+            "key TEXT PRIMARY KEY, data TEXT NOT NULL, expires REAL NOT NULL)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_cache_quotes_expires ON cache_quotes(expires)"
+        )
+        conn.execute("DELETE FROM cache_quotes WHERE expires < ?", (time.time(),))
+        conn.commit()
+    finally:
+        conn.close()
+    _db_initialized = True
+
+
+def _db_get(key: str) -> list | None:
+    """从持久层读取未过期缓存（返回 GoldKline 列表或 None）。"""
+    try:
+        _cache_db_init()
+        conn = sqlite3.connect(_CACHE_DB, timeout=5)
+        try:
+            row = conn.execute(
+                "SELECT data, expires FROM cache_quotes WHERE key = ?", (key,)
+            ).fetchone()
+        finally:
+            conn.close()
+        if row is not None and row[1] > time.time():
+            return [_dict_to_kline(d) for d in json.loads(row[0])]
+    except Exception as exc:  # noqa: BLE001 —— 持久层故障不影响主流程
+        logger.warning("quote cache read failed (%s)", exc)
+    return None
+
+
+def _db_set(key: str, klines: list) -> None:
+    """写入持久层（upsert）。"""
+    try:
+        _cache_db_init()
+        payload = json.dumps([_kline_to_dict(k) for k in klines], ensure_ascii=False)
+        conn = sqlite3.connect(_CACHE_DB, timeout=5)
+        try:
+            conn.execute(
+                "INSERT INTO cache_quotes (key, data, expires) VALUES (?, ?, ?) "
+                "ON CONFLICT(key) DO UPDATE SET data = excluded.data, expires = excluded.expires",
+                (key, payload, time.time() + QUOTE_CACHE_TTL),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("quote cache write failed (%s)", exc)
+
 
 def _cache_get(key: tuple) -> list | None:
-    """读取缓存（未过期返回值，否则 None）。"""
+    """读取缓存：内存优先，未命中回填持久层。"""
     with _CACHE_LOCK:
         item = _CACHE.get(key)
     if item is not None and time.time() - item[0] < QUOTE_CACHE_TTL:
         return item[1]
+
+    raw = _db_get(str(key))
+    if raw is not None:
+        with _CACHE_LOCK:
+            _CACHE[key] = (time.time(), raw)
+        logger.debug("quote cache hit (disk): %s", key)
+        return raw
     return None
 
 
 def _cache_set(key: tuple, value: list) -> None:
+    """写缓存：内存 + 持久层双写。"""
     with _CACHE_LOCK:
         _CACHE[key] = (time.time(), value)
+    _db_set(str(key), value)
 
 # 默认黄金 ETF：华安黄金ETF（规模最大、流动性最好）
 DEFAULT_GOLD_ETF = "518880"

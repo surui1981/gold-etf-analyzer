@@ -19,6 +19,12 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
     ],
 }
 
+# 高频查询字段索引：表名 -> 列名列表
+INDEX_MIGRATIONS: dict[str, list[str]] = {
+    "daily_snapshots": ["snapshot_date"],
+    "news_scores": ["score_date"],
+}
+
 
 async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
     """检查并补齐各表新增列（幂等，缺失才执行 ALTER TABLE）。"""
@@ -34,5 +40,23 @@ async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
                     text(f"ALTER TABLE {table} ADD COLUMN {col} {col_type} DEFAULT {default}")
                 )
                 logger.warning("db migrate: added column %s.%s (%s)", table, col, col_type)
+
+        await conn.commit()
+
+
+async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
+    """SQLite 性能优化：WAL 模式（高并发读写）+ 常用查询索引（幂等）。"""
+    async with engine.connect() as conn:
+        mode = (await conn.execute(text("PRAGMA journal_mode=WAL"))).scalar()
+        if mode:
+            logger.info("sqlite journal_mode=%s", mode)
+
+        for table, columns in INDEX_MIGRATIONS.items():
+            for col in columns:
+                idx = f"idx_{table}_{col}"
+                await conn.execute(
+                    text(f"CREATE INDEX IF NOT EXISTS {idx} ON {table} ({col})")
+                )
+                logger.info("sqlite index ready: %s on %s(%s)", idx, table, col)
 
         await conn.commit()

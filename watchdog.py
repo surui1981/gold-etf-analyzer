@@ -13,9 +13,11 @@
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import logging
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -34,6 +36,16 @@ CAPTURE_STATE_FILE = os.path.join(PROJECT_DIR, "capture_state.json")
 # 每日定时采集快照的时刻（本地时间）：16:00 国内收盘后 ｜ 06:00 纽约金收盘后
 CAPTURE_TIMES = ["06:00", "16:00"]
 CAPTURE_WINDOW = 1800  # 触发时刻后 30 分钟内有效，避免跨天误触发
+
+# 数据库路径与备份目录（与主库同目录 backup/）
+try:
+    from app.config import get_settings  # 独立脚本运行时不强依赖
+
+    _DB_PATH = get_settings().database_url.split("///", 1)[-1]
+except Exception:  # noqa: BLE001
+    _DB_PATH = os.path.join(os.path.dirname(PROJECT_DIR), "data", "gold_etf.db")
+BACKUP_DIR = os.path.join(os.path.dirname(_DB_PATH), "backup")
+BACKUP_KEEP = 7  # 保留最近 7 份
 
 logger = logging.getLogger("watchdog")
 
@@ -159,6 +171,23 @@ def do_capture() -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def backup_db(now: datetime) -> None:
+    """每日备份主库（按日期命名，保留最近 BACKUP_KEEP 份）。"""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        dst = os.path.join(BACKUP_DIR, f"gold_etf_{now:%Y%m%d}.db")
+        if not os.path.exists(dst):
+            if os.path.exists(_DB_PATH):
+                shutil.copy2(_DB_PATH, dst)
+                logger.info("db backup created: %s", dst)
+        backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "gold_etf_*.db")), reverse=True)
+        for old in backups[BACKUP_KEEP:]:
+            os.remove(old)
+            logger.info("db backup cleaned: %s", old)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("db backup failed: %s", exc)
+
+
 def maybe_capture() -> None:
     """到达每日采集时刻且当日该时段未采集 → 执行一次（幂等）。"""
     now = datetime.now()
@@ -178,6 +207,7 @@ def maybe_capture() -> None:
         delta = (now - target).total_seconds()
         if not (0 <= delta <= CAPTURE_WINDOW):
             continue
+        backup_db(now)  # 每日随采集备份主库
         try:
             snap = do_capture()
             done[slot] = now.isoformat(timespec="seconds")
