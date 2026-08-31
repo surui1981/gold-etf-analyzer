@@ -14,6 +14,7 @@ from app.api.v1.router import api_router
 from app.config import get_settings
 from app.models.base import Base
 from app.repositories.db import engine
+from app.utils.db_migrate import ensure_sqlite_columns
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -29,6 +30,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # 补齐历史库缺失的新增列（create_all 不会加列）
+    await ensure_sqlite_columns(engine)
     logger.info("Database ready (env=%s)", settings.app_env)
     yield
     await engine.dispose()

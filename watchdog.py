@@ -97,26 +97,31 @@ def start_service() -> bool:
 
     输出写入独立日志文件（server_wd.log），避免与被重启进程持有的
     server.log 句柄冲突（Windows 下文件被占用会导致启动失败）。
+
+    启动方式说明：直接 Popen + DETACHED_PROCESS 会让服务进程权限受限
+    （实测 SQLite 写入报 "attempt to write a readonly database"），
+    因此改用 PowerShell Start-Process（与手动启动等效，写入正常）。
     """
     server_log = os.path.join(PROJECT_DIR, "server_wd.log")
     server_err = os.path.join(PROJECT_DIR, "server_wd.log.err")
-    creation = 0
-    if os.name == "nt":
-        creation = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+
+    args = f"-m uvicorn app.main:app --host 0.0.0.0 --port {PORT}"
+    ps_cmd = (
+        f"Start-Process -FilePath '{PYTHON}' "
+        f"-ArgumentList '{args}' "
+        f"-WorkingDirectory '{PROJECT_DIR}' "
+        f"-WindowStyle Hidden "
+        f"-RedirectStandardOutput '{server_log}' "
+        f"-RedirectStandardError '{server_err}'"
+    )
     try:
-        with open(server_log, "a", encoding="utf-8") as fo, open(server_err, "a", encoding="utf-8") as fe:
-            subprocess.Popen(
-                [
-                    PYTHON, "-m", "uvicorn", "app.main:app",
-                    "--host", "0.0.0.0", "--port", str(PORT),
-                ],
-                cwd=PROJECT_DIR,
-                stdout=fo,
-                stderr=fe,
-                creationflags=creation,
-                close_fds=True,
-            )
-        logger.info("Service starting on port %s", PORT)
+        subprocess.Popen(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            cwd=PROJECT_DIR,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        logger.info("Service starting on port %s (via Start-Process)", PORT)
         return True
     except Exception as exc:  # noqa: BLE001
         logger.error("Failed to start service: %s", exc)
