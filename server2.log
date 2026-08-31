@@ -1,6 +1,0 @@
-2026-08-31 21:19:18,536 | INFO    | app.main | Database ready (env=dev)
-INFO:     127.0.0.1:14535 - "GET /api/v1/health HTTP/1.1" 200 OK
-2026-08-31 21:19:44,814 | INFO    | app.services.macro | Macro index: 83.2 (bullish), 5 factors
-2026-08-31 21:19:44,830 | INFO    | app.services.trend | Trend analyzed: 60 days, up (+2.03%), index=73.7 (tech=84.7¡Á30%, macro=83.2¡Á40%, news=50.0¡Á30%)
-2026-08-31 21:19:45,104 | INFO    | app.services.snapshot | Snapshot captured: 2026-08-31, close=9.135, trend=73.7 (up), tech=84.7, macro=83.2, news=50.0
-INFO:     127.0.0.1:14543 - "GET /api/v1/snapshots HTTP/1.1" 200 OK

@@ -38,3 +38,6 @@ watchdog.out.log
 watchdog.err.log
 server_wd.log
 server_wd.log.err
+server2.log*
+server_wd.log.err.bak
+*.log.bak
