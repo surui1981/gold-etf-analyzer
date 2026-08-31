@@ -7,12 +7,21 @@ from app.dependencies import (
     get_market_data_repository,
     get_trend_service,
 )
-from app.repositories.market_data import MarketDataRepository
+from app.repositories.market_data import MarketDataRepository, health_stats
 from app.schemas.market import GoldCompareOut, GoldQuoteOut, GoldTrendOut
 from app.services.compare import GoldCompareService
 from app.services.trend import TrendService
 
 router = APIRouter(prefix="/market", tags=["market"])
+
+
+@router.get("/health", summary="数据源健康度统计")
+async def market_health() -> dict:
+    """各数据源采集健康度：成功率 / 平均耗时 / 采集次数 / 最近状态（进程内近态统计）。"""
+    return {
+        "sources": health_stats(),
+        "note": "进程内近态统计，重启后清零；status=live 真实 / mock 降级",
+    }
 
 
 @router.get("/gold", response_model=GoldQuoteOut, summary="黄金ETF最新报价")

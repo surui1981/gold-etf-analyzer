@@ -128,6 +128,7 @@
 
   <!-- 数据源状态（降级可感知） -->
   <div id="sourceBar" class="source-bar" style="display:none"></div>
+  <div id="healthInfo" style="font-size:11.5px;color:var(--muted);margin:-6px 0 14px"></div>
 
   <!-- 加载进度提示（首屏不再空白） -->
   <div id="loadBar" class="source-bar source-warn">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
@@ -329,6 +330,18 @@ async function loadChecklist() {
   }
 }
 
+// 数据源健康度展示
+async function loadHealth() {
+  try {
+    const h = await fetch(API_BASE + "/api/v1/market/health").then(r => r.json());
+    const names = { etf: "黄金ETF", sge: "上海金", ny: "纽约金" };
+    const items = Object.entries(h.sources || {}).map(([k, v]) =>
+      `${names[k] || k}：${v.success_rate}% 成功 · 均耗 ${v.avg_ms}ms`);
+    const el = document.getElementById("healthInfo");
+    if (el && items.length) el.textContent = "数据源健康： " + items.join(" ｜ ");
+  } catch (e) { /* 静默 */ }
+}
+
 function renderSourceBar(d) {
   const bar = document.getElementById("sourceBar");
   const names = { etf: "黄金ETF（新浪/东财）", sge: "上海金（SGE）", ny: "纽约金（英为财情）" };
@@ -337,11 +350,21 @@ function renderSourceBar(d) {
   if (!keys.length) { bar.style.display = "none"; return; }
 
   const bad = keys.filter(k => src[k] === "mock");
-  const detail = keys.map(k => `${names[k] || k}：${src[k] === "live" ? "实时" : "演示"}`).join(" ｜ ");
-  bar.className = "source-bar " + (bad.length === 0 ? "source-ok" : bad.length === keys.length ? "source-bad" : "source-warn");
-  bar.innerHTML = bad.length === 0
-    ? `● 数据源正常：全部为实时行情 — ${detail}`
-    : `▲ ${bad.map(k => names[k] || k).join("、")} 当前为<b>演示数据（非真实行情）</b>，请勿据此决策 — ${detail}`;
+  const staled = keys.filter(k => src[k] === "stale");
+  const detail = keys.map(k => {
+    const st = src[k] === "live" ? "实时" : src[k] === "stale" ? "缓存(可能过期)" : "演示";
+    return `${names[k] || k}：${st}`;
+  }).join(" ｜ ");
+
+  bar.className = "source-bar " + (bad.length === 0 && staled.length === 0 ? "source-ok" : bad.length === keys.length ? "source-bad" : "source-warn");
+  if (bad.length === 0 && staled.length === 0) {
+    bar.innerHTML = `● 数据源正常：全部为实时行情 — ${detail}`;
+  } else {
+    const parts = [];
+    if (bad.length) parts.push(`${bad.map(k => names[k] || k).join("、")} 为<b>演示数据（非真实行情）</b>，请勿据此决策`);
+    if (staled.length) parts.push(`${staled.map(k => names[k] || k).join("、")} 为<b>缓存数据（可能过期）</b>`);
+    bar.innerHTML = `▲ ${parts.join("；")} — ${detail}`;
+  }
   bar.style.display = "block";
 }
 
@@ -591,7 +614,7 @@ async function loadSnapshots() {
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
-  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadNy(), loadSnapshots()]);
+  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadNy(), loadSnapshots(), loadHealth()]);
   bar.style.display = "none";
 })();
 </script>
