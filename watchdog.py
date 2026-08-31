@@ -18,12 +18,13 @@ import json
 import logging
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 
 HEALTH_URL = "http://127.0.0.1:8888/api/v1/health"
 CAPTURE_URL = "http://127.0.0.1:8888/api/v1/snapshots/capture"
@@ -46,6 +47,10 @@ except Exception:  # noqa: BLE001
     _DB_PATH = os.path.join(os.path.dirname(PROJECT_DIR), "data", "gold_etf.db")
 BACKUP_DIR = os.path.join(os.path.dirname(_DB_PATH), "backup")
 BACKUP_KEEP = 7  # 保留最近 7 份
+
+# 快照归档：保留最近 N 天，更早的导出 JSON 到 archive/ 后删除
+SNAPSHOT_RETENTION_DAYS = 365
+ARCHIVE_DIR = os.path.join(os.path.dirname(_DB_PATH), "archive")
 
 logger = logging.getLogger("watchdog")
 
@@ -171,6 +176,42 @@ def do_capture() -> dict:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def archive_snapshots() -> None:
+    """归档超过保留期的每日快照：导出 JSON 到 archive/ 后删除（幂等）。"""
+    try:
+        os.makedirs(ARCHIVE_DIR, exist_ok=True)
+        cutoff = (datetime.now() - timedelta(days=SNAPSHOT_RETENTION_DAYS)).strftime("%Y-%m-%d")
+        conn = sqlite3.connect(_DB_PATH, timeout=10)
+        try:
+            cols = [
+                "snapshot_date", "symbol", "close", "change_pct", "direction",
+                "tech_index", "macro_index", "news_index", "trend_index", "index_level",
+            ]
+            rows = conn.execute(
+                f"SELECT {', '.join(cols)} FROM daily_snapshots WHERE snapshot_date < ?",
+                (cutoff,),
+            ).fetchall()
+            if rows:
+                payload = [dict(zip(cols, r)) for r in rows]
+                dest = os.path.join(ARCHIVE_DIR, f"snapshots_{datetime.now():%Y%m%d}.json")
+                with open(dest, "w", encoding="utf-8") as fh:
+                    json.dump(payload, fh, ensure_ascii=False, indent=2)
+                conn.execute(
+                    "DELETE FROM daily_snapshots WHERE snapshot_date < ?", (cutoff,)
+                )
+                conn.commit()
+                logger.info(
+                    "snapshots archived: %d rows -> %s (retain %sd)",
+                    len(rows), dest, SNAPSHOT_RETENTION_DAYS,
+                )
+            else:
+                logger.debug("no snapshots older than %sd to archive", SNAPSHOT_RETENTION_DAYS)
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        logger.error("snapshot archive failed: %s", exc)
+
+
 def backup_db(now: datetime) -> None:
     """每日备份主库（按日期命名，保留最近 BACKUP_KEEP 份）。"""
     try:
@@ -208,6 +249,7 @@ def maybe_capture() -> None:
         if not (0 <= delta <= CAPTURE_WINDOW):
             continue
         backup_db(now)  # 每日随采集备份主库
+        archive_snapshots()  # 每日归档超期快照
         try:
             snap = do_capture()
             done[slot] = now.isoformat(timespec="seconds")

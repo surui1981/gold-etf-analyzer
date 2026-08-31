@@ -1,5 +1,6 @@
 """FastAPI 应用入口：装配路由、中间件与生命周期。"""
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -10,6 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from alembic import command
+from alembic.config import Config
+
 from app.api.v1.router import api_router
 from app.config import get_settings
 from app.models.base import Base
@@ -18,21 +22,41 @@ from app.utils.db_migrate import ensure_sqlite_columns, ensure_sqlite_optimizati
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
-STATIC_DIR = Path(__file__).resolve().parents[2] / "static"  # src/app/../.. = 项目根/static
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/app/../.. = 项目根
+STATIC_DIR = PROJECT_ROOT / "static"
+
+
+def _run_alembic_upgrade() -> None:
+    """以编程方式执行 Alembic 迁移至最新（head）。"""
+    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    cfg.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+    # 数据库 URL 由 migrations/env.py 从应用配置读取（支持测试库切换）
+    command.upgrade(cfg, "head")
+
+
+async def _migrate_db() -> None:
+    """正式 schema 迁移（Alembic）；失败时回退 create_all 兜底，保证可启动。"""
+    try:
+        await asyncio.to_thread(_run_alembic_upgrade)
+        logger.info("alembic upgrade head: ok")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("alembic upgrade failed (%s), fallback create_all", exc)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """应用生命周期钩子。
 
-    - 启动：确保数据表存在（骨架期用 create_all，迁移工具后续可切换 Alembic）
+    - 启动：ensure 表存在 → Alembic 正式迁移 → 运行时补列/性能优化
     - 关闭：释放数据库连接池
     """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    # 补齐历史库缺失的新增列（create_all 不会加列）
+    await _migrate_db()
+    # 运行时保障：补齐历史库缺失的新增列 + WAL/索引优化
     await ensure_sqlite_columns(engine)
-    # SQLite 性能优化：WAL 模式 + 高频查询索引
     await ensure_sqlite_optimizations(engine)
     logger.info("Database ready (env=%s)", settings.app_env)
     yield

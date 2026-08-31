@@ -1,6 +1,7 @@
 """权重配置服务：读取/保存用户自定义权重，未配置时返回默认值。"""
 
 import json
+import time
 
 from app.repositories.settings import SettingRepository
 from app.schemas.settings import (
@@ -15,6 +16,16 @@ logger = get_logger(__name__)
 
 WEIGHTS_KEY = "weight_config"
 
+# 配置内存缓存（P2-3）：权重属于低频变更数据，读库缓存 60s，保存时立即失效
+WEIGHTS_CACHE_TTL = 60  # 秒
+_WEIGHTS_CACHE: dict = {"ts": 0.0, "config": None}
+
+
+def clear_weights_cache() -> None:
+    """使配置缓存失效（保存配置 / 测试隔离时调用）。"""
+    global _WEIGHTS_CACHE
+    _WEIGHTS_CACHE = {"ts": 0.0, "config": None}
+
 
 class WeightService:
     """评估权重管理：趋势维度 / 宏观因子 / 技术宏观合成比。"""
@@ -23,11 +34,20 @@ class WeightService:
         self._repo = repo
 
     async def get_weights(self) -> WeightConfig:
-        """获取当前权重（存储值优先，缺失回退默认）。
+        """获取当前权重（内存缓存优先，TTL 60s，保存时失效）。"""
+        global _WEIGHTS_CACHE
+        if (
+            _WEIGHTS_CACHE["config"] is not None
+            and time.time() - _WEIGHTS_CACHE["ts"] < WEIGHTS_CACHE_TTL
+        ):
+            return _WEIGHTS_CACHE["config"]
 
-        兼容旧版配置：V0.20 之前合成权重只有 tech/macro 两项，
-        升级后要求三项（含 news）之和为 1，缺 news 时自动补全，避免整份配置被丢弃。
-        """
+        config = await self._load_weights()
+        _WEIGHTS_CACHE = {"ts": time.time(), "config": config}
+        return config
+
+    async def _load_weights(self) -> WeightConfig:
+        """从存储加载权重（含旧版配置迁移，失败回退默认）。"""
         raw = await self._repo.get(WEIGHTS_KEY)
         if raw:
             try:
@@ -42,8 +62,9 @@ class WeightService:
         return WeightConfig()
 
     async def save_weights(self, config: WeightConfig) -> WeightConfig:
-        """保存权重并返回（schema 已校验各组和=1）。"""
+        """保存权重并返回（schema 已校验各组和=1），保存后失效缓存。"""
         await self._repo.set(WEIGHTS_KEY, config.model_dump_json())
+        clear_weights_cache()
         logger.info("Weights saved: %s", config.model_dump_json())
         return config
 

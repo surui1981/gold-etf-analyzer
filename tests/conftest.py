@@ -21,6 +21,9 @@ from app.repositories.db import async_session_factory, engine  # noqa: E402
 @pytest.fixture(autouse=True)
 async def _reset_db() -> None:
     """每个用例前重建数据表，保证用例之间完全隔离。"""
+    from app.services.settings import clear_weights_cache
+
+    clear_weights_cache()  # 配置内存缓存随库重建失效
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
