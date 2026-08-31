@@ -41,3 +41,6 @@ server_wd.log.err
 server2.log*
 server_wd.log.err.bak
 *.log.bak
+capture.log
+capture_state.json
+install_out.txt

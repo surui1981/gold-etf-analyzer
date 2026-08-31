@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import subprocess
@@ -20,12 +21,19 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 HEALTH_URL = "http://127.0.0.1:8888/api/v1/health"
+CAPTURE_URL = "http://127.0.0.1:8888/api/v1/snapshots/capture"
 PORT = 8888
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 PYTHON = sys.executable
 LOG_FILE = os.path.join(PROJECT_DIR, "watchdog.log")
+CAPTURE_STATE_FILE = os.path.join(PROJECT_DIR, "capture_state.json")
+
+# 每日定时采集快照的时刻（本地时间）：16:00 国内收盘后 ｜ 06:00 纽约金收盘后
+CAPTURE_TIMES = ["06:00", "16:00"]
+CAPTURE_WINDOW = 1800  # 触发时刻后 30 分钟内有效，避免跨天误触发
 
 logger = logging.getLogger("watchdog")
 
@@ -128,6 +136,60 @@ def start_service() -> bool:
         return False
 
 
+def _load_capture_state() -> dict:
+    try:
+        with open(CAPTURE_STATE_FILE, encoding="utf-8") as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return {"done": {}}
+
+
+def _save_capture_state(state: dict) -> None:
+    with open(CAPTURE_STATE_FILE, "w", encoding="utf-8") as fh:
+        json.dump(state, fh)
+
+
+def do_capture() -> dict:
+    """调用采集接口，返回快照结果。"""
+    req = urllib.request.Request(
+        CAPTURE_URL, data=b"", method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def maybe_capture() -> None:
+    """到达每日采集时刻且当日该时段未采集 → 执行一次（幂等）。"""
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+    state = _load_capture_state()
+    done = state.setdefault("done", {})
+    today = now.strftime("%Y-%m-%d")
+
+    for slot_time in CAPTURE_TIMES:
+        slot = f"{today} {slot_time}"
+        if done.get(slot):
+            continue
+        try:
+            target = datetime.strptime(slot, "%Y-%m-%d %H:%M")
+        except ValueError:
+            continue
+        delta = (now - target).total_seconds()
+        if not (0 <= delta <= CAPTURE_WINDOW):
+            continue
+        try:
+            snap = do_capture()
+            done[slot] = now.isoformat(timespec="seconds")
+            _save_capture_state(state)
+            logger.info(
+                "scheduled capture done (%s): close=%.3f trend=%.1f (%s)",
+                slot, snap.get("close", 0), snap.get("trend_index", 0), snap.get("index_level"),
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("scheduled capture failed (%s): %s", slot, exc)
+
+
 def restart(reason: str) -> None:
     """清理残留进程并重启服务。"""
     logger.warning("Restart triggered: %s", reason)
@@ -151,12 +213,22 @@ def main() -> None:
     parser.add_argument("--interval", type=int, default=30, help="检查间隔秒数（默认 30）")
     parser.add_argument("--threshold", type=int, default=2, help="连续失败几次触发重启（默认 2）")
     parser.add_argument("--once", action="store_true", help="只检查一次后退出")
+    parser.add_argument(
+        "--capture-times", default=",".join(CAPTURE_TIMES),
+        help="每日快照采集时刻，逗号分隔（默认 06:00,16:00）",
+    )
+    parser.add_argument("--no-capture", action="store_true", help="关闭内置定时采集")
     args = parser.parse_args()
+
+    capture_times = [t.strip() for t in args.capture_times.split(",") if t.strip()]
+    CAPTURE_TIMES.clear()
+    CAPTURE_TIMES.extend(capture_times)
 
     _setup_logging()
     logger.info(
-        "Watchdog started (interval=%ss, threshold=%s, pid=%s)",
-        args.interval, args.threshold, os.getpid(),
+        "Watchdog started (interval=%ss, threshold=%s, capture=%s, pid=%s)",
+        args.interval, args.threshold,
+        "off" if args.no_capture else "/".join(CAPTURE_TIMES), os.getpid(),
     )
 
     fails = 0
@@ -165,6 +237,8 @@ def main() -> None:
             if fails:
                 logger.info("Service recovered (fails reset)")
             fails = 0
+            if not args.no_capture:
+                maybe_capture()
         else:
             fails += 1
             logger.warning("Health check failed (%s/%s)", fails, args.threshold)
