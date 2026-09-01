@@ -253,13 +253,24 @@
 // 避免 fetch 根相对路径打到错误端口。
 const API_BASE =
   location.port === "8888" ? "" : "http://127.0.0.1:8888";
+// 带超时的 JSON 请求：避免接口长时间无响应导致面板静默空白（快速失败 + 可见提示）
+async function fetchJSON(url, timeoutMs = 40000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return await resp.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const API = API_BASE + "/api/v1/market/gold/trend?days=60";
 
 async function init() {
   try {
-    const resp = await fetch(API);
-    if (!resp.ok) throw new Error("HTTP " + resp.status);
-    const data = await resp.json();
+    const data = await fetchJSON(API);
     lastTrend = data;
     renderSourceBar(data);
     render(data);
@@ -275,9 +286,9 @@ async function init() {
 async function loadChecklist() {
   try {
     const [t, dec, pos] = await Promise.all([
-      fetch(API).then(r => r.json()),
-      fetch(API_BASE + "/api/v1/decision/etf").then(r => r.json()),
-      fetch(API_BASE + "/api/v1/positions").then(r => r.json()),
+      fetchJSON(API),
+      fetchJSON(API_BASE + "/api/v1/decision/etf"),
+      fetchJSON(API_BASE + "/api/v1/positions"),
     ]);
     const list = Array.isArray(pos) ? pos : (pos.positions || []);
     const scored = !!(t.news && t.news.scored);
@@ -348,7 +359,7 @@ async function loadAlerts() {
   const alerts = [];
 
   try {
-    const snaps = await fetch(API_BASE + "/api/v1/snapshots?days=30").then(r => r.json());
+    const snaps = await fetchJSON(API_BASE + "/api/v1/snapshots?days=30");
     const items = snaps.snapshots || [];
     const today = new Date().toISOString().slice(0, 10);
     const prev = items.filter(s => s.snapshot_date !== today).slice(-1)[0];
@@ -378,7 +389,7 @@ async function loadAlerts() {
 // 数据源健康度展示
 async function loadHealth() {
   try {
-    const h = await fetch(API_BASE + "/api/v1/market/health").then(r => r.json());
+    const h = await fetchJSON(API_BASE + "/api/v1/market/health");
     const names = { etf: "黄金ETF", sge: "上海金", ny: "纽约金" };
     const items = Object.entries(h.sources || {}).map(([k, v]) =>
       `${names[k] || k}：${v.success_rate}% 成功 · 均耗 ${v.avg_ms}ms`);
@@ -531,8 +542,7 @@ function render(d) {
 // ETF vs 克价对照
 async function loadCompare() {
   try {
-    const c = await fetch(API_BASE + "/api/v1/market/gold/compare?days=60")
-      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    const c = await fetchJSON(API_BASE + "/api/v1/market/gold/compare?days=60");
     document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 起点归一化=100`;
     const e = c.etf, g = c.gram;
     const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
@@ -586,8 +596,7 @@ async function loadCompare() {
 // 上海金（国内金价）对照曲线
 async function loadSge() {
   try {
-    const n = await fetch(API_BASE + "/api/v1/market/gold/trend?target=gram&days=60")
-      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    const n = await fetchJSON(API_BASE + "/api/v1/market/gold/trend?target=gram&days=60");
     const m = n.metrics;
     const isUp = m.change_pct >= 0;
     const cls = v => v >= 0 ? "up" : "down";
@@ -629,8 +638,7 @@ async function loadSge() {
 // 每日评估历史（本地快照）
 async function loadSnapshots() {
   try {
-    const s = await fetch(API_BASE + "/api/v1/snapshots?days=30")
-      .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
+    const s = await fetchJSON(API_BASE + "/api/v1/snapshots?days=30");
     if (!s.snapshots.length) { document.getElementById("snapSub").textContent = "暂无快照数据"; return; }
     const list = [...s.snapshots].reverse(); // 时间升序
     document.getElementById("snapSub").textContent = `${s.total} 条 · 每日参数与评估值本地持久化`;

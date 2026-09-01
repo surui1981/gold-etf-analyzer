@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -34,10 +35,40 @@ def _run_alembic_upgrade() -> None:
     command.upgrade(cfg, "head")
 
 
-async def _migrate_db() -> None:
-    """正式 schema 迁移（Alembic）；失败时回退 create_all 兜底，保证可启动。"""
+async def _checkpoint_wal() -> None:
+    """启动期对主库做一次 WAL checkpoint(TRUNCATE)，清理上次异常退出遗留的 -wal/-shm。
+
+    异常强杀（如 -9）会让 SQLite 留下未合并的 WAL，新的连接可能卡在恢复/锁等待上，
+    故在迁移前先合并落盘并清空 WAL 文件。
+    """
     try:
-        await asyncio.to_thread(_run_alembic_upgrade)
+        url = settings.database_url
+        if not url.startswith("sqlite"):
+            return
+        db_path = url.split("///", 1)[-1]
+
+        def _cp() -> None:
+            conn = sqlite3.connect(db_path, timeout=10)
+            try:
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_cp)
+        logger.info("wal checkpoint done: %s", db_path)
+    except Exception as exc:  # noqa: BLE001 —— 清理失败不影响后续迁移
+        logger.warning("wal checkpoint skipped (%s)", exc)
+
+
+async def _migrate_db() -> None:
+    """正式 schema 迁移（Alembic）；失败时回退 create_all 兜底，保证可启动。
+
+    注意：迁移前**不**调用 create_all。应用异步引擎与 Alembic 内部引擎会同时持有
+    SQLite 连接，两个写者争同一文件写锁会导致迁移永久等待（启动 hang）。
+    Alembic ``upgrade head`` 已负责建全表，仅在其失败时回退 create_all。
+    """
+    try:
+        await asyncio.wait_for(asyncio.to_thread(_run_alembic_upgrade), timeout=30)
         logger.info("alembic upgrade head: ok")
     except Exception as exc:  # noqa: BLE001
         logger.warning("alembic upgrade failed (%s), fallback create_all", exc)
@@ -45,27 +76,48 @@ async def _migrate_db() -> None:
             await conn.run_sync(Base.metadata.create_all)
 
 
+async def _warm_cache() -> None:
+    """非阻塞预热行情缓存：启动后后台拉取三市场数据，使首屏直接命中缓存。
+
+    失败仅需日志记录，不影响服务可用（请求时仍会惰性加载 + 降级 Mock）。
+    """
+    try:
+        from app.repositories.market_data import MarketDataRepository
+
+        repo = MarketDataRepository()
+        await asyncio.gather(
+            repo.get_us_gold_history(days=60),
+            repo.get_gold_history(days=60),
+            repo.get_gold_gram_history(days=60),
+            return_exceptions=True,
+        )
+        logger.info("cache warmup done (ny/etf/gram)")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cache warmup failed (%s)", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """应用生命周期钩子。
 
-    - 启动：ensure 表存在 → Alembic 正式迁移 → 运行时补列/性能优化
+    - 启动：WAL 合并 → Alembic 正式迁移（建表/升级）→ 运行时补列/性能优化 → 后台预热缓存
     - 关闭：释放数据库连接池
     """
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await _checkpoint_wal()
     await _migrate_db()
     # 运行时保障：补齐历史库缺失的新增列 + WAL/索引优化
     await ensure_sqlite_columns(engine)
     await ensure_sqlite_optimizations(engine)
     logger.info("Database ready (env=%s)", settings.app_env)
+    # 非阻塞预热：首屏直接命中缓存，避免长时间空白等待
+    asyncio.create_task(_warm_cache())
     yield
     await engine.dispose()
 
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.11.0",
+    version="0.51.1",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
