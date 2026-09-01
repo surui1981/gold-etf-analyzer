@@ -15,7 +15,7 @@ class FakeTrend:
         self._idx = idx
         self._level = level
 
-    async def analyze(self, days: int = 60):
+    async def analyze(self, days: int = 60, target: str = "ny"):
         return SimpleNamespace(
             index=TrendIndexOut(
                 score=self._idx,

@@ -97,7 +97,7 @@
     <div>
       <h1>黄金价格投资辅助工具 · 持仓与决策</h1>
       <div class="tagline">个人持仓跟踪 · 盈亏管理 · 参数面 × 交易面 购买决策</div>
-      <p class="intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；结合<b>趋势评估指数</b>与持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细。</p>
+      <p class="intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；以<b>纽约金（COMEX）为投资指引基准</b>的趋势评估指数，结合持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细（交易标的仍为人民币黄金ETF）。</p>
       <div class="sub" id="subtitle" style="margin-top:6px">加载中…</div>
       <div class="notice">仅供研究参考，不构成投资建议</div>
     </div>
@@ -246,14 +246,19 @@ async function loadPositions() {
     const rows = list.map(p => {
       const cls = p.pnl >= 0 ? "up" : "down";
       const sign = p.pnl >= 0 ? "+" : "";
-      return `<tr>
+      // 阈值提醒：单笔盈亏超过 ±10% 时行高亮 + 标记
+      const alert = Math.abs(p.pnl_pct) >= 10;
+      const flag = alert
+        ? `<br><span style="font-size:11px;padding:1px 6px;border-radius:4px;background:${p.pnl_pct > 0 ? "#ffe9e9" : "#e6f4ea"};color:${p.pnl_pct > 0 ? "#c92a2a" : "#2f9e44"}">${p.pnl_pct > 0 ? "止盈关注" : "止损关注"}</span>`
+        : "";
+      return `<tr${alert ? ' style="outline:1px solid #ffd8a8;outline-offset:-1px"' : ""}>
         <td>${p.name}<br><span style="font-size:11px;color:var(--muted)">${p.symbol}</span></td>
         <td>${p.quantity}</td>
         <td>${p.avg_cost.toFixed(3)}</td>
         <td>${p.market_price.toFixed(3)}</td>
         <td>${p.market_value.toFixed(2)}</td>
         <td class="${cls}">${sign}${p.pnl.toFixed(2)}</td>
-        <td class="${cls}">${sign}${p.pnl_pct.toFixed(2)}%</td>
+        <td class="${cls}">${sign}${p.pnl_pct.toFixed(2)}%${flag}</td>
         <td>
           <button class="sm op-buy" onclick="trade(${p.id},'buy')">加</button>
           <button class="sm op-sell" onclick="trade(${p.id},'sell')">减</button>

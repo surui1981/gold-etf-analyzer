@@ -1,6 +1,6 @@
 [project]
 name = "gold-etf-analyzer"
-version = "0.50.0"
+version = "0.51.0"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.11"

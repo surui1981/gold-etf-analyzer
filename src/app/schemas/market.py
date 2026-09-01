@@ -62,6 +62,7 @@ class GoldTrendMetrics(BaseModel):
     change_pct_1d: float = Field(0.0, description="昨日（最近 1 个交易日）涨跌幅 %")
     change_pct_5d: float = Field(0.0, description="近 5 个交易日涨跌幅 %")
     direction: TrendDirection
+    unit: str = Field("元", description="计价单位：元 / 元/克 / 美元/盎司")
     summary: str
 
 
@@ -94,6 +95,10 @@ class TrendIndexOut(BaseModel):
     level: TrendIndexLevel
     direction: DirectionSignal
     summary: str
+    components: dict[str, float] = Field(
+        default_factory=dict,
+        description="各面分值 components: tech / macro / news（供权重调整实时预览）",
+    )
 
 
 class MacroFactorOut(BaseModel):

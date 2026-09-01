@@ -98,6 +98,18 @@
     <div class="desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）</div>
     <div id="combineRows"></div>
     <div class="sum-line">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span style="font-size:12.5px;color:var(--muted)">预设：</span>
+      <button class="chip" onclick="applyPreset(0.20, 0.50, 0.30)">保守（重宏观）</button>
+      <button class="chip" onclick="applyPreset(0.30, 0.40, 0.30)">均衡（默认）</button>
+      <button class="chip" onclick="applyPreset(0.45, 0.30, 0.25)">激进（重技术）</button>
+    </div>
+  </div>
+
+  <!-- 实时预览（拖动滑块即时可见调整后指数） -->
+  <div class="card" id="previewCard">
+    <h2>👁 调整后综合指数 · 实时预览</h2>
+    <div id="previewBox" class="empty">正在获取最新评估数据…</div>
   </div>
 
   <div class="actions">
@@ -159,6 +171,80 @@ function update() {
   TREND_FIELDS.forEach(([k]) => document.getElementById("t_" + k + "-pct").textContent = document.getElementById("t_" + k).value + "%");
   MACRO_FIELDS.forEach(([k]) => document.getElementById("m_" + k + "-pct").textContent = document.getElementById("m_" + k).value + "%");
   COMBINE_FIELDS.forEach(([k]) => document.getElementById("c_" + k + "-pct").textContent = document.getElementById("c_" + k).value + "%");
+  renderPreview();  // 拖动实时预览
+}
+
+// ---------- 实时预览：按当前滑块权重计算调整后综合指数 ----------
+let baseComponents = null;  // {tech, macro, news} 来自趋势接口
+let baseIndex = null;       // 当前生效的综合指数
+
+const LEVELS = [
+  [80, "强势上升", "#c92a2a"], [60, "上升", "#e8590c"], [45, "震荡整理", "#868e96"],
+  [35, "下降", "#2f9e44"], [0, "弱势下降", "#0ca678"],
+];
+
+function levelOf(score) {
+  for (const [min, label, color] of LEVELS) {
+    if (score >= min) return { label, color };
+  }
+  return { label: "弱势下降", color: "#0ca678" };
+}
+
+function combineValues() {
+  const v = (k) => (parseInt(document.getElementById("c_" + k).value) || 0) / 100;
+  return { tech: v("tech"), macro: v("macro"), news: v("news") };
+}
+
+function applyPreset(t, m, n) {
+  document.getElementById("c_tech").value = Math.round(t * 100);
+  document.getElementById("c_macro").value = Math.round(m * 100);
+  document.getElementById("c_news").value = Math.round(n * 100);
+  update();
+}
+
+function renderPreview() {
+  const box = document.getElementById("previewBox");
+  if (!baseComponents) return;
+
+  const w = combineValues();
+  const sum = w.tech + w.macro + w.news;
+  const preview = baseComponents.tech * w.tech + baseComponents.macro * w.macro + baseComponents.news * w.news;
+  const lv = levelOf(preview);
+  const baseLv = baseIndex !== null ? levelOf(baseIndex) : null;
+  const delta = baseIndex !== null ? preview - baseIndex : 0;
+  const valid = Math.abs(sum - 1) < 1e-6;
+
+  box.innerHTML = `
+    <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:12px;color:var(--muted)">调整后综合指数</div>
+        <div style="font-size:30px;font-weight:700;color:${lv.color}">${preview.toFixed(1)}</div>
+        <div style="font-size:12px;color:${lv.color}">${lv.label}</div>
+      </div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.8">
+        当前生效：<b>${baseIndex !== null ? baseIndex.toFixed(1) : "-"}</b>
+        ${baseLv ? `（${baseLv.label}）` : ""}
+        ${delta !== 0 ? `<br>变化：<b style="color:${delta > 0 ? "#c92a2a" : "#2f9e44"}">${delta > 0 ? "+" : ""}${delta.toFixed(1)}</b>` : ""}
+      </div>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:8px">
+      = 技术面 ${baseComponents.tech.toFixed(1)}×${(w.tech * 100).toFixed(0)}%
+      + 宏观参考 ${baseComponents.macro.toFixed(1)}×${(w.macro * 100).toFixed(0)}%
+      + 消息面 ${baseComponents.news.toFixed(1)}×${(w.news * 100).toFixed(0)}%
+      ${valid ? "" : '<br><b style="color:#c92a2a">合成合计须为 100% 才可保存（当前 ' + (sum * 100).toFixed(0) + '%）</b>'}
+    </div>`;
+}
+
+async function loadTrendForPreview() {
+  try {
+    const d = await fetch(API_BASE + "/api/v1/market/gold/trend?days=60").then(r => r.json());
+    baseIndex = d.index.score;
+    baseComponents = d.index.components || { tech: 0, macro: 0, news: 0 };
+    renderPreview();
+  } catch (e) {
+    document.getElementById("previewBox").innerHTML =
+      `<div class="empty">预览数据获取失败：${e.message}（需服务运行中）</div>`;
+  }
 }
 
 function collect() {
@@ -194,6 +280,7 @@ async function resetAll() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     state = await r.json();
     render();
+    loadTrendForPreview();  // 权重页实时预览
   } catch (e) {
     document.getElementById("trendRows").innerHTML = `<div class="desc">配置加载失败：${e.message}</div>`;
   }

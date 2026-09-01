@@ -58,7 +58,7 @@ async def test_capture_snapshot(client: AsyncClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
 
-    assert body["symbol"] == "518880"
+    assert body["symbol"] == "GC"
     assert body["trend_index"] > 0
     assert body["index_level"] in {"strong_up", "up", "sideways", "down", "strong_down"}
     assert body["close"] > 0

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黄金ETF 2个月趋势追踪</title>
+<title>黄金趋势追踪（纽约金指引）</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -180,6 +180,9 @@
     </a>
   </div>
 
+  <!-- 阈值提醒（指数跨档 / 价格异动） -->
+  <div id="alertBar"></div>
+
   <!-- 今日操作清单 -->
   <div class="panel" style="margin-bottom:16px">
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">📋 今日操作清单 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="clSum">加载中…</span></div>
@@ -214,12 +217,12 @@
     <div class="summary" id="snapSummary" style="font-size:12px"></div>
   </div>
 
-  <!-- 纽约金 60 天价格曲线 -->
+  <!-- 上海金（国内金价）对照 -->
   <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:4px">纽约金（COMEX GC）60天价格曲线 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="nySub"></span></div>
-    <div class="cards" id="nyCards" style="margin-bottom:12px"></div>
-    <canvas id="nyChart" style="max-height:260px"></canvas>
-    <div class="summary" id="nySummary"></div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">上海金 Au99.99（元/克）· 国内金价对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="sgeSub"></span></div>
+    <div class="cards" id="sgeCards" style="margin-bottom:12px"></div>
+    <canvas id="sgeChart" style="max-height:260px"></canvas>
+    <div class="summary" id="sgeSummary"></div>
   </div>
 
   <!-- 趋势参数维度 -->
@@ -257,8 +260,10 @@ async function init() {
     const resp = await fetch(API);
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     const data = await resp.json();
+    lastTrend = data;
     renderSourceBar(data);
     render(data);
+    loadAlerts();
   } catch (e) {
     document.getElementById("chartArea").innerHTML =
       '<div class="error">数据加载失败：' + e.message +
@@ -330,6 +335,46 @@ async function loadChecklist() {
   }
 }
 
+const LEVEL_LABEL = {
+  strong_up: "强势上升", up: "上升", sideways: "震荡整理",
+  down: "下降", strong_down: "弱势下降",
+};
+let lastTrend = null;
+
+// 阈值提醒：指数跨档位 / 价格异动 >2%
+async function loadAlerts() {
+  const bar = document.getElementById("alertBar");
+  if (!lastTrend) return;
+  const alerts = [];
+
+  try {
+    const snaps = await fetch(API_BASE + "/api/v1/snapshots?days=30").then(r => r.json());
+    const items = snaps.snapshots || [];
+    const today = new Date().toISOString().slice(0, 10);
+    const prev = items.filter(s => s.snapshot_date !== today).slice(-1)[0];
+    if (prev && prev.index_level !== lastTrend.index.level) {
+      alerts.push({
+        type: "level",
+        text: `评估指数档位变化：${LEVEL_LABEL[prev.index_level] || prev.index_level} → ${LEVEL_LABEL[lastTrend.index.level] || lastTrend.index.level}（${prev.snapshot_date} 至今）`,
+      });
+    }
+  } catch (e) { /* 快照不可达时忽略 */ }
+
+  const d1 = lastTrend.metrics.change_pct_1d ?? 0;
+  if (Math.abs(d1) >= 2) {
+    alerts.push({
+      type: "price",
+      text: `昨日价格异动 ${d1 > 0 ? "+" : ""}${d1.toFixed(2)}%（超过 2% 阈值）`,
+    });
+  }
+
+  if (!alerts.length) { bar.innerHTML = ""; return; }
+  bar.innerHTML = alerts.map(a => `
+    <div class="source-bar ${a.type === "level" ? "source-warn" : (a.type === "price" && d1 > 0 ? "source-bad" : "source-ok")}" style="margin-bottom:10px">
+      🔔 ${a.text}
+    </div>`).join("");
+}
+
 // 数据源健康度展示
 async function loadHealth() {
   try {
@@ -376,14 +421,17 @@ function render(d) {
   document.getElementById("badge").outerHTML =
     `<span class="badge" style="background:${isUp ? "var(--up)" : "var(--down)"};vertical-align:middle">${m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡"}</span>`;
   document.getElementById("subtitle").textContent =
-    `${d.name}（${d.symbol}） · ${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日`;
+    `${d.name}（${d.symbol}） · 投资指引基准 · ${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · ${unit}`;
 
-  // 指标卡
+  // 指标卡（计价单位随指引标的切换：美元/盎司 / 元 / 元/克）
+  const unit = m.unit || "元";
   const cards = [
-    { label: "最新价", value: m.end_price.toFixed(3), extra: "元" },
+    { label: "最新价", value: m.end_price.toFixed(3), extra: unit },
+    { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + m.change_pct_1d.toFixed(2) + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
+    { label: "5日涨跌", value: (m.change_pct_5d >= 0 ? "+" : "") + m.change_pct_5d.toFixed(2) + "%", cls: m.change_pct_5d >= 0 ? "up" : "down", extra: "近 5 个交易日" },
     { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + m.change_pct.toFixed(2) + "%", cls: isUp ? "up" : "down" },
-    { label: "区间最高", value: m.high.toFixed(3), extra: "元" },
-    { label: "区间最低", value: m.low.toFixed(3), extra: "元" },
+    { label: "区间最高", value: m.high.toFixed(3), extra: unit },
+    { label: "区间最低", value: m.low.toFixed(3), extra: unit },
     { label: "MA20", value: m.ma20 ? m.ma20.toFixed(3) : "—" },
     { label: "MA40", value: m.ma40 ? m.ma40.toFixed(3) : "—" },
   ];
@@ -535,10 +583,10 @@ async function loadCompare() {
   }
 }
 
-// 纽约金 60 天曲线
-async function loadNy() {
+// 上海金（国内金价）对照曲线
+async function loadSge() {
   try {
-    const n = await fetch(API_BASE + "/api/v1/market/gold/ny-trend?days=60")
+    const n = await fetch(API_BASE + "/api/v1/market/gold/trend?target=gram&days=60")
       .then(r => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); });
     const m = n.metrics;
     const isUp = m.change_pct >= 0;
@@ -546,21 +594,21 @@ async function loadNy() {
     const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     const d1 = m.change_pct_1d ?? 0;
     const d5 = m.change_pct_5d ?? 0;
-    document.getElementById("nySub").textContent = `${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · 美元/盎司`;
-    document.getElementById("nyCards").innerHTML = [
-      { label: "最新价", value: m.end_price.toFixed(1), extra: "美元/盎司" },
+    document.getElementById("sgeSub").textContent = `${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · 元/克`;
+    document.getElementById("sgeCards").innerHTML = [
+      { label: "最新价", value: m.end_price.toFixed(2), extra: "元/克" },
       { label: "昨日涨跌", value: pct(d1), cls: cls(d1), extra: "最近 1 个交易日" },
       { label: "5日涨跌", value: pct(d5), cls: cls(d5), extra: "近 5 个交易日" },
       { label: "区间涨跌", value: pct(m.change_pct), cls: isUp ? "up" : "down", extra: "60 天累计" },
-      { label: "区间最高", value: m.high.toFixed(1), extra: "美元/盎司" },
-      { label: "区间最低", value: m.low.toFixed(1), extra: "美元/盎司" },
+      { label: "区间最高", value: m.high.toFixed(2), extra: "元/克" },
+      { label: "区间最低", value: m.low.toFixed(2), extra: "元/克" },
     ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("");
-    new Chart(document.getElementById("nyChart"), {
+    new Chart(document.getElementById("sgeChart"), {
       type: "line",
       data: {
         labels: n.points.map(p => p.date),
         datasets: [
-          { label: "纽约金收盘", data: n.points.map(p => p.close), borderColor: "#c9a227", borderWidth: 2, pointRadius: 0, tension: 0.15 },
+          { label: "上海金收盘", data: n.points.map(p => p.close), borderColor: "#c9a227", borderWidth: 2, pointRadius: 0, tension: 0.15 },
           { label: "MA20", data: n.points.map(p => p.ma20), borderColor: "#1971c2", borderWidth: 1.2, pointRadius: 0 },
           { label: "MA40", data: n.points.map(p => p.ma40), borderColor: "#6741d9", borderWidth: 1.2, pointRadius: 0 },
         ],
@@ -572,9 +620,9 @@ async function loadNy() {
         scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
       },
     });
-    document.getElementById("nySummary").textContent = m.summary;
+    document.getElementById("sgeSummary").textContent = m.summary;
   } catch (e) {
-    document.getElementById("nySub").textContent = "纽约金数据加载失败：" + e.message;
+    document.getElementById("sgeSub").textContent = "上海金数据加载失败：" + e.message;
   }
 }
 
@@ -614,7 +662,7 @@ async function loadSnapshots() {
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
-  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadNy(), loadSnapshots(), loadHealth()]);
+  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge(), loadSnapshots(), loadHealth()]);
   bar.style.display = "none";
 })();
 </script>

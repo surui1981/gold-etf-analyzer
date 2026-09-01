@@ -38,16 +38,22 @@ async def gold_quote(
     )
 
 
-@router.get("/gold/trend", response_model=GoldTrendOut, summary="黄金2个月趋势追踪")
+@router.get("/gold/trend", response_model=GoldTrendOut, summary="黄金2个月趋势追踪（投资指引基准）")
 async def gold_trend(
     days: int = Query(60, ge=20, le=250, description="追踪的交易日数量（默认约2个月）"),
+    target: str = Query(
+        "ny",
+        pattern="^(ny|etf|gram)$",
+        description="指引标的：ny=纽约金COMEX（默认投资指引基准）/ etf=黄金ETF 518880 / gram=上海金Au99.99",
+    ),
     service: TrendService = Depends(get_trend_service),
 ) -> GoldTrendOut:
-    """返回黄金ETF近 N 个交易日趋势：价格序列 + MA5/MA20/MA40 + 方向判定。
+    """返回近 N 个交易日趋势：价格序列 + MA5/MA20/MA40 + 方向判定 + 综合趋势评估指数。
 
-    数据源为 AKShare（东方财富ETF历史行情），采集失败时回退 Mock。
+    投资指引基准默认为纽约金（COMEX GC，美元/盎司）——连续交易、夜盘覆盖国内休市，
+    对国内金价具备领先指示意义；持仓与交易仍以人民币 ETF/上海金计。
     """
-    return await service.analyze(days=days)
+    return await service.analyze(days=days, target=target)
 
 
 @router.get("/gold/ny-trend", response_model=GoldTrendOut, summary="纽约金60天趋势曲线")

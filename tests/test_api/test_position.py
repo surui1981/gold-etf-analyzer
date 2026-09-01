@@ -32,6 +32,42 @@ class FakeMarket:
             for i in range(days)
         ]
 
+    async def get_gold_gram_history(self, days: int = 60):
+        from datetime import timedelta
+
+        from app.repositories.market_data import GoldKline
+
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=990.0,
+                close=round(990.0 + i * 1.5, 2),
+                high=992.0,
+                low=988.0,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
+    async def get_us_gold_history(self, days: int = 60):
+        from datetime import timedelta
+
+        from app.repositories.market_data import GoldKline
+
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=4400.0,
+                close=round(4400.0 + i * 3.0, 2),
+                high=4410.0,
+                low=4390.0,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
 
 @pytest.fixture(autouse=True)
 def _override_market_repo():

@@ -6,7 +6,7 @@
 
 from app.schemas.position import DecisionOut
 from app.services.position import PositionService
-from app.services.trend import TrendService
+from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -30,7 +30,11 @@ _LEVEL_LABELS = {
 
 
 class DecisionService:
-    """决策引擎：综合趋势指数与持仓状态输出购买建议。"""
+    """决策引擎：综合趋势指数与持仓状态输出购买建议。
+
+    指引基准默认为纽约金（COMEX GC）——连续交易、夜盘覆盖国内休市时段，
+    对国内金价（ETF / 上海金）具备领先指示意义；持仓与交易仍以人民币 ETF 计。
+    """
 
     def __init__(
         self,
@@ -40,11 +44,12 @@ class DecisionService:
         self._trend = trend
         self._position = position
 
-    async def evaluate(self, days: int = 60) -> DecisionOut:
-        """生成 ETF 购买决策。
+    async def evaluate(self, days: int = 60, target: str = GUIDE_TARGET) -> DecisionOut:
+        """生成黄金购买决策。
 
         Args:
             days: 趋势指数覆盖的交易日数量
+            target: 指引标的类型，ny（纽约金，默认）/ etf / gram
 
         Returns:
             决策输出（行动 + 置信度 + 理由明细）
@@ -52,7 +57,7 @@ class DecisionService:
         Raises:
             ValueError: 趋势数据不足
         """
-        trend = await self._trend.analyze(days=days)
+        trend = await self._trend.analyze(days=days, target=target)
         pos = await self._position.summary()
 
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)

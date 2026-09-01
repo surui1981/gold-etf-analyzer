@@ -90,17 +90,22 @@ async def test_gold_quote(client: AsyncClient) -> None:
 
 
 async def test_gold_trend(client: AsyncClient) -> None:
+    """默认指引基准为纽约金（COMEX GC，美元/盎司）。"""
     resp = await client.get("/api/v1/market/gold/trend?days=60")
     assert resp.status_code == 200
     body = resp.json()
 
-    assert body["symbol"] == "518880"
+    assert body["symbol"] == "GC"
+    assert "纽约金" in body["name"]
     assert len(body["points"]) == 60
     assert body["metrics"]["trading_days"] == 60
     assert body["metrics"]["direction"] in {"up", "down", "sideways"}
     # 上升序列 → change_pct > 0
     assert body["metrics"]["change_pct"] > 0
     assert body["metrics"]["ma20"] is not None
+    # 计价单位随指引标的切换
+    assert body["metrics"]["unit"] == "美元/盎司"
+    assert body["metrics"]["end_price"] > 4000
     # 趋势参数与追踪指数
     assert len(body["indicators"]) == 5
     assert 0 <= body["index"]["score"] <= 100
@@ -108,6 +113,18 @@ async def test_gold_trend(client: AsyncClient) -> None:
     # 宏观参考指数
     assert body["macro"]["score"] == 50.0
     assert "宏观" in body["index"]["summary"]
+
+
+async def test_gold_trend_etf_target(client: AsyncClient) -> None:
+    """显式指定 target=etf 仍返回黄金ETF（518880，元）。"""
+    resp = await client.get("/api/v1/market/gold/trend?days=60&target=etf")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["symbol"] == "518880"
+    assert body["metrics"]["unit"] == "元"
+    assert len(body["points"]) == 60
+    assert body["metrics"]["trading_days"] == 60
 
 
 async def test_gold_trend_days_validation(client: AsyncClient) -> None:

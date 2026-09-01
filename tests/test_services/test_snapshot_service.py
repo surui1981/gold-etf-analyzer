@@ -54,7 +54,8 @@ async def test_capture_creates_snapshot(db_session: AsyncSession) -> None:
     out = await svc.capture_today()
 
     assert out.snapshot_date == date.today()
-    assert out.symbol == "518880"
+    assert out.symbol == "GC"
+    assert "纽约金" in out.name
     assert out.tech_index > 0
     assert out.macro_index == 50.0
     assert out.trend_index > 0

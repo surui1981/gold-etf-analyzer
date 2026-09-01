@@ -6,7 +6,7 @@ from datetime import date
 from app.models.snapshot import DailySnapshot
 from app.repositories.snapshot import SnapshotRepository
 from app.schemas.snapshot import SnapshotListOut, SnapshotOut
-from app.services.trend import TrendService
+from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class DailySnapshotService:
 
     async def capture_today(self) -> SnapshotOut:
         """捕获并持久化当日评估快照（同日重复捕获为更新）。"""
-        trend = await self._trend.analyze(days=60, target="etf")
+        trend = await self._trend.analyze(days=60, target=GUIDE_TARGET)
         m = trend.metrics
         macro = trend.macro
         tech_index = round(sum(i.contribution for i in trend.indicators), 1)

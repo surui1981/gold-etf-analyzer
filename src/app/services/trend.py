@@ -44,6 +44,12 @@ TREND_WEIGHTS: dict[str, float] = {
 # 各标的计价单位（用于摘要）
 _TARGET_UNITS = {"etf": "元", "gram": "元/克", "ny": "美元/盎司"}
 
+# 投资指引基准：默认以纽约金（COMEX GC）交易数据为准，
+# 因其连续交易、夜盘覆盖国内休市时段，对国内金价具备领先指示意义。
+GUIDE_TARGET = "ny"
+# 可切换的指引标的（etf=黄金ETF 518880 / gram=上海金 Au99.99 / ny=纽约金 COMEX GC）
+GUIDE_TARGETS = ("ny", "etf", "gram")
+
 
 def moving_average(values: list[float], window: int) -> list[float | None]:
     """计算滑动平均，窗口不足时为 None。
@@ -117,12 +123,14 @@ class TrendService:
 
         self._news: NewsScoreService | None = news
 
-    async def analyze(self, days: int = 60, target: str = "etf") -> GoldTrendOut:
+    async def analyze(self, days: int = 60, target: str = GUIDE_TARGET) -> GoldTrendOut:
         """分析黄金近 N 个交易日趋势并合成追踪指数。
+
+        默认基准为纽约金（``GUIDE_TARGET``），投资指引口径与之一致。
 
         Args:
             days: 覆盖的交易日数量
-            target: 标的类型，etf（518880）/ gram（上海金克价）/ ny（纽约金COMEX）
+            target: 标的类型，ny（纽约金COMEX，默认指引基准）/ etf（518880）/ gram（上海金克价）
 
         Returns:
             趋势追踪结果（序列 + 指标 + 参数 + 指数）
@@ -130,6 +138,7 @@ class TrendService:
         Raises:
             ValueError: 历史数据不足（<2 个交易日）
         """
+        target = target if target in _TARGET_UNITS else GUIDE_TARGET
         klines, symbol, name = await self._load_klines(days=days, target=target)
         if len(klines) < 2:
             raise ValueError("历史数据不足，无法进行趋势分析")
@@ -151,6 +160,7 @@ class TrendService:
             for i, k in enumerate(klines)
         ]
 
+        unit = _TARGET_UNITS.get(target, "元")
         start_price, end_price = closes[0], closes[-1]
         change_pct = (end_price - start_price) / start_price * 100 if start_price else 0.0
         change_1d, change_5d = self._recent_changes(closes)
@@ -169,7 +179,8 @@ class TrendService:
             change_pct_1d=change_1d,
             change_pct_5d=change_5d,
             direction=direction,
-            summary=self._summarize(direction, change_pct, end_price, _TARGET_UNITS.get(target, "元")),
+            unit=unit,
+            summary=self._summarize(direction, change_pct, end_price, unit),
         )
 
         # 权重：用户配置优先（趋势维度 + 技术/宏观/消息面合成比），否则内置默认
@@ -180,7 +191,7 @@ class TrendService:
             tech_weights = TREND_WEIGHTS
             tech_w, macro_w, news_w = TECH_WEIGHT, MACRO_WEIGHT, NEWS_WEIGHT
 
-        indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights)
+        indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights, unit=unit)
         macro_index = await self._macro.evaluate()
 
         # 消息面：客户当日打分（未打分 → 中性 50）
@@ -211,6 +222,11 @@ class TrendService:
                 f"= 技术面 {tech_index.score:.1f}×{tech_w:.0%} + 宏观参考 {macro_index.score:.1f}×{macro_w:.0%}"
                 f" + 消息面 {news_score:.1f}×{news_w:.0%}"
             ),
+            components={
+                "tech": round(tech_index.score, 1),
+                "macro": round(macro_index.score, 1),
+                "news": round(news_score, 1),
+            },
         )
         news_index = NewsIndexOut(
             score=news_score,
@@ -279,6 +295,7 @@ class TrendService:
         ma20: list[float | None],
         ma40: list[float | None],
         weights: dict[str, float] | None = None,
+        unit: str = "元",
     ) -> tuple[list[TrendIndicatorOut], TrendIndexOut]:
         """计算 5 个趋势维度并加权合成追踪指数（技术面）。"""
         weights = weights or TREND_WEIGHTS
@@ -364,7 +381,7 @@ class TrendService:
             score=total,
             level=level,
             direction=level_dir,
-            summary=self._index_summary(total, level, now_close),
+            summary=self._index_summary(total, level, now_close, unit),
         )
 
     @staticmethod
@@ -437,7 +454,7 @@ class TrendService:
         return TrendIndexLevel.STRONG_DOWN, DirectionSignal.BEARISH
 
     @staticmethod
-    def _index_summary(score: float, level: TrendIndexLevel, end_price: float) -> str:
+    def _index_summary(score: float, level: TrendIndexLevel, end_price: float, unit: str = "元") -> str:
         """生成追踪指数摘要。"""
         labels = {
             TrendIndexLevel.STRONG_UP: "强势上升",
@@ -455,7 +472,7 @@ class TrendService:
         }
         return (
             f"市场趋势评估指数 {score:.1f}/100，等级【{labels[level]}】{emoji[level]}，"
-            f"最新价 {end_price:.3f} 元。"
+            f"最新价 {end_price:.3f} {unit}。"
             f"{'趋势结构健康，多头动能占优' if score >= 55 else '趋势偏弱，注意风险控制' if score <= 45 else '多空胶着，等待方向选择'}"
         )
 
