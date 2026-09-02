@@ -24,8 +24,8 @@
 | 宏观机会分析 | `POST /api/v1/analysis/opportunity` 宏观因子加权评分 → 机会窗口 | ✅ |
 | 分析历史 | `GET /api/v1/analysis/history` SQLite 持久化查询 | ✅ |
 | 实时报价 | `GET /api/v1/market/gold` AKShare 真实报价（失败降级 Mock） | ✅ |
-| 趋势追踪 | `GET /api/v1/market/gold/trend?days=60` 价格序列 + MA5/20/40 + 方向 | ✅ |
-| 纽约金曲线 | `GET /api/v1/market/gold/ny-trend?days=60` COMEX 黄金期货 60 天曲线 | ✅ |
+| 趋势追踪 | `GET /api/v1/market/gold/trend?days=60` 价格序列 + MA5/20/40 + 方向（**默认纽约金 COMEX 为投资指引基准**；`target=ny/etf/gram` 可切换） | ✅ |
+| 纽约金曲线 | `GET /api/v1/market/gold/ny-trend?days=60` COMEX 黄金期货 60 天曲线（等价于 `/gold/trend?target=ny`） | ✅ |
 | 趋势评估指数 | 5 维度加权合成 0-100 指数（结构/动量/支撑/动能/回撤） | ✅ |
 | 宏观参考因子 | 美元指数/美债10Y·30Y/VIX/央行购金 → 宏观参考指数，与技术面合成综合指数 | ✅ |
 | 权重配置 | `GET/PUT /settings/weights` + `/weights` 页面：技术面/宏观面/合成比三组权重可调 | ✅ |
@@ -74,7 +74,7 @@ src/app/
 ├── api/v1/endpoints/    # health / analysis / market / position / decision
 └── utils/logger.py      # 统一日志
 static/                  # trend.html（趋势+对照） / portfolio.html（持仓决策）
-tests/                   # pytest（39 用例）
+tests/                   # pytest（67 用例）
 ```
 
 ### 3.3 数据流
@@ -106,7 +106,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 21 个用例
+python -m pytest -v          # 67 个用例
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -129,8 +129,8 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | POST | `/api/v1/analysis/opportunity` | 宏观机会评分 | body: `factors{dxy, us10y_yield, real_rate, inflation_expectation, risk_off}` |
 | GET | `/api/v1/analysis/history` | 历史分析记录 | `limit`(1-100) |
 | GET | `/api/v1/market/gold` | 黄金ETF最新报价 | - |
-| GET | `/api/v1/market/gold/trend` | 趋势追踪 + 评估指数 | `days`(20-250) |
-| GET | `/api/v1/market/gold/ny-trend` | 纽约金 60 天趋势曲线（美元/盎司） | `days`(20-250) |
+| GET | `/api/v1/market/gold/trend` | 趋势追踪 + 评估指数（**默认纽约金 COMEX 为投资指引基准**） | `days`(20-250)、`target`(ny/etf/gram，默认 ny) |
+| GET | `/api/v1/market/gold/ny-trend` | 纽约金 60 天趋势曲线（美元/盎司，等价于 `/gold/trend?target=ny`） | `days`(20-250) |
 | GET | `/api/v1/market/gold/compare` | ETF vs 黄金克价对照（归一化） | `days`(20-250) |
 | POST | `/api/v1/positions` | 开仓买入 | body: `{symbol, quantity, price, fee}` |
 | GET | `/api/v1/positions` | 持仓列表（实时盈亏） | - |
@@ -156,9 +156,9 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 ### 5.2 趋势追踪示例
 
 ```jsonc
-// GET /api/v1/market/gold/trend?days=60
+// GET /api/v1/market/gold/trend?days=60  （默认 target=ny：纽约金 COMEX；target=etf/gram 返回对应市场）
 {
-  "symbol": "518880", "name": "黄金ETF华安", "days": 60,
+  "symbol": "GC", "name": "纽约金COMEX", "unit": "美元/盎司", "days": 60,
   "points": [/* 60 个 {date, close, ma5, ma20, ma40} */],
   "metrics": { /* start/end/change_pct/high/low/ma20/ma40/direction/summary */ },
   "indicators": [ /* 5 个维度 {name, value, score, direction, weight, contribution, detail} */ ],
@@ -198,7 +198,7 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 - 等级：`≥75 强势上升` / `≥55 上升` / `≥45 震荡` / `≥25 下降` / `<25 弱势下降`
 - 配置位置：`services/trend.py::TREND_WEIGHTS`
 
-### 6.3 宏观参考指数（综合趋势指数 = 技术面 × 60% + 宏观面 × 40%）
+### 6.3 宏观参考指数（综合趋势指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%）
 
 | 因子 | 权重 | 与黄金关系 | 友好度100分位 | 友好度0分位 |
 |------|------|-----------|--------------|------------|
@@ -209,19 +209,21 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | 国际央行购金量 | 25% | 正相关（结构性） | 1200吨/年 | 500吨/年 |
 
 - 宏观参考指数 = Σ(因子友好度 × 权重)，0-100；**随宏观参数动态变化**（美债实时采集 `bond_zh_us_rate`，美元指数/VIX 静态参考值，央行购金为年度数据）
-- 综合趋势指数 = 技术面 × 60% + 宏观参考 × 40%（`services/macro.py::TECH_WEIGHT/MACRO_WEIGHT`）
+- 综合趋势指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%（`services/macro.py::TECH_WEIGHT/MACRO_WEIGHT/NEWS_WEIGHT`，用户可在 `/weights` 调整）
 
 ---
 
 ## 7. 数据源
 
-| 层级 | 说明 |
+| 标的 / 层级 | 说明 |
 |------|------|
-| 主源 | AKShare `fund_etf_hist_sina`（新浪，多数网络可达，含本沙箱） |
-| 备选 | AKShare `fund_etf_hist_em`（东方财富，部分网络被代理拦截） |
-| 兜底 | 内置 Mock 确定性序列（离线演示，保证应用可用） |
+| 纽约金（COMEX GC，指引基准） | 主源 AKShare `futures_foreign_hist`（英为财情）｜ 备选 `futures_global_hist_em`（东方财富 GC00Y）｜ 美元/盎司 |
+| 上海金（SGE Au99.99） | AKShare `spot_hist_sge`（上海黄金交易所）｜ 元/克，作国内对照 |
+| 黄金 ETF（518880） | 主源 AKShare `fund_etf_hist_sina`（新浪）｜ 备选 `fund_etf_hist_em`（东方财富）｜ 元 |
+| 宏观 5 因子 | 美元指数 / 美债 10Y·30Y（实时采集 `bond_zh_us_rate`）/ VIX / 央行购金（年度数据） |
+| 兜底 | 数据源三态：实时 `live` / 磁盘缓存 `stale` / 演示 `mock`（页面顶部状态条 + 健康度可见） |
 
-> 说明：AKShare 为同步阻塞库，代码中通过 `asyncio.to_thread` 放入线程池，避免阻塞事件循环。
+> 采集策略：AKShare 为同步阻塞库，经 `asyncio.to_thread` 放入线程池；按源分锁（`etf`/`sge`/`ny`）并发采集避免 V8 全局锁崩溃；统一 30s 超时快速失败而非挂起；内存 + 独立 SQLite 双写缓存（TTL 300s，冷启动 ~1.6s）。
 
 ---
 
@@ -241,10 +243,10 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-21 个用例覆盖：
+67 个用例覆盖：
 
 - **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向）、趋势服务（均线/方向/指数合成/数据不足异常）
-- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势/维度校验）、健康检查
+- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验）、决策、持仓、快照、健康检查
 - 测试通过 `FakeRepo` 注入假数据源，**不依赖网络**
 
 ---
@@ -267,6 +269,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 > 状态图例：✅ 已完成 ｜ ⏳ 进行中 ｜ 📋 待办
 >
 > 易用性专项改善路径（V0.20 现状评估 + P0-P3 方案与版本规划）：[improvement-path.md](improvement-path.md)
+> 用户体验（UX）专项改进方向（数据时效/响应式/可解释性/主动提醒等）：见 [improvement-path.md](improvement-path.md) 第六章。
 
 ### P1 · 近期（1-2 周）—— 工程化收口
 
@@ -275,7 +278,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | 1 | 发布 **V0.50**（commit + `v0.50.0` 标签推送 GitHub） | ✅ | 固化易用性/稳定性/可信度/性能/数据保障/工程全链路优化 |
 | 2 | **权重配置页** `/weights.html`：趋势 5 维度权重 + 决策「技术面 vs 消息面」合成权重可调（持久化 app_settings） | ✅ | 用户可定制评估逻辑 |
 | 3 | **CI/CD**：GitHub Actions 自动跑 pytest + ruff，tag 触发自动构建 | 📋 | 质量门禁 |
-| 4 | **Alembic 数据库迁移**（替代启动时 create_all） | 📋 | 结构可演进 |
+| 4 | **Alembic 数据库迁移**（替代启动时 create_all） | ✅ | V0.50 已落地（async 模板 + baseline；启动编程式 `upgrade head`，失败回退 `create_all`） |
 | 5 | 行情源**配置化**（.env 切换 sina/em/investing/mock） | 📋 | 环境适配 |
 | 6 | 交易面**多账户**（user_id 已预留）与交易历史查询页 | 📋 | 个人化增强 |
 

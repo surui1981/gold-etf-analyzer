@@ -79,7 +79,7 @@ docker compose up --build
 
 **技术面（5 维度）**：结构 30% / 动量 20% / 支撑 20% / 动能(RSI) 15% / 回撤 15%
 
-**消息面（客户评估）**：`/news` 页面基于主流财经网站（金十/新浪/东财/英为财情/汇通/华尔街见闻）的**投行黄金走势展望**研判打分（0-100：>55 看多、<45 看空、50 中性），保存后立即汇入综合指数与每日快照。
+**消息面（客户评估）**：消息面评估页（API `/news-score`）基于主流财经网站（金十/新浪/东财/英为财情/汇通/华尔街见闻）的**投行黄金走势展望**研判打分（0-100：>55 看多、<45 看空、50 中性），保存后立即汇入综合指数与每日快照。
 
 **宏观参考（5 因子）**：
 
@@ -109,7 +109,7 @@ gold-etf-analyzer/
 │   ├── api/v1/              # health / analysis / market / position / decision / settings / snapshot
 │   └── utils/               # 日志
 ├── static/                  # trend.html / portfolio.html / weights.html
-├── tests/                   # pytest（56 用例）
+├── tests/                   # pytest（67 用例）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -119,7 +119,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 56 个用例（服务层 + API 集成，不依赖网络）
+python -m pytest -v          # 67 个用例（服务层 + API 集成，不依赖网络）
 ruff check src tests
 ruff format src tests
 ```
@@ -128,11 +128,12 @@ ruff format src tests
 
 - [ ] 宏观×技术共振深化：决策引擎纳入宏观机会评分（消息面权重生效）
 - [ ] 克数持仓跟踪：实物金/积存金按克持仓，与 ETF 并列盈亏
-- [ ] CI/CD（GitHub Actions）+ 每日快照定时任务
-- [ ] Alembic 数据库迁移（替代启动时 create_all）
+- [ ] CI/CD（GitHub Actions 自动 pytest + ruff，tag 触发构建）｜ 每日快照定时任务 ✅（V0.50 看门狗 06:00/16:00 自动捕获）
+- [x] Alembic 数据库迁移（替代启动时 create_all，V0.50 已落地）
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）
 
 > 完整三阶段改进计划见 [docs/application-guide.md](docs/application-guide.md) 第 11 章。
 > 易用性专项改善路径（P0 稳定性/可信度优先）见 [docs/improvement-path.md](docs/improvement-path.md)。
+> 用户体验（UX）专项改进方向（数据时效透明 / 响应式 / 决策可解释性 / 主动提醒 / 加载与离线体验等）见 [docs/improvement-path.md](docs/improvement-path.md) 第六章。
