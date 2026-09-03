@@ -41,6 +41,8 @@ _CACHE_LOCK = threading.Lock()
 
 # 零KEY公开源：实时 XAU/USD 即期报价（无需任何 KEY，返回 {"price": <float>, ...}）
 _XAU_API = "https://api.gold-api.com/price/XAU"
+# 兜底公开源：新浪纽约黄金连续实时报价（零KEY，仅需 Referer 头）
+_SINA_GC = "https://hq.sinajs.cn/list=hf_GC"
 
 
 def _cache_get(key: tuple) -> list | None:
@@ -150,6 +152,34 @@ async def _fetch_xau_usd_live() -> float | None:
             return float(raw["price"])
     except Exception as exc:  # noqa: BLE001
         logger.warning("gold-api.com 取数失败: %s", exc)
+    return None
+
+
+async def _fetch_xau_usd_sina() -> float | None:
+    """兜底：新浪纽约黄金连续(hf_GC)实时报价（零KEY公开，需 Referer）。
+
+    返回美元/盎司最新价；失败返回 None。
+    响应形如：var hq_str_hf_GC="4438.4,,4439.7,...,4414.6,...,2026-09-03,纽约黄金,0";
+    其中第 7 个逗号字段为最新价（与 gold-api.com 实测量级一致）。
+    """
+    try:
+        def _get() -> str:
+            req = urllib.request.Request(
+                _SINA_GC,
+                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"},
+            )
+            with urllib.request.urlopen(req, timeout=12) as r:
+                return r.read().decode("utf-8", "ignore")
+
+        text = await asyncio.to_thread(_get)
+        seg = text.split('hf_GC="', 1)[-1].split('"', 1)[0]
+        parts = seg.split(",")
+        price = float(parts[7])  # 最新价
+        if price <= 0:
+            return None
+        return price
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("sina hf_GC 取数失败: %s", exc)
     return None
 
 
@@ -371,6 +401,21 @@ class MarketDataRepository:
         # 主源：gold-api.com 实时 XAU/USD（零KEY公开）
         price = await _fetch_xau_usd_live()
         if price:
+            self._mark("xau", True)
+            try:
+                change = await self._sge_daily_change()
+            except Exception:  # noqa: BLE001
+                change = 0.0
+            return GoldQuote(
+                symbol=symbol,
+                price_usd=round(price, 2),
+                change_pct=change,
+                updated_at=datetime.now(timezone.utc),
+            )
+        # 兜底源：新浪纽约黄金连续 hf_GC（零KEY公开，需 Referer）
+        price = await _fetch_xau_usd_sina()
+        if price:
+            self._mark("xau", True)
             try:
                 change = await self._sge_daily_change()
             except Exception:  # noqa: BLE001
@@ -387,6 +432,7 @@ class MarketDataRepository:
             if klines and len(klines) >= 2:
                 last, prev = klines[-1], klines[-2]
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                self._mark("xau", True)
                 return GoldQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 3),
@@ -395,6 +441,7 @@ class MarketDataRepository:
                 )
         except Exception as exc:  # noqa: BLE001
             logger.warning("quote from AKShare failed (%s), fallback to mock", exc)
+        self._mark("xau", False)
         return GoldQuote(
             symbol=symbol,
             price_usd=2350.5,
