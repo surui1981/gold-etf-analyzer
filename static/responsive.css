@@ -1,0 +1,96 @@
+/* 响应式布局（UX 6.2）：窄屏 / 移动端适配
+ *
+ * 由四个页面在各自 <style> 之后引入，利用「链接样式表位于内联 <style> 之后」
+ * 的文档顺序，使媒体查询在窄屏时覆盖内联基准样式（同特异性下后者胜出）。
+ *
+ * 适配目标：
+ *  - 顶栏可换行、字号缩小
+ *  - 追踪指数面板 / 导航网格在手机上纵向堆叠
+ *  - 宏因子行、权重行的固定宽列收窄，避免横向溢出
+ *  - 表单与输入框在手机上占满整行（纵向排列）
+ *  - 持仓表格在 #posArea 内横向滚动，而非撑破页面
+ *  - 按钮最小高度提升，触控更友好
+ *  - 时效条在超小屏字号微调
+ */
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+img, canvas, svg { max-width: 100%; }
+
+/* ---------- 平板 / 小屏笔记本 ---------- */
+@media (max-width: 768px) {
+  body { padding: 16px; }
+  .wrap { padding: 0 4px; }
+  .topnav { padding: 8px 12px; }
+  .hero { padding: 16px; }
+  .card, .panel, .index-panel { padding: 14px; }
+  h1 { font-size: 20px; }
+  .hero h1 { font-size: 22px; }
+}
+
+/* ---------- 手机 ---------- */
+@media (max-width: 480px) {
+  body { padding: 12px; font-size: 14px; }
+  .wrap { padding: 0; }
+  h1 { font-size: 19px; }
+  .hero h1 { font-size: 20px; }
+  .hero .intro,
+  .warn-banner li { font-size: 12px; }
+
+  /* 顶部导航：链接更小、可换行 */
+  .topnav { padding: 8px 10px; gap: 6px; }
+  .topnav .brand { font-size: 13.5px; }
+  .topnav a { font-size: 12.5px; padding: 5px 10px; }
+
+  /* 追踪指数面板纵向堆叠 */
+  .index-panel { flex-direction: column; align-items: stretch; gap: 14px; }
+  .index-score { min-width: 0; }
+  .index-score .num { font-size: 38px; }
+
+  /* 宏因子行：收窄固定列 */
+  .macro-row .nm { width: 84px; }
+  .macro-row .val { width: 84px; }
+  .macro-row .dt { width: 52px; }
+
+  /* 卡片栅格更紧凑；导航网格单列 */
+  .cards { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+  .nav-grid { grid-template-columns: 1fr; }
+
+  /* 权重行：收窄名称列 */
+  .w-row { gap: 8px; }
+  .w-row .nm { width: 92px; font-size: 12px; }
+  .w-row .pct { width: 44px; }
+
+  /* 消息面评分行允许换行 */
+  .score-row { flex-wrap: wrap; gap: 10px; }
+  .score-val { width: 64px; font-size: 22px; }
+
+  /* 表单：字段与输入框占满整行，纵向排列 */
+  form { gap: 8px; }
+  .field { width: 100%; }
+  input:not([type=range]), select, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
+  .quick-row { gap: 6px; }
+
+  /* 触控友好：按钮最小高度 */
+  button, .btn-save, .btn-reset, .chip, .cl-btn { min-height: 40px; }
+  .chip { padding: 8px 14px; }
+  .cl-btn { padding: 6px 14px; }
+
+  /* 持仓表格在容器内横向滚动，避免撑破页面 */
+  #posArea { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { font-size: 12px; }
+  th, td { padding: 7px 5px; white-space: nowrap; }
+
+  /* 介绍区导航按钮换行 */
+  .hero nav { gap: 6px; }
+  .hero nav a, .hero nav button { font-size: 12.5px; }
+}
+
+/* ---------- 超小屏（≤360px） ---------- */
+@media (max-width: 360px) {
+  .macro-row .nm { width: 70px; font-size: 11px; }
+  .macro-row .val { width: 70px; }
+  .w-row .nm { width: 76px; }
+  .cards { grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); }
+  .topnav a { padding: 5px 8px; font-size: 12px; }
+  .fresh-bar { font-size: 11px; padding: 6px 10px; }
+}

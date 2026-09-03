@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.52.0**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.53.0**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare
 > 仓库：https://github.com/surui1981/gold-etf-analyzer（Private）
@@ -261,7 +261,8 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | **V0.50**（已发布 v0.50.0） | **易用性**：今日操作清单引导、消息面打分提醒/快捷档位/沿用上次、持仓录入简化（金额↔份数/快捷比例）、纽约金昨日与 5 日涨跌；**稳定性**：服务看门狗自愈 + 开机自启（启动文件夹）；**可信度**：数据源三态标识（实时/缓存/演示）+ 健康度统计 + 备源与 stale 兜底；**性能**：行情缓存持久化（冷启动 1.6s）、分源并发采集（-39%）、SQLite WAL + 索引；**数据保障**：快照定时采集（06:00/16:00）、数据库自动备份（保留 7 份）、超期快照归档；**工程**：Alembic 正式迁移、配置内存缓存、66 测试 |
 | **V0.51** | **投资指引基准切换为纽约金（COMEX GC）**：趋势追踪指数、购买决策、每日快照均以纽约金为基准（连续交易、夜盘覆盖国内休市，对国内金价具领先指示意义）；ETF/上海金作为国内对照与交易标的。前端主趋势面板改显纽约金（美元/盎司），新增上海金 Au99.99（元/克）国内对照面板，`/gold/trend` 支持 `target` 参数（ny/etf/gram），67 测试 |
 | **V0.51.1** | **启动健壮性修复**：移除 Alembic 前的冗余 `create_all`，消除 SQLite 双引擎争写锁导致启动 hang；新增 WAL checkpoint（防异常退出遗留锁）+ 迁移 30s 超时兜底；启动后后台预热行情缓存使首屏直接命中；前端 `fetch` 增加 40s 超时与失败可见态，避免页面静默空白 | 启动/加载可靠性 |
-| **V0.52.0**（当前） | **数据时效透明（UX Roadmap 6.1）**：新增 `utils/market_clock.py`（纽约金 CME Globex / 上海金 SGE / ETF 三时段判定 + 时效分级）、`services/freshness.py`（FreshnessService）与 API `GET /api/v1/market/freshness`；趋势接口 `GET /api/v1/market/gold/trend` 内嵌 `freshness` 字段；前端 `static/freshness.js` 全站时效条（60s 刷新，含时段/时效等级/数据截止日/采集时间），趋势页主面板/上海金面板加 stale/mock 持续角标；**启动期 Alembic 改为子进程执行**（OS 级 60s 超时 kill 释放 SQLite 写锁，彻底消除迁移死锁）。49 项相关测试通过 | 数据可信 / 启动可靠 |
+| **V0.53.0**（当前） | **响应式与移动端适配（UX Roadmap 6.2）**：新增共享 `static/responsive.css`（768/480/360 三档媒体查询断点）并在趋势/持仓/权重/消息四页注入，使窄屏下顶栏换行、追踪面板与导航网格纵向堆叠、固定宽列收窄、表单输入满宽、持仓表格容器内横向滚动、按钮触控放大、时效条超小屏微调，关键指标首屏置顶；6.1 数据时效透明能力同步收敛进响应式体系 | 多端可用 | ✅ |
+| **V0.52.0** | **数据时效透明（UX Roadmap 6.1）**：新增 `utils/market_clock.py`（纽约金 CME Globex / 上海金 SGE / ETF 三时段判定 + 时效分级）、`services/freshness.py`（FreshnessService）与 API `GET /api/v1/market/freshness`；趋势接口 `GET /api/v1/market/gold/trend` 内嵌 `freshness` 字段；前端 `static/freshness.js` 全站时效条（60s 刷新），降级持续角标；启动期 Alembic 子进程化消除死锁。49 项相关测试通过 | 数据可信 / 启动可靠 | ✅ 已发布 |
 
 ---
 
