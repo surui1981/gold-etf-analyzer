@@ -1,170 +1,157 @@
-"""行情数据源：AKShare 真实数据采集 + Mock 降级。
+"""行情数据源：AKShare 免费采集 + 零KEY公开源兜底 + Mock 降级。
 
 设计：
 - ``GoldHistoryProvider`` 定义数据源接口（Protocol）
-- ``AkshareGoldDataProvider`` 为 AKShare 实现（东方财富 ETF 历史行情）
-- ``MarketDataRepository`` 面向服务层，采集失败时自动回退 Mock，保证应用可用
+- ``AkshareGoldDataProvider`` 为 AKShare 实现（东方财富/新浪 ETF 历史、英为财情外盘）
+- ``MarketDataRepository`` 面向服务层；采集失败时逐级回退：
+  1) 零KEY公开 API（gold-api.com 实时 XAU/USD 即期报价）
+  2) AKShare 免费源（东方财富/新浪/上海金交所）
+  3) 确定性 Mock（可离线演示，标注降级）
+
+重要：本应用**不依赖任何付费 API KEY**，全部为公开免费源：
+- gold-api.com：实时 XAU/USD 即期报价（零KEY、无需注册）
+- AKShare：东方财富/新浪 ETF 历史、上海金交所 Au99.99、中债美债收益率（免费开源库）
+- 美元指数/VIX 等宏观因子由 macro.py 内置静态参考值提供（可平滑替换为实时 provider）
 """
 
 import asyncio
 import json
-import os
-import sqlite3
+import subprocess
+import sys
 import threading
 import time
+import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Protocol
 
-from app.config import get_settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 # akshare 部分接口（新浪/英为财情）内部使用 py_mini_racer（内嵌 V8）解析加密数据，
-# V8 平台在同一进程内并发初始化会崩溃（partition_address_space fatal）。
-# 因此按数据源分锁：同一源内串行（保护 V8），不同源可并行采集（缩短首屏耗时）。
-_SOURCE_LOCKS: dict[str, threading.Lock] = {
-    "etf": threading.Lock(),  # 新浪/东财（mini_racer）
-    "sge": threading.Lock(),  # 上金所（requests，安全但同源仍串行）
-    "ny": threading.Lock(),   # 英为财情（mini_racer）
-}
-_AK_LOCK = threading.Lock()  # 兼容保留（全局兜底锁）
+# V8 平台在同一进程内初始化可能崩溃（partition_address_space fatal）。
+# 因此凡涉及 V8 的抓取统一放进**子进程**执行，崩溃只影响子进程，不拖垮主服务。
+_AK_LOCK = threading.Lock()
 
 # 行情结果缓存（TTL）：同一标的/天数在有效期内复用，避免重复网络请求拖慢首屏
 QUOTE_CACHE_TTL = 300  # 5 分钟
 _CACHE: dict[tuple, tuple[float, list]] = {}
 _CACHE_LOCK = threading.Lock()
 
-# 持久化缓存：独立 SQLite 文件（quote_cache.db），与主库分开避免并发写锁冲突；
-# 内存缓存 + 磁盘双写，服务重启后仍可命中，冷启动首屏 < 1s。
-_settings = get_settings()
-_CACHE_DB = os.path.join(
-    os.path.dirname(_settings.database_url.split("///", 1)[-1]), "quote_cache.db"
-)
-_db_initialized = False
-
-
-def _kline_to_dict(k: "GoldKline") -> dict:
-    return {
-        "date": k.date.isoformat(),
-        "open": k.open,
-        "close": k.close,
-        "high": k.high,
-        "low": k.low,
-        "volume": k.volume,
-    }
-
-
-def _dict_to_kline(d: dict) -> "GoldKline":
-    return GoldKline(
-        date=date.fromisoformat(d["date"]),
-        open=float(d["open"]),
-        close=float(d["close"]),
-        high=float(d["high"]),
-        low=float(d["low"]),
-        volume=float(d.get("volume", 0) or 0),
-    )
-
-
-def _cache_db_init() -> None:
-    """初始化持久化缓存表（幂等），并清理过期行。"""
-    global _db_initialized
-    if _db_initialized:
-        return
-    os.makedirs(os.path.dirname(_CACHE_DB), exist_ok=True)
-    conn = sqlite3.connect(_CACHE_DB, timeout=5)
-    try:
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS cache_quotes ("
-            "key TEXT PRIMARY KEY, data TEXT NOT NULL, expires REAL NOT NULL)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cache_quotes_expires ON cache_quotes(expires)"
-        )
-        conn.execute("DELETE FROM cache_quotes WHERE expires < ?", (time.time(),))
-        conn.commit()
-    finally:
-        conn.close()
-    _db_initialized = True
-
-
-def _db_get(key: str) -> list | None:
-    """从持久层读取未过期缓存（返回 GoldKline 列表或 None）。"""
-    try:
-        _cache_db_init()
-        conn = sqlite3.connect(_CACHE_DB, timeout=5)
-        try:
-            row = conn.execute(
-                "SELECT data, expires FROM cache_quotes WHERE key = ?", (key,)
-            ).fetchone()
-        finally:
-            conn.close()
-        if row is not None and row[1] > time.time():
-            return [_dict_to_kline(d) for d in json.loads(row[0])]
-    except Exception as exc:  # noqa: BLE001 —— 持久层故障不影响主流程
-        logger.warning("quote cache read failed (%s)", exc)
-    return None
-
-
-def _db_set(key: str, klines: list) -> None:
-    """写入持久层（upsert）。"""
-    try:
-        _cache_db_init()
-        payload = json.dumps([_kline_to_dict(k) for k in klines], ensure_ascii=False)
-        conn = sqlite3.connect(_CACHE_DB, timeout=5)
-        try:
-            conn.execute(
-                "INSERT INTO cache_quotes (key, data, expires) VALUES (?, ?, ?) "
-                "ON CONFLICT(key) DO UPDATE SET data = excluded.data, expires = excluded.expires",
-                (key, payload, time.time() + QUOTE_CACHE_TTL),
-            )
-            conn.commit()
-        finally:
-            conn.close()
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("quote cache write failed (%s)", exc)
+# 零KEY公开源：实时 XAU/USD 即期报价（无需任何 KEY，返回 {"price": <float>, ...}）
+_XAU_API = "https://api.gold-api.com/price/XAU"
 
 
 def _cache_get(key: tuple) -> list | None:
-    """读取缓存：内存优先，未命中回填持久层。"""
+    """读取缓存（未过期返回值，否则 None）。"""
     with _CACHE_LOCK:
         item = _CACHE.get(key)
     if item is not None and time.time() - item[0] < QUOTE_CACHE_TTL:
         return item[1]
-
-    raw = _db_get(str(key))
-    if raw is not None:
-        with _CACHE_LOCK:
-            _CACHE[key] = (time.time(), raw)
-        logger.debug("quote cache hit (disk): %s", key)
-        return raw
     return None
 
 
 def _cache_set(key: tuple, value: list) -> None:
-    """写缓存：内存 + 持久层双写。"""
     with _CACHE_LOCK:
         _CACHE[key] = (time.time(), value)
-    _db_set(str(key), value)
 
 
-def _stale_from_cache(key: tuple) -> list | None:
-    """主备源全部失败时的旧数据兜底（不检查过期，返回最近一次成功采集的数据）。"""
+# --- 子进程隔离抓取模板（避免 V8 崩溃拖垮主服务）---
+_SINA_TMPL = """import sys, json
+try:
+    import akshare as ak
+    df = ak.fund_etf_hist_sina(symbol="{symbol}")
+    out = [{{"date": str(r["date"])[:10], "open": float(r["open"]), "close": float(r["close"]),
+             "high": float(r["high"]), "low": float(r["low"]), "volume": float(r.get("volume", 0) or 0)}}
+            for _, r in df.tail({days}).iterrows()]
+    print(json.dumps(out))
+except Exception as e:
+    print("ERR:" + str(e)[:200], file=sys.stderr)
+    sys.exit(3)
+"""
+
+_US_TMPL = """import sys, json
+try:
+    import akshare as ak
+    df = ak.futures_foreign_hist(symbol="{symbol}")
+    out = [{{"date": str(r["date"])[:10], "open": float(r["open"]), "close": float(r["close"]),
+             "high": float(r["high"]), "low": float(r["low"]), "volume": float(r.get("volume", 0) or 0)}}
+            for _, r in df.tail({days}).iterrows()]
+    print(json.dumps(out))
+except Exception as e:
+    print("ERR:" + str(e)[:200], file=sys.stderr)
+    sys.exit(3)
+"""
+
+
+def _sina_etf_via_subprocess(symbol: str, days: int) -> list | None:
+    """子进程隔离调用新浪 ETF 历史，避免 V8 崩溃影响主服务。失败返回 None。"""
+    code = _SINA_TMPL.format(symbol=symbol, days=days)
     try:
-        _cache_db_init()
-        conn = sqlite3.connect(_CACHE_DB, timeout=5)
-        try:
-            row = conn.execute(
-                "SELECT data FROM cache_quotes WHERE key = ?", (str(key),)
-            ).fetchone()
-        finally:
-            conn.close()
-        if row is not None:
-            return [_dict_to_kline(d) for d in json.loads(row[0])]
+        res = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=30,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return [
+                GoldKline(
+                    date=_parse_date(r["date"]),
+                    open=float(r["open"]),
+                    close=float(r["close"]),
+                    high=float(r["high"]),
+                    low=float(r["low"]),
+                    volume=float(r.get("volume", 0) or 0),
+                )
+                for r in json.loads(res.stdout)
+            ]
     except Exception as exc:  # noqa: BLE001
-        logger.warning("stale cache read failed (%s)", exc)
+        logger.warning("sina subprocess 异常: %s", exc)
     return None
+
+
+def _us_gold_via_subprocess(symbol: str, days: int) -> list | None:
+    """子进程隔离调用英为财情外盘期货，避免 V8 崩溃。失败返回 None。"""
+    code = _US_TMPL.format(symbol=symbol, days=days)
+    try:
+        res = subprocess.run(
+            [sys.executable, "-c", code],
+            capture_output=True, text=True, timeout=30,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return [
+                GoldKline(
+                    date=_parse_date(r["date"]),
+                    open=float(r["open"]),
+                    close=float(r["close"]),
+                    high=float(r["high"]),
+                    low=float(r["low"]),
+                    volume=float(r.get("volume", 0) or 0),
+                )
+                for r in json.loads(res.stdout)
+            ]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("us gold subprocess 异常: %s", exc)
+    return None
+
+
+def _http_json(url: str, timeout: int = 15):
+    """通用 JSON GET（零依赖 urllib）。"""
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8", "ignore"))
+
+
+async def _fetch_xau_usd_live() -> float | None:
+    """零KEY公开源获取实时 XAU/USD 即期报价；失败返回 None。"""
+    try:
+        raw = await asyncio.to_thread(_http_json, _XAU_API, 15)
+        if isinstance(raw, dict) and raw.get("price"):
+            return float(raw["price"])
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("gold-api.com 取数失败: %s", exc)
+    return None
+
 
 # 默认黄金 ETF：华安黄金ETF（规模最大、流动性最好）
 DEFAULT_GOLD_ETF = "518880"
@@ -218,25 +205,15 @@ class GoldHistoryProvider(Protocol):
 
 
 class AkshareGoldDataProvider:
-    """基于 AKShare 的真实行情数据源。
+    """基于 AKShare 的真实行情数据源（全部免费、无 KEY）。
 
-    主源：新浪基金 ETF 历史（fund_etf_hist_sina，多数网络环境可达）；
-    备源：东方财富 ETF 历史（fund_etf_hist_em，主源失败时切换）。
+    主源：东方财富 ETF 历史（fund_etf_hist_em，不依赖 V8，跨网络更稳）；
+    备源：新浪 ETF 历史（子进程隔离，避免 V8 崩溃）；
+    外盘：英为财情期货（同样子进程隔离）。
     """
 
     async def get_history(self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60) -> list[GoldKline]:
-        """获取黄金 ETF 最近日 K。
-
-        Args:
-            symbol: ETF 代码（如 518880，自动推断市场前缀）
-            days: 需要返回的交易日数量
-
-        Returns:
-            按日期升序的 K 线列表
-
-        Raises:
-            RuntimeError: AKShare 未安装或全部数据源采集失败
-        """
+        """获取黄金 ETF 最近日 K。"""
         try:
             import akshare as ak  # 延迟导入：避免无网络环境/测试环境强依赖
         except ImportError as exc:  # pragma: no cover
@@ -245,35 +222,16 @@ class AkshareGoldDataProvider:
         prefix = "sh" if symbol.startswith(("5", "6")) else "sz"
 
         def _fetch() -> list[GoldKline]:
-            with _SOURCE_LOCKS["etf"]:
+            with _AK_LOCK:
                 return _fetch_inner()
 
         def _fetch_inner() -> list[GoldKline]:
             errors: list[str] = []
-            # 主源：新浪（沙箱/多数网络可达）
-            try:
-                df = ak.fund_etf_hist_sina(symbol=f"{prefix}{symbol}")
-                if df is not None and not df.empty:
-                    df = df.tail(days)
-                    return [
-                        GoldKline(
-                            date=_parse_date(row["date"]),
-                            open=float(row["open"]),
-                            close=float(row["close"]),
-                            high=float(row["high"]),
-                            low=float(row["low"]),
-                            volume=float(row.get("volume", 0) or 0),
-                        )
-                        for _, row in df.iterrows()
-                    ]
-                errors.append("sina empty")
-            except Exception as exc:  # noqa: BLE001 —— 数据源逐个降级
-                errors.append(f"sina: {exc}")
+            end = datetime.now()
+            start = end - timedelta(days=days * 2)  # 留足交易日余量
 
-            # 备源：东方财富（需网络可达该域）
+            # 主源：东方财富（不依赖 V8）
             try:
-                end = datetime.now()
-                start = end - timedelta(days=days * 2)  # 留足交易日余量
                 df = ak.fund_etf_hist_em(
                     symbol=symbol,
                     period="daily",
@@ -298,6 +256,15 @@ class AkshareGoldDataProvider:
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"em: {exc}")
 
+            # 备源：新浪（子进程隔离，避免 V8 崩溃影响主服务）
+            try:
+                sub = _sina_etf_via_subprocess(f"{prefix}{symbol}", days)
+                if sub:
+                    return sub
+                errors.append("sina subprocess empty")
+            except Exception as exc:  # noqa: BLE001
+                errors.append(f"sina: {exc}")
+
             raise RuntimeError(f"AKShare 全部数据源失败: {'; '.join(errors)}")
 
         key = ("etf", symbol, days)
@@ -313,25 +280,14 @@ class AkshareGoldDataProvider:
         symbol: str = DEFAULT_GOLD_GRAM,
         days: int = 60,
     ) -> list[GoldKline]:
-        """获取黄金克价（上海黄金交易所 Au99.99，元/克）最近日 K。
-
-        Args:
-            symbol: SGE 品种代码，默认 Au99.99
-            days: 需要返回的交易日数量
-
-        Returns:
-            按日期升序的 K 线列表
-
-        Raises:
-            RuntimeError: AKShare 未安装或采集失败
-        """
+        """获取黄金克价（上海黄金交易所 Au99.99，元/克）最近日 K。"""
         try:
             import akshare as ak  # 延迟导入
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
 
         def _fetch() -> list[GoldKline]:
-            with _SOURCE_LOCKS["sge"]:
+            with _AK_LOCK:
                 return _fetch_inner()
 
         def _fetch_inner() -> list[GoldKline]:
@@ -364,70 +320,22 @@ class AkshareGoldDataProvider:
         symbol: str = DEFAULT_NY_GOLD,
         days: int = 60,
     ) -> list[GoldKline]:
-        """获取纽约金（COMEX 黄金期货主力 GC，美元/盎司）最近日 K。
-
-        Args:
-            symbol: 外盘期货代码，默认 GC（COMEX 黄金）
-            days: 需要返回的交易日数量
-
-        Returns:
-            按日期升序的 K 线列表
-
-        Raises:
-            RuntimeError: AKShare 未安装或采集失败
-        """
+        """获取纽约金（COMEX 黄金期货主力 GC，美元/盎司）最近日 K。"""
         try:
             import akshare as ak  # 延迟导入
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
 
         def _fetch() -> list[GoldKline]:
-            with _SOURCE_LOCKS["ny"]:
+            with _AK_LOCK:
                 return _fetch_inner()
 
         def _fetch_inner() -> list[GoldKline]:
-            errors: list[str] = []
-            # 主源：英为财情外盘期货
-            try:
-                df = ak.futures_foreign_hist(symbol=symbol)
-                if df is not None and not df.empty:
-                    df = df.tail(days)
-                    return [
-                        GoldKline(
-                            date=_parse_date(row["date"]),
-                            open=float(row["open"]),
-                            close=float(row["close"]),
-                            high=float(row.get("high", row["close"])),
-                            low=float(row.get("low", row["close"])),
-                            volume=float(row.get("volume", 0) or 0),
-                        )
-                        for _, row in df.iterrows()
-                    ]
-                errors.append("investing empty")
-            except Exception as exc:  # noqa: BLE001 —— 数据源逐个降级
-                errors.append(f"investing: {exc}")
-
-            # 备源：东方财富全球期货（symbol 需带主力后缀，如 GC00Y）
-            try:
-                df = ak.futures_global_hist_em(symbol=f"{symbol}00Y")
-                if df is not None and not df.empty:
-                    df = df.tail(days)
-                    return [
-                        GoldKline(
-                            date=_parse_date(row.get("日期", row["date"])),
-                            open=float(row.get("开盘", row["open"])),
-                            close=float(row.get("收盘", row["close"])),
-                            high=float(row.get("最高", row.get("high", row["close"]))),
-                            low=float(row.get("最低", row.get("low", row["close"]))),
-                            volume=float(row.get("成交量", row.get("volume", 0)) or 0),
-                        )
-                        for _, row in df.iterrows()
-                    ]
-                errors.append("em global empty")
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"em global: {exc}")
-
-            raise RuntimeError(f"纽约金全部数据源失败: {'; '.join(errors)}")
+            # 英为财情外盘期货依赖 V8，子进程隔离防止崩溃
+            sub = _us_gold_via_subprocess(symbol, days)
+            if sub:
+                return sub
+            raise RuntimeError("us gold subprocess empty")
 
         key = ("ny", symbol, days)
         cached = _cache_get(key)
@@ -438,57 +346,17 @@ class AkshareGoldDataProvider:
         return result
 
 
-# 数据源健康度统计（进程内，近态指标）：
-# key -> {"ok": 成功次数, "fail": 失败次数, "total_ms": 累计耗时, "last": 最近状态, "last_ms": 最近耗时}
-_HEALTH: dict[str, dict] = {}
-_HEALTH_LOCK = threading.Lock()
-
-
-def _record_health(key: str, ok: bool, latency_ms: float) -> None:
-    """记录一次采集结果（线程安全，进程重启后清空，属近态健康度）。"""
-    with _HEALTH_LOCK:
-        h = _HEALTH.setdefault(key, {"ok": 0, "fail": 0, "total_ms": 0.0})
-        if ok:
-            h["ok"] += 1
-        else:
-            h["fail"] += 1
-        h["total_ms"] += latency_ms
-        h["last"] = "live" if ok else "mock"
-        h["last_ms"] = round(latency_ms, 1)
-
-
-def health_stats() -> dict[str, dict]:
-    """各数据源健康度：成功率 / 平均耗时 / 采集次数 / 最近状态。"""
-    with _HEALTH_LOCK:
-        snap = {k: dict(v) for k, v in _HEALTH.items()}
-    out: dict[str, dict] = {}
-    for key, h in snap.items():
-        total = h["ok"] + h["fail"]
-        avg_ms = round(h["total_ms"] / total, 1) if total else 0.0
-        out[key] = {
-            "status": h.get("last", "-"),
-            "ok": h["ok"],
-            "fail": h["fail"],
-            "total": total,
-            "success_rate": round(h["ok"] / total * 100, 1) if total else 100.0,
-            "avg_ms": avg_ms,
-            "last_ms": h.get("last_ms", 0.0),
-        }
-    return out
-
-
 class MarketDataRepository:
-    """行情数据源入口：真实源优先，异常自动回退 Mock（降级可感知）。"""
+    """行情数据源入口：实时公开源优先，异常自动回退 Mock（降级可感知）。"""
 
     def __init__(self, provider: GoldHistoryProvider | None = None) -> None:
         self._provider = provider or AkshareGoldDataProvider()
         # 数据源状态：key → "live"（真实）/ "mock"（降级演示）
         self._sources: dict[str, str] = {}
 
-    def _mark(self, key: str, ok: bool, latency_ms: float = 0.0) -> None:
-        """记录数据源取数结果（状态 + 健康度）。"""
+    def _mark(self, key: str, ok: bool) -> None:
+        """记录数据源取数结果。"""
         self._sources[key] = "live" if ok else "mock"
-        _record_health(key, ok, latency_ms)
 
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。"""
@@ -499,44 +367,52 @@ class MarketDataRepository:
         return any(v == "mock" for v in self._sources.values())
 
     async def get_gold_quote(self, symbol: str = "XAU") -> GoldQuote:
-        """获取黄金最新报价（由最近 K 线推导，比固定 Mock 更真实）。"""
-        try:
-            klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=3)
-            if not klines:
-                raise RuntimeError("empty history")
-            last, prev = klines[-1], klines[-2]
-            change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+        """获取黄金最新报价（零KEY公开源优先，真实可达）。"""
+        # 主源：gold-api.com 实时 XAU/USD（零KEY公开）
+        price = await _fetch_xau_usd_live()
+        if price:
+            try:
+                change = await self._sge_daily_change()
+            except Exception:  # noqa: BLE001
+                change = 0.0
             return GoldQuote(
                 symbol=symbol,
-                price_usd=round(last.close, 3),
-                change_pct=round(change_pct, 2),
-                updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
-            )
-        except Exception as exc:  # noqa: BLE001 —— 数据源故障时降级 Mock
-            logger.warning("quote from AKShare failed (%s), fallback to mock", exc)
-            return GoldQuote(
-                symbol=symbol,
-                price_usd=2350.5,
-                change_pct=0.42,
+                price_usd=round(price, 2),
+                change_pct=change,
                 updated_at=datetime.now(timezone.utc),
             )
+        # 兜底：由 ETF 历史推导
+        try:
+            klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=3)
+            if klines and len(klines) >= 2:
+                last, prev = klines[-1], klines[-2]
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                return GoldQuote(
+                    symbol=symbol,
+                    price_usd=round(last.close, 3),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("quote from AKShare failed (%s), fallback to mock", exc)
+        return GoldQuote(
+            symbol=symbol,
+            price_usd=2350.5,
+            change_pct=0.42,
+            updated_at=datetime.now(timezone.utc),
+        )
 
     async def get_gold_history(self, days: int = 60) -> list[GoldKline]:
         """获取黄金 ETF 历史日 K；失败时返回确定性 Mock 序列（可离线演示）。"""
-        _t0 = time.perf_counter()
         try:
             klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=days)
             if klines:
-                self._mark("etf", True, (time.perf_counter() - _t0) * 1000)
+                self._mark("etf", True)
                 return klines
             raise RuntimeError("empty history")
         except Exception as exc:  # noqa: BLE001
             logger.warning("history from AKShare failed (%s), fallback to mock", exc)
-            self._mark("etf", False, (time.perf_counter() - _t0) * 1000)
-            stale = _stale_from_cache(("etf", DEFAULT_GOLD_ETF, days))
-            if stale:
-                self._sources["etf"] = "stale"
-                return stale
+            self._mark("etf", False)
             return self._mock_history(days)
 
     async def get_gold_gram_quote(self, symbol: str = DEFAULT_GOLD_GRAM) -> GoldQuote:
@@ -568,21 +444,26 @@ class MarketDataRepository:
         days: int = 60,
     ) -> list[GoldKline]:
         """获取黄金克价历史日 K；失败降级 Mock。"""
-        _t0 = time.perf_counter()
         try:
             klines = await self._provider.get_gram_history(symbol=symbol, days=days)
             if klines:
-                self._mark("sge", True, (time.perf_counter() - _t0) * 1000)
+                self._mark("sge", True)
                 return klines
             raise RuntimeError("empty gram history")
         except Exception as exc:  # noqa: BLE001
             logger.warning("gram history failed (%s), fallback to mock", exc)
-            self._mark("sge", False, (time.perf_counter() - _t0) * 1000)
-            stale = _stale_from_cache(("sge", symbol, days))
-            if stale:
-                self._sources["sge"] = "stale"
-                return stale
+            self._mark("sge", False)
             return self._mock_gram_history(days)
+
+    async def _sge_daily_change(self) -> float:
+        """由上海金真实近两日推导涨跌幅（免费公开源）。"""
+        try:
+            kl = await self.get_gold_gram_history(symbol=DEFAULT_GOLD_GRAM, days=3)
+            if len(kl) >= 2 and kl[-2].close:
+                return round((kl[-1].close - kl[-2].close) / kl[-2].close * 100, 2)
+        except Exception:  # noqa: BLE001
+            pass
+        return 0.0
 
     @staticmethod
     def _mock_gram_history(days: int) -> list[GoldKline]:
@@ -611,26 +492,39 @@ class MarketDataRepository:
 
     async def get_us_gold_quote(self, symbol: str = DEFAULT_NY_GOLD) -> GoldQuote:
         """获取纽约金最新报价（美元/盎司）。"""
-        try:
-            klines = await self.get_us_gold_history(symbol=symbol, days=3)
-            if len(klines) < 2:
-                raise RuntimeError("empty us gold history")
-            last, prev = klines[-1], klines[-2]
-            change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+        # 主源：零KEY公开 XAU/USD 即期报价（与COMEX高度联动）
+        price = await _fetch_xau_usd_live()
+        if price:
+            try:
+                change = await self._sge_daily_change()
+            except Exception:  # noqa: BLE001
+                change = 0.0
             return GoldQuote(
                 symbol=symbol,
-                price_usd=round(last.close, 2),
-                change_pct=round(change_pct, 2),
-                updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("us gold quote failed (%s), fallback to mock", exc)
-            return GoldQuote(
-                symbol=symbol,
-                price_usd=4500.5,
-                change_pct=0.3,
+                price_usd=round(price, 2),
+                change_pct=change,
                 updated_at=datetime.now(timezone.utc),
             )
+        # 兜底：由外盘历史推导
+        try:
+            klines = await self.get_us_gold_history(symbol=symbol, days=3)
+            if klines and len(klines) >= 2:
+                last, prev = klines[-1], klines[-2]
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                return GoldQuote(
+                    symbol=symbol,
+                    price_usd=round(last.close, 2),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
+                )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("us gold quote failed (%s), fallback to mock", exc)
+        return GoldQuote(
+            symbol=symbol,
+            price_usd=4500.5,
+            change_pct=0.3,
+            updated_at=datetime.now(timezone.utc),
+        )
 
     async def get_us_gold_history(
         self,
@@ -638,20 +532,15 @@ class MarketDataRepository:
         days: int = 60,
     ) -> list[GoldKline]:
         """获取纽约金历史日 K；失败降级 Mock。"""
-        _t0 = time.perf_counter()
         try:
             klines = await self._provider.get_us_gold_history(symbol=symbol, days=days)
             if klines:
-                self._mark("ny", True, (time.perf_counter() - _t0) * 1000)
+                self._mark("ny", True)
                 return klines
             raise RuntimeError("empty us gold history")
         except Exception as exc:  # noqa: BLE001
             logger.warning("us gold history failed (%s), fallback to mock", exc)
-            self._mark("ny", False, (time.perf_counter() - _t0) * 1000)
-            stale = _stale_from_cache(("ny", symbol, days))
-            if stale:
-                self._sources["ny"] = "stale"
-                return stale
+            self._mark("ny", False)
             return self._mock_us_history(days)
 
     @staticmethod
@@ -662,7 +551,7 @@ class MarketDataRepository:
         points: list[GoldKline] = []
         for i in range(days, 0, -1):
             day = today - timedelta(days=i)
-            if day.weekday() >= 5:
+            if day.weekday() >= 5:  # 跳过周末
                 continue
             progress = (days - i) / days
             wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)
