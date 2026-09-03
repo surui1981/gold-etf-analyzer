@@ -383,10 +383,21 @@ class MarketDataRepository:
         self._provider = provider or AkshareGoldDataProvider()
         # 数据源状态：key → "live"（真实）/ "mock"（降级演示）
         self._sources: dict[str, str] = {}
+        # 采集元信息（供「数据时效透明」展示）：各源最近一次采集时刻(UTC)与数据截止日
+        self._fetched_at: dict[str, datetime] = {}
+        self._last_date: dict[str, date] = {}
 
-    def _mark(self, key: str, ok: bool) -> None:
-        """记录数据源取数结果。"""
+    def _mark(
+        self,
+        key: str,
+        ok: bool,
+        last_date: date | None = None,
+    ) -> None:
+        """记录数据源取数结果，并登记采集时刻与数据截止日（供数据时效透明展示）。"""
         self._sources[key] = "live" if ok else "mock"
+        self._fetched_at[key] = datetime.now(timezone.utc)
+        if last_date is not None:
+            self._last_date[key] = last_date
 
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。"""
@@ -395,6 +406,20 @@ class MarketDataRepository:
     def is_degraded(self) -> bool:
         """是否存在任一数据源降级为 Mock。"""
         return any(v == "mock" for v in self._sources.values())
+
+    def source_meta(self) -> dict[str, dict]:
+        """各数据源采集元信息（状态 / 采集时刻 UTC / 数据截止日），供数据时效透明展示。
+
+        返回形如 ``{key: {"status": ..., "fetched_at": datetime|None, "last_date": date|None}}``。
+        """
+        return {
+            key: {
+                "status": status,
+                "fetched_at": self._fetched_at.get(key),
+                "last_date": self._last_date.get(key),
+            }
+            for key, status in self._sources.items()
+        }
 
     async def get_gold_quote(self, symbol: str = "XAU") -> GoldQuote:
         """获取黄金最新报价（零KEY公开源优先，真实可达）。"""
@@ -454,7 +479,7 @@ class MarketDataRepository:
         try:
             klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=days)
             if klines:
-                self._mark("etf", True)
+                self._mark("etf", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty history")
         except Exception as exc:  # noqa: BLE001
@@ -494,7 +519,7 @@ class MarketDataRepository:
         try:
             klines = await self._provider.get_gram_history(symbol=symbol, days=days)
             if klines:
-                self._mark("sge", True)
+                self._mark("sge", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty gram history")
         except Exception as exc:  # noqa: BLE001
@@ -582,7 +607,7 @@ class MarketDataRepository:
         try:
             klines = await self._provider.get_us_gold_history(symbol=symbol, days=days)
             if klines:
-                self._mark("ny", True)
+                self._mark("ny", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty us gold history")
         except Exception as exc:  # noqa: BLE001

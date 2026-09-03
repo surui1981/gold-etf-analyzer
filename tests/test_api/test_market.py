@@ -113,6 +113,14 @@ async def test_gold_trend(client: AsyncClient) -> None:
     # 宏观参考指数
     assert body["macro"]["score"] == 50.0
     assert "宏观" in body["index"]["summary"]
+    # 数据时效（UX 6.1）：时效等级 + 交易时段 + 数据截止日
+    fresh = body["freshness"]
+    assert fresh["market"] == "ny"
+    assert fresh["freshness"] in {"realtime", "delayed", "t1", "lagged", "cached", "mock", "unknown"}
+    assert fresh["freshness_label"]
+    assert fresh["data_date"]
+    assert fresh["session"]["state"] in {"open", "pre", "break", "closed"}
+    assert fresh["session"]["windows"]
 
 
 async def test_gold_trend_etf_target(client: AsyncClient) -> None:

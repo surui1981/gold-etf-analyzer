@@ -17,6 +17,7 @@ data/
 # 服务运行日志
 server.log
 server.log.err
+server_run.log
 
 # 测试与工具缓存
 .pytest_cache/

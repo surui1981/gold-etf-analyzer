@@ -15,6 +15,7 @@ from app.repositories.snapshot import SnapshotRepository
 from app.services.analysis import AnalysisService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
+from app.services.freshness import FreshnessService
 from app.services.news import NewsScoreService
 from app.services.position import PositionService
 from app.services.scoring import OpportunityScoringService
@@ -148,3 +149,10 @@ def get_compare_service(
 ) -> GoldCompareService:
     """ETF vs 克价对照服务依赖（行情仓储）。"""
     return GoldCompareService(repo=repo)
+
+
+def get_freshness_service(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> FreshnessService:
+    """数据时效服务依赖（行情仓储的采集元信息 + 交易时段）。"""
+    return FreshnessService(repo=repo)

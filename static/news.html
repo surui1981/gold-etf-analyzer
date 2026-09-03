@@ -63,6 +63,8 @@
     </div>
   </nav>
 
+  <!-- 数据时效（UX 6.1：交易时段 + 时效等级 + 数据截止日 + 采集时间，全站一致） -->
+  <div id="freshnessBar"></div>
   <div class="warn-banner">
     <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
@@ -214,5 +216,6 @@ async function save() {
   }
 })();
 </script>
+  <script src="/static/freshness.js"></script>
 </body>
 </html>

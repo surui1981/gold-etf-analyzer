@@ -134,6 +134,54 @@ class NewsIndexOut(BaseModel):
     scored: bool = Field(False, description="今日是否已打分")
 
 
+class FreshnessLevel(StrEnum):
+    """数据时效等级（UX 6.1：消除「误判数据新鲜度」）。"""
+
+    REALTIME = "realtime"  # 实时（交易中且数据截止当日）
+    DELAYED = "delayed"  # 延时（数据截止当日但已休市，属盘后静态价）
+    T1 = "t1"  # T-1（数据截止上一交易日）
+    LAGGED = "lagged"  # 滞后多日
+    CACHED = "cached"  # 缓存（数据源失败读取磁盘旧缓存，可能过期）
+    MOCK = "mock"  # 演示（非真实行情）
+    UNKNOWN = "unknown"  # 尚未采集
+
+
+class MarketSessionOut(BaseModel):
+    """市场交易时段快照。"""
+
+    market: str = Field(..., description="市场标识 ny/sge/etf")
+    name: str = Field(..., description="市场名称")
+    state: str = Field(..., description="状态 open（交易中）/pre（盘前）/break（盘中休整）/closed（休市）")
+    state_label: str = Field(..., description="状态中文名")
+    windows: list[str] = Field(default_factory=list, description="交易时段说明")
+    next_event: str = Field("", description="下一时间点提示（如 15:00 收盘）")
+    note: str = Field("", description="当前语境说明（如 周末休市）")
+
+
+class DataFreshnessOut(BaseModel):
+    """单市场数据时效：时效等级 + 数据截止日 + 采集时间 + 交易时段。"""
+
+    market: str = Field(..., description="市场标识 ny/sge/etf")
+    name: str = Field(..., description="市场名称")
+    status: str = Field("-", description="数据源状态 live（实时）/stale（缓存）/mock（演示）")
+    freshness: FreshnessLevel = Field(..., description="时效等级")
+    freshness_label: str = Field(..., description="时效等级中文名")
+    data_date: str = Field("", description="数据截止日（最后一根 K 线日期，YYYY-MM-DD）")
+    fetched_at: str = Field("", description="数据采集时间（UTC ISO 8601）")
+    age_minutes: float = Field(-1.0, description="距采集已过分钟数；-1 表示未知")
+    session: MarketSessionOut = Field(..., description="当前交易时段")
+    note: str = Field("", description="补充语境说明")
+
+
+class FreshnessOut(BaseModel):
+    """全站数据时效报告（供顶部时效条展示）。"""
+
+    server_time: str = Field(..., description="服务器当前时间（UTC ISO 8601）")
+    markets: dict[str, DataFreshnessOut] = Field(..., description="各市场时效明细")
+    degraded: bool = Field(False, description="是否存在缓存/演示降级数据")
+    summary: str = Field("", description="一句话汇总（市场：时段·时效）")
+
+
 class GoldTrendOut(BaseModel):
     """黄金趋势追踪输出：序列 + 指标 + 参数 + 追踪指数（三面合成）+ 宏观/消息面。"""
 
@@ -151,6 +199,10 @@ class GoldTrendOut(BaseModel):
         description="数据源状态：etf/sge/ny → live（真实）或 mock（降级演示）",
     )
     degraded: bool = Field(False, description="是否存在数据源降级为演示数据")
+    freshness: DataFreshnessOut | None = Field(
+        None,
+        description="数据时效（实时/延时/T-1/缓存/演示 + 交易时段），供页面持续标注",
+    )
 
 
 class GoldCompareSeries(BaseModel):

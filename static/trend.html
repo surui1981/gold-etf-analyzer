@@ -85,6 +85,14 @@
   .ind-head .sc { font-weight: 700; }
   .ind-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
   canvas { max-height: 420px; }
+  /* 数据时效角标（UX 6.1）：降级数据在图表与数字上持续可见 */
+  #chartArea { position: relative; }
+  .data-badge { position:absolute; top:6px; right:10px; z-index:2; font-size:11px; font-weight:700;
+    padding:3px 10px; border-radius:20px; border:1px solid; }
+  .db-ok { background:#e8f7ee; color:#1a7f37; border-color:#b7e4c7; }
+  .db-warn { background:#fff1e6; color:#b35309; border-color:#ffd8a8; }
+  .db-bad { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }
+  .db-dim { background:#f1f3f5; color:#868e96; border-color:#dee2e6; }
   .loading { text-align: center; color: var(--muted); padding: 60px 0; }
   .error { color: var(--up); text-align: center; padding: 40px 0; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
@@ -126,6 +134,8 @@
     </div>
   </nav>
 
+  <!-- 数据时效（UX 6.1：交易时段 + 时效等级 + 数据截止日 + 采集时间，全站一致） -->
+  <div id="freshnessBar"></div>
   <!-- 数据源状态（降级可感知） -->
   <div id="sourceBar" class="source-bar" style="display:none"></div>
   <div id="healthInfo" style="font-size:11.5px;color:var(--muted);margin:-6px 0 14px"></div>
@@ -152,6 +162,7 @@
       <div class="tagline">三市场对照 · 趋势评估指数 · 个人持仓跟踪 · ETF 购买决策</div>
       <p class="intro">汇聚<b>纽约金、上海金、黄金ETF</b>三大市场价格数据，量化评估黄金投资窗口——以趋势评估指数量化多空、以持仓盈亏跟踪投资进度、以参数面×交易面辅助 ETF 购买决策，为个人黄金投资者提供一站式数据参考。</p>
       <div class="sub" id="subtitle" style="margin-top:8px">加载中…</div>
+      <div style="margin-top:6px"><span id="freshBadge"></span></div>
       <div class="notice">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
     </div>
   </header>
@@ -221,7 +232,7 @@
   <div class="panel" style="margin-bottom:16px">
     <div style="font-size:15px;font-weight:600;margin-bottom:4px">上海金 Au99.99（元/克）· 国内金价对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="sgeSub"></span></div>
     <div class="cards" id="sgeCards" style="margin-bottom:12px"></div>
-    <canvas id="sgeChart" style="max-height:260px"></canvas>
+    <div id="sgeArea" style="position:relative"><canvas id="sgeChart" style="max-height:260px"></canvas></div>
     <div class="summary" id="sgeSummary"></div>
   </div>
 
@@ -424,6 +435,55 @@ function renderSourceBar(d) {
   bar.style.display = "block";
 }
 
+// 数据时效角标（UX 6.1）：在标题与图表上持续标注，降级数据绝不静默
+function freshnessMeta(f) {
+  if (!f) return { cls: "db-dim", text: "时效未知" };
+  if (f.status === "mock") return { cls: "db-bad", text: "演示数据 · 非真实行情" };
+  if (f.status === "stale") return { cls: "db-warn", text: "缓存数据 · 可能过期" };
+  const map = {
+    realtime: { cls: "db-ok", text: "实时" },
+    delayed: { cls: "db-ok", text: "盘后静态价" },
+    t1: { cls: "db-warn", text: "T-1 数据" },
+    lagged: { cls: "db-warn", text: "滞后多日" },
+    cached: { cls: "db-warn", text: "缓存数据" },
+    mock: { cls: "db-bad", text: "演示数据" },
+    unknown: { cls: "db-dim", text: "未采集" },
+  };
+  return map[f.freshness] || { cls: "db-dim", text: f.freshness_label || "未知" };
+}
+
+function renderFreshness(d) {
+  const f = d.freshness;
+  const meta = freshnessMeta(f);
+  const tip = f ? [
+    f.name,
+    "时段：" + f.session.state_label,
+    "交易时间：" + (f.session.windows || []).join("；"),
+    "下一时点：" + f.session.next_event,
+    "数据截止：" + (f.data_date || "—"),
+    f.note || "",
+  ].filter(Boolean).join("\n") : "";
+
+  // 主面板：标题下方持续角标
+  const holder = document.getElementById("freshBadge");
+  if (holder) {
+    holder.outerHTML =
+      `<span id="freshBadge" class="data-badge ${meta.cls}" style="position:static;display:inline-block" title="${tip.replace(/"/g, "")}">` +
+      `${meta.text}${f && f.data_date ? " · 截止 " + f.data_date : ""}` +
+      `${f ? " · " + f.session.state_label : ""}</span>`;
+  }
+
+  // 图表：叠加在 K 线右上角，滚动/切换均持续可见
+  const area = document.getElementById("chartArea");
+  if (area && f) {
+    const badge = document.createElement("div");
+    badge.className = "data-badge " + meta.cls;
+    badge.textContent = meta.text;
+    badge.title = tip;
+    area.appendChild(badge);
+  }
+}
+
 function render(d) {
   const m = d.metrics;
   const isUp = m.change_pct >= 0;
@@ -535,6 +595,9 @@ function render(d) {
     },
   });
 
+  // 数据时效角标（图表渲染后叠加，随图持续可见）
+  renderFreshness(d);
+
   // 摘要
   document.getElementById("summary").innerHTML = m.summary;
 }
@@ -629,6 +692,16 @@ async function loadSge() {
         scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
       },
     });
+    // 数据时效角标（叠加在曲线右上角，缓存/演示持续可见）
+    const sgeArea = document.getElementById("sgeArea");
+    if (sgeArea && n.freshness) {
+      const fm = freshnessMeta(n.freshness);
+      const b = document.createElement("div");
+      b.className = "data-badge " + fm.cls;
+      b.textContent = fm.text;
+      b.title = `${n.name} · ${n.freshness.session.state_label} · 数据截止 ${n.freshness.data_date || "—"}`;
+      sgeArea.appendChild(b);
+    }
     document.getElementById("sgeSummary").textContent = m.summary;
   } catch (e) {
     document.getElementById("sgeSub").textContent = "上海金数据加载失败：" + e.message;
@@ -674,5 +747,6 @@ async function loadSnapshots() {
   bar.style.display = "none";
 })();
 </script>
+  <script src="/static/freshness.js"></script>
 </body>
 </html>

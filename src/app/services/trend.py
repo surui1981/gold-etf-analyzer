@@ -6,6 +6,8 @@
 权重集中在 ``TREND_WEIGHTS``，可按经验直接调整。
 """
 
+from datetime import datetime, timezone
+
 from app.repositories.market_data import (
     DEFAULT_GOLD_ETF,
     DEFAULT_GOLD_ETF_NAME,
@@ -28,6 +30,7 @@ from app.schemas.market import (
     TrendIndexOut,
 )
 from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
+from app.services.freshness import build_data_freshness
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,6 +52,9 @@ _TARGET_UNITS = {"etf": "元", "gram": "元/克", "ny": "美元/盎司"}
 GUIDE_TARGET = "ny"
 # 可切换的指引标的（etf=黄金ETF 518880 / gram=上海金 Au99.99 / ny=纽约金 COMEX GC）
 GUIDE_TARGETS = ("ny", "etf", "gram")
+
+# 指引标的 → 时效/时段判定的市场 key（上海金在仓储层记为 sge）
+_FRESHNESS_KEYS = {"ny": "ny", "gram": "sge", "etf": "etf"}
 
 
 def moving_average(values: list[float], window: int) -> list[float | None]:
@@ -245,6 +251,15 @@ class TrendService:
         if degraded:
             logger.warning("Data source degraded to mock: %s", sources)
 
+        # 数据时效（UX 6.1）：以最后一根 K 线日期为数据截止日，结合时段判定等级
+        clock_key = _FRESHNESS_KEYS.get(target, "ny")
+        freshness = build_data_freshness(
+            clock_key,
+            status=sources.get(clock_key, "-"),
+            data_date=klines[-1].date,
+            fetched_at=datetime.now(timezone.utc),
+        )
+
         return GoldTrendOut(
             symbol=symbol,
             name=name,
@@ -257,6 +272,7 @@ class TrendService:
             news=news_index,
             data_sources=sources,
             degraded=degraded,
+            freshness=freshness,
         )
 
     @staticmethod

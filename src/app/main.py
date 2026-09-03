@@ -3,6 +3,8 @@
 import asyncio
 import logging
 import sqlite3
+import subprocess
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -11,9 +13,6 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-
-from alembic import command
-from alembic.config import Config
 
 from app.api.v1.router import api_router
 from app.config import get_settings
@@ -28,11 +27,23 @@ STATIC_DIR = PROJECT_ROOT / "static"
 
 
 def _run_alembic_upgrade() -> None:
-    """以编程方式执行 Alembic 迁移至最新（head）。"""
-    cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
-    cfg.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
-    # 数据库 URL 由 migrations/env.py 从应用配置读取（支持测试库切换）
-    command.upgrade(cfg, "head")
+    """以**子进程**方式执行 Alembic 迁移至最新（head）。
+
+    关键：
+
+    - 与当前进程完全隔离，使用独立的 SQLite 连接与锁，避免「在已运行的事件循环内
+      调用 Alembic 异步 env」导致的死锁（迁移线程持住写锁并永久等待）。
+    - ``timeout`` 由 OS 级 kill 保障：超时即终止子进程，绝不会残留持锁线程，
+      从而让下面的回退 ``create_all`` 能正常拿到写锁。
+    """
+    subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=str(PROJECT_ROOT),
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
 
 
 async def _checkpoint_wal() -> None:
@@ -68,7 +79,7 @@ async def _migrate_db() -> None:
     Alembic ``upgrade head`` 已负责建全表，仅在其失败时回退 create_all。
     """
     try:
-        await asyncio.wait_for(asyncio.to_thread(_run_alembic_upgrade), timeout=30)
+        await asyncio.to_thread(_run_alembic_upgrade)
         logger.info("alembic upgrade head: ok")
     except Exception as exc:  # noqa: BLE001
         logger.warning("alembic upgrade failed (%s), fallback create_all", exc)
@@ -117,7 +128,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.51.1",
+    version="0.52.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
