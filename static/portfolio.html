@@ -59,6 +59,12 @@
   .sm.del { background: #fff; color: #c92a2a; border: 1px solid #ffc9c9; }
   .sm.del:hover { background: #fff5f5; }
   .inline-err { color: #c92a2a; font-size: 12.5px; margin-top: 6px; min-height: 16px; }
+  /* 主动提醒（UX 6.6） */
+  .remind-toggle { margin-left: auto; font-size: 12px; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff; cursor: pointer; color: #495057; display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; }
+  .remind-toggle.on { background: #e7f5ff; border-color: #74c0fc; color: #1971c2; }
+  .briefing { margin-top: 10px; padding: 10px 14px; background: #f8f9fa; border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; color: #374151; line-height: 1.6; }
+  .alert-bar { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); background: #1f2329; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; max-width: 92vw; box-shadow: 0 10px 30px rgba(0,0,0,.3); display: none; z-index: 70; }
+  .alert-bar.show { display: block; }
   .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 50; }
   .overlay.show { display: flex; }
   .modal { background: #fff; border-radius: 12px; width: min(440px, 92vw); padding: 20px 22px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
@@ -147,7 +153,10 @@
 
   <!-- 决策卡片 -->
   <div class="card">
-    <h2>ETF 购买决策建议 <span class="conf" id="signalInfo"></span></h2>
+    <h2>ETF 购买决策建议 <span class="conf" id="signalInfo"></span>
+      <button class="remind-toggle" id="remindToggle" type="button">🔔 提醒：关</button>
+    </h2>
+    <div id="briefing" class="briefing" style="display:none"></div>
     <div id="decisionArea"><div class="empty">正在评估…</div></div>
   </div>
 
@@ -196,6 +205,8 @@
   </div>
   <!-- 撤销提示条 -->
   <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button">撤销</button></div>
+  <!-- 主动提醒条 -->
+  <div class="alert-bar" id="alertBar"></div>
 </div>
 
 <script>
@@ -256,6 +267,83 @@ function showUndoToast(msg, onUndo) {
 }
 
 function fmtMoney(n) { return "¥" + (Number(n) || 0).toFixed(2); }
+
+// ---------- 主动提醒（UX 6.6，浏览器通知 + 页面提示） ----------
+let ALERT_ON = localStorage.getItem("pm_alert_on") === "1";
+let _lastBand = null, _lastPrice = null, _inited = false;
+let lastQuote = null;
+
+function bandOf(score) {
+  if (score >= 65) return "强烈偏多";
+  if (score >= 55) return "偏多";
+  if (score >= 45) return "中性";
+  if (score >= 35) return "偏空";
+  return "强烈偏空";
+}
+
+function updateRemindToggle() {
+  const t = document.getElementById("remindToggle");
+  t.classList.toggle("on", ALERT_ON);
+  t.textContent = ALERT_ON ? "🔔 提醒：开" : "🔔 提醒：关";
+}
+
+function showAlert(msg) {
+  if (!ALERT_ON) return;
+  const b = document.getElementById("alertBar");
+  b.textContent = "🔔 " + msg;
+  b.classList.add("show");
+  clearTimeout(b._t);
+  b._t = setTimeout(() => b.classList.remove("show"), 6000);
+  if ("Notification" in window && Notification.permission === "granted") {
+    try { new Notification("黄金ETF 评估提醒", { body: msg }); } catch (e) {}
+  }
+}
+
+function checkAlerts(d, q) {
+  const band = bandOf(d.trend_index.score);
+  if (_lastBand && band !== _lastBand) {
+    showAlert(`评估指数 ${d.trend_index.score.toFixed(1)}/100 由「${_lastBand}」变为「${band}」，建议动作：${d.action_label}`);
+  }
+  if (q && q.price_usd != null && _lastPrice) {
+    const ch = Math.abs((q.price_usd - _lastPrice) / _lastPrice);
+    if (ch >= 0.02) showAlert(`纽约金波动 ${(ch * 100).toFixed(2)}%（现 ${q.price_usd.toFixed(2)}）`);
+  }
+  _lastBand = band;
+  if (q && q.price_usd != null) _lastPrice = q.price_usd;
+}
+
+function renderBriefing(d, q) {
+  const b = document.getElementById("briefing");
+  b.style.display = "block";
+  const px = q && q.price_usd != null
+    ? `${q.price_usd.toFixed(2)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
+    : "—";
+  b.innerHTML =
+    `📌 <b>今日简报</b>：评估指数 <b>${d.trend_index.score.toFixed(1)}/100</b>（${d.position_level}）｜` +
+    `建议 <b>${d.action_label}</b>｜建议仓位 <b>${d.suggested_position}%</b>｜纽约金 ${px}`;
+}
+
+async function refreshQuote() {
+  lastQuote = await json(API.quote).catch(() => null);
+  return lastQuote;
+}
+
+function startAlertPolling() {
+  setInterval(async () => {
+    await refreshQuote();
+    loadDecision();  // 内部会 renderBriefing + checkAlerts
+  }, 60000);
+}
+
+document.getElementById("remindToggle").addEventListener("click", () => {
+  ALERT_ON = !ALERT_ON;
+  localStorage.setItem("pm_alert_on", ALERT_ON ? "1" : "0");
+  updateRemindToggle();
+  if (ALERT_ON && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+  if (ALERT_ON) showAlert("已开启主动提醒：指数档位切换或金价波动≥2% 时将通知你");
+});
 
 // ---------- 持仓录入简化 ----------
 let suggestRatio = null;
@@ -366,6 +454,9 @@ async function loadDecision() {
       </div>
       <div class="factor-list">${buildFactors(d).join("")}</div>
       ${buildComposition(d.trend_index)}`;
+    // 简报 + 主动提醒（指数档位/金价波动）
+    renderBriefing(d, lastQuote);
+    checkAlerts(d, lastQuote);
     // 预填开仓价格
     document.getElementById("price").value = d.trend_index ? "" : "";
   } catch (e) {
@@ -507,8 +598,11 @@ document.getElementById("btnExport").addEventListener("click", async () => {
   document.getElementById("subtitle").textContent = q
     ? `518880 最新价 ${q.price_usd.toFixed(3)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
     : "518880 华安黄金ETF";
+  lastQuote = q;
+  updateRemindToggle();
   loadDecision();
   loadPositions();
+  startAlertPolling();
 })();
 </script>
   <script src="/static/freshness.js"></script>
