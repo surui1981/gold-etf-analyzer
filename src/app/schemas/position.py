@@ -76,6 +76,13 @@ class PositionSummary(BaseModel):
     position_ratio: float = Field(0, description="仓位占用比例 0-1（估算）")
 
 
+class ReasonItem(BaseModel):
+    """决策理由明细项：文字 + 方向（利多/利空/中性），供前端红绿着色对照展示。"""
+
+    text: str = Field(..., description="理由文字（面向客户）")
+    direction: str = Field("neutral", description="bullish 利多 / bearish 利空 / neutral 中性")
+
+
 class DecisionOut(BaseModel):
     """购买决策输出：行动 + 置信度 + 仓位推荐 + 理由明细。"""
 
@@ -87,5 +94,8 @@ class DecisionOut(BaseModel):
     position: PositionSummary = Field(..., description="当前持仓摘要")
     suggested_position: float = Field(..., ge=0, le=100, description="建议黄金仓位比例 0-100%（由评估指数映射）")
     position_level: str = Field(..., description="仓位等级：重仓/中高仓位/中性仓位/轻仓/观望空仓")
-    reasons: list[str] = Field(..., description="决策理由明细（面向客户）")
+    reasons: list[str] = Field(..., description="决策理由明细（纯文本，向后兼容）")
+    reason_items: list[ReasonItem] = Field(
+        default_factory=list, description="决策理由明细（结构化：含利多/利空方向，供红绿对照条）"
+    )
     summary: str = Field(..., description="决策总结")

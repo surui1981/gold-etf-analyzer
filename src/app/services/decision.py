@@ -4,7 +4,7 @@
 后续 P2 将叠加宏观机会评分形成「宏观 × 技术」双维度共振。
 """
 
-from app.schemas.position import DecisionOut
+from app.schemas.position import DecisionOut, ReasonItem
 from app.services.position import PositionService
 from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
@@ -62,10 +62,7 @@ class DecisionService:
 
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)
         suggested_position, position_level = self._suggest_position(trend.index.score)
-        reasons = self._build_reasons(action, trend, pos)
-        reasons.append(
-            f"仓位建议：评估指数 {trend.index.score:.1f}/100 → 建议黄金仓位 {suggested_position:.0f}%（{position_level}）"
-        )
+        reason_items = self._build_reason_items(action, trend, pos, suggested_position, position_level)
         summary = self._summarize(action, confidence, trend, pos)
 
         logger.info(
@@ -81,7 +78,8 @@ class DecisionService:
             position=pos,
             suggested_position=suggested_position,
             position_level=position_level,
-            reasons=reasons,
+            reasons=[r.text for r in reason_items],
+            reason_items=reason_items,
             summary=summary,
         )
 
@@ -130,25 +128,51 @@ class DecisionService:
             return "HOLD", "low"
         return "REDUCE", "medium"
 
-    def _build_reasons(
+    def _build_reason_items(
         self,
         action: str,
         trend: object,
         pos: object,
-    ) -> list[str]:
-        """生成面向客户的中文决策理由明细。"""
+        suggested_position: float,
+        position_level: str,
+    ) -> list[ReasonItem]:
+        """生成面向客户的结构化决策理由（含利多/利空方向标记）。
+
+        方向约定（红=利多/看多黄金 bullish，绿=利空/看空黄金 bearish，灰=中性）：
+        - 参数面：跟随趋势指数方向；
+        - 交易面：持仓浮盈→利多，浮亏→利空，无持仓→中性；
+        - 决策依据：建仓/加仓→利多，止盈/减仓→利空，持有/观望→中性；
+        - 仓位建议：指数偏高（≥55）→利多，偏低（≤40）→利空，其余中性。
+        """
         idx = trend.index.score
         level = _LEVEL_LABELS[trend.index.level.value]
-        reasons = [
-            f"参数面：趋势评估指数 {idx:.1f}/100，等级【{level}】",
+        # 指数方向：score 高→利多，低→利空，中间→中性
+        if idx >= 55:
+            idx_dir = "bullish"
+        elif idx <= 40:
+            idx_dir = "bearish"
+        else:
+            idx_dir = "neutral"
+
+        items: list[ReasonItem] = [
+            ReasonItem(
+                text=f"参数面：趋势评估指数 {idx:.1f}/100，等级【{level}】",
+                direction=idx_dir,
+            ),
         ]
         if pos.has_position:
-            reasons.append(
-                f"交易面：持仓 {pos.quantity:.0f} 份，成本 {pos.avg_cost:.3f} 元，"
-                f"浮动盈亏 {pos.pnl:+.2f} 元（{pos.pnl_pct:+.2f}%）"
+            trade_dir = "bullish" if pos.pnl_pct > 0 else "bearish" if pos.pnl_pct < 0 else "neutral"
+            items.append(
+                ReasonItem(
+                    text=(
+                        f"交易面：持仓 {pos.quantity:.0f} 份，成本 {pos.avg_cost:.3f} 元，"
+                        f"浮动盈亏 {pos.pnl:+.2f} 元（{pos.pnl_pct:+.2f}%）"
+                    ),
+                    direction=trade_dir,
+                )
             )
         else:
-            reasons.append("交易面：当前无持仓")
+            items.append(ReasonItem(text="交易面：当前无持仓", direction="neutral"))
 
         rule_hint = {
             "BUY": "趋势走强且无持仓，具备建仓条件",
@@ -158,8 +182,19 @@ class DecisionService:
             "SELL": "浮盈可观且趋势动能衰减，建议止盈兑现",
             "WAIT": "信号不明或趋势偏弱，观望等待更优时机",
         }[action]
-        reasons.append(f"决策依据：{rule_hint}")
-        return reasons
+        action_dir = {"BUY": "bullish", "ADD": "bullish", "SELL": "bearish",
+                      "REDUCE": "bearish", "HOLD": "neutral", "WAIT": "neutral"}[action]
+        items.append(ReasonItem(text=f"决策依据：{rule_hint}", direction=action_dir))
+
+        items.append(
+            ReasonItem(
+                text=(
+                    f"仓位建议：评估指数 {idx:.1f}/100 → 建议黄金仓位 {suggested_position:.0f}%（{position_level}）"
+                ),
+                direction=idx_dir,
+            )
+        )
+        return items
 
     @staticmethod
     def _summarize(

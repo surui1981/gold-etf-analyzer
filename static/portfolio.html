@@ -31,6 +31,24 @@
   .chip:hover { border-color: var(--accent); background: #fffaf0; }
   .reasons { margin-top: 8px; list-style: none; }
   .reasons li { font-size: 13px; color: #4b5563; padding: 3px 0; border-left: 3px solid var(--border); padding-left: 10px; margin: 4px 0; }
+  /* 6.3 决策可解释性：利多/利空因子对照条 */
+  .factor-list { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .factor-row { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; background: #fafbfc; border-left: 4px solid #d0d7de; }
+  .factor-row.bullish { border-left-color: var(--up); background: #fff5f5; }
+  .factor-row.bearish { border-left-color: var(--down); background: #f3fbf4; }
+  .factor-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #fff; padding: 2px 8px; border-radius: 999px; margin-top: 1px; }
+  .factor-row.bullish .factor-tag { background: var(--up); }
+  .factor-row.bearish .factor-tag { background: var(--down); }
+  .factor-row.neutral .factor-tag { background: #868e96; }
+  .factor-text { font-size: 13px; color: #374151; line-height: 1.5; }
+  /* 指数构成堆叠条（技术/宏观/消息） */
+  .composition { margin-top: 12px; padding: 12px 14px; background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; }
+  .comp-title { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+  .comp-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
+  .comp-name { flex: 0 0 56px; font-size: 12.5px; color: #374151; }
+  .comp-track { flex: 1; height: 9px; background: #eceef1; border-radius: 999px; overflow: hidden; }
+  .comp-fill { display: block; height: 100%; border-radius: 999px; }
+  .comp-score { flex: 0 0 30px; text-align: right; font-size: 12.5px; font-weight: 600; color: #374151; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }
@@ -212,6 +230,39 @@ function applySuggest() {
   applyRatio(suggestRatio / 100);
 }
 
+function buildFactors(d) {
+  // 优先用结构化 reason_items（含利多/利空方向）；缺失时回退纯文本 reasons
+  const items = (d.reason_items && d.reason_items.length)
+    ? d.reason_items
+    : (d.reasons || []).map(t => ({ text: t, direction: "neutral" }));
+  return items.map(r => {
+    const dir = r.direction || "neutral";
+    const tag = dir === "bullish" ? "利多" : dir === "bearish" ? "利空" : "中性";
+    return `<div class="factor-row ${dir}">
+      <span class="factor-tag">${tag}</span>
+      <span class="factor-text">${r.text}</span>
+    </div>`;
+  });
+}
+
+function buildComposition(idx) {
+  if (!idx || !idx.components) return "";
+  const c = idx.components;
+  const order = [["技术面", c.tech], ["宏观面", c.macro], ["消息面", c.news]];
+  return `<div class="composition">
+    <div class="comp-title">指数构成（技术 30% · 宏观 40% · 消息 30%）</div>
+    ${order.map(([name, sc]) => {
+      const s = sc || 0;
+      const color = s >= 55 ? "var(--up)" : s <= 45 ? "var(--down)" : "#868e96";
+      return `<div class="comp-row">
+        <span class="comp-name">${name}</span>
+        <span class="comp-track"><span class="comp-fill" style="width:${s}%;background:${color}"></span></span>
+        <span class="comp-score">${s.toFixed(0)}</span>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
 async function loadDecision() {
   try {
     const d = await json(API.decision);
@@ -233,7 +284,8 @@ async function loadDecision() {
         <span class="badge" style="background:#1f2329;color:#f5d97a;font-size:12px">${d.position_level}</span>
         <span style="color:var(--muted);font-size:12px">评估指数 ${d.trend_index.score.toFixed(1)}/100 映射</span>
       </div>
-      <ul class="reasons">${d.reasons.map(r => `<li>${r}</li>`).join("")}</ul>`;
+      <div class="factor-list">${buildFactors(d).join("")}</div>
+      ${buildComposition(d.trend_index)}`;
     // 预填开仓价格
     document.getElementById("price").value = d.trend_index ? "" : "";
   } catch (e) {
