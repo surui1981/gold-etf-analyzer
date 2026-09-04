@@ -11,18 +11,23 @@ class PositionCreate(BaseModel):
     """开仓请求。"""
 
     symbol: str = Field("518880", description="品种代码，默认 518880 华安黄金ETF")
-    quantity: float = Field(..., gt=0, description="买入数量（份）")
-    price: float = Field(..., gt=0, description="成交价（元/份）")
-    fee: float = Field(0, ge=0, description="手续费（元）")
+    quantity: float = Field(..., gt=0, le=1e9, description="买入数量（份），需大于 0")
+    price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
+    fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
+
+    @field_validator("quantity", "price", "fee")
+    @classmethod
+    def _round(cls, value: float) -> float:
+        return round(value, 4)
 
 
 class TradeRequest(BaseModel):
     """加仓/减仓请求。"""
 
     side: str = Field(..., description="buy 加仓 / sell 减仓")
-    quantity: float = Field(..., gt=0, description="数量（份）")
-    price: float = Field(..., gt=0, description="成交价（元/份）")
-    fee: float = Field(0, ge=0, description="手续费（元）")
+    quantity: float = Field(..., gt=0, le=1e9, description="数量（份），需大于 0")
+    price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
+    fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
 
     @field_validator("side")
     @classmethod
@@ -30,6 +35,11 @@ class TradeRequest(BaseModel):
         if value not in {"buy", "sell"}:
             raise ValueError("side 必须为 buy 或 sell")
         return value
+
+    @field_validator("quantity", "price", "fee")
+    @classmethod
+    def _round(cls, value: float) -> float:
+        return round(value, 4)
 
 
 class PositionOut(BaseModel):
@@ -63,6 +73,16 @@ class TradeRecordOut(BaseModel):
     price: float
     fee: float
     traded_at: datetime
+
+
+class PositionDeleteOut(BaseModel):
+    """软删除/撤销结果。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    deleted: bool = Field(..., description="true=已软删除；false=已撤销恢复")
+    deleted_at: datetime | None = None
 
 
 class PositionSummary(BaseModel):

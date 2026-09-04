@@ -59,19 +59,23 @@ class PositionRepository:
         await self._session.refresh(record)
         return record
 
-    async def get(self, position_id: int) -> Position | None:
-        """按 ID 查询持仓。"""
-        stmt = select(Position).where(Position.id == position_id)
-        return (await self._session.execute(stmt)).scalar_one_or_none()
-
     async def list_open(self, user_id: int = 1) -> list[Position]:
-        """当前未平仓持仓（按开仓时间升序）。"""
+        """当前未平仓且未删除的持仓（按开仓时间升序）。"""
         stmt = (
             select(Position)
-            .where(Position.status == "open", Position.user_id == user_id)
+            .where(
+                Position.status == "open",
+                Position.user_id == user_id,
+                Position.deleted_at.is_(None),
+            )
             .order_by(Position.opened_at)
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get(self, position_id: int) -> Position | None:
+        """按 ID 查询持仓（含已软删除的，供撤销恢复使用）。"""
+        stmt = select(Position).where(Position.id == position_id)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list_trades(self, position_id: int) -> list[TradeRecord]:
         """持仓的交易流水（按时间倒序）。"""
@@ -81,6 +85,26 @@ class PositionRepository:
             .order_by(desc(TradeRecord.traded_at))
         )
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def soft_delete(self, position_id: int) -> Position:
+        """软删除：标记 deleted_at，数据不丢失，可撤销。"""
+        position = await self.get(position_id)
+        if position is None:
+            raise ValueError("持仓不存在")
+        position.deleted_at = utcnow()
+        await self._session.commit()
+        await self._session.refresh(position)
+        return position
+
+    async def restore(self, position_id: int) -> Position:
+        """撤销软删除：清除 deleted_at，恢复显示。"""
+        position = await self.get(position_id)
+        if position is None:
+            raise ValueError("持仓不存在")
+        position.deleted_at = None
+        await self._session.commit()
+        await self._session.refresh(position)
+        return position
 
     async def save(self, position: Position) -> Position:
         """保存持仓变更（减仓/清仓后提交）。"""

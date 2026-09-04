@@ -4,6 +4,7 @@ from app.repositories.market_data import DEFAULT_GOLD_ETF_NAME, MarketDataReposi
 from app.repositories.position import PositionRepository, utcnow
 from app.schemas.position import (
     PositionCreate,
+    PositionDeleteOut,
     PositionOut,
     PositionSummary,
     TradeRequest,
@@ -96,11 +97,51 @@ class PositionService:
         logger.info("Position closed: id=%s @ %s", position_id, market_price)
         return await self._to_out(position)
 
+    async def delete(self, position_id: int) -> PositionDeleteOut:
+        """软删除：标记删除而非物理删除，可随时撤销恢复。"""
+        position = await self._repo.soft_delete(position_id)
+        logger.info("Position soft-deleted: id=%s", position_id)
+        return PositionDeleteOut(id=position.id, deleted=True, deleted_at=position.deleted_at)
+
+    async def restore(self, position_id: int) -> PositionDeleteOut:
+        """撤销软删除：恢复持仓显示。"""
+        position = await self._repo.restore(position_id)
+        logger.info("Position restored: id=%s", position_id)
+        return PositionDeleteOut(id=position.id, deleted=False, deleted_at=position.deleted_at)
+
     async def list_positions(self) -> list[PositionOut]:
         """当前所有未平仓持仓（含实时估值）。"""
         positions = await self._repo.list_open()
         results = [await self._to_out(p) for p in positions]
         return results
+
+    async def export_csv(self) -> str:
+        """导出当前持仓与交易流水为 CSV 文本（供对账/备份）。"""
+        import csv
+        import io
+
+        positions = await self._repo.list_open()
+        buf = io.StringIO()
+        w = csv.writer(buf)
+        w.writerow(["# 持仓导出", "", "", "", "", "", "", "", "", "", ""])
+        w.writerow(
+            ["id", "symbol", "name", "quantity", "avg_cost", "status",
+             "opened_at", "market_price", "market_value", "pnl", "pnl_pct"]
+        )
+        for p in positions:
+            out = await self._to_out(p)
+            w.writerow([
+                out.id, out.symbol, out.name, out.quantity, out.avg_cost, out.status,
+                out.opened_at, out.market_price, out.market_value, out.pnl, out.pnl_pct,
+            ])
+        w.writerow([])
+        w.writerow(["# 交易流水", "", "", "", "", "", ""])
+        w.writerow(["id", "position_id", "side", "quantity", "price", "fee", "traded_at"])
+        for p in positions:
+            trades = await self._repo.list_trades(p.id)
+            for t in trades:
+                w.writerow([t.id, t.position_id, t.side, t.quantity, t.price, t.fee, t.traded_at])
+        return buf.getvalue()
 
     async def summary(self) -> PositionSummary:
         """持仓摘要：全部未平仓持仓汇总（供决策引擎）。"""

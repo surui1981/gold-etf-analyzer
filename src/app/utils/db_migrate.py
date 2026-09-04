@@ -17,6 +17,9 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
     "daily_snapshots": [
         ("news_index", "FLOAT", "50"),
     ],
+    "positions": [
+        ("deleted_at", "DATETIME", "NULL"),
+    ],
 }
 
 # 高频查询字段索引：表名 -> 列名列表

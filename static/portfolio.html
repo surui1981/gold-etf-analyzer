@@ -52,6 +52,27 @@
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }
+  /* 确认弹窗 + 提示条 + 校验 */
+  .btn-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+  .btn-export { margin-left: auto; font-size: 12px; padding: 5px 12px; background: #fff; border: 1px solid var(--border); border-radius: 6px; cursor: pointer; color: #374151; }
+  .btn-export:hover { background: #f1f3f5; }
+  .sm.del { background: #fff; color: #c92a2a; border: 1px solid #ffc9c9; }
+  .sm.del:hover { background: #fff5f5; }
+  .inline-err { color: #c92a2a; font-size: 12.5px; margin-top: 6px; min-height: 16px; }
+  .overlay { position: fixed; inset: 0; background: rgba(15,23,42,.45); display: none; align-items: center; justify-content: center; z-index: 50; }
+  .overlay.show { display: flex; }
+  .modal { background: #fff; border-radius: 12px; width: min(440px, 92vw); padding: 20px 22px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .modal .summary { font-size: 13.5px; color: #374151; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; line-height: 1.7; }
+  .modal .summary b { color: #111827; }
+  .modal .actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
+  .modal button { padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 13.5px; }
+  .modal .cancel { background: #f1f3f5; color: #374151; }
+  .modal .ok { background: var(--up); color: #fff; }
+  .modal .ok.danger { background: #e03131; }
+  #toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: #1f2329; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 13.5px; display: none; align-items: center; gap: 14px; z-index: 60; box-shadow: 0 10px 30px rgba(0,0,0,.3); }
+  #toast.show { display: flex; }
+  #toast .undo { background: #f5d97a; color: #1f2329; border: none; border-radius: 6px; padding: 5px 14px; cursor: pointer; font-weight: 700; }
   th { color: var(--muted); font-weight: 500; font-size: 12px; }
   .empty { text-align: center; color: var(--muted); padding: 24px 0; }
   form { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
@@ -154,15 +175,31 @@
 
   <!-- 持仓列表 -->
   <div class="card">
-    <h2>当前持仓</h2>
+    <h2>当前持仓
+      <button class="btn-export" id="btnExport" type="button">导出 CSV</button>
+    </h2>
     <div id="posArea"><div class="empty">加载中…</div></div>
   </div>
 
   <footer>gold-etf-analyzer · 红盈绿亏 · 决策仅供参考，不构成投资建议</footer>
+
+  <!-- 二次确认弹窗 -->
+  <div class="overlay" id="overlay">
+    <div class="modal">
+      <h3 id="modalTitle">确认操作</h3>
+      <div class="summary" id="modalBody"></div>
+      <div class="actions">
+        <button class="cancel" id="modalCancel" type="button">取消</button>
+        <button class="ok" id="modalOk" type="button">确认</button>
+      </div>
+    </div>
+  </div>
+  <!-- 撤销提示条 -->
+  <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button">撤销</button></div>
 </div>
 
 <script>
-const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+const API_BASE = "";  // 同源：静态页与 API 由同一 uvicorn 提供（8888/8891 均适用）
 const API = { decision: API_BASE + "/api/v1/decision/etf", positions: API_BASE + "/api/v1/positions", quote: API_BASE + "/api/v1/market/gold" };
 
 const ACTION_STYLE = {
@@ -176,6 +213,49 @@ async function json(url, opts) {
   if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.detail || "HTTP " + r.status); }
   return r.json();
 }
+
+// ---------- 校验 + 二次确认（UX 6.4 防误点） ----------
+function validateTrade(body) {
+  const q = Number(body.quantity), p = Number(body.price), f = Number(body.fee) || 0;
+  if (!(q > 0)) return "数量必须大于 0";
+  if (!(p > 0)) return "成交价必须大于 0";
+  if (f < 0) return "手续费不能为负";
+  if (q > 1e9) return "数量过大，请核对";
+  if (p > 1e6) return "成交价过高，请核对";
+  if (f > 1e6) return "手续费过高，请核对";
+  return null;
+}
+
+let _modalResolve = null;
+function confirmDialog(title, html, danger) {
+  document.getElementById("modalTitle").textContent = title;
+  document.getElementById("modalBody").innerHTML = html;
+  const ok = document.getElementById("modalOk");
+  ok.className = "ok" + (danger ? " danger" : "");
+  document.getElementById("overlay").classList.add("show");
+  return new Promise((resolve) => { _modalResolve = resolve; });
+}
+document.getElementById("modalCancel").addEventListener("click", () => {
+  document.getElementById("overlay").classList.remove("show");
+  if (_modalResolve) { _modalResolve(false); _modalResolve = null; }
+});
+document.getElementById("modalOk").addEventListener("click", () => {
+  document.getElementById("overlay").classList.remove("show");
+  if (_modalResolve) { _modalResolve(true); _modalResolve = null; }
+});
+
+let _toastTimer = null;
+function showUndoToast(msg, onUndo) {
+  const t = document.getElementById("toast");
+  document.getElementById("toastMsg").textContent = msg;
+  const btn = document.getElementById("toastUndo");
+  btn.onclick = () => { t.classList.remove("show"); if (onUndo) onUndo(); };
+  t.classList.add("show");
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove("show"), 8000);
+}
+
+function fmtMoney(n) { return "¥" + (Number(n) || 0).toFixed(2); }
 
 // ---------- 持仓录入简化 ----------
 let suggestRatio = null;
@@ -318,6 +398,7 @@ async function loadPositions() {
           <button class="sm op-buy" onclick="trade(${p.id},'buy')">加</button>
           <button class="sm op-sell" onclick="trade(${p.id},'sell')">减</button>
           <button class="sm ghost" onclick="closePos(${p.id})">清仓</button>
+          <button class="sm del" onclick="deletePosition(${p.id})">删</button>
         </td>
       </tr>`;
     }).join("");
@@ -335,34 +416,91 @@ document.getElementById("openForm").addEventListener("submit", async (ev) => {
     price: parseFloat(document.getElementById("price").value),
     fee: parseFloat(document.getElementById("fee").value) || 0,
   };
+  const err = validateTrade(body);
+  if (err) { document.getElementById("openErr").textContent = err; return; }
+  document.getElementById("openErr").textContent = "";
+  const est = body.quantity * body.price + body.fee;
+  const ok = await confirmDialog(
+    "确认开仓买入",
+    `品种：<b>518880 黄金ETF</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>手续费：<b>${body.fee}</b> 元<br>预估金额：<b>${fmtMoney(est)}</b>`,
+    false
+  );
+  if (!ok) return;
   try {
     await json(API.positions, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    document.getElementById("openErr").textContent = "";
     document.getElementById("qty").value = "";
     loadPositions(); loadDecision();
   } catch (e) { document.getElementById("openErr").textContent = "开仓失败：" + e.message; }
 });
 
 async function trade(id, side) {
-  const qty = prompt(side === "buy" ? "加仓数量（份）：" : "减仓数量（份）：");
-  if (!qty) return;
+  const label = side === "buy" ? "加仓" : "减仓";
+  const qty = prompt(label + "数量（份）：");
+  if (qty === null) return;
   const price = prompt("成交价（元）：");
-  if (!price) return;
+  if (price === null) return;
+  const body = { side, quantity: parseFloat(qty), price: parseFloat(price), fee: 0 };
+  const err = validateTrade(body);
+  if (err) { alert(err); return; }
+  const est = body.quantity * body.price + body.fee;
+  const ok = await confirmDialog(
+    "确认" + label,
+    `品种：<b>518880 黄金ETF</b><br>方向：<b>${label}</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>预估金额：<b>${fmtMoney(est)}</b>`,
+    side === "sell"
+  );
+  if (!ok) return;
   try {
-    await json(API.positions + "/" + id + "/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ side, quantity: parseFloat(qty), price: parseFloat(price), fee: 0 }) });
+    await json(API.positions + "/" + id + "/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     loadPositions(); loadDecision();
   } catch (e) { alert("操作失败：" + e.message); }
+}
+
+async function deletePosition(id) {
+  const ok = await confirmDialog(
+    "确认删除该持仓？",
+    "删除后可在 8 秒内点击<b>撤销</b>恢复。逾期未撤销将仅作软删除（数据保留、列表不显示），仍可经接口恢复。",
+    true
+  );
+  if (!ok) return;
+  try {
+    await json(API.positions + "/" + id, { method: "DELETE" });
+    loadPositions(); loadDecision();
+    showUndoToast("已删除持仓 #" + id, async () => {
+      try {
+        await json(API.positions + "/" + id + "/restore", { method: "POST" });
+        loadPositions(); loadDecision();
+      } catch (e) { alert("撤销失败：" + e.message); }
+    });
+  } catch (e) { alert("删除失败：" + e.message); }
 }
 
 fillPrice();
 
 async function closePos(id) {
-  if (!confirm("确认按最新市价清仓？")) return;
+  const q = await json(API.quote).catch(() => null);
+  const px = q
+    ? `${q.price_usd.toFixed(3)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
+    : "最新市价";
+  const ok = await confirmDialog("确认清仓", `将按 <b>${px}</b> 全部卖出并平仓。此操作将锁定当前盈亏，请确认。`, true);
+  if (!ok) return;
   try {
     await json(API.positions + "/" + id + "/close", { method: "POST" });
     loadPositions(); loadDecision();
   } catch (e) { alert("清仓失败：" + e.message); }
 }
+
+document.getElementById("btnExport").addEventListener("click", async () => {
+  try {
+    const r = await fetch(API.positions + "/export");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const blob = await r.blob();
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "positions_export.csv";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { alert("导出失败：" + e.message); }
+});
 
 (async function init() {
   const q = await json(API.quote).catch(() => null);

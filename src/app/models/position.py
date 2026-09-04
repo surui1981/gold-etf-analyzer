@@ -25,6 +25,9 @@ class Position(Base):
     status: Mapped[str] = mapped_column(String(16), default="open", comment="open/closed")
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="软删除时间戳；非空表示已删除（可撤销）"
+    )
 
 
 class TradeRecord(Base):
