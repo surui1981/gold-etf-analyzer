@@ -5,8 +5,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# 项目根目录：src/app/config.py -> parents[3] = 项目根
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# 项目根目录：src/app/config.py -> parents[2] = 项目根
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 
 class Settings(BaseSettings):
