@@ -4,9 +4,16 @@
 对价格趋势的 5 个维度（结构/动量/支撑/动能/回撤）按典型经验赋权，
 各自映射为 0-100 评分，加权合成「市场趋势评估指数」，映射为等级。
 权重集中在 ``TREND_WEIGHTS``，可按经验直接调整。
+
+每日重算策略
+------------
+- ``analyze()`` 命中当日缓存时**直接返回 GoldTrendOut**（页面秒级加载）；
+- 缓存由 ``services/cache.py`` 提供，key 为 (target, date)，跨日自动失效；
+- 消息面评分更新通过 ``invalidate_for_news()`` 主动失效，下次请求全量重算；
+- ``scheduler.py`` 在北京时间 07:00 自动预生成（首屏直接命中缓存）。
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from app.repositories.market_data import (
     DEFAULT_GOLD_ETF,
@@ -29,6 +36,7 @@ from app.schemas.market import (
     TrendIndexLevel,
     TrendIndexOut,
 )
+from app.services import cache as served_cache
 from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
 from app.services.freshness import build_data_freshness
 from app.utils.logger import get_logger
@@ -117,9 +125,10 @@ class TrendService:
         macro: MacroFactorService | None = None,
         settings=None,
         news=None,
+        central_bank=None,
     ) -> None:
         self._repo = repo
-        self._macro = macro or MacroFactorService(settings=settings)
+        self._macro = macro or MacroFactorService(settings=settings, central_bank=central_bank)
         # 延迟导入避免循环依赖
         from app.services.settings import WeightService
 
@@ -129,10 +138,22 @@ class TrendService:
 
         self._news: NewsScoreService | None = news
 
+    @staticmethod
+    def invalidate_for_news(target: str | None = None) -> int:
+        """消息面评分更新后调用：失效 ``served_cache``，下次请求全量重算。
+
+        Returns:
+            失效的缓存条目数。
+        """
+        return served_cache.invalidate(target)
+
     async def analyze(self, days: int = 60, target: str = GUIDE_TARGET) -> GoldTrendOut:
         """分析黄金近 N 个交易日趋势并合成追踪指数。
 
         默认基准为纽约金（``GUIDE_TARGET``），投资指引口径与之一致。
+
+        **每日重算策略**：命中当日缓存时直接返回 GoldTrendOut；
+        未命中则全量计算并写入缓存。消息面评分更新会失效缓存。
 
         Args:
             days: 覆盖的交易日数量
@@ -145,6 +166,19 @@ class TrendService:
             ValueError: 历史数据不足（<2 个交易日）
         """
         target = target if target in _TARGET_UNITS else GUIDE_TARGET
+
+        # 命中当日缓存：直接返回，避免重复 K 线/宏观/合成
+        cached = served_cache.get_served(target)
+        if cached is not None:
+            logger.debug("Trend cache hit: target=%s", target)
+            return cached
+
+        result = await self._analyze_uncached(days=days, target=target)
+        served_cache.set_served(target, result)
+        return result
+
+    async def _analyze_uncached(self, days: int, target: str) -> GoldTrendOut:
+        """实际计算：K 线 + 均线 + 技术指数 + 宏观 + 消息面 + 合成（不走缓存）。"""
         klines, symbol, name = await self._load_klines(days=days, target=target)
         if len(klines) < 2:
             raise ValueError("历史数据不足，无法进行趋势分析")
@@ -273,6 +307,7 @@ class TrendService:
             data_sources=sources,
             degraded=degraded,
             freshness=freshness,
+            served_at=datetime.now(),
         )
 
     @staticmethod

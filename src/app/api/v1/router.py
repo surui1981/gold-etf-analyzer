@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     analysis,
+    central_bank,
     decision,
     health,
     market,
@@ -22,3 +23,4 @@ api_router.include_router(decision.router)
 api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)
 api_router.include_router(news.router)
+api_router.include_router(central_bank.router)

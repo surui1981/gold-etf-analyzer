@@ -10,11 +10,14 @@
 
 重要：本应用**不依赖任何付费 API KEY**，全部为公开免费源：
 - gold-api.com：实时 XAU/USD 即期报价（零KEY、无需注册）
-- AKShare：东方财富/新浪 ETF 历史、上海金交所 Au99.99、中债美债收益率（免费开源库）
+- Federal Reserve H.15：美债10Y/30Y 收益率曲线（零KEY、官方源、T+1~T+3 滞后）
+- AKShare：东方财富/新浪 ETF 历史、上海金交所 Au99.99（免费开源库）
 - 美元指数/VIX 等宏观因子由 macro.py 内置静态参考值提供（可平滑替换为实时 provider）
 """
 
 import asyncio
+import csv
+import io
 import json
 import subprocess
 import sys
@@ -43,6 +46,12 @@ _CACHE_LOCK = threading.Lock()
 _XAU_API = "https://api.gold-api.com/price/XAU"
 # 兜底公开源：新浪纽约黄金连续实时报价（零KEY，仅需 Referer 头）
 _SINA_GC = "https://hq.sinajs.cn/list=hf_GC"
+# 零KEY官方源：美联储 H.15 收益率曲线（含 10Y/30Y 列，T+1~T+3 滞后，无 KEY）
+_H15_CSV = (
+    "https://www.federalreserve.gov/datadownload/Output.aspx"
+    "?rel=H15&series=bf17364827e38702b42a58cf8eaa3f78&lastobs=&from=&to="
+    "&filetype=csv&label=include&layout=seriescolumn"
+)
 
 
 def _cache_get(key: tuple) -> list | None:
@@ -225,6 +234,91 @@ class GoldKline:
     high: float
     low: float
     volume: float
+
+
+@dataclass(frozen=True)
+class USTYield:
+    """美债收益率快照（数据源无关）。
+
+    数据源：美联储 H.15（Selected Interest Rates），T+1~T+3 滞后。
+    """
+
+    us10y: float  # 10 年期收益率（%）
+    us30y: float  # 30 年期收益率（%）
+    data_date: date  # 数据截止日（H.15 最近一个交易日）
+
+
+# H.15 CSV 前 5 行为元数据（Series Description / Unit / Multiplier / Currency / Unique Identifier），
+# 第 6 行为列名（含 RIFLGFCY10_N.B / RIFLGFCY30_N.B）。解析时跳过前 5 行。
+_H15_HEADER_SKIP = 5
+_H15_COL_DATE = "Time Period"
+_H15_COL_10Y = "RIFLGFCY10_N.B"
+_H15_COL_30Y = "RIFLGFCY30_N.B"
+
+
+def _parse_h15_csv(text: str) -> USTYield | None:
+    """解析美联储 H.15 CSV 文本，提取最近一行同时含 10Y/30Y 数据的快照。
+
+    CSV 头部有 5 行元数据描述 + 1 行列名，跳过前 5 行后用 csv.DictReader 解析。
+    末尾可能若干行 10Y/30Y 列为空（节假日/未公布），从末尾反向找首个双非空行。
+    """
+    try:
+        rows = list(csv.reader(io.StringIO(text)))
+        if len(rows) <= _H15_HEADER_SKIP:
+            return None
+        # 第 6 行（索引 _H15_HEADER_SKIP）为列名
+        header = rows[_H15_HEADER_SKIP]
+        if _H15_COL_10Y not in header or _H15_COL_30Y not in header:
+            return None
+        idx_date = header.index(_H15_COL_DATE)
+        idx_10y = header.index(_H15_COL_10Y)
+        idx_30y = header.index(_H15_COL_30Y)
+
+        # 从末尾反向找首个双非空行
+        for row in reversed(rows[_H15_HEADER_SKIP + 1:]):
+            if len(row) <= max(idx_date, idx_10y, idx_30y):
+                continue
+            v10, v30, d = row[idx_10y].strip(), row[idx_30y].strip(), row[idx_date].strip()
+            if not v10 or not v30 or not d:
+                continue
+            return USTYield(
+                us10y=float(v10),
+                us30y=float(v30),
+                data_date=datetime.strptime(d, "%Y-%m-%d").date(),
+            )
+    except (ValueError, IndexError, csv.Error) as exc:
+        logger.warning("H.15 CSV 解析失败: %s", exc)
+    return None
+
+
+async def fetch_us_treasury_h15() -> USTYield | None:
+    """零KEY官方源：美联储 H.15 收益率曲线 → 美债 10Y/30Y 最新值。
+
+    数据延迟 T+1~T+3（每个美东交易日 ~16:00 ET 公布前一日数据）。
+    返回 ``USTYield``；任何环节失败返回 None（调用方应保持静态参考值）。
+    成功结果缓存 5 分钟（复用 QUOTE_CACHE_TTL），失败不缓存以便快速重试。
+    """
+    cached = _cache_get(("ust",))
+    if cached is not None:
+        return cached  # type: ignore[return-value]
+
+    def _get_and_parse() -> USTYield | None:
+        req = urllib.request.Request(
+            _H15_CSV,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req, timeout=15) as r:
+            text = r.read().decode("utf-8", "ignore")
+        return _parse_h15_csv(text)
+
+    try:
+        result = await asyncio.wait_for(asyncio.to_thread(_get_and_parse), timeout=20)
+        if result is not None:
+            _cache_set(("ust",), result)
+        return result
+    except (TimeoutError, Exception) as exc:  # noqa: BLE001
+        logger.warning("H.15 取数失败: %s", exc)
+    return None
 
 
 class GoldHistoryProvider(Protocol):
@@ -614,6 +708,18 @@ class MarketDataRepository:
             logger.warning("us gold history failed (%s), fallback to mock", exc)
             self._mark("ny", False)
             return self._mock_us_history(days)
+
+    async def get_us_treasury_yields(self) -> USTYield | None:
+        """获取美债 10Y/30Y 收益率（美联储 H.15 官方源）；失败返回 None。
+
+        调用方（macro 服务）应保持内置静态参考值作为降级。
+        """
+        result = await fetch_us_treasury_h15()
+        if result is not None:
+            self._mark("ust", True, last_date=result.data_date)
+        else:
+            self._mark("ust", False)
+        return result
 
     @staticmethod
     def _mock_us_history(days: int) -> list[GoldKline]:

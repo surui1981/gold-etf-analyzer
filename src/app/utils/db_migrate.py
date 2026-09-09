@@ -30,9 +30,24 @@ INDEX_MIGRATIONS: dict[str, list[str]] = {
 
 
 async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
-    """检查并补齐各表新增列（幂等，缺失才执行 ALTER TABLE）。"""
+    """检查并补齐各表新增列（幂等，缺失才执行 ALTER TABLE）。
+
+    表不存在时跳过（部分老库 / 测试场景）：调用方应保证上游 Alembic / create_all
+    已建表；此处仅做列级补齐。
+    """
     async with engine.connect() as conn:
         for table, columns in COLUMN_MIGRATIONS.items():
+            # 表不存在则跳过（PRAGMA table_info 返回空，但 ALTER 会失败）
+            tbl_exists = (
+                await conn.execute(
+                    text("SELECT 1 FROM sqlite_master WHERE type='table' AND name=:n"),
+                    {"n": table},
+                )
+            ).first()
+            if not tbl_exists:
+                logger.debug("db migrate: table %s not present, skip", table)
+                continue
+
             rows = await conn.execute(text(f"PRAGMA table_info({table})"))
             existing = {row[1] for row in rows}
 

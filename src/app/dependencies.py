@@ -6,6 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.analysis import AnalysisRepository
+from app.repositories.central_bank import CentralBankPurchaseRepository
 from app.repositories.db import async_session_factory
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.news import NewsScoreRepository
@@ -13,6 +14,7 @@ from app.repositories.position import PositionRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.services.analysis import AnalysisService
+from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
@@ -28,6 +30,23 @@ async def get_db_session() -> AsyncIterator[AsyncSession]:
     """每个请求一个数据库会话，请求结束自动关闭。"""
     async with async_session_factory() as session:
         yield session
+
+
+# 注：央行购金工厂放在靠前位置（get_trend_service 依赖 get_central_bank_service）
+
+
+async def get_central_bank_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> CentralBankPurchaseRepository:
+    """央行购金 DB 仓储依赖。"""
+    return CentralBankPurchaseRepository(session)
+
+
+def get_central_bank_service(
+    repo: CentralBankPurchaseRepository = Depends(get_central_bank_repository),
+) -> CentralBankService:
+    """央行购金业务服务依赖。"""
+    return CentralBankService(repo=repo)
 
 
 def get_scoring_service() -> OpportunityScoringService:
@@ -87,9 +106,16 @@ def get_trend_service(
     repo: MarketDataRepository = Depends(get_market_data_repository),
     settings: WeightService = Depends(get_weight_service),
     news: NewsScoreService = Depends(get_news_score_service),
+    central_bank: CentralBankService = Depends(get_central_bank_service),
 ) -> TrendService:
-    """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估）。"""
-    return TrendService(repo=repo, settings=settings, news=news)
+    """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估 + 央行购金服务）。
+
+    ``central_bank`` 注入后，宏观因子 ``cb_gold`` 会从 ``central_bank_purchases`` 表自动计算
+    T12M（不再依赖 STATIC_REF 硬编码）。空表时回退 STATIC_REF，单测时不注入也保持兼容。
+    """
+    return TrendService(
+        repo=repo, settings=settings, news=news, central_bank=central_bank,
+    )
 
 
 async def get_snapshot_repository(

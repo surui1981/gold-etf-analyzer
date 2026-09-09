@@ -70,6 +70,12 @@ class NewsScoreService:
             "News score saved: %s, score=%.1f (%s)",
             record.score_date, record.score, record.direction,
         )
+
+        # 消息面评分变化 → 失效 served cache，下次请求全量重算综合指数
+        # 延迟导入避免循环依赖（TrendService 也引用 NewsScoreService）
+        from app.services.trend import TrendService
+        TrendService.invalidate_for_news()
+
         return NewsScoreOut(
             score_date=record.score_date,
             score=record.score,

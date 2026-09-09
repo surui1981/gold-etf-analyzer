@@ -38,6 +38,11 @@
   .summary b { color: var(--text); }
   /* 追踪指数 */
   .index-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  /* 实时评估摘要（置顶首屏：指数 + 金价卡） */
+  .headline { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 70%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 16px 18px 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .headline-title { font-size: 15px; font-weight: 700; color: var(--accent); letter-spacing: .5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .headline .index-panel { background: transparent; border: none; padding: 0; margin-bottom: 12px; }
+  .headline .cards { margin-top: 4px; }
   .index-score { text-align: center; min-width: 120px; }
   .index-score .num { font-size: 44px; font-weight: 700; line-height: 1; }
   .index-score .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
@@ -68,14 +73,6 @@
   .macro-row .bar { flex: 1; height: 7px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
   .macro-row .bar > i { display: block; height: 100%; border-radius: 999px; }
   .macro-row .dt { width: 66px; font-size: 10.5px; color: var(--muted); text-align: right; flex-shrink: 0; }
-  /* 应用导航卡片 */
-  .nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
-  .nav-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; cursor: pointer; transition: box-shadow .15s, transform .15s; text-decoration: none; color: var(--text); display: block; }
-  .nav-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,.08); transform: translateY(-1px); border-color: var(--accent); }
-  .nav-card .t { font-size: 14.5px; font-weight: 700; margin-bottom: 4px; }
-  .nav-card .t span { float: right; color: var(--muted); font-size: 12px; font-weight: 400; }
-  .nav-card .d { font-size: 12px; color: var(--muted); line-height: 1.6; }
-  .nav-card.active { border-color: var(--accent); background: linear-gradient(135deg, #fffaf0, #ffffff); }
   .bar { height: 10px; background: #eef0f3; border-radius: 999px; overflow: hidden; margin: 8px 0 2px; }
   .bar > i { display: block; height: 100%; border-radius: 999px; }
   .ind-row { margin-bottom: 14px; }
@@ -132,6 +129,7 @@
       <a href="/portfolio">持仓与决策</a>
       <a href="/weights">权重配置</a>
       <a href="/news">消息面评估</a>
+      <a href="/central-bank">央行购金统计</a>
     </div>
   </nav>
 
@@ -168,59 +166,39 @@
     </div>
   </header>
 
-  <!-- 应用导航 -->
-  <div class="nav-grid">
-    <a class="nav-card active" href="/static/trend.html">
-      <div class="t">📈 趋势追踪 <span>当前页</span></div>
-      <div class="d">三市场行情 · 综合趋势指数 · 纽约金60天曲线 · 宏观参考因子</div>
-    </a>
-    <a class="nav-card" href="/portfolio">
-      <div class="t">💼 持仓与决策</div>
-      <div class="d">个人持仓跟踪 · 实时盈亏 · 参数面×交易面 购买决策建议</div>
-    </a>
-    <a class="nav-card" href="/weights">
-      <div class="t">⚖️ 权重配置</div>
-      <div class="d">调整技术/宏观/消息面权重（默认 30/40/30），指数实时重算</div>
-    </a>
-    <a class="nav-card" href="/news">
-      <div class="t">🗞️ 消息面评估</div>
-      <div class="d">基于投行黄金展望研判打分（0-100），汇入每日评估</div>
-    </a>
-    <a class="nav-card" href="/docs">
-      <div class="t">📚 API 文档</div>
-      <div class="d">全部 REST 接口参考（OpenAPI / Swagger UI）</div>
-    </a>
-  </div>
-
   <!-- 阈值提醒（指数跨档 / 价格异动） -->
   <div id="alertBar"></div>
+
+  <!-- 实时评估摘要（置顶：指数 + 金价） -->
+  <section class="headline" aria-label="实时评估摘要">
+    <div class="headline-title">📊 实时评估摘要 · 趋势指数 × 金价</div>
+    <div class="index-panel">
+      <div class="index-score">
+        <div class="num" id="idxNum">--</div>
+        <div class="lbl">趋势评估指数 (0-100)</div>
+      </div>
+      <div class="index-info">
+        <span class="badge" id="idxBadge" style="display:none"></span>
+        <div class="txt" id="idxSummary"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="snapTime"></div>
+        <div class="method" id="idxMethod"></div>
+        <div class="macro-box">
+          <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
+          <div id="macroFactors"></div>
+          <div class="macro-title" style="margin-top:8px">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
+          <div id="newsFactor"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cards" id="cards"></div>
+  </section>
 
   <!-- 今日操作清单 -->
   <div class="panel" style="margin-bottom:16px">
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">📋 今日操作清单 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="clSum">加载中…</span></div>
     <div id="checklistItems"><div class="loading" style="padding:12px 0">加载中…</div></div>
   </div>
-
-  <!-- 市场趋势评估追踪指数（置顶） -->
-  <div class="index-panel">
-    <div class="index-score">
-      <div class="num" id="idxNum">--</div>
-      <div class="lbl">趋势评估指数 (0-100)</div>
-    </div>
-    <div class="index-info">
-      <span class="badge" id="idxBadge" style="display:none"></span>
-      <div class="txt" id="idxSummary"></div>
-      <div class="method" id="idxMethod"></div>
-      <div class="macro-box">
-        <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
-        <div id="macroFactors"></div>
-        <div class="macro-title" style="margin-top:8px">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
-        <div id="newsFactor"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="cards" id="cards"></div>
 
   <!-- 每日评估历史（本地快照） -->
   <div class="panel" style="margin-bottom:16px">
@@ -489,6 +467,9 @@ function render(d) {
   const m = d.metrics;
   const isUp = m.change_pct >= 0;
 
+  // 计价单位（先于标题模板字符串声明，避免 TDZ）
+  const unit = m.unit || "元";
+
   // 标题与徽章
   document.getElementById("badge").outerHTML =
     `<span class="badge" style="background:${isUp ? "var(--up)" : "var(--down)"};vertical-align:middle">${m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡"}</span>`;
@@ -496,7 +477,6 @@ function render(d) {
     `${d.name}（${d.symbol}） · 投资指引基准 · ${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · ${unit}`;
 
   // 指标卡（计价单位随指引标的切换：美元/盎司 / 元 / 元/克）
-  const unit = m.unit || "元";
   const cards = [
     { label: "最新价", value: m.end_price.toFixed(3), extra: unit },
     { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + m.change_pct_1d.toFixed(2) + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
@@ -523,6 +503,14 @@ function render(d) {
   badge.style.background = idxColor;
   badge.textContent = lvlTxt;
   document.getElementById("idxSummary").textContent = idx.summary;
+  // 「快照于」提示：每日评估一次，展示生成时刻便于客户判断时效
+  const servedAt = d.served_at ? new Date(d.served_at) : null;
+  const snapEl = document.getElementById("snapTime");
+  if (snapEl && servedAt) {
+    const pad = (n) => String(n).padStart(2, "0");
+    snapEl.textContent = `📸 快照于 ${pad(servedAt.getHours())}:${pad(servedAt.getMinutes())}`;
+    snapEl.title = `生成时刻 ${servedAt.toLocaleString("zh-CN")}；每日 07:00（北京时间）自动重算`;
+  }
   document.getElementById("idxMethod").innerHTML =
     "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
     d.indicators.map(i => `${i.name}×${(i.weight * 100).toFixed(0)}%`).join("+") +
@@ -533,8 +521,9 @@ function render(d) {
     `宏观参考指数 ${d.macro.score.toFixed(1)}/100 · ${d.macro.direction === "bullish" ? "利多黄金" : d.macro.direction === "bearish" ? "利空黄金" : "中性"}`;
   document.getElementById("macroFactors").innerHTML = d.macro.factors.map(f => {
     const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "#868e96";
+    const srcBadge = f.source ? `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${f.source.includes("H.15") ? "#e7f5ff" : "#f1f3f5"};color:${f.source.includes("H.15") ? "#1971c2" : "#868e96"};font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
     return `<div class="macro-row">
-      <span class="nm">${f.name}</span>
+      <span class="nm">${f.name}${srcBadge}</span>
       <span class="val" style="color:${c}">${f.value} ${f.unit}</span>
       <span class="bar"><i style="width:${f.score}%;background:${c}"></i></span>
       <span class="dt">${f.data_date}</span>

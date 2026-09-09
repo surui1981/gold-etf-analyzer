@@ -41,16 +41,18 @@ docker compose up --build
 | 综合趋势指数 | 技术面（5 维度）× 宏观面（5 因子）加权合成 0-100 指数 |
 | 宏观参考因子 | 美元指数 / 美债10Y·30Y / VIX / 央行购金，随参数动态变化 |
 | 权重配置 | `/weights` 页面调整技术/宏观/合成比权重，指数实时重算 |
+| 央行购金统计 | `/central-bank` 世界各国央行季度净购金（吨）数据，按国家/季度筛选，Chart.js 堆叠柱状图 + Top 榜 + 明细表 |
 | 个人交易跟踪 | 开仓/加仓/减仓/清仓、实时盈亏（SQLite 持久化） |
 | 购买决策 | 趋势指数 × 持仓状态 → 买入/加仓/持有/减仓/卖出 + 理由明细 |
 | 每日快照 | 每日参数+评估值本地存储（`daily_snapshots`），指数历史序列 |
-| 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、持仓页、权重页 |
+| 自动调度 | 每日 07:00 BJT 捕获快照 + 央行购金每月 1/15/末日 07:30 BJT 自动从 WGC 拉取数据 |
+| 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、央行页（KPI/堆叠柱/Top 榜/明细表）、持仓页、权重页 |
 
 ## API 一览
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` / `/portfolio` / `/weights` | 趋势追踪 / 持仓决策 / 权重配置 页面 |
+| GET | `/` / `/portfolio` / `/weights` / `/news` / `/central-bank` | 趋势追踪 / 持仓决策 / 权重配置 / 消息面评估 / 央行购金 页面 |
 | GET | `/api/v1/health` | 健康检查 |
 | POST | `/api/v1/analysis/opportunity` | 宏观因子 → 机会评分与窗口 |
 | GET | `/api/v1/analysis/history` | 历史分析记录 |
@@ -65,11 +67,29 @@ docker compose up --build
 | GET | `/api/v1/decision/etf` | 购买决策 |
 | GET/PUT | `/api/v1/settings/weights` | 权重配置读取/保存 |
 | GET/PUT | `/api/v1/news-score` | 消息面打分（客户评估） |
+| GET | `/api/v1/central-bank/summary` | 央行购金摘要（T12M 总量 / 参与国数 / 最新季度） |
+| GET | `/api/v1/central-bank/top-buyers` | 某年度 Top N 买家 |
+| GET | `/api/v1/central-bank/purchases` | 央行购金明细（按国家 / 季度范围筛选） |
 | POST | `/api/v1/snapshots/capture` | 捕获当日快照 |
 | GET | `/api/v1/snapshots` | 每日评估历史（自动补当日） |
 
-> 数据源：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率），
+> 数据源：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率）+ **WGC Gold Demand Trends**（央行购金月度统计，HTML chart JS 自动抓取），
 > 采集失败自动降级内置 Mock / 静态参考值；akshare 调用全局串行（py_mini_racer 兼容）。
+
+## 央行购金数据
+
+独立的 `/central-bank` 页面（`static/central_bank.html`）展示世界各国央行近年来的黄金净购金（吨）：
+
+- **数据源**：WGC（世界黄金协会）Gold Demand Trends 季度报告 HTML chart JS（`fsapi.gold.org/api/v12/charts/js/...`），绕开 XLSX 直链 403 反爬
+- **覆盖**：全球合计季度数据 2014Q1–2026Q2（52 季度）+ H1 2026 按国家（19 买家 + 4 卖家）+ UZB/IRN 手工补丁（26 季度）
+- **页面元素**：4 个 KPI 卡（T12M / 本季合计 / 参与国数 / 数据截止季） + Chart.js 堆叠柱状图（季度 × 国家） + Top 10 排行榜 + 完整明细表（按国家 / 季度范围筛选）
+- **cb_gold 因子联动**：`MacroFactorService` 注入 `CentralBankService`，从 `central_bank_purchases` 表自动汇总 T12M；表无数据时回退 STATIC_REF 硬编码
+- **手动刷新**：
+  ```bash
+  python -m app.scripts.import_central_bank             # 全量落库
+  python -m app.scripts.import_central_bank --dry-run    # 预览
+  ```
+- **自动调度**：每月 1 / 15 / 末日 07:30 BJT 自动从 WGC 拉取；通过 `CENTRAL_BANK_AUTO_REFRESH` 环境变量控制（`0` / `false` / `no` / `off` 关闭）
 
 ## 综合趋势评估指数
 
@@ -99,17 +119,19 @@ docker compose up --build
 ```
 gold-etf-analyzer/
 ├── src/app/
-│   ├── main.py              # 入口：路由装配、CORS、lifespan、静态页
+│   ├── main.py              # 入口：路由装配、CORS、lifespan、静态页、调度器启动
 │   ├── config.py            # pydantic-settings 配置
 │   ├── dependencies.py      # 依赖注入容器
-│   ├── models/              # ORM：analysis / position / snapshot / settings
+│   ├── models/              # ORM：analysis / position / snapshot / settings / central_bank
 │   ├── schemas/             # Pydantic v2 请求/响应 + 枚举
-│   ├── services/            # scoring / trend / macro / decision / position / compare / snapshot / settings
-│   ├── repositories/        # analysis / market_data(AKShare) / position / snapshot / settings
-│   ├── api/v1/              # health / analysis / market / position / decision / settings / snapshot
+│   ├── services/            # scoring / trend / macro / decision / position / compare / snapshot / settings / central_bank / scheduler
+│   ├── repositories/        # analysis / market_data(AKShare) / position / snapshot / settings / central_bank / central_bank_data (WGC fetcher)
+│   ├── api/v1/              # health / analysis / market / position / decision / settings / snapshot / central_bank
 │   └── utils/               # 日志
-├── static/                  # trend.html / portfolio.html / weights.html
-├── tests/                   # pytest（67 用例）
+├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
+├── data/
+│   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
+├── tests/                   # pytest（214 个用例，含 fetcher / scheduler / 集成）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -119,7 +141,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 67 个用例（服务层 + API 集成，不依赖网络）
+python -m pytest -v          # 214 个用例（服务层 + API 集成，不依赖网络）
 ruff check src tests
 ruff format src tests
 ```
@@ -128,8 +150,10 @@ ruff format src tests
 
 - [ ] 宏观×技术共振深化：决策引擎纳入宏观机会评分（消息面权重生效）
 - [ ] 克数持仓跟踪：实物金/积存金按克持仓，与 ETF 并列盈亏
-- [ ] CI/CD（GitHub Actions 自动 pytest + ruff，tag 触发构建）｜ 每日快照定时任务 ✅（V0.50 看门狗 06:00/16:00 自动捕获）
+- [ ] CI/CD（GitHub Actions 自动 pytest + ruff，tag 触发构建）
+- [x] 每日快照定时任务（V0.50 看门狗 06:00/16:00 自动捕获）✅
 - [x] Alembic 数据库迁移（替代启动时 create_all，V0.50 已落地）
+- [x] 世界央行购金统计页（`/central-bank`，WGC 自动抓取 + 手工补丁，月度调度）
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）

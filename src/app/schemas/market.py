@@ -109,6 +109,7 @@ class MacroFactorOut(BaseModel):
     value: str = Field(..., description="当前值（文本）")
     unit: str
     data_date: str = Field(..., description="数据日期（实时或静态标注）")
+    source: str = Field("", description="数据源标识（如「美联储 H.15」「静态参考」）")
     score: float = Field(..., ge=0, le=100, description="黄金友好度 0-100")
     direction: DirectionSignal
     weight: float = Field(..., ge=0, le=1)
@@ -202,6 +203,11 @@ class GoldTrendOut(BaseModel):
     freshness: DataFreshnessOut | None = Field(
         None,
         description="数据时效（实时/延时/T-1/缓存/演示 + 交易时段），供页面持续标注",
+    )
+    served_at: datetime = Field(
+        default_factory=lambda: datetime.now(),
+        description="本次评估生成时刻（UTC）；命中当日缓存时为原始生成时间，"
+        "页面据此展示「快照于 X 时 Y 分」。",
     )
 
 

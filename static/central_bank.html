@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>世界央行黄金购买统计 · 黄金价格投资辅助工具</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --up: #e03131;
+    --down: #2f9e44;
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --border: #e6e8eb;
+    --text: #1f2329;
+    --muted: #8a919f;
+    --accent: #c9a227;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  /* Hero / warn banner */
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 25px; letter-spacing: .5px; }
+  .hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 820px; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
+  /* KPI 卡（4 个） */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .kpi .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; letter-spacing: .5px; }
+  .kpi .value { font-size: 24px; font-weight: 700; }
+  .kpi .extra { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .kpi .value.up { color: var(--up); }
+  .kpi .value.down { color: var(--down); }
+  /* Panel 通用 */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .panel-title { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .panel-title .accent { color: var(--accent); }
+  /* 过滤器行 */
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .filters label { font-size: 12px; color: var(--muted); }
+  .filters select, .filters input { font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: #fff; color: var(--text); }
+  .filters button { font-size: 12.5px; padding: 4px 14px; border: none; border-radius: 6px; background: #1f2329; color: #fff; cursor: pointer; }
+  .filters button:hover { background: var(--accent); color: #1f2329; }
+  /* 图表 */
+  .chart-wrap { position: relative; height: 380px; }
+  /* 表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { background: #fafbfc; color: var(--muted); font-weight: 600; text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+  tbody td { padding: 7px 10px; border-bottom: 1px solid #f1f3f5; }
+  tbody tr:hover { background: #fafbfc; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  td.num.up { color: var(--up); }
+  td.num.down { color: var(--down); }
+  .src-badge { display: inline-block; padding: 1px 6px; border-radius: 8px; font-size: 10px; font-weight: 500; }
+  .src-imf { background: #e7f5ff; color: #1971c2; }
+  .src-wgc { background: #fff4e5; color: #b35309; }
+  .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+  .error { color: var(--up); text-align: center; padding: 40px 0; font-size: 13px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  .legend-list { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+  .legend-list .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+  /* 表格容器（明细表可能很长，加 max-height 滚动） */
+  .scroll-x { overflow-x: auto; }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- 顶部导航 -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/central-bank" class="active">央行购金统计</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="en">CENTRAL BANK GOLD PURCHASES · 2020 – 2026</div>
+    <h1>📊 世界央行黄金购买统计</h1>
+    <div class="tagline">数据驱动研判：各国央行结构性购金 vs 卖出</div>
+    <div class="intro">
+      央行黄金储备变化是金价最长期、最结构性的支撑因素之一。
+      本页汇总 15 个主要购金国 2020Q1 – 2026Q2 的季度净购金吨数，按国家、按季度拆解。
+      数据主源为 IMF IRFCL（覆盖 13 国，免费无 KEY），UZB/IRN 因不向 IMF 披露，辅以 WGC 月报手工补丁。
+    </div>
+    <div class="notice">数据滞后 6-12 个月 · 仅供研究参考，不构成投资建议</div>
+  </section>
+
+  <!-- 投资警示 -->
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 数据使用注意</div>
+    <ol>
+      <li><b>IMF IRFCL</b> 月度发布（T+1~T+3 月滞后），单日汇率波动不影响；季度 delta 由相邻两月 oz 持仓差值推算。</li>
+      <li><b>UZB / IRN</b> 因制裁或主动不披露，IMF 无数据，使用 WGC 月报公开估读，已标注 source=<b>WGC 月报估读</b>。</li>
+      <li>季度净购金 = (本季度末 oz − 上季度末 oz) / 32,150.7466；<b>负值代表卖出</b>（俄罗斯/土耳其历史多次）。</li>
+      <li>本统计仅反映<b>官方部门</b>净买卖，不含 ETF、首饰、工业需求等其他黄金消费。</li>
+    </ol>
+  </div>
+
+  <!-- KPI 卡 -->
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="label">T12M 滚动 12 月合计</div>
+      <div class="value" id="kpiT12m">—</div>
+      <div class="extra" id="kpiT12mWindow">窗口：—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">最新季度合计</div>
+      <div class="value" id="kpiCurrent">—</div>
+      <div class="extra" id="kpiCurrentLabel">截至 —</div>
+    </div>
+    <div class="kpi">
+      <div class="label">参与国家数</div>
+      <div class="value" id="kpiCountries">—</div>
+      <div class="extra">覆盖 IMF 上报 13 + WGC 补丁 2</div>
+    </div>
+    <div class="kpi">
+      <div class="label">数据截止季</div>
+      <div class="value" id="kpiLatest">—</div>
+      <div class="extra" id="kpiRefresh">最后刷新：—</div>
+    </div>
+  </div>
+
+  <!-- 堆叠柱状图 -->
+  <section class="panel">
+    <div class="panel-title">📈 季度净购金堆叠图 <span class="accent">· Top 10 国家 + Other</span></div>
+    <div class="chart-wrap"><canvas id="stackedChart"></canvas></div>
+    <div class="legend-list" id="chartLegend"></div>
+  </section>
+
+  <!-- Top 10 买家榜 -->
+  <section class="panel">
+    <div class="panel-title">🏆 T12M Top 10 买家（按滚动 12 月合计降序）</div>
+    <table id="topTable">
+      <thead>
+        <tr>
+          <th style="width:50px">排名</th>
+          <th>国家</th>
+          <th style="width:120px">ISO</th>
+          <th style="width:120px" class="num">T12M 净购金（吨）</th>
+          <th style="width:100px">数据源</th>
+        </tr>
+      </thead>
+      <tbody id="topBody"></tbody>
+    </table>
+  </section>
+
+  <!-- 完整明细表 + 过滤器 -->
+  <section class="panel">
+    <div class="panel-title">📋 完整明细（按国家 / 季度筛选）</div>
+    <div class="filters">
+      <label>国家</label>
+      <select id="filterCountry">
+        <option value="">全部</option>
+      </select>
+      <label>起始季度</label>
+      <input id="filterFrom" placeholder="2024Q1" maxlength="6">
+      <label>结束季度</label>
+      <input id="filterTo" placeholder="2026Q2" maxlength="6">
+      <button id="filterApply">应用筛选</button>
+      <button id="filterReset" style="background:var(--muted)">重置</button>
+    </div>
+    <div class="scroll-x" style="max-height:420px;overflow:auto">
+      <table id="detailTable">
+        <thead>
+          <tr>
+            <th>季度</th>
+            <th>国家</th>
+            <th>ISO</th>
+            <th class="num">净购金（吨）</th>
+            <th>数据源</th>
+            <th>数据截止日</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>© 黄金价格投资辅助工具 · 数据来源 IMF IRFCL + WGC 月报</footer>
+</div>
+
+<script>
+  // ============ 工具函数 ============
+  const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+
+  async function fetchJSON(url, timeoutMs = 30000) {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const r = await fetch(API_BASE + url, { signal: ctrl.signal });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } finally {
+      clearTimeout(tid);
+    }
+  }
+
+  const fmt = {
+    num(n, digits = 1) {
+      if (n === null || n === undefined) return "—";
+      return Number(n).toFixed(digits);
+    },
+    numSign(n, digits = 1) {
+      if (n === null || n === undefined) return "—";
+      const s = Number(n).toFixed(digits);
+      return n > 0 ? "+" + s : s;
+    },
+    date(d) {
+      if (!d) return "—";
+      return d;
+    },
+  };
+
+  function srcBadge(source) {
+    if (!source) return "";
+    if (source.includes("IMF")) return `<span class="src-badge src-imf">IMF IRFCL</span>`;
+    return `<span class="src-badge src-wgc">WGC 手工</span>`;
+  }
+
+  // ============ 状态 ============
+  let fullData = null;  // 原始 API 响应
+
+  // ============ 渲染 ============
+  function renderKPI(summary) {
+    const t12m = summary.t12m_total;
+    document.getElementById("kpiT12m").textContent = fmt.num(t12m) + " t";
+    document.getElementById("kpiT12m").className = "value " + (t12m >= 0 ? "up" : "down");
+    document.getElementById("kpiT12mWindow").textContent = "窗口：" + summary.t12m_window;
+
+    document.getElementById("kpiCurrent").textContent = fmt.num(summary.current_quarter_total) + " t";
+    document.getElementById("kpiCurrent").className = "value " + (summary.current_quarter_total >= 0 ? "up" : "down");
+    document.getElementById("kpiCurrentLabel").textContent = "截至 " + summary.current_quarter;
+
+    document.getElementById("kpiCountries").textContent = summary.country_count;
+    document.getElementById("kpiLatest").textContent = summary.latest_data_quarter;
+    if (summary.last_refresh) {
+      const d = new Date(summary.last_refresh);
+      const pad = (n) => String(n).padStart(2, "0");
+      document.getElementById("kpiRefresh").textContent =
+        `最后刷新：${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } else {
+      document.getElementById("kpiRefresh").textContent = "最后刷新：—";
+    }
+  }
+
+  function renderTopBuyers(top) {
+    const tbody = document.getElementById("topBody");
+    if (!top || top.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px">暂无数据</td></tr>';
+      return;
+    }
+    tbody.innerHTML = top.map((t) => {
+      const cls = t.tonnes_net > 0 ? "up" : t.tonnes_net < 0 ? "down" : "";
+      return `<tr>
+        <td>${t.rank}</td>
+        <td><b>${t.country_name}</b></td>
+        <td>${t.country_iso}</td>
+        <td class="num ${cls}">${fmt.numSign(t.tonnes_net)}</td>
+        <td>${srcBadge(t.country_iso === "UZB" || t.country_iso === "IRN" ? "WGC 手工" : "IMF IRFCL")}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function renderStackedChart(items) {
+    // 按 quarter × country 聚合（Top 10 + Other）
+    const byQuarter = {};
+    const countryTotals = {};
+    for (const it of items) {
+      const q = it.quarter;
+      byQuarter[q] = byQuarter[q] || {};
+      byQuarter[q][it.country_iso] = (byQuarter[q][it.country_iso] || 0) + it.tonnes_net;
+      countryTotals[it.country_iso] = (countryTotals[it.country_iso] || 0) + Math.max(it.tonnes_net, 0);
+    }
+    const quarters = Object.keys(byQuarter).sort();
+    const topCountries = Object.entries(countryTotals)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([k]) => k);
+
+    // 配色：固定 10 种区分色（金黄主色 + 辅助）
+    const palette = [
+      "#c9a227", "#1971c2", "#2f9e44", "#e67700", "#9c36b5",
+      "#0ca678", "#c92a2a", "#5c940d", "#0c8599", "#d9480f",
+    ];
+    const otherColor = "#adb5bd";
+
+    const datasets = topCountries.map((iso, i) => ({
+      label: iso,
+      data: quarters.map((q) => Math.max(byQuarter[q][iso] || 0, 0)),
+      backgroundColor: palette[i],
+      borderColor: palette[i],
+      borderWidth: 0.5,
+      stack: "cb",
+    }));
+    datasets.push({
+      label: "Other",
+      data: quarters.map((q) => {
+        let other = 0;
+        for (const [iso, val] of Object.entries(byQuarter[q])) {
+          if (!topCountries.includes(iso)) other += Math.max(val, 0);
+        }
+        return other;
+      }),
+      backgroundColor: otherColor,
+      borderColor: otherColor,
+      borderWidth: 0.5,
+      stack: "cb",
+    });
+
+    const ctx = document.getElementById("stackedChart").getContext("2d");
+    if (window._cbChart) window._cbChart.destroy();
+    window._cbChart = new Chart(ctx, {
+      type: "bar",
+      data: { labels: quarters, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { mode: "index", intersect: false },
+        },
+        scales: {
+          x: { stacked: true, ticks: { autoSkip: true, maxTicksLimit: 12 } },
+          y: { stacked: true, title: { display: true, text: "吨" } },
+        },
+      },
+    });
+
+    // 自定义图例
+    const legendEl = document.getElementById("chartLegend");
+    legendEl.innerHTML = [...topCountries.map((iso, i) =>
+      `<span><span class="sw" style="background:${palette[i]}"></span>${iso}</span>`
+    ), `<span><span class="sw" style="background:${otherColor}"></span>Other</span>`].join("");
+  }
+
+  function renderDetailTable(items) {
+    const tbody = document.getElementById("detailBody");
+    if (!items || items.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">暂无数据</td></tr>';
+      return;
+    }
+    tbody.innerHTML = items.map((it) => {
+      const cls = it.tonnes_net > 0 ? "up" : it.tonnes_net < 0 ? "down" : "";
+      return `<tr>
+        <td>${it.quarter}</td>
+        <td><b>${it.country_name}</b></td>
+        <td>${it.country_iso}</td>
+        <td class="num ${cls}">${fmt.numSign(it.tonnes_net)}</td>
+        <td>${srcBadge(it.source)}</td>
+        <td>${fmt.date(it.data_date)}</td>
+      </tr>`;
+    }).join("");
+  }
+
+  function populateCountryFilter(items) {
+    const sel = document.getElementById("filterCountry");
+    const seen = new Set();
+    const countries = [];
+    for (const it of items) {
+      if (!seen.has(it.country_iso)) {
+        seen.add(it.country_iso);
+        countries.push({ iso: it.country_iso, name: it.country_name });
+      }
+    }
+    countries.sort((a, b) => a.iso.localeCompare(b.iso));
+    for (const c of countries) {
+      const opt = document.createElement("option");
+      opt.value = c.iso;
+      opt.textContent = `${c.iso} · ${c.name}`;
+      sel.appendChild(opt);
+    }
+  }
+
+  function applyFilters() {
+    if (!fullData) return;
+    const country = document.getElementById("filterCountry").value;
+    const from = document.getElementById("filterFrom").value.trim();
+    const to = document.getElementById("filterTo").value.trim();
+    let filtered = fullData.items;
+    if (country) filtered = filtered.filter((it) => it.country_iso === country);
+    if (from) filtered = filtered.filter((it) => it.quarter >= from);
+    if (to) filtered = filtered.filter((it) => it.quarter <= to);
+    renderDetailTable(filtered);
+  }
+
+  // ============ 启动 ============
+  (async function boot() {
+    try {
+      const data = await fetchJSON("/api/v1/central-bank/purchases");
+      fullData = data;
+      renderKPI(data.summary);
+      renderTopBuyers(data.top_buyers);
+      renderStackedChart(data.items);
+      renderDetailTable(data.items);
+      populateCountryFilter(data.items);
+
+      document.getElementById("filterApply").onclick = applyFilters;
+      document.getElementById("filterReset").onclick = () => {
+        document.getElementById("filterCountry").value = "";
+        document.getElementById("filterFrom").value = "";
+        document.getElementById("filterTo").value = "";
+        applyFilters();
+      };
+    } catch (e) {
+      const wrap = document.querySelector(".wrap");
+      const div = document.createElement("div");
+      div.className = "panel";
+      div.innerHTML = `<div class="error">数据加载失败：${e.message}<br><br><span style="font-size:11.5px;color:var(--muted)">请确认服务已启动（${API_BASE || "http://127.0.0.1:8888"}），并先访问 <code>python -m app.scripts.import_central_bank</code> 导入历史数据。</span></div>`;
+      wrap.appendChild(div);
+    }
+  })();
+</script>
+</body>
+</html>

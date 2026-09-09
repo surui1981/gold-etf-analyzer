@@ -5,16 +5,18 @@
 权重集中在 ``MACRO_FACTOR_RULES``，可按经验调整。
 
 数据来源：
-- 美债 10Y/30Y：AKShare ``bond_zh_us_rate``（中债数据，实时）
+- 美债 10Y/30Y：美联储 H.15 收益率曲线（零KEY官方源，T+1~T+3 滞后）；
+  由 ``fetch_us_treasury_h15`` 拉取，单文件含 11 个期限，5min TTL 缓存
 - 美元指数 / VIX：沙箱网络无可用实时源，采用内置静态参考值（``STATIC_REF``），
   架构上可平滑替换为实时 provider
-- 央行购金：世界黄金协会年度数据（结构性因子，低频更新）
+- 央行购金：世界黄金协会 Gold Demand Trends 季度数据（结构性因子，低频更新）；
+  采用滚动 12 月（最近 4 个季度合计）作为当前读数，平滑季度间波动并与 WGC
+  「央行年均 ~1000 t」口径一致。Q1 2026 因 WGC 将部分 OTC 重分类而下修至 56.5 t，
+  Q2 2026 创纪录 288.9 t（同比 +62%）
 """
 
-import asyncio
 import time
 
-from app.repositories.market_data import _AK_LOCK
 from app.schemas.common import DirectionSignal
 from app.schemas.market import MacroFactorOut, MacroIndexOut
 from app.utils.logger import get_logger
@@ -54,11 +56,15 @@ NEWS_WEIGHT = 0.30
 STATIC_REF: dict[str, dict] = {
     "dxy": {"value": 96.5, "date": "2026-08-28", "note": "静态参考值"},
     "vix": {"value": 18.5, "date": "2026-08-28", "note": "静态参考值"},
-    "cb_gold": {"value": 1045.0, "date": "2024年度", "note": "世界黄金协会年度数据"},
+    "cb_gold": {
+        # 滚动 12 月：2025 Q3(337) + 2025 Q4(337) + 2026 Q1(56.5, WGC 下修) + 2026 Q2(288.9, 季度纪录)
+        "value": 1019.0,
+        "date": "2025Q3–2026Q2 滚动12月",
+        "note": "世界黄金协会 GDT Q2 2026（季度明细：Q1 56.5 / Q2 288.9）",
+    },
 }
 
-# 美债实时采集超时（秒）与结果缓存时长（秒）
-BOND_TIMEOUT = 15
+# 宏观综合指数结果缓存时长（秒）；底层 H.15 fetcher 自带 5min TTL
 MACRO_CACHE_TTL = 600  # 10 分钟
 
 # 模块级 TTL 缓存：中债接口偶发挂起，缓存避免每个请求都触发
@@ -84,11 +90,14 @@ def _friendly_score(value: float, rule: dict) -> float:
 class MacroFactorService:
     """宏观参考因子采集与评分。"""
 
-    def __init__(self, settings=None) -> None:
+    def __init__(self, settings=None, central_bank=None) -> None:
         # 延迟导入避免循环依赖（settings 服务引用 repositories）
         from app.services.settings import WeightService
 
         self._settings: WeightService | None = settings
+        # 央行购金服务（可选）：注入后 cb_gold 因子从 central_bank_purchases 表自动计算；
+        # 未注入时（单测/降级）回退到 STATIC_REF 硬编码值。
+        self._central_bank = central_bank
 
     async def evaluate(self) -> MacroIndexOut:
         """采集宏观因子并合成宏观参考指数（0-100）。
@@ -105,7 +114,7 @@ class MacroFactorService:
         return result
 
     async def _evaluate_uncached(self) -> MacroIndexOut:
-        values: dict[str, tuple[float, str]] = await self._collect()
+        values: dict[str, tuple[float, str, str]] = await self._collect()
         weights = (
             await self._settings.macro_weights()
             if self._settings is not None
@@ -115,7 +124,7 @@ class MacroFactorService:
         total = 0.0
         factors: list[MacroFactorOut] = []
         for rule in MACRO_FACTOR_RULES:
-            value, data_date = values[rule["key"]]
+            value, data_date, source = values[rule["key"]]
             weight = weights.get(rule["key"], rule["weight"])
             score = _friendly_score(value, rule)
             contribution = round(score * weight, 2)
@@ -132,6 +141,7 @@ class MacroFactorService:
                     value=f"{value:g}",
                     unit=rule["unit"],
                     data_date=data_date,
+                    source=source,
                     score=round(score, 1),
                     direction=direction,
                     weight=weight,
@@ -154,35 +164,47 @@ class MacroFactorService:
             summary=self._summarize(total, direction),
         )
 
-    async def _collect(self) -> dict[str, tuple[float, str]]:
-        """采集各因子当前值：(数值, 数据日期)。美债实时，其余静态。"""
-        values: dict[str, tuple[float, str]] = {}
+    async def _collect(self) -> dict[str, tuple[float, str, str]]:
+        """采集各因子当前值：(数值, 数据日期, 数据源标识)。美债实时，其余静态。"""
+        values: dict[str, tuple[float, str, str]] = {}
         for key, ref in STATIC_REF.items():
-            values[key] = (float(ref["value"]), ref["date"])
+            values[key] = (float(ref["value"]), ref["date"], ref["note"])  # 静态参考值自带 note
 
-        # 美债 10Y/30Y 实时采集（失败保持静态默认）
+        # 央行购金：优先读 central_bank_purchases 表（注入 central_bank 时）；
+        # 表无数据时回退 STATIC_REF 硬编码值（保证系统永远有值）。
+        if self._central_bank is not None:
+            try:
+                summary = await self._central_bank.summary()
+                if summary.country_count > 0:
+                    values["cb_gold"] = (
+                        summary.t12m_total,
+                        summary.t12m_window,
+                        "央行购金表自动汇总",
+                    )
+                    logger.debug(
+                        "cb_gold from central_bank_purchases: t12m=%.1f (%s)",
+                        summary.t12m_total, summary.t12m_window,
+                    )
+            except Exception as exc:  # noqa: BLE001 —— 失败保持 STATIC_REF
+                logger.warning("central_bank summary failed (%s), use static ref", exc)
+
+        # 美债 10Y/30Y 实时采集（美联储 H.15 官方源；失败保持静态默认）
+        # 延迟导入避免循环依赖（services 层不应在模块级锁住 repositories）
+        from app.repositories.market_data import fetch_us_treasury_h15
+
         try:
-            import akshare as ak
-
-            def _fetch() -> tuple[float, float, str]:
-                df = ak.bond_zh_us_rate(start_date="20260101")
-                row = df.iloc[-1]
-                return (
-                    float(row["美国国债收益率10年"]),
-                    float(row["美国国债收益率30年"]),
-                    str(row["日期"]),
-                )
-
-            with _AK_LOCK:
-                us10y, us30y, d = await asyncio.wait_for(
-                    asyncio.to_thread(_fetch), timeout=BOND_TIMEOUT,
-                )
-            values["us10y"] = (us10y, d)
-            values["us30y"] = (us30y, d)
-        except (TimeoutError, Exception) as exc:  # noqa: BLE001 —— 超时/失败保持静态参考
+            result = await fetch_us_treasury_h15()
+            if result is not None:
+                values["us10y"] = (result.us10y, result.data_date.isoformat(), "美联储 H.15")
+                values["us30y"] = (result.us30y, result.data_date.isoformat(), "美联储 H.15")
+            else:
+                logger.warning("H.15 returned None, use static ref")
+                values["us10y"] = (4.4, "2026-08-28", "静态参考值")
+                values["us30y"] = (4.9, "2026-08-28", "静态参考值")
+        except Exception as exc:  # noqa: BLE001 —— 失败保持静态参考
             logger.warning("US bond rate fetch failed (%s), use static ref", exc)
-            values["us10y"] = (4.4, "2026-08-28")
-            values["us30y"] = (4.9, "2026-08-28")
+            values["us10y"] = (4.4, "2026-08-28", "静态参考值")
+            values["us30y"] = (4.9, "2026-08-28", "静态参考值")
         return values
 
     @staticmethod
