@@ -1,0 +1,351 @@
+/* PM-Help · 新手引导与帮助体系样式（V0.58.0, UX Roadmap 6.8）
+ * 暗色主题 + 响应式 + 无障碍。
+ */
+
+/* ── 悬浮 ? 按钮 ─────────────────────────────────────────────── */
+#pmHelpBtn {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent, #c9a227);
+  color: #1f2329;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+  z-index: 9999;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+#pmHelpBtn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 4px 16px rgba(201, 162, 39, 0.5);
+}
+#pmHelpBtn:active {
+  transform: scale(0.96);
+}
+
+/* ── Modal ───────────────────────────────────────────────────── */
+#pmHelpModal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#pmHelpModal[hidden] { display: none; }
+
+.pmh-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.pmh-panel {
+  position: relative;
+  background: #1f2329;
+  color: #d6d9dd;
+  border: 1px solid #2a2f37;
+  border-radius: 14px;
+  width: min(640px, 92vw);
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.pmh-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #2a2f37;
+  background: #232830;
+}
+.pmh-panel header h2 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--accent, #c9a227);
+  letter-spacing: 0.5px;
+}
+.pmh-close {
+  background: none;
+  border: none;
+  color: #9aa0a6;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0 8px;
+  line-height: 1;
+}
+.pmh-close:hover { color: #fff; }
+
+.pmh-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 8px 12px 0;
+  background: #232830;
+  border-bottom: 1px solid #2a2f37;
+}
+.pmh-tabs button {
+  background: none;
+  border: none;
+  color: #9aa0a6;
+  padding: 8px 16px;
+  font-size: 13.5px;
+  cursor: pointer;
+  border-radius: 8px 8px 0 0;
+  transition: background 0.12s, color 0.12s;
+}
+.pmh-tabs button:hover { background: #2a2f37; color: #d6d9dd; }
+.pmh-tabs button.active {
+  background: #1f2329;
+  color: var(--accent, #c9a227);
+  font-weight: 600;
+  border-bottom: 2px solid var(--accent, #c9a227);
+}
+
+.pmh-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+.pmh-body h3 {
+  color: var(--accent, #c9a227);
+  font-size: 14px;
+  margin: 14px 0 8px;
+}
+.pmh-body h3:first-child { margin-top: 0; }
+.pmh-body p { margin: 8px 0; }
+.pmh-body code {
+  background: #2a2f37;
+  color: #f5d97a;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12.5px;
+}
+.pmh-body a { color: var(--accent, #c9a227); text-decoration: none; }
+.pmh-body a:hover { text-decoration: underline; }
+
+.pmh-warn {
+  background: rgba(201, 162, 39, 0.12);
+  border-left: 3px solid var(--accent, #c9a227);
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.pmh-guide { padding-left: 22px; }
+.pmh-guide li { margin: 8px 0; }
+
+.pmh-terms section { margin-bottom: 18px; }
+.pmh-terms dl {
+  display: grid;
+  grid-template-columns: minmax(120px, max-content) 1fr;
+  gap: 6px 14px;
+  margin: 6px 0;
+}
+.pmh-terms dt {
+  font-weight: 600;
+  color: #f5d97a;
+}
+.pmh-terms dd { margin: 0; color: #c8ccd1; }
+
+.pmh-source dt {
+  font-weight: 600;
+  color: #f5d97a;
+  margin-top: 8px;
+}
+.pmh-source dd { margin: 4px 0 8px; color: #c8ccd1; }
+
+.pmh-tip {
+  background: rgba(201, 162, 39, 0.08);
+  border-left: 3px solid var(--accent, #c9a227);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: #c8ccd1;
+}
+
+.pmh-panel footer {
+  padding: 12px 20px;
+  border-top: 1px solid #2a2f37;
+  background: #232830;
+  text-align: right;
+}
+.pmh-replay {
+  background: none;
+  border: 1px solid var(--accent, #c9a227);
+  color: var(--accent, #c9a227);
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.pmh-replay:hover {
+  background: var(--accent, #c9a227);
+  color: #1f2329;
+}
+
+/* ── Tour 浮层 ───────────────────────────────────────────────── */
+#pmhTourMask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 18, 22, 0.72);
+  z-index: 9990;
+  pointer-events: none;
+}
+
+#pmhTourSpot {
+  position: fixed;
+  border: 2px solid var(--accent, #c9a227);
+  border-radius: 8px;
+  box-shadow: 0 0 0 4px rgba(201, 162, 39, 0.2);
+  z-index: 9991;
+  pointer-events: none;
+  transition: all 0.25s;
+}
+
+#pmhTourTip {
+  position: absolute;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  background: #1f2329;
+  border: 1px solid var(--accent, #c9a227);
+  border-radius: 10px;
+  padding: 14px 16px;
+  color: #d6d9dd;
+  font-size: 13px;
+  line-height: 1.6;
+  z-index: 9992;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+.pmh-tip-body { margin-bottom: 12px; }
+.pmh-tip-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-top: 1px solid #2a2f37;
+  padding-top: 10px;
+}
+.pmh-step-counter {
+  font-size: 11px;
+  color: #9aa0a6;
+}
+.pmh-tip-skip,
+.pmh-tip-next {
+  background: none;
+  border: 1px solid #2a2f37;
+  color: #d6d9dd;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.pmh-tip-skip:hover { border-color: #9aa0a6; }
+.pmh-tip-next {
+  background: var(--accent, #c9a227);
+  border-color: var(--accent, #c9a227);
+  color: #1f2329;
+  font-weight: 600;
+}
+.pmh-tip-next:hover { box-shadow: 0 2px 8px rgba(201, 162, 39, 0.4); }
+
+/* ── Inline Tooltip ? 图标 ────────────────────────────────────── */
+.pmh-q {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: rgba(201, 162, 39, 0.15);
+  color: var(--accent, #c9a227);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  vertical-align: middle;
+  user-select: none;
+  transition: background 0.12s, transform 0.12s;
+}
+.pmh-q:hover {
+  background: var(--accent, #c9a227);
+  color: #1f2329;
+  transform: scale(1.15);
+}
+
+#pmhPopover {
+  position: absolute;
+  width: 280px;
+  background: #2a2f37;
+  border: 1px solid var(--accent, #c9a227);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #d6d9dd;
+  font-size: 12.5px;
+  line-height: 1.55;
+  z-index: 9993;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+#pmhPopover b {
+  color: var(--accent, #c9a227);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+#pmhPopover p { margin: 0; }
+
+/* ── 响应式：移动端 ────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  #pmHelpBtn {
+    right: 12px;
+    bottom: 12px;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .pmh-panel {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 90vh;
+    border-radius: 14px 14px 0 0;
+    margin-top: auto;
+    align-self: flex-end;
+  }
+  #pmHelpModal {
+    align-items: flex-end;
+  }
+
+  #pmhTourTip {
+    width: calc(100vw - 24px);
+  }
+
+  .pmh-terms dl {
+    grid-template-columns: 1fr;
+    gap: 2px 0;
+  }
+  .pmh-terms dt {
+    margin-top: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .pmh-panel header h2 { font-size: 15px; }
+  .pmh-tabs button { padding: 6px 12px; font-size: 12.5px; }
+  .pmh-body { font-size: 13px; padding: 14px 16px; }
+}

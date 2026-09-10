@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.57.0**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.58.0**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
@@ -38,6 +38,7 @@
 | **自动调度** | 每日 07:00 BJT 捕获快照 + **央行购金月度 1/15/末日 07:30 BJT 自动从 WGC 拉取**（`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关） | ✅ V0.57.0 |
 | 数据时效透明 | `GET /api/v1/market/freshness` + 全站 `freshness.js` 时效条：三市场时段判定 + live/stale/mock 三态 + 60s 自动刷新 | ✅ V0.52.0 |
 | 主动提醒（前端侧） | `/portfolio` 页面 60s 轮询评估指数/纽约金，档位切换/金价波动 ≥2% 触发浏览器通知 + 提醒条 + 今日简报 | ✅ V0.56.0 |
+| **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉；`localStorage.pm_help_*` 命名空间 | ✅ V0.58.0 |
 | 可视化页面 | 趋势页 `/static/trend.html`（含对照区块）+ 持仓决策页 `/static/portfolio.html` + 权重页 `/weights` + 消息面页 `/news` + **央行购金页 `/central-bank`** | ✅ |
 | 健康检查 | `GET /api/v1/health` | ✅ |
 
@@ -91,7 +92,7 @@ src/app/
 ├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入）
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
 static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html + freshness.js + responsive.css
-tests/                   # pytest（216 用例，含 fetcher / scheduler / 服务 / API）
+tests/                   # pytest（279 用例，含 fetcher / scheduler / 服务 / API / help）
 ```
 
 ### 3.3 数据流
@@ -123,7 +124,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 216 个用例（服务层 + API 集成 + fetcher + scheduler，不依赖网络）
+python -m pytest -v          # 279 个用例（服务层 + API 集成 + fetcher + scheduler + help，不依赖网络）
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -276,7 +277,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-216 个用例覆盖：
+216 + 63 = 279 个用例覆盖：
 
 - **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）
 - **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出）、快照、消息面、央行购金（3 个 endpoint）、健康检查
@@ -301,7 +302,8 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | **V0.54.0** | **决策可解释性增强（UX Roadmap 6.3）**：`schemas/position.py` 新增 `ReasonItem(text, direction)`，`DecisionOut` 增加 `reason_items`（保留 `reasons` 向后兼容）；`services/decision.py` 为每条理由标注 `bullish`/`bearish`/`neutral`（参数面按指数方向、交易面按盈亏、决策依据按行动、仓位建议标中性）；前端 `portfolio.html` 渲染红绿对照条（`.bullish` 红 / `.bearish` 绿 / `.neutral` 灰，含「利多/利空/中性」标签）+ 指数构成（技术/宏观/消息）堆叠条可视化 | 决策看得懂 | ✅ |
 | **V0.55.0** | **操作闭环防错与撤销（UX Roadmap 6.4）**：开仓/加仓/减仓/清仓统一 `confirmDialog()` 二次确认弹窗（数量/价格/手续费/预估金额摘要，危险态标红）；`validateTrade()` 前端范围校验；持仓软删除（`models/position.py` 加 `deleted_at`，`utils/db_migrate.py` 启动幂等补齐）+ `DELETE /positions/{id}` + 8 秒内「撤销」→ `POST /{id}/restore`；新增 `GET /api/v1/positions/export` 导出持仓+流水 CSV（UTF-8 BOM）；前端 `API_BASE` 改同源，修复此前写死指向已死 8888 端口导致接口全失败的问题 | 操作不翻车 | ✅ |
 | **V0.56.0** | **主动提醒与推送（UX Roadmap 6.6，前端侧）**：持仓决策页新增「🔔 提醒」开关（`localStorage` 记忆 `pm_alert_on`，默认关）；开启时请求 `Notification` 授权；每 60s 轮询 `decision` + `gold`，`checkAlerts()` 比较评估指数档位与纽约金价格：档位切换或金价波动 ≥2% 时，触发浏览器通知 + 顶部 `alertBar`（6s 自动消失）；`renderBriefing()` 在决策区下方常驻「今日简报」一句话摘要。邮件/微信推送因需外部服务与密钥，本期未做 | 主动触达 | ✅ |
-| **V0.57.0**（当前） | **世界央行购金统计独立页面 + 月度自动调度**：新增 `/central-bank` 页面（4 KPI 卡 + Chart.js 堆叠柱状图 + Top 10 + 按国家/季度范围筛选明细表）+ `GET /api/v1/central-bank/{summary,top-buyers,purchases}` 三个 endpoint。数据源由 IMF IRFCL（不可达）切到 **WGC Gold Demand Trends HTML chart JS**（`fsapi.gold.org/api/v12/charts/js/...`，绕开 XLSX 403 反爬），覆盖全球合计 2014Q1–2026Q2（52 季度）+ H1 2026 按国家（19 买家 + 4 卖家）+ UZB/IRN 手工补丁。`cb_gold` 宏观因子从表自动汇总 T12M（无数据回退 STATIC_REF）。**月度自动调度**：每月 1/15/末日 07:30 BJT 由 `services/scheduler.py` 自动从 WGC 拉取（`calendar.monthrange()` 动态月末，`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关）。三层测试覆盖（fetcher 32 + scheduler 26 + 集成），216 测试通过；顺手修复 `ensure_sqlite_columns` 跳过不存在表（部分老库启动不再崩溃） | 央行购金数据化 + 自动化 | ✅ |
+| **V0.57.0** | **世界央行购金统计独立页面 + 月度自动调度**：新增 `/central-bank` 页面（4 KPI 卡 + Chart.js 堆叠柱状图 + Top 10 + 按国家/季度范围筛选明细表）+ `GET /api/v1/central-bank/{summary,top-buyers,purchases}` 三个 endpoint。数据源由 IMF IRFCL（不可达）切到 **WGC Gold Demand Trends HTML chart JS**（`fsapi.gold.org/api/v12/charts/js/...`，绕开 XLSX 403 反爬），覆盖全球合计 2014Q1–2026Q2（52 季度）+ H1 2026 按国家（19 买家 + 4 卖家）+ UZB/IRN 手工补丁。`cb_gold` 宏观因子从表自动汇总 T12M（无数据回退 STATIC_REF）。**月度自动调度**：每月 1/15/末日 07:30 BJT 由 `services/scheduler.py` 自动从 WGC 拉取（`calendar.monthrange()` 动态月末，`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关）。三层测试覆盖（fetcher 32 + scheduler 26 + 集成），216 测试通过；顺手修复 `ensure_sqlite_columns` 跳过不存在表（部分老库启动不再崩溃） | 央行购金数据化 + 自动化 | ✅ |
+| **V0.58.0**（当前） | **新手引导与帮助体系（UX Roadmap 6.8）**：新增 `static/help.js`（~480 行，自包含 IIFE，挂在 `window.PM_Help`）+ `static/help.css`（暗色主题 + 移动端 <768px modal 改为底部抽屉）。右下角悬浮 `?` 按钮唤起 3 tab modal（**操作指南**每日 5 步流程 / **术语速查**30+ 术语按 7 大类分组：评估指数/指标均线/宏观因子/品种代码/交易动作/系统状态/时段 / **数据来源**5 类数据源 + 投资警示 + 交易时段 + 采集容错）。首次访问 5 个页面自动弹 2-4 步 **tour 浮层**（蒙层 + 高亮 + 步骤切换），`localStorage.pm_help_seen_version` 升级时强制重看。15 项关键术语 inline `?` 图标自动注入（综合指数/MA5·MA20·MA40/RSI(14)/T12M/Au99.99/COMEX/518880/仓位推荐 等）。5 个 HTML 页面各 +2 行注入。63 项新测试（`tests/test_help/test_glossary.py` + `test_modal.py`，后者通过 Node 子进程沙箱执行 JS 验证 escapeHtml 与 XSS 防护）。279 测试全通过 | 新手引导 + 帮助体系 | ✅ |
 
 ---
 
