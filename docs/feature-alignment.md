@@ -104,7 +104,6 @@
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
 | 🟢 低 | UX 6.5/6.7/6.8 三项（个性化/多时间框架/新手引导） | 各 1-2d | 需单独立项 |
-| 🟢 低 | 删除工作草稿 `docs/readme-improvement.md` | 1min | README 已实质改进完毕 |
 
 ---
 
