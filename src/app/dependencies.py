@@ -5,10 +5,12 @@ from collections.abc import AsyncIterator
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import Settings, get_settings
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
 from app.repositories.db import async_session_factory
 from app.repositories.market_data import MarketDataRepository
+from app.repositories.market_providers import build_provider_bundle
 from app.repositories.news import NewsScoreRepository
 from app.repositories.position import PositionRepository
 from app.repositories.settings import SettingRepository
@@ -54,9 +56,19 @@ def get_scoring_service() -> OpportunityScoringService:
     return OpportunityScoringService()
 
 
-def get_market_data_repository() -> MarketDataRepository:
-    """行情数据源抽象；当前为 Mock 实现，后续可替换真实源。"""
-    return MarketDataRepository()
+def get_market_data_repository(
+    settings: Settings = Depends(get_settings),
+) -> MarketDataRepository:
+    """行情数据源仓储（V0.59.0 配置化）。
+
+    按 ``settings.market_provider`` 自动解析 provider bundle：
+    - ``akshare``（默认）：东财 + 新浪 + 英为财情 + gold-api + H.15
+    - ``mock``：纯内存确定性序列（离线演示 / 测试）
+    - ``eastmoney_only``：仅东财 ETF
+    - ``sina_only``：仅新浪 ETF（东财 403 时）
+    """
+    bundle = build_provider_bundle(settings)
+    return MarketDataRepository(bundle=bundle, settings=settings)
 
 
 async def get_analysis_repository(

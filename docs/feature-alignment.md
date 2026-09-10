@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-11 ｜ 适用版本：**V0.58.0**
+> 生成日期：2026-09-11 ｜ 适用版本：**V0.59.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.58.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.59.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -23,8 +23,9 @@
 | 数据时效透明（freshness.js 三态） | `static/freshness.js` + `/market/freshness` | ✅（V0.52.0） |
 | 主动提醒（前端通知 + 简报） | `static/portfolio.html` 6.6 节 | ✅（V0.56.0） |
 | **新手引导与帮助体系** | `static/help.js` + `static/help.css` + 5 HTML 各 +2 行 | ✅（V0.58.0） |
+| **行情源 provider 可切换** | `MARKET_PROVIDER=.env` 配置（akshare / mock / eastmoney_only / sina_only） | ✅（V0.59.0） |
 
-**测试数对账**：README 标 279 ✅ 与 `find tests/test_*.py` 一致（27 文件，含 `test_help/` 新增 2 文件）。
+**测试数对账**：README 标 303 ✅ 与 `find tests/test_*.py` 一致（28 文件，含 `test_help/` 2 + `test_market_providers.py` 1 新增）。
 
 ---
 
@@ -38,7 +39,7 @@
 | 2 | 权重配置页 | ✅ | ✅ | ✅ |
 | 3 | **CI/CD** | 📋 | ❌ 无 `.github/workflows/` | ⚠️ 未做 |
 | 4 | Alembic 迁移 | ✅ | ✅ + 央行购金表 c1b3a1d27e9f | ✅ |
-| 5 | **行情源配置化** | 📋 | ❌ 仍写死在 `market_data.py` | ⚠️ 未做 |
+| 5 | **行情源配置化** | ✅ V0.59.0 | ✅ MARKET_PROVIDER=.env 4 选 1 + 工厂 + bundle 注入 | ✅ |
 | 6 | **多账户 + 交易历史查询页** | 📋 | ❌ `user_id` 仅预留，无前端 | ⚠️ 未做 |
 
 ### P2 · 分析深度
@@ -80,19 +81,19 @@
 
 ---
 
-## 四、文档自身不一致（V0.57.0 / V0.58.0 同步已完成）
+## 四、文档自身不一致（V0.57.0 / V0.58.0 / V0.59.0 同步已完成）
 
 | # | 原问题 | 修复 |
 |---|---|---|
-| 1 | `application-guide.md` 头部版本号 V0.53.0 → V0.57.0 → V0.58.0 | ✅ 已升 V0.58.0 |
-| 2 | `application-guide.md` 第 10 章缺 V0.54–V0.58 五条 + 表格列错位 | ✅ 已补齐，统一 5 列格式 |
-| 3 | `improvement-path.md` 头部版本号 V0.56.0 → V0.57.0 → V0.58.0 | ✅ 已升 V0.58.0 |
-| 4 | `improvement-path.md` 实施路线表缺 V0.57.0/V0.58.0 行 + 6.10/6.8 节 | ✅ 已补 |
-| 5 | 三文档测试数不一致（67/214/216 残留 → 279） | ✅ 统一 279 |
-| 6 | `application-guide.md` 第 2 章功能清单缺央行购金/调度/新手引导 | ✅ 已补 3 行 |
+| 1 | `application-guide.md` 头部版本号 V0.53.0 → V0.57.0 → V0.58.0 → V0.59.0 | ✅ 已升 V0.59.0 |
+| 2 | `application-guide.md` 第 10 章缺 V0.54–V0.59 六条 + 表格列错位 | ✅ 已补齐，统一 5 列格式 |
+| 3 | `improvement-path.md` 头部版本号 V0.56.0 → V0.57.0 → V0.58.0 → V0.59.0 | ✅ 已升 V0.59.0 |
+| 4 | `improvement-path.md` 实施路线表缺 V0.57.0/V0.58.0/V0.59.0 行 + 6.10/6.8/P1#5 | ✅ 已补 |
+| 5 | 三文档测试数不一致（67/214/216/279 残留 → 303） | ✅ 统一 303 |
+| 6 | `application-guide.md` 第 2 章功能清单缺央行购金/调度/新手引导/行情源 | ✅ 已补 4 行 |
 | 7 | `application-guide.md` 第 5 章 API 表缺 `/news-score`、`/snapshots`、`/central-bank/*` | ✅ 已补全 28 endpoints |
 | 8 | `application-guide.md` 第 7 章数据源"央行购金"硬编码描述 | ✅ 改为 WGC 自动汇总 |
-| 9 | `application-guide.md` 第 12 章数据来源仅 AKShare | ✅ + WGC |
+| 9 | `application-guide.md` 第 12 章数据来源仅 AKShare | ✅ + WGC + 行情源 provider 说明 |
 | 10 | V0.58.0：help.js 内 V0.57.0 央行购金标注 | ✅ renderSourceTab 含 WGC + V0.57.0 |
 
 ---
@@ -102,10 +103,9 @@
 | 优先级 | 事项 | 估时 | 备注 |
 |---|---|---|---|
 | 🔴 高 | 规划 P1 #3 CI/CD（GitHub Actions） | 0.5d | 写 pytest + ruff + Docker build workflow |
-| 🟡 中 | P1 #5 行情源配置化（.env 切换 sina/em/investing/mock） | 0.5d | 重构 market_data.py 工厂模式 |
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
-| 🟢 低 | UX 6.5/6.7 两项（个性化 / 多时间框架） | 各 1-2d | 6.8 已于 V0.58.0 落地 |
+| 🟢 低 | UX 6.5/6.7 两项（个性化 / 多时间框架） | 各 1-2d | 6.8 V0.58.0 落地；6.10 V0.57.0 落地；P1#5 V0.59.0 落地 |
 
 ---
 

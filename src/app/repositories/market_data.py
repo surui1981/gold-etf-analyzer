@@ -1,12 +1,9 @@
-"""行情数据源：AKShare 免费采集 + 零KEY公开源兜底 + Mock 降级。
+"""行情数据源：AKShare 免费采集 + 零KEY公开源兜底 + Mock 降级（V0.59.0 重构）。
 
 设计：
-- ``GoldHistoryProvider`` 定义数据源接口（Protocol）
-- ``AkshareGoldDataProvider`` 为 AKShare 实现（东方财富/新浪 ETF 历史、英为财情外盘）
-- ``MarketDataRepository`` 面向服务层；采集失败时逐级回退：
-  1) 零KEY公开 API（gold-api.com 实时 XAU/USD 即期报价）
-  2) AKShare 免费源（东方财富/新浪/上海金交所）
-  3) 确定性 Mock（可离线演示，标注降级）
+- 三个窄接口 + bundle 抽到 ``market_providers.py``（V0.59.0 新增）；
+- 本模块保留 ``MarketDataRepository`` 入口 + 降级 Mock + 数据时效元信息；
+- 旧 ``provider=`` kwarg 通过 ``MarketDataRepository`` 自动包装为 bundle 向后兼容。
 
 重要：本应用**不依赖任何付费 API KEY**，全部为公开免费源：
 - gold-api.com：实时 XAU/USD 即期报价（零KEY、无需注册）
@@ -19,46 +16,33 @@ import asyncio
 import csv
 import io
 import json
-import subprocess
-import sys
 import threading
 import time
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 from typing import Protocol
 
+from app.config import Settings, get_settings
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# akshare 部分接口（新浪/英为财情）内部使用 py_mini_racer（内嵌 V8）解析加密数据，
-# V8 平台在同一进程内初始化可能崩溃（partition_address_space fatal）。
-# 因此凡涉及 V8 的抓取统一放进**子进程**执行，崩溃只影响子进程，不拖垮主服务。
-_AK_LOCK = threading.Lock()
-
 # 行情结果缓存（TTL）：同一标的/天数在有效期内复用，避免重复网络请求拖慢首屏
-QUOTE_CACHE_TTL = 300  # 5 分钟
+# V0.59.0：默认值仍为 300（5 分钟），实际 TTL 改为按 settings.quote_cache_ttl 读取，
+# 此常量仅作向后兼容（外部直接 import QUOTE_CACHE_TTL 的代码仍可用）。
+QUOTE_CACHE_TTL = 300  # 5 分钟（默认）
 _CACHE: dict[tuple, tuple[float, list]] = {}
 _CACHE_LOCK = threading.Lock()
 
-# 零KEY公开源：实时 XAU/USD 即期报价（无需任何 KEY，返回 {"price": <float>, ...}）
-_XAU_API = "https://api.gold-api.com/price/XAU"
-# 兜底公开源：新浪纽约黄金连续实时报价（零KEY，仅需 Referer 头）
-_SINA_GC = "https://hq.sinajs.cn/list=hf_GC"
-# 零KEY官方源：美联储 H.15 收益率曲线（含 10Y/30Y 列，T+1~T+3 滞后，无 KEY）
-_H15_CSV = (
-    "https://www.federalreserve.gov/datadownload/Output.aspx"
-    "?rel=H15&series=bf17364827e38702b42a58cf8eaa3f78&lastobs=&from=&to="
-    "&filetype=csv&label=include&layout=seriescolumn"
-)
 
-
-def _cache_get(key: tuple) -> list | None:
-    """读取缓存（未过期返回值，否则 None）。"""
+def _cache_get(key: tuple, ttl: int) -> list | None:
+    """读取缓存（未过期返回值，否则 None）。ttl<=0 表示禁用缓存。"""
+    if ttl <= 0:
+        return None
     with _CACHE_LOCK:
         item = _CACHE.get(key)
-    if item is not None and time.time() - item[0] < QUOTE_CACHE_TTL:
+    if item is not None and time.time() - item[0] < ttl:
         return item[1]
     return None
 
@@ -66,130 +50,6 @@ def _cache_get(key: tuple) -> list | None:
 def _cache_set(key: tuple, value: list) -> None:
     with _CACHE_LOCK:
         _CACHE[key] = (time.time(), value)
-
-
-# --- 子进程隔离抓取模板（避免 V8 崩溃拖垮主服务）---
-_SINA_TMPL = """import sys, json
-try:
-    import akshare as ak
-    df = ak.fund_etf_hist_sina(symbol="{symbol}")
-    out = [{{"date": str(r["date"])[:10], "open": float(r["open"]), "close": float(r["close"]),
-             "high": float(r["high"]), "low": float(r["low"]), "volume": float(r.get("volume", 0) or 0)}}
-            for _, r in df.tail({days}).iterrows()]
-    print(json.dumps(out))
-except Exception as e:
-    print("ERR:" + str(e)[:200], file=sys.stderr)
-    sys.exit(3)
-"""
-
-_US_TMPL = """import sys, json
-try:
-    import akshare as ak
-    df = ak.futures_foreign_hist(symbol="{symbol}")
-    out = [{{"date": str(r["date"])[:10], "open": float(r["open"]), "close": float(r["close"]),
-             "high": float(r["high"]), "low": float(r["low"]), "volume": float(r.get("volume", 0) or 0)}}
-            for _, r in df.tail({days}).iterrows()]
-    print(json.dumps(out))
-except Exception as e:
-    print("ERR:" + str(e)[:200], file=sys.stderr)
-    sys.exit(3)
-"""
-
-
-def _sina_etf_via_subprocess(symbol: str, days: int) -> list | None:
-    """子进程隔离调用新浪 ETF 历史，避免 V8 崩溃影响主服务。失败返回 None。"""
-    code = _SINA_TMPL.format(symbol=symbol, days=days)
-    try:
-        res = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=30,
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            return [
-                GoldKline(
-                    date=_parse_date(r["date"]),
-                    open=float(r["open"]),
-                    close=float(r["close"]),
-                    high=float(r["high"]),
-                    low=float(r["low"]),
-                    volume=float(r.get("volume", 0) or 0),
-                )
-                for r in json.loads(res.stdout)
-            ]
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("sina subprocess 异常: %s", exc)
-    return None
-
-
-def _us_gold_via_subprocess(symbol: str, days: int) -> list | None:
-    """子进程隔离调用英为财情外盘期货，避免 V8 崩溃。失败返回 None。"""
-    code = _US_TMPL.format(symbol=symbol, days=days)
-    try:
-        res = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=30,
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            return [
-                GoldKline(
-                    date=_parse_date(r["date"]),
-                    open=float(r["open"]),
-                    close=float(r["close"]),
-                    high=float(r["high"]),
-                    low=float(r["low"]),
-                    volume=float(r.get("volume", 0) or 0),
-                )
-                for r in json.loads(res.stdout)
-            ]
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("us gold subprocess 异常: %s", exc)
-    return None
-
-
-def _http_json(url: str, timeout: int = 15):
-    """通用 JSON GET（零依赖 urllib）。"""
-    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        return json.loads(r.read().decode("utf-8", "ignore"))
-
-
-async def _fetch_xau_usd_live() -> float | None:
-    """零KEY公开源获取实时 XAU/USD 即期报价；失败返回 None。"""
-    try:
-        raw = await asyncio.to_thread(_http_json, _XAU_API, 15)
-        if isinstance(raw, dict) and raw.get("price"):
-            return float(raw["price"])
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("gold-api.com 取数失败: %s", exc)
-    return None
-
-
-async def _fetch_xau_usd_sina() -> float | None:
-    """兜底：新浪纽约黄金连续(hf_GC)实时报价（零KEY公开，需 Referer）。
-
-    返回美元/盎司最新价；失败返回 None。
-    响应形如：var hq_str_hf_GC="4438.4,,4439.7,...,4414.6,...,2026-09-03,纽约黄金,0";
-    其中第 7 个逗号字段为最新价（与 gold-api.com 实测量级一致）。
-    """
-    try:
-        def _get() -> str:
-            req = urllib.request.Request(
-                _SINA_GC,
-                headers={"User-Agent": "Mozilla/5.0", "Referer": "https://finance.sina.com.cn"},
-            )
-            with urllib.request.urlopen(req, timeout=12) as r:
-                return r.read().decode("utf-8", "ignore")
-
-        text = await asyncio.to_thread(_get)
-        seg = text.split('hf_GC="', 1)[-1].split('"', 1)[0]
-        parts = seg.split(",")
-        price = float(parts[7])  # 最新价
-        if price <= 0:
-            return None
-        return price
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("sina hf_GC 取数失败: %s", exc)
-    return None
 
 
 # 默认黄金 ETF：华安黄金ETF（规模最大、流动性最好）
@@ -291,190 +151,89 @@ def _parse_h15_csv(text: str) -> USTYield | None:
     return None
 
 
-async def fetch_us_treasury_h15() -> USTYield | None:
-    """零KEY官方源：美联储 H.15 收益率曲线 → 美债 10Y/30Y 最新值。
-
-    数据延迟 T+1~T+3（每个美东交易日 ~16:00 ET 公布前一日数据）。
-    返回 ``USTYield``；任何环节失败返回 None（调用方应保持静态参考值）。
-    成功结果缓存 5 分钟（复用 QUOTE_CACHE_TTL），失败不缓存以便快速重试。
-    """
-    cached = _cache_get(("ust",))
-    if cached is not None:
-        return cached  # type: ignore[return-value]
-
-    def _get_and_parse() -> USTYield | None:
-        req = urllib.request.Request(
-            _H15_CSV,
-            headers={"User-Agent": "Mozilla/5.0"},
-        )
-        with urllib.request.urlopen(req, timeout=15) as r:
-            text = r.read().decode("utf-8", "ignore")
-        return _parse_h15_csv(text)
-
-    try:
-        result = await asyncio.wait_for(asyncio.to_thread(_get_and_parse), timeout=20)
-        if result is not None:
-            _cache_set(("ust",), result)
-        return result
-    except (TimeoutError, Exception) as exc:  # noqa: BLE001
-        logger.warning("H.15 取数失败: %s", exc)
-    return None
-
-
 class GoldHistoryProvider(Protocol):
-    """历史 K 线数据源接口。"""
-
-    async def get_history(self, symbol: str, days: int) -> list[GoldKline]:
-        """获取最近 days 个交易日的日 K。"""
+    """历史 K 线数据源接口（V0.59.0 保留向后兼容；新代码用 bundle）。"""
 
 
-class AkshareGoldDataProvider:
-    """基于 AKShare 的真实行情数据源（全部免费、无 KEY）。
+# ───────────────────── 向后兼容 shim（V0.58 旧测试代码） ─────────────────────
+# 旧版 AkshareGoldDataProvider 已被 AkshareGoldHistoryProvider 取代；
+# 但部分旧测试可能仍通过 from ... import AkshareGoldDataProvider 引用。
+# 这里提供延迟 import 转发以保持 ABI 兼容。
+def __getattr__(name: str):  # pragma: no cover
+    if name == "AkshareGoldDataProvider":
+        from app.repositories.market_providers import AkshareGoldHistoryProvider
 
-    主源：东方财富 ETF 历史（fund_etf_hist_em，不依赖 V8，跨网络更稳）；
-    备源：新浪 ETF 历史（子进程隔离，避免 V8 崩溃）；
-    外盘：英为财情期货（同样子进程隔离）。
-    """
+        logger.warning(
+            "AkshareGoldDataProvider 已弃用，请改用 AkshareGoldHistoryProvider",
+        )
+        return AkshareGoldHistoryProvider
+    if name == "fetch_us_treasury_h15":
+        from app.repositories.market_providers import AkshareTreasuryYieldProvider
 
-    async def get_history(self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60) -> list[GoldKline]:
-        """获取黄金 ETF 最近日 K。"""
-        try:
-            import akshare as ak  # 延迟导入：避免无网络环境/测试环境强依赖
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
+        async def _shim() -> USTYield | None:
+            return await AkshareTreasuryYieldProvider().get_treasury_yields()
 
-        prefix = "sh" if symbol.startswith(("5", "6")) else "sz"
-
-        def _fetch() -> list[GoldKline]:
-            with _AK_LOCK:
-                return _fetch_inner()
-
-        def _fetch_inner() -> list[GoldKline]:
-            errors: list[str] = []
-            end = datetime.now()
-            start = end - timedelta(days=days * 2)  # 留足交易日余量
-
-            # 主源：东方财富（不依赖 V8）
-            try:
-                df = ak.fund_etf_hist_em(
-                    symbol=symbol,
-                    period="daily",
-                    start_date=start.strftime("%Y%m%d"),
-                    end_date=end.strftime("%Y%m%d"),
-                    adjust="qfq",  # 前复权，追踪真实价格走势
-                )
-                if df is not None and not df.empty:
-                    df = df.tail(days)
-                    return [
-                        GoldKline(
-                            date=_parse_date(row["日期"]),
-                            open=float(row["开盘"]),
-                            close=float(row["收盘"]),
-                            high=float(row["最高"]),
-                            low=float(row["最低"]),
-                            volume=float(row.get("成交量", 0) or 0),
-                        )
-                        for _, row in df.iterrows()
-                    ]
-                errors.append("em empty")
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"em: {exc}")
-
-            # 备源：新浪（子进程隔离，避免 V8 崩溃影响主服务）
-            try:
-                sub = _sina_etf_via_subprocess(f"{prefix}{symbol}", days)
-                if sub:
-                    return sub
-                errors.append("sina subprocess empty")
-            except Exception as exc:  # noqa: BLE001
-                errors.append(f"sina: {exc}")
-
-            raise RuntimeError(f"AKShare 全部数据源失败: {'; '.join(errors)}")
-
-        key = ("etf", symbol, days)
-        cached = _cache_get(key)
-        if cached is not None:
-            return cached
-        result = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
-        _cache_set(key, result)
-        return result
-
-    async def get_gram_history(
-        self,
-        symbol: str = DEFAULT_GOLD_GRAM,
-        days: int = 60,
-    ) -> list[GoldKline]:
-        """获取黄金克价（上海黄金交易所 Au99.99，元/克）最近日 K。"""
-        try:
-            import akshare as ak  # 延迟导入
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
-
-        def _fetch() -> list[GoldKline]:
-            with _AK_LOCK:
-                return _fetch_inner()
-
-        def _fetch_inner() -> list[GoldKline]:
-            df = ak.spot_hist_sge(symbol=symbol)
-            if df is None or df.empty:
-                raise RuntimeError(f"AKShare 未返回 {symbol} 行情数据")
-            df = df.tail(days)
-            return [
-                GoldKline(
-                    date=_parse_date(row["date"]),
-                    open=float(row["open"]),
-                    close=float(row["close"]),
-                    high=float(row.get("high", row["close"])),
-                    low=float(row.get("low", row["close"])),
-                    volume=float(row.get("volume", 0) or 0),
-                )
-                for _, row in df.iterrows()
-            ]
-
-        key = ("sge", symbol, days)
-        cached = _cache_get(key)
-        if cached is not None:
-            return cached
-        result = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
-        _cache_set(key, result)
-        return result
-
-    async def get_us_gold_history(
-        self,
-        symbol: str = DEFAULT_NY_GOLD,
-        days: int = 60,
-    ) -> list[GoldKline]:
-        """获取纽约金（COMEX 黄金期货主力 GC，美元/盎司）最近日 K。"""
-        try:
-            import akshare as ak  # 延迟导入
-        except ImportError as exc:  # pragma: no cover
-            raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
-
-        def _fetch() -> list[GoldKline]:
-            with _AK_LOCK:
-                return _fetch_inner()
-
-        def _fetch_inner() -> list[GoldKline]:
-            # 英为财情外盘期货依赖 V8，子进程隔离防止崩溃
-            sub = _us_gold_via_subprocess(symbol, days)
-            if sub:
-                return sub
-            raise RuntimeError("us gold subprocess empty")
-
-        key = ("ny", symbol, days)
-        cached = _cache_get(key)
-        if cached is not None:
-            return cached
-        result = await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
-        _cache_set(key, result)
-        return result
+        return _shim
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 class MarketDataRepository:
-    """行情数据源入口：实时公开源优先，异常自动回退 Mock（降级可感知）。"""
+    """行情数据源入口：实时公开源优先，异常自动回退 Mock（降级可感知）。
 
-    def __init__(self, provider: GoldHistoryProvider | None = None) -> None:
-        self._provider = provider or AkshareGoldDataProvider()
+    V0.59.0 重构：
+    - 新增 ``bundle`` 参数：注入 ``MarketProviderBundle`` 三件套（推荐）；
+    - 旧 ``provider`` 参数：自动包装为 bundle（向后兼容）；
+    - 新增 ``settings`` 参数：注入配置（默认走 ``get_settings()``）；
+    - 缓存 TTL 改为按 ``settings.quote_cache_ttl`` 读取（默认 300）；
+    - XAU fallback chain 按 ``settings.xau_fallback_chain`` 顺序执行；
+    - 旧 ``_mock_*`` 静态方法保留（内部 fallback 使用），等价逻辑已迁到 market_providers。
+    """
+
+    def __init__(
+        self,
+        provider: GoldHistoryProvider | None = None,
+        *,
+        bundle: object | None = None,
+        settings: Settings | None = None,
+        xau_fallback_chain: list[str] | None = None,
+        cache_ttl: int | None = None,
+    ) -> None:
+        # 懒加载 market_providers 避免循环依赖
+        from app.repositories.market_providers import (
+            AkshareGoldHistoryProvider,
+            build_provider_bundle,
+        )
+
+        self._settings = settings or get_settings()
+        self._cache_ttl = (
+            cache_ttl if cache_ttl is not None else self._settings.quote_cache_ttl
+        )
+        self._xau_chain = (
+            xau_fallback_chain
+            if xau_fallback_chain is not None
+            else self._settings.xau_fallback_chain_list
+        )
+
+        # 三种构造方式优先级：bundle > provider（兼容）> settings 自动解析
+        if bundle is not None:
+            self._bundle = bundle
+        elif provider is not None:
+            # 旧签名：把单个 provider 包成 bundle（live/treasury 仍走默认 akshare 实现）
+            from app.repositories.market_providers import (
+                AkshareLiveQuoteProvider,
+                AkshareTreasuryYieldProvider,
+                MarketProviderBundle,
+            )
+
+            self._bundle = MarketProviderBundle(
+                history=provider,
+                live=AkshareLiveQuoteProvider(self._settings),
+                treasury=AkshareTreasuryYieldProvider(self._settings),
+            )
+        else:
+            # 新签名：按 settings.market_provider 自动解析
+            self._bundle = build_provider_bundle(self._settings)
+
         # 数据源状态：key → "live"（真实）/ "mock"（降级演示）
         self._sources: dict[str, str] = {}
         # 采集元信息（供「数据时效透明」展示）：各源最近一次采集时刻(UTC)与数据截止日
@@ -516,38 +275,27 @@ class MarketDataRepository:
         }
 
     async def get_gold_quote(self, symbol: str = "XAU") -> GoldQuote:
-        """获取黄金最新报价（零KEY公开源优先，真实可达）。"""
-        # 主源：gold-api.com 实时 XAU/USD（零KEY公开）
-        price = await _fetch_xau_usd_live()
-        if price:
-            self._mark("xau", True)
-            try:
-                change = await self._sge_daily_change()
-            except Exception:  # noqa: BLE001
-                change = 0.0
-            return GoldQuote(
-                symbol=symbol,
-                price_usd=round(price, 2),
-                change_pct=change,
-                updated_at=datetime.now(timezone.utc),
-            )
-        # 兜底源：新浪纽约黄金连续 hf_GC（零KEY公开，需 Referer）
-        price = await _fetch_xau_usd_sina()
-        if price:
-            self._mark("xau", True)
-            try:
-                change = await self._sge_daily_change()
-            except Exception:  # noqa: BLE001
-                change = 0.0
-            return GoldQuote(
-                symbol=symbol,
-                price_usd=round(price, 2),
-                change_pct=change,
-                updated_at=datetime.now(timezone.utc),
-            )
-        # 兜底：由 ETF 历史推导
+        """获取黄金最新报价（按 settings.xau_fallback_chain 顺序逐源尝试）。"""
+        change = 0.0
         try:
-            klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=3)
+            change = await self._sge_daily_change()
+        except Exception:  # noqa: BLE001
+            pass
+
+        for token in self._xau_chain:
+            price = await self._fetch_xau_by_token(token)
+            if price and price > 0:
+                self._mark("xau", True)
+                return GoldQuote(
+                    symbol=symbol,
+                    price_usd=round(price, 2),
+                    change_pct=change,
+                    updated_at=datetime.now(timezone.utc),
+                )
+
+        # 全部 XAU 源失败 → 兜底：ETF 历史推导
+        try:
+            klines = await self._bundle.history.get_history(DEFAULT_GOLD_ETF, days=3)
             if klines and len(klines) >= 2:
                 last, prev = klines[-1], klines[-2]
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
@@ -559,7 +307,7 @@ class MarketDataRepository:
                     updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
                 )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("quote from AKShare failed (%s), fallback to mock", exc)
+            logger.warning("quote from history failed (%s), fallback to mock", exc)
         self._mark("xau", False)
         return GoldQuote(
             symbol=symbol,
@@ -568,16 +316,80 @@ class MarketDataRepository:
             updated_at=datetime.now(timezone.utc),
         )
 
+    async def _fetch_xau_by_token(self, token: str) -> float | None:
+        """按 token 从对应源取 XAU 实时价。"""
+        token = token.strip().lower()
+        if token == "goldapi":
+            from app.repositories.market_providers import AkshareLiveQuoteProvider
+
+            provider = (
+                self._bundle.live
+                if isinstance(self._bundle.live, AkshareLiveQuoteProvider)
+                else AkshareLiveQuoteProvider(self._settings)
+            )
+            # 直接走 goldapi（不走 fallback chain）
+            url = self._settings.xau_live_api_url
+
+            def _get() -> dict:
+                req = urllib.request.Request(
+                    url, headers={"User-Agent": "Mozilla/5.0"},
+                )
+                with urllib.request.urlopen(req, timeout=15) as r:
+                    return json.loads(r.read().decode("utf-8", "ignore"))
+
+            try:
+                raw = await asyncio.to_thread(_get)
+                if isinstance(raw, dict) and raw.get("price"):
+                    return float(raw["price"])
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("goldapi 取数失败: %s", exc)
+            return None
+        if token == "sina":
+            url = self._settings.sina_gc_url
+
+            def _get() -> str:
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Referer": "https://finance.sina.com.cn",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    return r.read().decode("utf-8", "ignore")
+
+            try:
+                text = await asyncio.to_thread(_get)
+                seg = text.split('hf_GC="', 1)[-1].split('"', 1)[0]
+                parts = seg.split(",")
+                price = float(parts[7])
+                if price > 0:
+                    return price
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("sina hf_GC 取数失败: %s", exc)
+            return None
+        if token == "etf_history":
+            try:
+                klines = await self._bundle.history.get_history(DEFAULT_GOLD_ETF, days=3)
+                if klines and len(klines) >= 2:
+                    last, prev = klines[-1], klines[-2]
+                    return float(last.close)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("etf_history 取数失败: %s", exc)
+            return None
+        logger.warning("未知 xau_fallback_chain token: %s", token)
+        return None
+
     async def get_gold_history(self, days: int = 60) -> list[GoldKline]:
         """获取黄金 ETF 历史日 K；失败时返回确定性 Mock 序列（可离线演示）。"""
         try:
-            klines = await self._provider.get_history(DEFAULT_GOLD_ETF, days=days)
+            klines = await self._bundle.history.get_history(DEFAULT_GOLD_ETF, days=days)
             if klines:
                 self._mark("etf", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty history")
         except Exception as exc:  # noqa: BLE001
-            logger.warning("history from AKShare failed (%s), fallback to mock", exc)
+            logger.warning("history from provider failed (%s), fallback to mock", exc)
             self._mark("etf", False)
             return self._mock_history(days)
 
@@ -611,7 +423,7 @@ class MarketDataRepository:
     ) -> list[GoldKline]:
         """获取黄金克价历史日 K；失败降级 Mock。"""
         try:
-            klines = await self._provider.get_gram_history(symbol=symbol, days=days)
+            klines = await self._bundle.history.get_gram_history(symbol=symbol, days=days)
             if klines:
                 self._mark("sge", True, last_date=klines[-1].date)
                 return klines
@@ -634,43 +446,29 @@ class MarketDataRepository:
     @staticmethod
     def _mock_gram_history(days: int) -> list[GoldKline]:
         """确定性 Mock 克价序列：与 ETF Mock 同走势（克价 ≈990 元）。"""
-        base = 985.0  # 上海金约 990 元/克区间
-        today = date.today()
-        points: list[GoldKline] = []
-        for i in range(days, 0, -1):
-            day = today - timedelta(days=i)
-            if day.weekday() >= 5:
-                continue
-            progress = (days - i) / days
-            wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)
-            close = round(base * (1 + 0.085 * progress - 0.025 * (progress**2)) * (1 + wave), 2)
-            points.append(
-                GoldKline(
-                    date=day,
-                    open=round(close * 0.995, 2),
-                    close=close,
-                    high=round(close * 1.01, 2),
-                    low=round(close * 0.99, 2),
-                    volume=0.0,
-                )
-            )
-        return points
+        from app.repositories.market_providers import _mock_gram_history
+
+        return _mock_gram_history(days=days)
 
     async def get_us_gold_quote(self, symbol: str = DEFAULT_NY_GOLD) -> GoldQuote:
         """获取纽约金最新报价（美元/盎司）。"""
         # 主源：零KEY公开 XAU/USD 即期报价（与COMEX高度联动）
-        price = await _fetch_xau_usd_live()
-        if price:
-            try:
-                change = await self._sge_daily_change()
-            except Exception:  # noqa: BLE001
-                change = 0.0
-            return GoldQuote(
-                symbol=symbol,
-                price_usd=round(price, 2),
-                change_pct=change,
-                updated_at=datetime.now(timezone.utc),
-            )
+        change = 0.0
+        try:
+            change = await self._sge_daily_change()
+        except Exception:  # noqa: BLE001
+            pass
+
+        for token in self._xau_chain:
+            price = await self._fetch_xau_by_token(token)
+            if price and price > 0:
+                return GoldQuote(
+                    symbol=symbol,
+                    price_usd=round(price, 2),
+                    change_pct=change,
+                    updated_at=datetime.now(timezone.utc),
+                )
+
         # 兜底：由外盘历史推导
         try:
             klines = await self.get_us_gold_history(symbol=symbol, days=3)
@@ -699,7 +497,7 @@ class MarketDataRepository:
     ) -> list[GoldKline]:
         """获取纽约金历史日 K；失败降级 Mock。"""
         try:
-            klines = await self._provider.get_us_gold_history(symbol=symbol, days=days)
+            klines = await self._bundle.history.get_us_gold_history(symbol=symbol, days=days)
             if klines:
                 self._mark("ny", True, last_date=klines[-1].date)
                 return klines
@@ -714,7 +512,11 @@ class MarketDataRepository:
 
         调用方（macro 服务）应保持内置静态参考值作为降级。
         """
-        result = await fetch_us_treasury_h15()
+        try:
+            result = await self._bundle.treasury.get_treasury_yields()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("treasury provider 调用失败: %s", exc)
+            result = None
         if result is not None:
             self._mark("ust", True, last_date=result.data_date)
         else:
@@ -724,49 +526,14 @@ class MarketDataRepository:
     @staticmethod
     def _mock_us_history(days: int) -> list[GoldKline]:
         """确定性 Mock 纽约金序列（约 4500 美元/盎司区间）。"""
-        base = 4430.0
-        today = date.today()
-        points: list[GoldKline] = []
-        for i in range(days, 0, -1):
-            day = today - timedelta(days=i)
-            if day.weekday() >= 5:  # 跳过周末
-                continue
-            progress = (days - i) / days
-            wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)
-            close = round(base * (1 + 0.05 * progress - 0.02 * (progress**2)) * (1 + wave), 2)
-            points.append(
-                GoldKline(
-                    date=day,
-                    open=round(close * 0.995, 2),
-                    close=close,
-                    high=round(close * 1.01, 2),
-                    low=round(close * 0.99, 2),
-                    volume=0.0,
-                )
-            )
-        return points
+        from app.repositories.market_providers import _mock_us_history
+
+        return _mock_us_history(days=days)
 
     @staticmethod
     def _mock_history(days: int) -> list[GoldKline]:
         """确定性 Mock 序列：近 2 个月黄金上行后回调，便于离线演示。"""
-        base = 5.42  # 黄金 ETF 约 5.4 元区间
-        today = date.today()
-        points: list[GoldKline] = []
-        for i in range(days, 0, -1):
-            day = today - timedelta(days=i)
-            if day.weekday() >= 5:  # 跳过周末
-                continue
-            progress = (days - i) / days
-            wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)  # 前段上行、后段回落
-            close = round(base * (1 + 0.09 * progress - 0.03 * (progress**2)) * (1 + wave), 3)
-            points.append(
-                GoldKline(
-                    date=day,
-                    open=round(close * 0.995, 3),
-                    close=close,
-                    high=round(close * 1.01, 3),
-                    low=round(close * 0.99, 3),
-                    volume=100000.0,
-                )
-            )
-        return points
+        from app.repositories.market_providers import _mock_history
+
+        return _mock_history(base=5.42, days=days)
+

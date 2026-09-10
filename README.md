@@ -49,6 +49,7 @@ docker compose up --build
 | 自动调度 | 每日 07:00 BJT 捕获快照 + 央行购金每月 1/15/末日 07:30 BJT 自动从 WGC 拉取数据 |
 | 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、央行页（KPI/堆叠柱/Top 榜/明细表）、持仓页、权重页 |
 | **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉 |
+| **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；XAU fallback chain 与缓存 TTL 也可配；测试 / 离线演示可直接走 mock 不触网 |
 
 ## API 一览
 
@@ -133,7 +134,7 @@ gold-etf-analyzer/
 ├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（279 个用例，含 fetcher / scheduler / 集成 / help）
+├── tests/                   # pytest（303 个用例，含 fetcher / scheduler / 集成 / help / providers）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -143,7 +144,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 279 个用例（服务层 + API 集成 + fetcher + scheduler + help，不依赖网络）
+python -m pytest -v          # 303 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers，不依赖网络）
 ruff check src tests
 ruff format src tests
 ```
@@ -157,6 +158,7 @@ ruff format src tests
 - [x] Alembic 数据库迁移（替代启动时 create_all，V0.50 已落地）
 - [x] 世界央行购金统计页（`/central-bank`，WGC 自动抓取 + 手工补丁，月度调度）
 - [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
+- [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）

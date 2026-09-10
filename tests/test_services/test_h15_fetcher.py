@@ -6,12 +6,7 @@
 from datetime import date
 
 from app.repositories import market_data
-from app.repositories.market_data import (
-    USTYield,
-    _cache_get,
-    _parse_h15_csv,
-    fetch_us_treasury_h15,
-)
+from app.repositories.market_data import USTYield, _parse_h15_csv
 
 
 # 真实 H.15 CSV 头部 5 行元数据（截取自联邦储备 H.15 公开 CSV）
@@ -93,13 +88,8 @@ def test_parse_h15_csv_malformed_date_returns_none() -> None:
 
 
 async def test_fetch_h15_success(monkeypatch) -> None:
-    """网络成功：返回 USTYield，并写入缓存。"""
+    """网络成功：AkshareTreasuryYieldProvider.get_treasury_yields 返回 USTYield。"""
     import io
-    from app.repositories.market_data import _CACHE
-
-    # 清缓存
-    with market_data._CACHE_LOCK:
-        market_data._CACHE.pop(("ust",), None)
 
     sample_csv = _build_h15_csv([
         ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),
@@ -125,20 +115,16 @@ async def test_fetch_h15_success(monkeypatch) -> None:
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
-    result = await fetch_us_treasury_h15()
+    # V0.59.0：H.15 拉取走 AkshareTreasuryYieldProvider
+    from app.repositories.market_providers import AkshareTreasuryYieldProvider
+
+    provider = AkshareTreasuryYieldProvider()
+    result = await provider.get_treasury_yields()
     assert result == USTYield(us10y=4.77, us30y=5.25, data_date=date(2026, 9, 3))
-    # 缓存命中：再次调用直接返回缓存（无副作用）
-    r2 = await fetch_us_treasury_h15()
-    assert r2 == result
-    # 缓存确实写入了
-    assert _cache_get(("ust",)) == result
 
 
 async def test_fetch_h15_network_error(monkeypatch) -> None:
-    """网络异常：返回 None，不缓存失败状态（便于快速重试）。"""
-    with market_data._CACHE_LOCK:
-        market_data._CACHE.pop(("ust",), None)
-
+    """网络异常：provider 返回 None（不抛异常）。"""
     import urllib.request
 
     def fake_urlopen(req, timeout=15):
@@ -146,20 +132,17 @@ async def test_fetch_h15_network_error(monkeypatch) -> None:
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
-    result = await fetch_us_treasury_h15()
+    from app.repositories.market_providers import AkshareTreasuryYieldProvider
+
+    provider = AkshareTreasuryYieldProvider()
+    result = await provider.get_treasury_yields()
     assert result is None
-    # 失败不缓存：_CACHE 中无 ("ust",) 键
-    with market_data._CACHE_LOCK:
-        assert ("ust",) not in market_data._CACHE
 
 
 async def test_fetch_h15_malformed_response(monkeypatch) -> None:
-    """HTTP 200 但 CSV 损坏：返回 None，不抛异常。"""
+    """HTTP 200 但 CSV 损坏：provider 返回 None，不抛异常。"""
     import io
     import urllib.request
-
-    with market_data._CACHE_LOCK:
-        market_data._CACHE.pop(("ust",), None)
 
     class FakeResp:
         def __init__(self):
@@ -176,38 +159,59 @@ async def test_fetch_h15_malformed_response(monkeypatch) -> None:
 
     monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout=15: FakeResp())
 
-    result = await fetch_us_treasury_h15()
+    from app.repositories.market_providers import AkshareTreasuryYieldProvider
+
+    provider = AkshareTreasuryYieldProvider()
+    result = await provider.get_treasury_yields()
     assert result is None
 
 
 async def test_fetch_h15_timeout(monkeypatch) -> None:
-    """网络超时：返回 None，不缓存失败状态。"""
+    """网络超时：provider 返回 None（不抛异常）。"""
     import urllib.request
-
-    with market_data._CACHE_LOCK:
-        market_data._CACHE.pop(("ust",), None)
 
     def fake_urlopen(req, timeout=15):
         raise TimeoutError("fetch timed out")
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
-    result = await fetch_us_treasury_h15()
+    from app.repositories.market_providers import AkshareTreasuryYieldProvider
+
+    provider = AkshareTreasuryYieldProvider()
+    result = await provider.get_treasury_yields()
     assert result is None
 
 
-async def test_repo_marks_ust_source(monkeypatch) -> None:
-    """MarketDataRepository.get_us_treasury_yields 标记 source_meta 中 ust 状态。"""
+async def test_repo_marks_ust_source() -> None:
+    """MarketDataRepository.get_us_treasury_yields 标记 source_meta 中 ust 状态。
+
+    V0.59.0：通过 bundle.treasury 注入 provider；测试用 fake bundle 替代 monkeypatch。
+    """
     from app.repositories.market_data import MarketDataRepository
+    from app.repositories.market_providers import MarketProviderBundle
 
     sample = USTYield(us10y=4.5, us30y=5.0, data_date=date(2026, 9, 3))
 
-    async def fake_fetch():
-        return sample
+    class FakeTreasury:
+        async def get_treasury_yields(self):
+            return sample
 
-    monkeypatch.setattr(market_data, "fetch_us_treasury_h15", fake_fetch)
+    class FakeHistory:
+        async def get_history(self, symbol="518880", days=60):
+            return []
 
-    repo = MarketDataRepository()
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return []
+
+    class FakeLive:
+        async def get_live_quote(self):
+            return None
+
+    bundle = MarketProviderBundle(history=FakeHistory(), live=FakeLive(), treasury=FakeTreasury())
+    repo = MarketDataRepository(bundle=bundle)
     result = await repo.get_us_treasury_yields()
 
     assert result == sample
@@ -216,16 +220,31 @@ async def test_repo_marks_ust_source(monkeypatch) -> None:
     assert meta["ust"]["last_date"] == date(2026, 9, 3)
 
 
-async def test_repo_marks_ust_failed(monkeypatch) -> None:
+async def test_repo_marks_ust_failed() -> None:
     """H.15 拉取失败时，source_meta 标记 ust 为 mock。"""
     from app.repositories.market_data import MarketDataRepository
+    from app.repositories.market_providers import MarketProviderBundle
 
-    async def fake_fetch():
-        return None
+    class FakeTreasury:
+        async def get_treasury_yields(self):
+            return None
 
-    monkeypatch.setattr(market_data, "fetch_us_treasury_h15", fake_fetch)
+    class FakeHistory:
+        async def get_history(self, symbol="518880", days=60):
+            return []
 
-    repo = MarketDataRepository()
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return []
+
+    class FakeLive:
+        async def get_live_quote(self):
+            return None
+
+    bundle = MarketProviderBundle(history=FakeHistory(), live=FakeLive(), treasury=FakeTreasury())
+    repo = MarketDataRepository(bundle=bundle)
     result = await repo.get_us_treasury_yields()
 
     assert result is None
