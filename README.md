@@ -6,6 +6,7 @@
 
 > 📖 完整说明文档（架构 / API 参考 / 核心模型 / 改进计划）：[docs/application-guide.md](docs/application-guide.md)
 > 🧭 易用性改善路径（现状评估 + P0-P3 改善方案与版本规划）：[docs/improvement-path.md](docs/improvement-path.md)
+> ✅ README ↔ 代码 ↔ 文档三方对账报告（已落实 / 待完善）：[docs/feature-alignment.md](docs/feature-alignment.md)
 
 ## 快速开始
 
@@ -131,7 +132,7 @@ gold-etf-analyzer/
 ├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（214 个用例，含 fetcher / scheduler / 集成）
+├── tests/                   # pytest（216 个用例，含 fetcher / scheduler / 集成）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -141,7 +142,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 214 个用例（服务层 + API 集成，不依赖网络）
+python -m pytest -v          # 216 个用例（服务层 + API 集成 + fetcher + scheduler，不依赖网络）
 ruff check src tests
 ruff format src tests
 ```
