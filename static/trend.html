@@ -54,6 +54,12 @@
   .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
   .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
   .hero nav { margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap; }
+  /* V0.60.0：手动刷新按钮（与 h1 同行） */
+  .refresh-btn { background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    padding: 3px 10px; font-size: 16px; cursor: pointer; margin-left: 8px;
+    transition: transform 0.4s, background 0.2s; vertical-align: middle; }
+  .refresh-btn:hover { background: var(--card); }
+  .refresh-btn.refreshing { transform: rotate(360deg); }
   /* 投资警示横幅 */
   .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
   .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
@@ -157,7 +163,10 @@
 
   <header class="hero">
     <div>
-      <h1>黄金价格投资辅助工具 <span id="badge"></span></h1>
+      <h1>黄金价格投资辅助工具 <span id="badge"></span>
+        <!-- V0.60.0：手动刷新按钮（每 60 秒自动刷新中） -->
+        <button id="refreshBtn" class="refresh-btn" title="手动刷新行情（每 60 秒自动刷新）">🔄</button>
+      </h1>
       <div class="en">Gold Price Investment Assistant</div>
       <div class="tagline">三市场对照 · 趋势评估指数 · 个人持仓跟踪 · ETF 购买决策</div>
       <p class="intro">汇聚<b>纽约金、上海金、黄金ETF</b>三大市场价格数据，量化评估黄金投资窗口——以趋势评估指数量化多空、以持仓盈亏跟踪投资进度、以参数面×交易面辅助 ETF 购买决策，为个人黄金投资者提供一站式数据参考。</p>
@@ -736,7 +745,40 @@ async function loadSnapshots() {
   const bar = document.getElementById("loadBar");
   await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge(), loadSnapshots(), loadHealth()]);
   bar.style.display = "none";
+  startTrendPolling();  // V0.60.0：60s 轮询 + visibilitychange 切回前台自动刷新
 })();
+
+// V0.60.0：行情自动轮询（前端定时拉取，命中后端 served cache / 行情 cache，零网络负载）
+const REFRESH_MS = 60_000;
+let _refreshTimer = null;
+let _isRefreshing = false;
+
+async function refreshTrendQuotes() {
+  if (_isRefreshing) return;  // 防重入（前一轮未结束）
+  _isRefreshing = true;
+  const btn = document.getElementById("refreshBtn");
+  if (btn) btn.classList.add("refreshing");
+  try {
+    // 命中后端 cache 时 ms 级返回；超 TTL 时重算 ~200ms
+    await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge()]);
+  } catch (e) {
+    console.warn("refreshTrendQuotes failed:", e);
+  } finally {
+    _isRefreshing = false;
+    setTimeout(() => btn && btn.classList.remove("refreshing"), 600);
+  }
+}
+
+function startTrendPolling() {
+  if (_refreshTimer) return;
+  _refreshTimer = setInterval(refreshTrendQuotes, REFRESH_MS);
+  // 切回前台立即刷一次（visibilitychange）
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") refreshTrendQuotes();
+  });
+  // 手动按钮
+  document.getElementById("refreshBtn")?.addEventListener("click", refreshTrendQuotes);
+}
 </script>
   <script src="/static/freshness.js"></script>
   <script src="/static/help.js" defer></script>

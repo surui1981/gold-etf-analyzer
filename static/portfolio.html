@@ -331,10 +331,21 @@ async function refreshQuote() {
 }
 
 function startAlertPolling() {
+  // V0.60.0：60s → 30s（持仓 + 决策是最高优先级页面）；同步拉 freshness
   setInterval(async () => {
     await refreshQuote();
-    loadDecision();  // 内部会 renderBriefing + checkAlerts
-  }, 60000);
+    await loadDecision();
+    if (window.FreshnessBar && typeof window.FreshnessBar.load === "function") {
+      window.FreshnessBar.load();
+    }
+  }, 30000);
+  // 切回前台立即刷一次
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") {
+      refreshQuote();
+      loadDecision();
+    }
+  });
 }
 
 document.getElementById("remindToggle").addEventListener("click", () => {

@@ -267,4 +267,42 @@ def test_trend_invalidate_for_news_all() -> None:
 
     n = TrendService.invalidate_for_news()
     assert n == 2
-    assert served_cache.cache_size() == 0
+
+
+# ---------------- V0.60.0: 日内 TTL ----------------
+
+
+def test_v060_served_cache_set_records_timestamp() -> None:
+    """V0.60.0：set_served 内部写入 set_at 时间戳（datetime UTC）。"""
+    served_cache.set_served("ny", _sample_result())
+    set_at = served_cache._entry_set_at("ny")
+    assert set_at is not None
+    assert isinstance(set_at, datetime)
+    assert set_at.tzinfo is not None
+
+
+def test_v060_get_served_within_max_age_returns() -> None:
+    """V0.60.0：set 后立即以足够大的 max_age 调 get_served → 命中。"""
+    served_cache.set_served("ny", _sample_result())
+    result = served_cache.get_served("ny", max_age_seconds=600)
+    assert result is not None
+    assert result.index.score == 60.0
+
+
+def test_v060_get_served_zero_or_negative_max_age_disables_ttl() -> None:
+    """V0.60.0：``max_age_seconds<=0`` 视为禁用 TTL 派生（等同于不传参数）。"""
+    served_cache.set_served("ny", _sample_result())
+    # max_age_seconds=0 → 禁用 TTL → 命中（即使 entry 极旧）
+    assert served_cache.get_served("ny", max_age_seconds=0) is not None
+    # max_age_seconds=-1 → 同上
+    assert served_cache.get_served("ny", max_age_seconds=-1) is not None
+
+
+def test_v060_get_served_old_signature_unchanged() -> None:
+    """V0.60.0：不传 max_age_seconds → 旧行为（仅按 date 命中，永不按 TTL 失效）。"""
+    served_cache.set_served("ny", _sample_result())
+    # 不传 max_age_seconds → 旧语义：命中
+    assert served_cache.get_served("ny") is not None
+    # 旧调用方后续再调仍然命中（不抛异常、不受 TTL 参数影响）
+    assert served_cache.get_served("ny") is not None
+    assert served_cache.cache_size() == 1

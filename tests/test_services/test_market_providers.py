@@ -271,3 +271,122 @@ async def test_repo_get_gold_quote_mock_provider() -> None:
     # Mock 序列最后一日 close 落在 ~5.5~ 区间（ETF），不是 USD/oz
     # 这里只验证不报错且返回 quote
     assert quote.price_usd > 0
+
+
+# ────────────────── V0.60.0：行情缓存启用验证 ──────────────────
+
+
+async def test_v060_cache_hit_returns_same_list_instance() -> None:
+    """V0.60.0：第二次同 days 命中缓存，返回完全相同的 list 实例（不走 provider）。"""
+    from unittest.mock import MagicMock
+
+    call_count = MagicMock()
+
+    class CountingProvider:
+        async def get_history(self, symbol, days=60):
+            call_count()
+            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            call_count()
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            call_count()
+            return []
+
+    repo = MarketDataRepository(provider=CountingProvider())
+    h1 = await repo.get_gold_history(days=10)
+    h2 = await repo.get_gold_history(days=10)
+    assert h1 is h2, "cache hit should return the same list instance"
+    assert call_count.call_count == 1, f"provider called {call_count.call_count} times, expected 1"
+
+
+async def test_v060_cache_disabled_when_ttl_zero() -> None:
+    """V0.60.0：cache_ttl=0 时完全禁用缓存，每次调用都走 provider。"""
+    from unittest.mock import MagicMock
+
+    call_count = MagicMock()
+
+    class CountingProvider:
+        async def get_history(self, symbol, days=60):
+            call_count()
+            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return []
+
+    repo = MarketDataRepository(provider=CountingProvider(), cache_ttl=0)
+    await repo.get_gold_history(days=10)
+    await repo.get_gold_history(days=10)
+    assert call_count.call_count == 2, "cache_ttl=0 should bypass cache"
+
+
+async def test_v060_cache_keys_isolated_by_tuple() -> None:
+    """V0.60.0：不同 cache key（days 不同 / etf vs gram）互不干扰。"""
+    class SimpleProvider:
+        async def get_history(self, symbol, days=60):
+            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=float(days), high=5.2, low=4.9, volume=100.0)]
+
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return [GoldKline(date=date(2026, 9, 1), open=9.0, close=float(days) + 1000.0, high=9.2, low=8.9, volume=100.0)]
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return [GoldKline(date=date(2026, 9, 1), open=4.0, close=float(days) + 2000.0, high=4.2, low=3.9, volume=100.0)]
+
+    repo = MarketDataRepository(provider=SimpleProvider())
+    etf_10 = await repo.get_gold_history(days=10)
+    etf_60 = await repo.get_gold_history(days=60)
+    gram_10 = await repo.get_gold_gram_history(days=10)
+    ny_10 = await repo.get_us_gold_history(days=10)
+    assert etf_10[0].close == 10.0
+    assert etf_60[0].close == 60.0
+    assert gram_10[0].close == 1010.0
+    assert ny_10[0].close == 2010.0
+
+
+async def test_v060_source_status_promotes_to_stale_after_ttl() -> None:
+    """V0.60.0：``source_status()`` 按 ``_fetched_at + cache_ttl`` 派生 ``"stale"``。"""
+    from datetime import datetime, timedelta, timezone
+
+    class SimpleProvider:
+        async def get_history(self, symbol, days=60):
+            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return []
+
+    repo = MarketDataRepository(provider=SimpleProvider(), cache_ttl=600)
+    await repo.get_gold_history(days=10)
+    assert repo.source_status()["etf"] == "live"
+
+    # 手动把 _fetched_at 倒回 700 秒前（超 TTL=600）
+    repo._fetched_at["etf"] = datetime.now(timezone.utc) - timedelta(seconds=700)
+    assert repo.source_status()["etf"] == "stale"
+
+
+async def test_v060_source_status_keeps_mock_label() -> None:
+    """V0.60.0：``"mock"`` 永远不会被推导为 ``"stale"``，永远保留原值。"""
+    from datetime import datetime, timedelta, timezone
+
+    class FailingProvider:
+        async def get_history(self, symbol, days=60):
+            raise RuntimeError("fail")
+
+        async def get_gram_history(self, symbol="Au99.99", days=60):
+            return []
+
+        async def get_us_gold_history(self, symbol="GC", days=60):
+            return []
+
+    repo = MarketDataRepository(provider=FailingProvider(), cache_ttl=600)
+    await repo.get_gold_history(days=10)
+    assert repo.source_status()["etf"] == "mock"
+    repo._fetched_at["etf"] = datetime.now(timezone.utc) - timedelta(seconds=10000)
+    assert repo.source_status()["etf"] == "mock", "mock must not be promoted to stale"

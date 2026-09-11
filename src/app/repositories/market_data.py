@@ -253,8 +253,27 @@ class MarketDataRepository:
             self._last_date[key] = last_date
 
     def source_status(self) -> dict[str, str]:
-        """各数据源状态明细（供接口返回与页面展示）。"""
-        return dict(self._sources)
+        """各数据源状态明细（供接口返回与页面展示）。
+
+        V0.60.0：派生 ``"stale"`` 状态。若 ``_fetched_at`` 距今超过 ``_cache_ttl``，
+        将原始 ``"live"`` 推导为 ``"stale"``（前端 freshness 角标据此点亮"缓存过期"分支）。
+        ``"mock"`` 永远保持原值；``_cache_ttl<=0`` 视同禁用 TTL 派生（始终返回原状态）。
+        """
+        if self._cache_ttl <= 0:
+            return dict(self._sources)
+        now = datetime.now(timezone.utc)
+        out: dict[str, str] = {}
+        for key, raw in self._sources.items():
+            if raw == "mock":
+                out[key] = "mock"
+                continue
+            fetched = self._fetched_at.get(key)
+            if (fetched is not None
+                    and (now - fetched).total_seconds() > self._cache_ttl):
+                out[key] = "stale"
+            else:
+                out[key] = raw
+        return out
 
     def is_degraded(self) -> bool:
         """是否存在任一数据源降级为 Mock。"""
@@ -275,7 +294,15 @@ class MarketDataRepository:
         }
 
     async def get_gold_quote(self, symbol: str = "XAU") -> GoldQuote:
-        """获取黄金最新报价（按 settings.xau_fallback_chain 顺序逐源尝试）。"""
+        """获取黄金最新报价（按 settings.xau_fallback_chain 顺序逐源尝试）。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。cache hit 时直接返回缓存值，
+        不重写 ``_fetched_at``，使 ``source_status()`` 的 staleness 推导自然生效。
+        """
+        cache_key = ("quote_xau",)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         change = 0.0
         try:
             change = await self._sge_daily_change()
@@ -286,12 +313,14 @@ class MarketDataRepository:
             price = await self._fetch_xau_by_token(token)
             if price and price > 0:
                 self._mark("xau", True)
-                return GoldQuote(
+                quote = GoldQuote(
                     symbol=symbol,
                     price_usd=round(price, 2),
                     change_pct=change,
                     updated_at=datetime.now(timezone.utc),
                 )
+                _cache_set(cache_key, quote)
+                return quote
 
         # 全部 XAU 源失败 → 兜底：ETF 历史推导
         try:
@@ -300,12 +329,14 @@ class MarketDataRepository:
                 last, prev = klines[-1], klines[-2]
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
                 self._mark("xau", True)
-                return GoldQuote(
+                quote = GoldQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 3),
                     change_pct=round(change_pct, 2),
                     updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
                 )
+                _cache_set(cache_key, quote)
+                return quote
         except Exception as exc:  # noqa: BLE001
             logger.warning("quote from history failed (%s), fallback to mock", exc)
         self._mark("xau", False)
@@ -381,10 +412,19 @@ class MarketDataRepository:
         return None
 
     async def get_gold_history(self, days: int = 60) -> list[GoldKline]:
-        """获取黄金 ETF 历史日 K；失败时返回确定性 Mock 序列（可离线演示）。"""
+        """获取黄金 ETF 历史日 K；失败时返回确定性 Mock 序列（可离线演示）。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。cache hit 时直接返回缓存值，
+        不重写 ``_fetched_at``，使 ``source_status()`` 的 staleness 推导自然生效。
+        """
+        cache_key = ("etf", days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         try:
             klines = await self._bundle.history.get_history(DEFAULT_GOLD_ETF, days=days)
             if klines:
+                _cache_set(cache_key, klines)
                 self._mark("etf", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty history")
@@ -394,19 +434,29 @@ class MarketDataRepository:
             return self._mock_history(days)
 
     async def get_gold_gram_quote(self, symbol: str = DEFAULT_GOLD_GRAM) -> GoldQuote:
-        """获取黄金克价最新报价（元/克）。"""
+        """获取黄金克价最新报价（元/克）。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。gram quote 由日 K 推导，
+        缓存 hit 时直接返回，不重写 ``_fetched_at``。
+        """
+        cache_key = ("quote_gram", symbol)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         try:
             klines = await self.get_gold_gram_history(symbol=symbol, days=3)
             if len(klines) < 2:
                 raise RuntimeError("empty gram history")
             last, prev = klines[-1], klines[-2]
             change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-            return GoldQuote(
+            quote = GoldQuote(
                 symbol=symbol,
                 price_usd=round(last.close, 2),
                 change_pct=round(change_pct, 2),
                 updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
             )
+            _cache_set(cache_key, quote)
+            return quote
         except Exception as exc:  # noqa: BLE001
             logger.warning("gram quote failed (%s), fallback to mock", exc)
             return GoldQuote(
@@ -421,10 +471,18 @@ class MarketDataRepository:
         symbol: str = DEFAULT_GOLD_GRAM,
         days: int = 60,
     ) -> list[GoldKline]:
-        """获取黄金克价历史日 K；失败降级 Mock。"""
+        """获取黄金克价历史日 K；失败降级 Mock。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。
+        """
+        cache_key = ("gram", symbol, days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         try:
             klines = await self._bundle.history.get_gram_history(symbol=symbol, days=days)
             if klines:
+                _cache_set(cache_key, klines)
                 self._mark("sge", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty gram history")
@@ -451,7 +509,14 @@ class MarketDataRepository:
         return _mock_gram_history(days=days)
 
     async def get_us_gold_quote(self, symbol: str = DEFAULT_NY_GOLD) -> GoldQuote:
-        """获取纽约金最新报价（美元/盎司）。"""
+        """获取纽约金最新报价（美元/盎司）。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。
+        """
+        cache_key = ("quote_ny", symbol)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         # 主源：零KEY公开 XAU/USD 即期报价（与COMEX高度联动）
         change = 0.0
         try:
@@ -462,12 +527,14 @@ class MarketDataRepository:
         for token in self._xau_chain:
             price = await self._fetch_xau_by_token(token)
             if price and price > 0:
-                return GoldQuote(
+                quote = GoldQuote(
                     symbol=symbol,
                     price_usd=round(price, 2),
                     change_pct=change,
                     updated_at=datetime.now(timezone.utc),
                 )
+                _cache_set(cache_key, quote)
+                return quote
 
         # 兜底：由外盘历史推导
         try:
@@ -475,12 +542,14 @@ class MarketDataRepository:
             if klines and len(klines) >= 2:
                 last, prev = klines[-1], klines[-2]
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-                return GoldQuote(
+                quote = GoldQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 2),
                     change_pct=round(change_pct, 2),
                     updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
                 )
+                _cache_set(cache_key, quote)
+                return quote
         except Exception as exc:  # noqa: BLE001
             logger.warning("us gold quote failed (%s), fallback to mock", exc)
         return GoldQuote(
@@ -495,10 +564,18 @@ class MarketDataRepository:
         symbol: str = DEFAULT_NY_GOLD,
         days: int = 60,
     ) -> list[GoldKline]:
-        """获取纽约金历史日 K；失败降级 Mock。"""
+        """获取纽约金历史日 K；失败降级 Mock。
+
+        V0.60.0：启用 ``_cache_get/_cache_set``。
+        """
+        cache_key = ("ny", symbol, days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
         try:
             klines = await self._bundle.history.get_us_gold_history(symbol=symbol, days=days)
             if klines:
+                _cache_set(cache_key, klines)
                 self._mark("ny", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty us gold history")

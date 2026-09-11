@@ -56,6 +56,19 @@ class Settings(BaseSettings):
     # 是否允许行情网络请求（false 时强制走 Mock，避免测试环境触网）
     network_enabled: bool = True
 
+    # ===== 行情实时性（V0.60.0 新增）=====
+    # Served cache 日内 TTL（秒）；超过此时间后下次请求会全量重算。
+    # 默认 600（10 分钟），按"半日 A 股"量级；设置 0 表示仅依赖跨日 + invalidate_for_news 失效。
+    served_cache_ttl_seconds: int = 600
+
+    # 是否启用日内多次预热（默认启用）。
+    # 设为 false 可回退到仅每日 07:00 BJT 一次的旧行为。
+    intraday_refresh_enabled: bool = True
+
+    # 日内预热触发时刻（北京时分，逗号分隔）。覆盖 A 股 + SGE 关键时点。
+    # 默认：09:30 开盘前 / 11:30 上午收盘前 / 14:00 下午开盘前 / 15:30 SGE 收盘前。
+    intraday_refresh_hours: str = "9:30,11:30,14:00,15:30"
+
     @property
     def cors_origin_list(self) -> list[str]:
         """解析 CORS 来源为列表，* 表示放行全部。"""
@@ -66,6 +79,26 @@ class Settings(BaseSettings):
     def xau_fallback_chain_list(self) -> list[str]:
         """解析 XAU fallback chain 为 token 列表（已 trim + 过滤空）。"""
         return [t.strip() for t in self.xau_fallback_chain.split(",") if t.strip()]
+
+    @property
+    def intraday_refresh_hour_list(self) -> list[tuple[int, int]]:
+        """解析日内预热触发时刻（"9:30,11:30,..."）为 [(hour, minute), ...] 元组列表。
+
+        格式错误或空字符串会被静默跳过；调用方需自行处理空列表。
+        """
+        out: list[tuple[int, int]] = []
+        for token in self.intraday_refresh_hours.split(","):
+            token = token.strip()
+            if not token:
+                continue
+            try:
+                hh_s, mm_s = token.split(":", 1)
+                hh, mm = int(hh_s), int(mm_s)
+                if 0 <= hh <= 23 and 0 <= mm <= 59:
+                    out.append((hh, mm))
+            except (ValueError, AttributeError):
+                continue
+        return out
 
 
 @lru_cache

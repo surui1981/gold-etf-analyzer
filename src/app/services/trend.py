@@ -168,7 +168,14 @@ class TrendService:
         target = target if target in _TARGET_UNITS else GUIDE_TARGET
 
         # 命中当日缓存：直接返回，避免重复 K 线/宏观/合成
-        cached = served_cache.get_served(target)
+        # V0.60.0：按 settings.served_cache_ttl_seconds 派生日内 TTL；
+        # 超期返回 None，强制下次请求全量重算
+        # 注意：self._settings 在 TrendService 中是 WeightService 实例，
+        # TTL 应通过全局 get_settings() 读 Settings.served_cache_ttl_seconds。
+        from app.config import get_settings
+
+        ttl = get_settings().served_cache_ttl_seconds
+        cached = served_cache.get_served(target, max_age_seconds=ttl)
         if cached is not None:
             logger.debug("Trend cache hit: target=%s", target)
             return cached

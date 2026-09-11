@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.59.0**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.60.0**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
@@ -40,6 +40,7 @@
 | 主动提醒（前端侧） | `/portfolio` 页面 60s 轮询评估指数/纽约金，档位切换/金价波动 ≥2% 触发浏览器通知 + 提醒条 + 今日简报 | ✅ V0.56.0 |
 | **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉；`localStorage.pm_help_*` 命名空间 | ✅ V0.58.0 |
 | **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；`market_providers.py` 工厂解析 bundle 注入；XAU fallback chain 与缓存 TTL 也可配；旧 `provider=` 签名保留向后兼容 | ✅ V0.59.0 |
+| **行情实时性增强** | served cache 日内 TTL（默认 600s，`.env` 配 `SERVED_CACHE_TTL_SECONDS`）+ 6 个行情接口启用 `quote_cache_ttl` 真生效 + 日内 4 点（09:30/11:30/14:00/15:30 BJT）自动预热 served cache；趋势页 60s 轮询 + visibilitychange + 手动 🔄 按钮；持仓页 30s 轮询；freshness 角标按 `_fetched_at + cache_ttl` 派生 "stale" | ✅ V0.60.0 |
 | 可视化页面 | 趋势页 `/static/trend.html`（含对照区块）+ 持仓决策页 `/static/portfolio.html` + 权重页 `/weights` + 消息面页 `/news` + **央行购金页 `/central-bank`** | ✅ |
 | 健康检查 | `GET /api/v1/health` | ✅ |
 
@@ -93,7 +94,7 @@ src/app/
 ├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入）
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
 static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html + freshness.js + responsive.css
-tests/                   # pytest（303 用例，含 fetcher / scheduler / 服务 / API / help / providers）
+tests/                   # pytest（316 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday）
 ```
 
 ### 3.3 数据流
@@ -125,7 +126,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 303 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers，不依赖网络）
+python -m pytest -v          # 316 个用例（服务层 + API 集成 + fetcher / scheduler / cache / intraday / help / providers，不依赖网络）
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -278,7 +279,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-216 + 63 + 24 = 303 个用例覆盖：
+216 + 63 + 24 + 13 = 316 个用例覆盖：
 
 - **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）
 - **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出）、快照、消息面、央行购金（3 个 endpoint）、健康检查
@@ -305,7 +306,8 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | **V0.56.0** | **主动提醒与推送（UX Roadmap 6.6，前端侧）**：持仓决策页新增「🔔 提醒」开关（`localStorage` 记忆 `pm_alert_on`，默认关）；开启时请求 `Notification` 授权；每 60s 轮询 `decision` + `gold`，`checkAlerts()` 比较评估指数档位与纽约金价格：档位切换或金价波动 ≥2% 时，触发浏览器通知 + 顶部 `alertBar`（6s 自动消失）；`renderBriefing()` 在决策区下方常驻「今日简报」一句话摘要。邮件/微信推送因需外部服务与密钥，本期未做 | 主动触达 | ✅ |
 | **V0.57.0** | **世界央行购金统计独立页面 + 月度自动调度**：新增 `/central-bank` 页面（4 KPI 卡 + Chart.js 堆叠柱状图 + Top 10 + 按国家/季度范围筛选明细表）+ `GET /api/v1/central-bank/{summary,top-buyers,purchases}` 三个 endpoint。数据源由 IMF IRFCL（不可达）切到 **WGC Gold Demand Trends HTML chart JS**（`fsapi.gold.org/api/v12/charts/js/...`，绕开 XLSX 403 反爬），覆盖全球合计 2014Q1–2026Q2（52 季度）+ H1 2026 按国家（19 买家 + 4 卖家）+ UZB/IRN 手工补丁。`cb_gold` 宏观因子从表自动汇总 T12M（无数据回退 STATIC_REF）。**月度自动调度**：每月 1/15/末日 07:30 BJT 由 `services/scheduler.py` 自动从 WGC 拉取（`calendar.monthrange()` 动态月末，`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关）。三层测试覆盖（fetcher 32 + scheduler 26 + 集成），216 测试通过；顺手修复 `ensure_sqlite_columns` 跳过不存在表（部分老库启动不再崩溃） | 央行购金数据化 + 自动化 | ✅ |
 | **V0.58.0** | **新手引导与帮助体系（UX Roadmap 6.8）**：新增 `static/help.js`（~480 行，自包含 IIFE，挂在 `window.PM_Help`）+ `static/help.css`（暗色主题 + 移动端 <768px modal 改为底部抽屉）。右下角悬浮 `?` 按钮唤起 3 tab modal（**操作指南**每日 5 步流程 / **术语速查**30+ 术语按 7 大类分组：评估指数/指标均线/宏观因子/品种代码/交易动作/系统状态/时段 / **数据来源**5 类数据源 + 投资警示 + 交易时段 + 采集容错）。首次访问 5 个页面自动弹 2-4 步 **tour 浮层**（蒙层 + 高亮 + 步骤切换），`localStorage.pm_help_seen_version` 升级时强制重看。15 项关键术语 inline `?` 图标自动注入（综合指数/MA5·MA20·MA40/RSI(14)/T12M/Au99.99/COMEX/518880/仓位推荐 等）。5 个 HTML 页面各 +2 行注入。63 项新测试（`tests/test_help/test_glossary.py` + `test_modal.py`，后者通过 Node 子进程沙箱执行 JS 验证 escapeHtml 与 XSS 防护）。279 测试全通过 | 新手引导 + 帮助体系 | ✅ |
-| **V0.59.0**（当前） | **行情源 provider 配置化（P1 #5）**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块。3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF 主 + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债，全部免费零 KEY）/ **mock**（确定性序列，纯内存、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）。`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容（旧测试零改动）。24 项新测试覆盖：工厂解析（4 provider 名 + 大小写 + 未知名抛错 + 空回退默认）+ Mock provider 数据正确性 + bundle 注入 + XAU chain 解析 + cache_ttl=0 禁用 + 5 mock 取数集成。303 测试全通过（279 → 303） | 行情源配置化 | ✅ |
+| **V0.59.0** | **行情源 provider 配置化（P1 #5）**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块。3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF 主 + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债，全部免费零 KEY）/ **mock**（确定性序列，纯内存、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）。`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容（旧测试零改动）。24 项新测试覆盖：工厂解析（4 provider 名 + 大小写 + 未知名抛错 + 空回退默认）+ Mock provider 数据正确性 + bundle 注入 + XAU chain 解析 + cache_ttl=0 禁用 + 5 mock 取数集成。303 测试全通过（279 → 303） | 行情源配置化 | ✅ |
+| **V0.60.0**（当前） | **行情实时性增强（D + B）**：① 后端死代码启用：`repositories/market_data.py` 6 个接口（`get_gold_history` / `get_gold_gram_history` / `get_us_gold_history` / `get_gold_quote` / `get_gold_gram_quote` / `get_us_gold_quote`）启用 `quote_cache_ttl=300` 进程级 cache（V0.59.0 之前是死代码），cache hit 时**不调** `_mark` 保留 `_fetched_at`；② served cache 日内 TTL：`services/cache.py` value 由 `GoldTrendOut` → `(GoldTrendOut, set_at)` 元组；`get_served` 新增 keyword-only `max_age_seconds`（默认 600s，可由 `.env` 配 `SERVED_CACHE_TTL_SECONDS`），超期返回 None 强制重算，旧调用方不传 → 行为完全不变；③ `source_status()` 按 `_fetched_at + cache_ttl` 派生 `"stale"` 状态（不改 `_mark`），前端 freshness 角标"缓存过期"分支自然点亮；④ 日内多次预热：`services/scheduler.py` `daily_capture_loop` 内部串联 `next_intraday_run_utc`（默认 09:30 / 11:30 / 14:00 / 15:30 BJT，可由 `.env` 配 `INTRADAY_REFRESH_HOURS`，`INTRADAY_REFRESH_ENABLED=false` 关闭），取 `min(next_daily, next_intraday)` 最近点触发（`intraday_warm_once` 仅刷新 served cache 不落库）；⑤ 前端轮询：`trend.html` `setInterval(refreshTrendQuotes, 60_000)` + `visibilitychange` 切回前台自动刷新 + 右上角手动 🔄 按钮（带旋转动画）；`portfolio.html` 60s → 30s + `visibilitychange` + 同步 `FreshnessBar.load()`；⑥ `tests/conftest.py` `_reset_db` fixture 同时清空 `_CACHE`（行情 cache）保证跨测试隔离；13 项新测试覆盖（5 cache hit/expire/disabled/key-isolation/stale-promotion/mock-keep + 4 served TTL set/max_age/zero-disable/old-signature + 2 intraday 时间计算/异常静默 + 1 writes-served-cache + 1 stale 派生 + 1 mock 保持）；316 测试全通过（303 → 316） | 行情实时性 | ✅ |
 
 ---
 

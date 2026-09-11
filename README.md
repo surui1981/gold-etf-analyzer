@@ -50,6 +50,7 @@ docker compose up --build
 | 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、央行页（KPI/堆叠柱/Top 榜/明细表）、持仓页、权重页 |
 | **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉 |
 | **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；XAU fallback chain 与缓存 TTL 也可配；测试 / 离线演示可直接走 mock 不触网 |
+| **行情实时性增强** | served cache 日内 TTL（默认 10 分钟，`.env` 可配）+ 6 个行情接口启用进程级 cache（`quote_cache_ttl` 真生效）+ 日内 4 个时点（09:30/11:30/14:00/15:30 BJT）自动预热；趋势页 60s 轮询 + 切回前台自动刷新 + 手动 🔄 按钮；持仓页 30s 轮询；freshness 角标自动派生"缓存过期"分支 |
 
 ## API 一览
 
@@ -134,7 +135,7 @@ gold-etf-analyzer/
 ├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（303 个用例，含 fetcher / scheduler / 集成 / help / providers）
+├── tests/                   # pytest（316 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -144,7 +145,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 303 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers，不依赖网络）
+python -m pytest -v          # 316 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers + cache + intraday，不依赖网络）
 ruff check src tests
 ruff format src tests
 ```
@@ -159,6 +160,7 @@ ruff format src tests
 - [x] 世界央行购金统计页（`/central-bank`，WGC 自动抓取 + 手工补丁，月度调度）
 - [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
 - [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
+- [x] 行情实时性增强（V0.60.0：served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 趋势页 60s 轮询 + visibilitychange + 持仓页 30s）
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）

@@ -21,11 +21,15 @@ from app.repositories.db import async_session_factory, engine  # noqa: E402
 @pytest.fixture(autouse=True)
 async def _reset_db() -> None:
     """每个用例前重建数据表，保证用例之间完全隔离。"""
+    from app.repositories import market_data
     from app.services import cache as served_cache
     from app.services.settings import clear_weights_cache
 
     clear_weights_cache()  # 配置内存缓存随库重建失效
     served_cache.invalidate()  # 当日 served 缓存：跨测试隔离（避免模块级缓存污染）
+    # V0.60.0：行情缓存（_cache_get/_cache_set）也是进程级 dict，跨测试必须清空
+    with market_data._CACHE_LOCK:
+        market_data._CACHE.clear()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

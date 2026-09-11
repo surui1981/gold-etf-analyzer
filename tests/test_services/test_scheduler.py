@@ -235,3 +235,109 @@ class _FrozenDatetime:
 
     def __getattr__(self, name):
         return getattr(self._real, name)
+
+
+# ── V0.60.0: 日内预热 ───────────────────────────
+
+
+def test_v060_next_intraday_run_utc_before_first_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.60.0：BJT 08:00（早于首个 09:30）→ 下次为今日 09:30 BJT。"""
+    # BJT 2026-09-07 08:00 = UTC 2026-09-07 00:00
+    now_utc = datetime(2026, 9, 7, 0, 0, tzinfo=timezone.utc)
+    nxt = sch.next_intraday_run_utc(now_utc=now_utc)
+    bjt = nxt.astimezone(BJT)
+    assert bjt.hour == 9
+    assert bjt.minute == 30
+    assert (bjt.year, bjt.month, bjt.day) == (2026, 9, 7)
+
+
+def test_v060_next_intraday_run_utc_after_last_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.60.0：BJT 16:00（晚于末个 15:30）→ 下次为明日 09:30 BJT。"""
+    # BJT 2026-09-07 16:00 = UTC 2026-09-07 08:00
+    now_utc = datetime(2026, 9, 7, 8, 0, tzinfo=timezone.utc)
+    nxt = sch.next_intraday_run_utc(now_utc=now_utc)
+    bjt = nxt.astimezone(BJT)
+    assert bjt.hour == 9
+    assert bjt.minute == 30
+    assert (bjt.year, bjt.month, bjt.day) == (2026, 9, 8)
+
+
+async def test_v060_intraday_warm_once_silent_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.60.0：``intraday_warm_once`` 在 trend.analyze 抛异常时仅日志告警，不抛。"""
+
+    class FailingTrend:
+        async def analyze(self, days=60, target="ny"):
+            raise RuntimeError("provider offline")
+
+    # 不应抛异常
+    await sch.intraday_warm_once(FailingTrend())  # noqa: F821
+
+
+async def test_v060_intraday_warm_once_writes_served_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.60.0：``intraday_warm_once`` 成功后写入 served cache。"""
+    from datetime import date as date_cls
+
+    from app.schemas.market import (
+        DirectionSignal,
+        GoldTrendMetrics,
+        GoldTrendOut,
+        MacroIndexOut,
+        NewsIndexOut,
+        TrendDirection,
+        TrendIndexLevel,
+        TrendIndexOut,
+    )
+    from app.services import cache as served_cache
+    from app.services.scheduler import GUIDE_TARGET
+
+    served_cache.invalidate()
+
+    class FakeTrend:
+        async def analyze(self, days=60, target=GUIDE_TARGET):
+            return GoldTrendOut(
+                symbol="GC",
+                name="纽约金COMEX",
+                days=60,
+                points=[],
+                metrics=GoldTrendMetrics(
+                    start_date=date_cls(2026, 7, 1),
+                    end_date=date_cls(2026, 9, 1),
+                    trading_days=60,
+                    start_price=2300.0,
+                    end_price=2350.0,
+                    change_pct=2.17,
+                    high=2400.0,
+                    low=2250.0,
+                    ma20=2330.0,
+                    ma40=2310.0,
+                    change_pct_1d=0.0,
+                    change_pct_5d=0.0,
+                    direction=TrendDirection.SIDEWAYS,
+                    unit="美元/盎司",
+                    summary="测试摘要",
+                ),
+                indicators=[],
+                index=TrendIndexOut(
+                    score=70.0,
+                    level=TrendIndexLevel.UP,
+                    direction=DirectionSignal.BULLISH,
+                    summary="test",
+                    components={"tech": 70.0, "macro": 70.0, "news": 70.0},
+                ),
+                macro=MacroIndexOut(
+                    score=70.0,
+                    direction=DirectionSignal.BULLISH,
+                    factors=[],
+                    summary="macro summary",
+                ),
+                news=NewsIndexOut(score=70.0, direction=DirectionSignal.BULLISH, note="", scored=True),
+                data_sources={},
+                degraded=False,
+                freshness=None,
+                served_at=datetime.now(timezone.utc),
+            )
+
+    await sch.intraday_warm_once(FakeTrend())  # noqa: F821
+    cached = served_cache.get_served(GUIDE_TARGET)
+    assert cached is not None
+    assert cached.index.score == 70.0

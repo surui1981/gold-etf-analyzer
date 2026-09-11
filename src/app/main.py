@@ -138,6 +138,9 @@ async def _warm_cache() -> None:
 async def _start_daily_scheduler() -> None:
     """启动每日 07:00 BJT 调度协程（捕获快照 + 预热 served cache）。
 
+    V0.60.0：内部串联日内 4 个时点（09:30/11:30/14:00/15:30 BJT）的 served cache
+    预热，由 ``daily_capture_loop`` 内部 ``min(next_daily, next_intraday)`` 决定触发时机。
+
     异常仅日志告警；调度循环自身 try/except 隔离失败。
     """
     try:
@@ -147,7 +150,10 @@ async def _start_daily_scheduler() -> None:
         from app.repositories.snapshot import SnapshotRepository
         from app.services.central_bank import CentralBankService
         from app.services.macro import MacroFactorService
-        from app.services.scheduler import daily_capture_loop
+        from app.services.scheduler import (
+            daily_capture_loop,
+            is_intraday_refresh_enabled,
+        )
         from app.services.snapshot import DailySnapshotService
         from app.services.trend import TrendService
 
@@ -175,7 +181,11 @@ async def _start_daily_scheduler() -> None:
                 return await _capture_with_session()
 
         asyncio.create_task(daily_capture_loop(_SnapshotAdapter(), trend_svc))
-        logger.info("daily scheduler started (07:00 BJT)")
+        intra_state = "enabled" if is_intraday_refresh_enabled() else "disabled"
+        logger.info(
+            "daily scheduler started (07:00 BJT + intraday 09:30/11:30/14:00/15:30 BJT, %s)",
+            intra_state,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.error("daily scheduler failed to start: %s", exc)
 
@@ -213,7 +223,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.59.0",
+    version="0.60.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
