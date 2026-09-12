@@ -18,12 +18,22 @@ data/
 server.log
 server.log.err
 server_run.log
+server_v*.log
 
 # 测试与工具缓存
 .pytest_cache/
 .ruff_cache/
 .coverage
 htmlcov/
+pytest_run*.log
+pytest-cache-files-*/
+*.db-journal
+
+# 一次性校验产物（前端 JS 语法 / 脚本临时文件）
+_check.js
+_b*.js
+_t.js
+_jscheck*.py
 
 # IDE
 .idea/

@@ -9,10 +9,29 @@ from app.schemas.common import DirectionSignal
 
 
 class GoldQuoteOut(BaseModel):
-    """黄金现货报价输出。"""
+    """黄金现货报价输出（国际金价 XAU/USD）。
+
+    ⚠ 单位口径：美元/盎司。**不可**用于人民币计价标的（如 518880 黄金ETF）
+    的持仓估值——请改用 ``GoldEtfQuoteOut``（元/份）。
+    """
 
     symbol: str
     price_usd: float = Field(..., gt=0)
+    change_pct: float = Field(..., description="涨跌幅 %")
+    updated_at: datetime
+
+
+class GoldEtfQuoteOut(BaseModel):
+    """黄金 ETF 场内报价输出（人民币计价）。
+
+    与 ``GoldQuoteOut``（XAU/USD）严格区分：本口径为 **元/份**，
+    持仓成本、浮动盈亏、收益率一律以此为准。
+    """
+
+    symbol: str
+    price: float = Field(..., gt=0, description="最新价，元/份")
+    currency: str = Field("CNY", description="计价币种")
+    unit: str = Field("元/份", description="计价单位")
     change_pct: float = Field(..., description="涨跌幅 %")
     updated_at: datetime
 

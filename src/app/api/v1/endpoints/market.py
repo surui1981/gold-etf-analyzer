@@ -12,6 +12,7 @@ from app.repositories.market_data import MarketDataRepository
 from app.schemas.market import (
     FreshnessOut,
     GoldCompareOut,
+    GoldEtfQuoteOut,
     GoldQuoteOut,
     GoldTrendOut,
 )
@@ -51,15 +52,46 @@ async def market_freshness(
     return await service.report()
 
 
-@router.get("/gold", response_model=GoldQuoteOut, summary="黄金ETF最新报价")
+@router.get("/gold", response_model=GoldQuoteOut, summary="国际金价 XAU/USD 报价")
 async def gold_quote(
     repo: MarketDataRepository = Depends(get_market_data_repository),
 ) -> GoldQuoteOut:
-    """获取黄金ETF最新报价（AKShare 实时数据，失败自动降级 Mock）。"""
+    """获取国际金价 XAU/USD（美元/盎司）实时报价，用于纽约金投资指引与涨跌提醒。
+
+    注意：**这不是 518880 ETF 的人民币价格**。持仓估值 / 开仓预填 / 清仓请使用
+    ``GET /market/gold/etf-quote``（元/份）；此前二者混用导致盈亏计算错误，V0.61.0 修正。
+    """
     quote = await repo.get_gold_quote()
     return GoldQuoteOut(
         symbol=quote.symbol,
         price_usd=quote.price_usd,
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
+    "/gold/etf-quote",
+    response_model=GoldEtfQuoteOut,
+    summary="黄金ETF（518880）报价（元/份）",
+)
+async def gold_etf_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> GoldEtfQuoteOut:
+    """518880 华安黄金ETF 最新成交价（人民币元/份）——持仓估值与交易价格源。
+
+    与 ``/market/gold``（XAU/USD 国际金价）严格区分：本接口与收益曲线同源，
+    用于持仓市值、浮动盈亏、开仓 / 加减仓预填价与清仓价。
+
+    返回字段为 ``price``（元/份）+ ``currency`` / ``unit`` 显式单位，
+    不使用易混淆的 ``price_usd`` 命名。
+    """
+    quote = await repo.get_gold_etf_quote()
+    return GoldEtfQuoteOut(
+        symbol=quote.symbol,
+        price=quote.price_usd,
+        currency="CNY",
+        unit="元/份",
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
     )

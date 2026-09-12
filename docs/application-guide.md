@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.60.0**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.61.0**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
@@ -41,6 +41,7 @@
 | **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉；`localStorage.pm_help_*` 命名空间 | ✅ V0.58.0 |
 | **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；`market_providers.py` 工厂解析 bundle 注入；XAU fallback chain 与缓存 TTL 也可配；旧 `provider=` 签名保留向后兼容 | ✅ V0.59.0 |
 | **行情实时性增强** | served cache 日内 TTL（默认 600s，`.env` 配 `SERVED_CACHE_TTL_SECONDS`）+ 6 个行情接口启用 `quote_cache_ttl` 真生效 + 日内 4 点（09:30/11:30/14:00/15:30 BJT）自动预热 served cache；趋势页 60s 轮询 + visibilitychange + 手动 🔄 按钮；持仓页 30s 轮询；freshness 角标按 `_fetched_at + cache_ttl` 派生 "stale" | ✅ V0.60.0 |
+| **交易闭环与业绩分析** | ① **ETF 报价口径修正**：新增 `GET /api/v1/market/gold/etf-quote`（518880，元/份；字段为 `price` + `currency`/`unit`，**不再用易混淆的 `price_usd`**），持仓估值 / 开仓预填 / 清仓价统一改用 ETF 价（此前误用 XAU/USD 国际金价导致收益率虚高）；② **加仓 / 减仓内联交易面板**：金额↔份数双向换算、快捷比例（1/4·1/2·3/4·全部）、摊薄成本与已实现盈亏实时预览，替代原生 `prompt()`；新增 `GET /positions/{id}/trades` 流水查询；③ **收益曲线** `GET /api/v1/portfolio/equity-curve?days=90`：交易流水 + ETF 历史价**回放重建**每日持有份数 / 成本 / 市值 / 累计收益率 + 最大回撤，30/90/180/365 天可切；④ **获利分析总结评估** `GET /api/v1/portfolio/performance`：已实现 / 浮动盈亏、平仓笔数与胜率、盈亏比、最佳 / 最差平仓、平均持仓天数 + 面向客户的中文复盘总结 | ✅ V0.61.0 |
 | 可视化页面 | 趋势页 `/static/trend.html`（含对照区块）+ 持仓决策页 `/static/portfolio.html` + 权重页 `/weights` + 消息面页 `/news` + **央行购金页 `/central-bank`** | ✅ |
 | 健康检查 | `GET /api/v1/health` | ✅ |
 
@@ -94,7 +95,7 @@ src/app/
 ├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入）
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
 static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html + freshness.js + responsive.css
-tests/                   # pytest（316 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday）
+tests/                   # pytest（334 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析）
 ```
 
 ### 3.3 数据流
@@ -126,7 +127,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 316 个用例（服务层 + API 集成 + fetcher / scheduler / cache / intraday / help / providers，不依赖网络）
+python -m pytest -v          # 334 个用例（服务层 + API 集成 + fetcher / scheduler / cache / intraday / help / providers / 业绩分析，不依赖网络）
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -279,13 +280,14 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-216 + 63 + 24 + 13 = 316 个用例覆盖：
+216 + 63 + 24 + 13 + 18 = 334 个用例覆盖：
 
-- **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）
-- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出）、快照、消息面、央行购金（3 个 endpoint）、健康检查
+- **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）、**业绩分析（交易流水回放 / 收益曲线 / 平仓统计 / 空仓与除零边界）**
+- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**）、**业绩（收益曲线区间校验 / 获利分析）**、快照、消息面、央行购金（3 个 endpoint）、健康检查
 - **数据层**：WGC fetcher（`_parse_chart_series` / `_iso_for_country` / `_find_country_chart` / `load_manual_overrides` / 端到端 mock 32 项）、市场时段判定、SQLite 启动幂等补列
 - **调度层**：央行购金月度调度时间计算（月末动态 28/29/30/31 天 / 年切换 / 环境变量开关 13 项 / 循环节流）
 - 测试通过 `FakeRepo` 注入假数据源，**不依赖网络**
+- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 5 个静态页面的内联 JS 做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
 
 ---
 

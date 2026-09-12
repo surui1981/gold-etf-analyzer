@@ -9,6 +9,7 @@ from app.api.v1.endpoints import (
     health,
     market,
     news,
+    portfolio,
     position,
     settings,
     snapshot,
@@ -24,3 +25,4 @@ api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)
 api_router.include_router(news.router)
 api_router.include_router(central_bank.router)
+api_router.include_router(portfolio.router)

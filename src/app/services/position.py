@@ -7,6 +7,7 @@ from app.schemas.position import (
     PositionDeleteOut,
     PositionOut,
     PositionSummary,
+    TradeRecordOut,
     TradeRequest,
 )
 from app.utils.logger import get_logger
@@ -115,6 +116,24 @@ class PositionService:
         results = [await self._to_out(p) for p in positions]
         return results
 
+    async def list_trades(self, position_id: int) -> list[TradeRecordOut]:
+        """某持仓的完整成交流水（按时间倒序），用于复盘加仓/减仓过程。
+
+        Args:
+            position_id: 持仓 ID
+
+        Returns:
+            该持仓的成交流水列表（倒序）
+
+        Raises:
+            ValueError: 持仓不存在
+        """
+        position = await self._repo.get(position_id)
+        if position is None:
+            raise ValueError("持仓不存在")
+        trades = await self._repo.list_trades(position_id)
+        return [TradeRecordOut.model_validate(t) for t in trades]
+
     async def export_csv(self) -> str:
         """导出当前持仓与交易流水为 CSV 文本（供对账/备份）。"""
         import csv
@@ -166,8 +185,14 @@ class PositionService:
         )
 
     async def _current_price(self) -> float:
-        """最新市场价（AKShare，失败降级 Mock）。"""
-        quote = await self._market.get_gold_quote()
+        """518880 黄金ETF 最新价（人民币元/份）——持仓估值专用。
+
+        V0.61.0 修正：此前误用 ``get_gold_quote()``（返回 XAU/USD 国际金价，
+        美元/盎司，约 4349），与人民币 ETF 成本（约 9 元/份）量纲不一致，
+        导致浮动盈亏与收益率虚高数万个百分点。现改用 ``get_gold_etf_quote()``，
+        价格口径与收益曲线同源。
+        """
+        quote = await self._market.get_gold_etf_quote()
         return quote.price_usd
 
     async def _to_out(self, position: object) -> PositionOut:

@@ -347,6 +347,61 @@ class MarketDataRepository:
             updated_at=datetime.now(timezone.utc),
         )
 
+    async def get_gold_etf_quote(self, symbol: str = DEFAULT_GOLD_ETF) -> GoldQuote:
+        """黄金 ETF（518880）最新价（人民币元/份）——**持仓估值与交易专用**。
+
+        与 :meth:`get_gold_quote` 的区别：后者返回 XAU/USD 国际金价（美元/盎司，
+        用于纽约金投资指引）；本方法返回国内 ETF 成交价（元/份），是持仓盈亏、
+        开仓/加减仓预填价、清仓价唯一正确的价格源。
+
+        V0.61.0 修复：此前持仓估值误用 XAU/USD（约 4349 美元/盎司）导致
+        收益率高达数万个百分点，此处提供口径一致的正确价格。
+
+        Args:
+            symbol: ETF 代码，默认 518880 华安黄金ETF。
+
+        Returns:
+            GoldQuote，其中 ``price_usd`` 字段承载 **元/份**（沿用统一结构，
+            调用方需按 ETF 语义解读，勿与美元金价混用）。
+
+        Note:
+            取 ETF 日 K 最后一根收盘价，与 ``get_gold_history`` 同源，
+            保证估值与收益曲线口径一致；失败时降级为确定性 Mock。
+        """
+        cache_key = ("quote_etf", symbol)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+
+        try:
+            klines = await self.get_gold_history(days=3)
+            if klines:
+                last = klines[-1]
+                prev = klines[-2] if len(klines) >= 2 else last
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                self._mark("etf", True)
+                quote = GoldQuote(
+                    symbol=symbol,
+                    price_usd=round(last.close, 3),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc,
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ETF 报价取数失败: %s", exc)
+
+        self._mark("etf", False)
+        logger.warning("ETF 报价全部失败，降级 Mock")
+        return GoldQuote(
+            symbol=symbol,
+            price_usd=9.6,
+            change_pct=0.0,
+            updated_at=datetime.now(timezone.utc),
+        )
+
     async def _fetch_xau_by_token(self, token: str) -> float | None:
         """按 token 从对应源取 XAU 实时价。"""
         token = token.strip().lower()

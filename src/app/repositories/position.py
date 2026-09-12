@@ -77,6 +77,32 @@ class PositionRepository:
         stmt = select(Position).where(Position.id == position_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def list_all(self, user_id: int = 1) -> list[Position]:
+        """所有未软删除的持仓（**含已平仓**），按开仓时间升序。
+
+        收益曲线与获利分析需要已平仓持仓来核算已实现盈亏，故与
+        :meth:`list_open` 区分（后者仅返回持仓中的）。
+        """
+        stmt = (
+            select(Position)
+            .where(Position.user_id == user_id, Position.deleted_at.is_(None))
+            .order_by(Position.opened_at)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_all_trades(self, user_id: int = 1) -> list[TradeRecord]:
+        """所有交易流水（排除已软删除持仓的流水），按成交时间**升序**。
+
+        升序是回放重建收益曲线的前提（均价法成本随买卖顺序变化）。
+        """
+        stmt = (
+            select(TradeRecord)
+            .join(Position, TradeRecord.position_id == Position.id)
+            .where(Position.user_id == user_id, Position.deleted_at.is_(None))
+            .order_by(TradeRecord.traded_at)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def list_trades(self, position_id: int) -> list[TradeRecord]:
         """持仓的交易流水（按时间倒序）。"""
         stmt = (

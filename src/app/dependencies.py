@@ -22,6 +22,7 @@ from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
 from app.services.news import NewsScoreService
 from app.services.position import PositionService
+from app.services.portfolio import PortfolioAnalyticsService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
 from app.services.snapshot import DailySnapshotService
@@ -172,6 +173,17 @@ def get_position_service(
 ) -> PositionService:
     """交易面服务依赖（持仓仓储 + 行情）。"""
     return PositionService(repo=repo, market=market)
+
+
+def get_portfolio_analytics_service(
+    repo: PositionRepository = Depends(get_position_repository),
+    market: MarketDataRepository = Depends(get_market_data_repository),
+) -> PortfolioAnalyticsService:
+    """交易业绩分析服务依赖（持仓仓储 + 行情仓储）。
+
+    为持仓页提供收益曲线与获利分析：无新增数据表，曲线由交易流水回放重建。
+    """
+    return PortfolioAnalyticsService(repo=repo, market=market)
 
 
 def get_decision_service(

@@ -9,9 +9,14 @@ from app.dependencies import get_market_data_repository
 
 
 class FakeMarket:
-    """假行情：固定最新价 10.0，历史序列上升。"""
+    """假行情：ETF 价固定 10.0（V0.61.0 起持仓估值用 ETF 价），历史序列上升。"""
 
     async def get_gold_quote(self, symbol: str = "XAU"):
+        """纽约金价（美元/盎司）——不参与 ETF 持仓估值。"""
+        return type("Q", (), {"symbol": symbol, "price_usd": 4349.7, "change_pct": 0.5, "updated_at": date.today()})()
+
+    async def get_gold_etf_quote(self, symbol: str = "518880"):
+        """518880 ETF 价（元/份）——持仓估值唯一价格源。"""
         return type("Q", (), {"symbol": symbol, "price_usd": 10.0, "change_pct": 0.5, "updated_at": date.today()})()
 
     async def get_gold_history(self, days: int = 60):

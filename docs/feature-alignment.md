@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-11 ｜ 适用版本：**V0.60.0**
+> 生成日期：2026-09-12 ｜ 适用版本：**V0.61.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.60.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.61.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -25,8 +25,14 @@
 | **新手引导与帮助体系** | `static/help.js` + `static/help.css` + 5 HTML 各 +2 行 | ✅（V0.58.0） |
 | **行情源 provider 可切换** | `MARKET_PROVIDER=.env` 配置（akshare / mock / eastmoney_only / sina_only） | ✅（V0.59.0） |
 | **行情实时性增强** | served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 前端 60s 轮询 + visibilitychange | ✅（V0.60.0） |
+| **ETF 报价口径修正** | `get_gold_etf_quote()` + `GET /market/gold/etf-quote`（元/份）；PositionService 改用 ETF 价 | ✅（V0.61.0） |
+| **加仓 / 减仓内联面板** | `portfolio.html` 交易面板（金额↔份数、快捷比例、盈亏预览）+ `GET /positions/{id}/trades` | ✅（V0.61.0） |
+| **收益曲线** | `GET /api/v1/portfolio/equity-curve` + `PortfolioAnalyticsService.equity_curve` | ✅（V0.61.0） |
+| **获利分析总结评估** | `GET /api/v1/portfolio/performance` + `PortfolioAnalyticsService.performance` | ✅（V0.61.0） |
+| **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
+| **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 
-**测试数对账**：README 标 316 ✅ 与 `find tests/test_*.py` 一致（28 文件，含 `test_help/` 2 + `test_market_providers.py` + V0.60.0 新增 cache/intraday 13 用例）。
+**测试数对账**：`pytest --collect-only -q` = **334 用例**，`find tests -name "test_*.py"` = **30 文件**，README 与三文档数字一致（V0.61.0 新增 `test_portfolio_analytics.py` 10 + `test_portfolio_api.py` 6 = 18 用例）。全量回归 288 passed（忽略 `test_irfcl_fetcher.py` / `test_h15_fetcher.py` 两个真实联网用例，耗时约 15 分钟）。
 
 ---
 
@@ -59,7 +65,7 @@
 |---|------|------|------|------|
 | 12 | **仓位建议（账户本金）** | 📋 | ⚠️ 部分实现（80/60/40/20/10%），无账户本金估算 | ⚠️ 半成品 |
 | 13 | **模拟交易 + 回测引擎** | 📋 | ❌ | ⚠️ 未做 |
-| 14 | **指数时间序列可视化** | 📋 | ⚠️ 数据有（snapshot 表），前端无曲线 | ⚠️ 半成品 |
+| 14 | **指数时间序列可视化** | 📋 | ⚠️ 数据有（snapshot 表）；V0.61.0 已加**账户收益曲线**，但评估指数自身曲线仍无 | ⚠️ 半成品 |
 | 15 | **监控告警** | 📋 | ⚠️ 浏览器通知已做，邮件/微信未做 | ⚠️ 半成品 |
 | 16 | **公开部署** | 📋 | ❌ 当前 `127.0.0.1:8888` 仅本机 | ⚠️ 未做 |
 
@@ -75,7 +81,7 @@
 | 6.4 | 操作防错与撤销 | ✅ V0.55.0 | ✅ | ✅ |
 | **6.5** | **个性化与上下文记忆** | 🟢 待规划 | ❌ 无主题/标的记忆，无多账户 UI | ⚠️ 未做 |
 | 6.6 | 主动提醒与推送 | ✅ V0.56.0 | ✅ 浏览器通知（邮件/微信仍欠） | ⚠️ 部分 |
-| **6.7** | **多时间框架 + 回测可视化** | 🟢 待规划 | ❌ | ⚠️ 未做 |
+| **6.7** | **多时间框架 + 回测可视化** | 🟡 部分（V0.61.0） | ⚠️ **收益曲线 + 获利分析总结已落地**；周/月线趋势与权重参数回测未做 | ⚠️ 部分 |
 | **6.8** | **新手引导与帮助** | ✅ V0.58.0 | ✅ help.js + help.css + 5 HTML 注入 | ✅ |
 | **6.9** | **加载与离线体验** | 🟡 中 | ⚠️ 有进度条 + V0.60.0 加 60s 轮询 + visibilitychange，**仍无 Service Worker 离线缓存** | ⚠️ 部分 |
 | **6.10** | **央行购金数据化与自动化** | ✅ V0.57.0 | ✅ | ✅ |

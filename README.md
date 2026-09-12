@@ -135,7 +135,7 @@ gold-etf-analyzer/
 ├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（316 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday）
+├── tests/                   # pytest（334 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -145,10 +145,13 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 316 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers + cache + intraday，不依赖网络）
+python -m pytest -v          # 334 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers + cache + intraday + 业绩分析，不依赖网络）
+python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests
 ```
+
+> 前端为「纯静态 HTML + 内联 `<script>`」，**没有构建步骤**：JS 写错不会被任何编译期拦截，却会让整页脚本失效（按钮无响应、数据不加载），而后端测试依旧全绿。因此改动 `static/*.html` 后请务必执行上面的 `check_static_js.py`（等价于 `make check-web`）。
 
 ## 待办 / 优化方向
 
@@ -161,6 +164,7 @@ ruff format src tests
 - [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
 - [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
 - [x] 行情实时性增强（V0.60.0：served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 趋势页 60s 轮询 + visibilitychange + 持仓页 30s）
+- [x] 交易闭环与业绩分析（V0.61.0：**ETF 报价口径修正**（`/market/gold/etf-quote`，元/份）+ 加仓/减仓内联面板（金额换算 / 快捷比例 / 摊薄成本与已实现盈亏预览）+ 收益曲线（流水回放重建，含最大回撤）+ 获利分析总结（胜率 / 盈亏比 / 平均持仓天数））
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒
 - [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）

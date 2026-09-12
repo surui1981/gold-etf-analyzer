@@ -8,6 +8,7 @@ from app.schemas.position import (
     PositionCreate,
     PositionDeleteOut,
     PositionOut,
+    TradeRecordOut,
     TradeRequest,
 )
 from app.services.position import PositionService
@@ -46,6 +47,22 @@ async def export_positions(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=positions_export.csv"},
     )
+
+
+@router.get(
+    "/{position_id}/trades",
+    response_model=list[TradeRecordOut],
+    summary="持仓交易流水",
+)
+async def list_position_trades(
+    position_id: int,
+    service: PositionService = Depends(get_position_service),
+) -> list[TradeRecordOut]:
+    """某持仓的完整成交流水（按时间倒序），用于复盘加仓/减仓过程。"""
+    try:
+        return await service.list_trades(position_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post("/{position_id}/trades", response_model=PositionOut, summary="加仓/减仓")

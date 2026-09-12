@@ -111,9 +111,30 @@
   .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
   .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
   .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  /* ── V0.61.0 加仓 / 减仓内联交易面板 ── */
+  .trade-meta { font-size: 12.5px; color: #4b5563; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; line-height: 1.8; }
+  .trade-meta b { color: var(--text); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #1f2329; font-weight: 600; }
+  .trade-preview { flex-basis: 100%; font-size: 12.5px; color: #4b5563; background: #fffaf0; border: 1px dashed #f0e2b6; border-radius: 8px; padding: 9px 12px; line-height: 1.8; }
+  .trade-preview b { color: var(--text); }
+  /* ── V0.61.0 收益曲线 / 获利分析 ── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .kpi { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .kpi .k-label { font-size: 12px; color: var(--muted); }
+  .kpi .k-value { font-size: 21px; font-weight: 700; margin-top: 5px; line-height: 1.2; }
+  .kpi .k-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .up-txt { color: var(--up); }
+  .down-txt { color: var(--down); }
+  .chart-wrap { position: relative; height: 300px; }
+  .perf-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  .perf-table th, .perf-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  .perf-table th { color: var(--muted); font-weight: 500; font-size: 12px; }
+  .perf-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .summary-box { margin-top: 12px; padding: 12px 14px; background: #f8f9fa; border-left: 3px solid var(--accent); border-radius: 8px; font-size: 13px; line-height: 1.9; color: #374151; }
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -192,6 +213,53 @@
     <div id="posArea"><div class="empty">加载中…</div></div>
   </div>
 
+  <!-- 加仓 / 减仓交易面板（V0.61.0：内联面板替代原生 prompt，支持金额反算 + 快捷比例 + 交易后预览） -->
+  <div class="card" id="tradeCard" style="display:none">
+    <h2><span id="tradeTitle">加仓</span>
+      <button class="btn-export" type="button" onclick="closeTradePanel()">收起</button>
+    </h2>
+    <div class="trade-meta" id="tradeMeta"></div>
+    <form id="tradeForm">
+      <div class="quick-row" style="flex-basis:100%">
+        <span class="ql">方向：</span>
+        <button type="button" class="chip" id="sideBuy" onclick="setTradeSide('buy')">加仓（买入）</button>
+        <button type="button" class="chip" id="sideSell" onclick="setTradeSide('sell')">减仓（卖出）</button>
+      </div>
+      <div class="field"><label>成交价（元/份）</label><input id="tPrice" type="number" min="0.001" step="0.001" required oninput="tQtyFromAmount()"><div class="hint" id="tPriceHint"></div></div>
+      <div class="field"><label>金额（元）</label><input id="tAmount" type="number" min="0" step="1" placeholder="自动换算份数" oninput="tQtyFromAmount()"></div>
+      <div class="field"><label>数量（份）</label><input id="tQty" type="number" min="1" step="1" required oninput="tAmountFromQty()"><div class="hint" id="tQtyHint"></div></div>
+      <div class="field"><label>手续费（元）</label><input id="tFee" type="number" min="0" step="0.01" value="0" oninput="tUpdatePreview()"></div>
+      <div class="quick-row" style="flex-basis:100%">
+        <span class="ql">快捷比例：</span>
+        <button type="button" class="chip" onclick="tApplyRatio(0.25)">1/4</button>
+        <button type="button" class="chip" onclick="tApplyRatio(0.5)">1/2</button>
+        <button type="button" class="chip" onclick="tApplyRatio(0.75)">3/4</button>
+        <button type="button" class="chip" onclick="tApplyRatio(1)">全部</button>
+        <button type="button" class="chip" onclick="tUseCurrentPrice()">填入现价</button>
+      </div>
+      <div class="trade-preview" id="tPreview"></div>
+      <button type="submit" id="tSubmit">确认加仓</button>
+    </form>
+    <div class="err" id="tErr"></div>
+  </div>
+
+  <!-- 收益曲线分析（V0.61.0） -->
+  <div class="card">
+    <h2>收益曲线分析
+      <button class="btn-export" id="btnEquityRange" type="button" onclick="toggleEquityRange()">区间：90 天</button>
+    </h2>
+    <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
+    <div class="hint" id="equityHint">加载中…</div>
+  </div>
+
+  <!-- 获利分析总结评估（V0.61.0） -->
+  <div class="card">
+    <h2>获利分析总结评估</h2>
+    <div class="kpi-grid" id="perfKpis"><div class="empty">加载中…</div></div>
+    <div id="perfDetail"></div>
+    <div class="summary-box" id="perfSummary" style="display:none"></div>
+  </div>
+
   <footer>gold-etf-analyzer · 红盈绿亏 · 决策仅供参考，不构成投资建议</footer>
 
   <!-- 二次确认弹窗 -->
@@ -213,7 +281,14 @@
 
 <script>
 const API_BASE = "";  // 同源：静态页与 API 由同一 uvicorn 提供（8888/8891 均适用）
-const API = { decision: API_BASE + "/api/v1/decision/etf", positions: API_BASE + "/api/v1/positions", quote: API_BASE + "/api/v1/market/gold" };
+const API = {
+  decision: API_BASE + "/api/v1/decision/etf",
+  positions: API_BASE + "/api/v1/positions",
+  quote: API_BASE + "/api/v1/market/gold",              // 纽约金 XAU/USD（美元/盎司）→ 简报/提醒
+  etfQuote: API_BASE + "/api/v1/market/gold/etf-quote", // 518880 ETF（元/份）→ 估值/预填/清仓
+  equity: API_BASE + "/api/v1/portfolio/equity-curve",  // 收益曲线（V0.61.0）
+  performance: API_BASE + "/api/v1/portfolio/performance", // 获利分析（V0.61.0）
+};
 
 const ACTION_STYLE = {
   BUY: { txt: "买入", color: "var(--up)" }, ADD: { txt: "加仓", color: "var(--up)" },
@@ -273,7 +348,9 @@ function fmtMoney(n) { return "¥" + (Number(n) || 0).toFixed(2); }
 // ---------- 主动提醒（UX 6.6，浏览器通知 + 页面提示） ----------
 let ALERT_ON = localStorage.getItem("pm_alert_on") === "1";
 let _lastBand = null, _lastPrice = null, _inited = false;
-let lastQuote = null;
+let lastQuote = null;   // ETF 518880 价（元/份）—— 持仓估值 / 预填 / 清仓
+let lastNy = null;      // 纽约金 XAU/USD（美元/盎司）—— 简报 / 涨跌提醒
+let positionsCache = []; // 当前持仓缓存（加仓/减仓面板计算用，V0.61.0）
 
 function bandOf(score) {
   if (score >= 65) return "强烈偏多";
@@ -308,7 +385,7 @@ function checkAlerts(d, q) {
   }
   if (q && q.price_usd != null && _lastPrice) {
     const ch = Math.abs((q.price_usd - _lastPrice) / _lastPrice);
-    if (ch >= 0.02) showAlert(`纽约金波动 ${(ch * 100).toFixed(2)}%（现 ${q.price_usd.toFixed(2)}）`);
+    if (ch >= 0.02) showAlert(`纽约金波动 ${(ch * 100).toFixed(2)}%（现 ${q.price_usd.toFixed(2)} 美元/盎司）`);
   }
   _lastBand = band;
   if (q && q.price_usd != null) _lastPrice = q.price_usd;
@@ -318,7 +395,7 @@ function renderBriefing(d, q) {
   const b = document.getElementById("briefing");
   b.style.display = "block";
   const px = q && q.price_usd != null
-    ? `${q.price_usd.toFixed(2)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
+    ? `${q.price_usd.toFixed(2)} 美元/盎司（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
     : "—";
   b.innerHTML =
     `📌 <b>今日简报</b>：评估指数 <b>${d.trend_index.score.toFixed(1)}/100</b>（${d.position_level}）｜` +
@@ -326,7 +403,13 @@ function renderBriefing(d, q) {
 }
 
 async function refreshQuote() {
-  lastQuote = await json(API.quote).catch(() => null);
+  // V0.61.0：ETF 价（人民币，估值用）与纽约金价（美元，提醒用）分开取，杜绝口径混用
+  const [etf, ny] = await Promise.all([
+    json(API.etfQuote).catch(() => null),
+    json(API.quote).catch(() => null),
+  ]);
+  if (etf) lastQuote = etf;
+  if (ny) lastNy = ny;
   return lastQuote;
 }
 
@@ -363,14 +446,16 @@ let suggestRatio = null;
 
 async function fillPrice() {
   try {
-    const q = await json(API.quote);
-    if (q && q.price_usd) {
-      document.getElementById("price").value = q.price_usd;
+    const q = await json(API.etfQuote);
+    const ep = etfPrice(q);
+    if (ep != null) {
+      lastQuote = q;
+      document.getElementById("price").value = ep;
       document.getElementById("priceHint").textContent =
-        `当前市价 ${q.price_usd} 元（已自动填入，可修改）`;
+        `ETF 最新价 ${ep} 元/份（已自动填入，可修改）`;
     }
   } catch (e) {
-    document.getElementById("priceHint").textContent = "市价获取失败，请手动填写成交价";
+    document.getElementById("priceHint").textContent = "ETF 市价获取失败，请手动填写成交价";
   }
 }
 
@@ -467,9 +552,9 @@ async function loadDecision() {
       </div>
       <div class="factor-list">${buildFactors(d).join("")}</div>
       ${buildComposition(d.trend_index)}`;
-    // 简报 + 主动提醒（指数档位/金价波动）
-    renderBriefing(d, lastQuote);
-    checkAlerts(d, lastQuote);
+    // 简报 + 主动提醒（指数档位/纽约金波动）
+    renderBriefing(d, lastNy);
+    checkAlerts(d, lastNy);
     // 预填开仓价格
     document.getElementById("price").value = d.trend_index ? "" : "";
   } catch (e) {
@@ -480,6 +565,7 @@ async function loadDecision() {
 async function loadPositions() {
   try {
     const list = await json(API.positions);
+    positionsCache = list;   // V0.61.0：供交易面板读取持仓明细
     const area = document.getElementById("posArea");
     if (!list.length) { area.innerHTML = '<div class="empty">暂无持仓，先买入建仓吧</div>'; return; }
     const rows = list.map(p => {
@@ -499,8 +585,8 @@ async function loadPositions() {
         <td class="${cls}">${sign}${p.pnl.toFixed(2)}</td>
         <td class="${cls}">${sign}${p.pnl_pct.toFixed(2)}%${flag}</td>
         <td>
-          <button class="sm op-buy" onclick="trade(${p.id},'buy')">加</button>
-          <button class="sm op-sell" onclick="trade(${p.id},'sell')">减</button>
+          <button class="sm op-buy" onclick="openTradePanel(${p.id},'buy')">加</button>
+          <button class="sm op-sell" onclick="openTradePanel(${p.id},'sell')">减</button>
           <button class="sm ghost" onclick="closePos(${p.id})">清仓</button>
           <button class="sm del" onclick="deletePosition(${p.id})">删</button>
         </td>
@@ -537,27 +623,151 @@ document.getElementById("openForm").addEventListener("submit", async (ev) => {
   } catch (e) { document.getElementById("openErr").textContent = "开仓失败：" + e.message; }
 });
 
-async function trade(id, side) {
-  const label = side === "buy" ? "加仓" : "减仓";
-  const qty = prompt(label + "数量（份）：");
-  if (qty === null) return;
-  const price = prompt("成交价（元）：");
-  if (price === null) return;
-  const body = { side, quantity: parseFloat(qty), price: parseFloat(price), fee: 0 };
+// ---------- 加仓 / 减仓内联交易面板（V0.61.0：替代原生 prompt） ----------
+let tradeCtx = null;   // { id, side, position }
+
+// ETF 报价统一按 price（元/份）消费，兼容旧字段 price_usd
+function etfPrice(q) {
+  if (!q) return null;
+  const v = (q.price != null) ? q.price : q.price_usd;
+  return (v != null && isFinite(v)) ? v : null;
+}
+
+function openTradePanel(id, side) {
+  const p = positionsCache.find(x => x.id === id);
+  if (!p) { alert("持仓不存在，请先刷新列表"); return; }
+  tradeCtx = { id, side, position: p };
+  document.getElementById("tradeCard").style.display = "block";
+  setTradeSide(side);
+  const px = etfPrice(lastQuote) != null ? etfPrice(lastQuote) : p.market_price;
+  document.getElementById("tPrice").value = px;
+  document.getElementById("tPriceHint").textContent = `ETF 最新价 ${px} 元/份（已预填，可修改）`;
+  document.getElementById("tAmount").value = "";
+  document.getElementById("tQty").value = "";
+  document.getElementById("tFee").value = "0";
+  document.getElementById("tErr").textContent = "";
+  tUpdatePreview();
+  document.getElementById("tradeCard").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function closeTradePanel() {
+  document.getElementById("tradeCard").style.display = "none";
+  tradeCtx = null;
+}
+
+function setTradeSide(side) {
+  if (!tradeCtx) return;
+  tradeCtx.side = side;
+  const buy = side === "buy";
+  document.getElementById("tradeTitle").textContent = buy ? "加仓（买入）" : "减仓（卖出）";
+  document.getElementById("sideBuy").classList.toggle("active", buy);
+  document.getElementById("sideSell").classList.toggle("active", !buy);
+  const btn = document.getElementById("tSubmit");
+  btn.textContent = buy ? "确认加仓" : "确认减仓";
+  btn.style.background = buy ? "var(--up)" : "var(--down)";
+  tUpdateMeta();
+  tUpdatePreview();
+}
+
+function tUpdateMeta() {
+  if (!tradeCtx) return;
+  const p = tradeCtx.position;
+  document.getElementById("tradeMeta").innerHTML =
+    `持仓 #${p.id} · <b>${p.name}（${p.symbol}）</b>｜持有 <b>${p.quantity}</b> 份｜成本 <b>${p.avg_cost.toFixed(4)}</b> 元/份` +
+    `｜现价 <b>${p.market_price.toFixed(3)}</b>｜浮动盈亏 <b>${fmtSigned(p.pnl)}</b>（${p.pnl_pct >= 0 ? "+" : ""}${p.pnl_pct.toFixed(2)}%）`;
+}
+
+function tCurrentPrice() { return parseFloat(document.getElementById("tPrice").value) || 0; }
+
+function tUseCurrentPrice() {
+  const px = etfPrice(lastQuote) != null ? etfPrice(lastQuote) : (tradeCtx && tradeCtx.position ? tradeCtx.position.market_price : 0);
+  if (px > 0) { document.getElementById("tPrice").value = px; tQtyFromAmount(); }
+}
+
+function tQtyFromAmount() {
+  const p = tCurrentPrice();
+  const a = parseFloat(document.getElementById("tAmount").value) || 0;
+  if (p > 0 && a > 0) {
+    const q = Math.floor(a / p);
+    document.getElementById("tQty").value = q > 0 ? q : "";
+  }
+  tUpdatePreview();
+}
+
+function tAmountFromQty() {
+  const p = tCurrentPrice();
+  const q = parseFloat(document.getElementById("tQty").value) || 0;
+  if (p > 0 && q > 0) document.getElementById("tAmount").value = Math.round(q * p);
+  tUpdatePreview();
+}
+
+function tApplyRatio(r) {
+  if (!tradeCtx) return;
+  const p = tradeCtx.position;
+  if (p.quantity <= 0) return;
+  // 加仓：按当前持仓份数的比例追加；减仓：卖出当前持仓的该比例
+  let q = Math.floor(p.quantity * r);
+  if (tradeCtx.side === "sell") q = Math.min(q, p.quantity);
+  document.getElementById("tQty").value = Math.max(q, 1);
+  tAmountFromQty();
+}
+
+function tUpdatePreview() {
+  if (!tradeCtx) return;
+  const p = tradeCtx.position;
+  const q = parseFloat(document.getElementById("tQty").value) || 0;
+  const px = tCurrentPrice();
+  const fee = parseFloat(document.getElementById("tFee").value) || 0;
+  const el = document.getElementById("tPreview");
+  if (!(q > 0) || !(px > 0)) { el.innerHTML = "填写数量与成交价后，此处显示交易预览（含摊薄成本 / 已实现盈亏）"; return; }
+  const amount = q * px;
+  if (tradeCtx.side === "buy") {
+    const newQty = p.quantity + q;
+    const newCost = (p.avg_cost * p.quantity + px * q + fee) / newQty;
+    el.innerHTML =
+      `预计买入 <b>${q}</b> 份，成交金额 <b>${fmtMoney(amount)}</b>${fee ? ` ＋手续费 <b>${fmtMoney(fee)}</b>` : ""}<br>` +
+      `加仓后：持有 <b>${newQty.toFixed(0)}</b> 份，摊薄成本 <b>${newCost.toFixed(4)}</b> 元/份（原 ${p.avg_cost.toFixed(4)}）`;
+  } else {
+    const remain = p.quantity - q;
+    if (remain < 0) { el.innerHTML = `<span class="up-txt">⚠ 减仓数量超过当前持仓（${p.quantity} 份）</span>`; return; }
+    const realized = (px - p.avg_cost) * q - fee;
+    el.innerHTML =
+      `预计卖出 <b>${q}</b> 份，成交金额 <b>${fmtMoney(amount)}</b>${fee ? ` －手续费 <b>${fmtMoney(fee)}</b>` : ""}<br>` +
+      `本笔已实现盈亏 <b class="${realized >= 0 ? "up-txt" : "down-txt"}">${fmtSigned(realized)}</b>；剩余 <b>${remain.toFixed(0)}</b> 份`;
+  }
+}
+
+document.getElementById("tradeForm").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
+  if (!tradeCtx) return;
+  const body = {
+    side: tradeCtx.side,
+    quantity: parseFloat(document.getElementById("tQty").value),
+    price: parseFloat(document.getElementById("tPrice").value),
+    fee: parseFloat(document.getElementById("tFee").value) || 0,
+  };
   const err = validateTrade(body);
-  if (err) { alert(err); return; }
+  if (err) { document.getElementById("tErr").textContent = err; return; }
+  if (tradeCtx.side === "sell" && body.quantity > tradeCtx.position.quantity) {
+    document.getElementById("tErr").textContent = `减仓数量超过当前持仓（${tradeCtx.position.quantity} 份）`;
+    return;
+  }
+  document.getElementById("tErr").textContent = "";
+  const label = tradeCtx.side === "buy" ? "加仓" : "减仓";
   const est = body.quantity * body.price + body.fee;
   const ok = await confirmDialog(
     "确认" + label,
     `品种：<b>518880 黄金ETF</b><br>方向：<b>${label}</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>预估金额：<b>${fmtMoney(est)}</b>`,
-    side === "sell"
+    tradeCtx.side === "sell"
   );
   if (!ok) return;
+  const id = tradeCtx.id;
   try {
     await json(API.positions + "/" + id + "/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    loadPositions(); loadDecision();
-  } catch (e) { alert("操作失败：" + e.message); }
-}
+    closeTradePanel();
+    loadPositions(); loadDecision(); loadEquity(); loadPerformance();
+  } catch (e) { document.getElementById("tErr").textContent = "操作失败：" + e.message; }
+});
 
 async function deletePosition(id) {
   const ok = await confirmDialog(
@@ -581,9 +791,10 @@ async function deletePosition(id) {
 fillPrice();
 
 async function closePos(id) {
-  const q = await json(API.quote).catch(() => null);
-  const px = q
-    ? `${q.price_usd.toFixed(3)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
+  const q = await json(API.etfQuote).catch(() => null);
+  const ep = etfPrice(q);
+  const px = ep != null
+    ? `${ep.toFixed(3)} 元/份（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
     : "最新市价";
   const ok = await confirmDialog("确认清仓", `将按 <b>${px}</b> 全部卖出并平仓。此操作将锁定当前盈亏，请确认。`, true);
   if (!ok) return;
@@ -607,16 +818,128 @@ document.getElementById("btnExport").addEventListener("click", async () => {
 });
 
 (async function init() {
-  const q = await json(API.quote).catch(() => null);
-  document.getElementById("subtitle").textContent = q
-    ? `518880 最新价 ${q.price_usd.toFixed(3)} 元（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
+  const q = await json(API.etfQuote).catch(() => null);
+  lastNy = await json(API.quote).catch(() => null);
+  const ep = etfPrice(q);
+  document.getElementById("subtitle").textContent = ep != null
+    ? `518880 最新价 ${ep.toFixed(3)} 元/份（${q.change_pct >= 0 ? "+" : ""}${q.change_pct}%）`
     : "518880 华安黄金ETF";
   lastQuote = q;
   updateRemindToggle();
   loadDecision();
   loadPositions();
+  loadEquity();
+  loadPerformance();
   startAlertPolling();
 })();
+
+// ==================== V0.61.0：收益曲线分析 ====================
+let equityDays = 90;
+let equityChart = null;
+const EQUITY_RANGES = [30, 90, 180, 365];
+
+function fmtSigned(n) {
+  const v = Number(n) || 0;
+  return (v >= 0 ? "+¥" : "-¥") + Math.abs(v).toFixed(2);
+}
+function fmtPct(v) {
+  const n = Number(v) || 0;
+  return (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+}
+
+function toggleEquityRange() {
+  const i = EQUITY_RANGES.indexOf(equityDays);
+  equityDays = EQUITY_RANGES[(i + 1) % EQUITY_RANGES.length];
+  document.getElementById("btnEquityRange").textContent = `区间：${equityDays} 天`;
+  loadEquity();
+}
+
+async function loadEquity() {
+  const hint = document.getElementById("equityHint");
+  try {
+    const d = await json(`${API.equity}?days=${equityDays}`);
+    if (!d.points || !d.points.length) {
+      hint.textContent = "暂无交易记录，记录买入后即可生成收益曲线";
+      if (equityChart) { equityChart.destroy(); equityChart = null; }
+      return;
+    }
+    drawEquityChart(d);
+    const s = d.summary || {};
+    hint.textContent =
+      `${d.points.length} 个交易日 ｜ 累计收益率 ${fmtPct(s.total_return_pct)}` +
+      ` ｜ 最大回撤 ${fmtPct(s.max_drawdown_pct)} ｜ 当前持仓市值 ${fmtMoney(s.latest_market_value)}`;
+  } catch (e) {
+    hint.textContent = "收益曲线加载失败：" + e.message;
+  }
+}
+
+function drawEquityChart(d) {
+  const ctx = document.getElementById("equityChart");
+  if (!window.Chart) { document.getElementById("equityHint").textContent = "图表库未加载（离线状态）"; return; }
+  if (equityChart) equityChart.destroy();
+  equityChart = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: d.points.map(p => p.date),
+      datasets: [
+        { label: "累计收益率 %", data: d.points.map(p => p.return_pct), borderColor: "#c92a2a", backgroundColor: "rgba(201,42,42,.08)", yAxisID: "y", tension: .25, pointRadius: 0, borderWidth: 2 },
+        { label: "持仓市值 ¥", data: d.points.map(p => p.market_value), borderColor: "#c9a227", backgroundColor: "rgba(201,162,39,.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 4] },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { labels: { color: "#4b5563", boxWidth: 12, font: { size: 11 } } } },
+      scales: {
+        x: { ticks: { color: "#868e96", maxTicksLimit: 10, font: { size: 11 } }, grid: { color: "rgba(0,0,0,.05)" } },
+        y: { position: "left", ticks: { color: "#c92a2a", font: { size: 11 }, callback: v => v + "%" }, grid: { color: "rgba(0,0,0,.05)" } },
+        y1: { position: "right", ticks: { color: "#c9a227", font: { size: 11 } }, grid: { drawOnChartArea: false } },
+      },
+    },
+  });
+}
+
+// ==================== V0.61.0：获利分析总结评估 ====================
+async function loadPerformance() {
+  const kpis = document.getElementById("perfKpis");
+  const detail = document.getElementById("perfDetail");
+  const sum = document.getElementById("perfSummary");
+  try {
+    const d = await json(API.performance);
+    const cls = v => (Number(v) || 0) >= 0 ? "up-txt" : "down-txt";
+    kpis.innerHTML = `
+      <div class="kpi"><div class="k-label">总收益（浮动＋已实现）</div>
+        <div class="k-value ${cls(d.total_pnl)}">${fmtSigned(d.total_pnl)}</div>
+        <div class="k-sub">收益率 ${fmtPct(d.total_return_pct)}</div></div>
+      <div class="kpi"><div class="k-label">已实现盈亏（落袋）</div>
+        <div class="k-value ${cls(d.realized_pnl)}">${fmtSigned(d.realized_pnl)}</div>
+        <div class="k-sub">${d.closed_trades} 笔平仓</div></div>
+      <div class="kpi"><div class="k-label">浮动盈亏（持仓中）</div>
+        <div class="k-value ${cls(d.unrealized_pnl)}">${fmtSigned(d.unrealized_pnl)}</div>
+        <div class="k-sub">${d.open_positions} 笔持仓</div></div>
+      <div class="kpi"><div class="k-label">胜率（盈利平仓占比）</div>
+        <div class="k-value">${Number(d.win_rate || 0).toFixed(1)}%</div>
+        <div class="k-sub">${d.win_trades} 胜 / ${d.loss_trades} 负</div></div>
+      <div class="kpi"><div class="k-label">累计投入成本</div>
+        <div class="k-value">${fmtMoney(d.total_cost)}</div>
+        <div class="k-sub">买入 ${d.buy_count} 笔 / 卖出 ${d.sell_count} 笔</div></div>`;
+    detail.innerHTML = `<table class="perf-table">
+      <tr><th>明细指标</th><th class="num">数值</th></tr>
+      <tr><td>最佳平仓</td><td class="num ${cls(d.best_trade_pnl)}">${fmtSigned(d.best_trade_pnl)}</td></tr>
+      <tr><td>最差平仓</td><td class="num ${cls(d.worst_trade_pnl)}">${fmtSigned(d.worst_trade_pnl)}</td></tr>
+      <tr><td>平均每笔平仓盈亏</td><td class="num ${cls(d.avg_trade_pnl)}">${fmtSigned(d.avg_trade_pnl)}</td></tr>
+      <tr><td>盈利平仓合计 / 亏损平仓合计</td><td class="num"><span class="up-txt">${fmtSigned(d.gross_profit)}</span> / <span class="down-txt">${fmtSigned(d.gross_loss)}</span></td></tr>
+      <tr><td>盈亏比（总盈利 / 总亏损）</td><td class="num">${d.profit_factor == null ? "—" : Number(d.profit_factor).toFixed(2)}</td></tr>
+      <tr><td>平均持仓天数</td><td class="num">${Number(d.avg_holding_days || 0).toFixed(1)} 天</td></tr>
+    </table>`;
+    sum.style.display = "block";
+    sum.innerHTML = d.summary;
+  } catch (e) {
+    kpis.innerHTML = `<div class="err">获利分析加载失败：${e.message}</div>`;
+    detail.innerHTML = "";
+    sum.style.display = "none";
+  }
+}
 </script>
   <script src="/static/freshness.js"></script>
   <script src="/static/help.js" defer></script>
