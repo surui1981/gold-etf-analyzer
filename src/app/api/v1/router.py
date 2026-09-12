@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    account,
     analysis,
     central_bank,
     decision,
@@ -13,6 +14,7 @@ from app.api.v1.endpoints import (
     position,
     settings,
     snapshot,
+    trades,
 )
 
 api_router = APIRouter()
@@ -20,6 +22,8 @@ api_router.include_router(health.router)
 api_router.include_router(analysis.router)
 api_router.include_router(market.router)
 api_router.include_router(position.router)
+api_router.include_router(account.router)
+api_router.include_router(trades.router)
 api_router.include_router(decision.router)
 api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)

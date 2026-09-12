@@ -6,6 +6,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
+from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
 from app.repositories.db import async_session_factory
@@ -15,6 +16,7 @@ from app.repositories.news import NewsScoreRepository
 from app.repositories.position import PositionRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
+from app.services.account import AccountService
 from app.services.analysis import AnalysisService
 from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
@@ -27,6 +29,7 @@ from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
 from app.services.snapshot import DailySnapshotService
 from app.services.trend import TrendService
+from app.services.trades import TradeHistoryService
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
@@ -167,12 +170,35 @@ async def get_position_repository(
     return PositionRepository(session)
 
 
+async def get_account_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> AccountRepository:
+    """账本仓储依赖。"""
+    return AccountRepository(session)
+
+
+def get_account_service(
+    repo: AccountRepository = Depends(get_account_repository),
+    positions: PositionRepository = Depends(get_position_repository),
+) -> AccountService:
+    """账本服务依赖（账本仓储 + 持仓仓储，用于归档前的未平仓校验与统计）。"""
+    return AccountService(repo=repo, positions=positions)
+
+
 def get_position_service(
     repo: PositionRepository = Depends(get_position_repository),
     market: MarketDataRepository = Depends(get_market_data_repository),
+    accounts: AccountService = Depends(get_account_service),
 ) -> PositionService:
-    """交易面服务依赖（持仓仓储 + 行情）。"""
-    return PositionService(repo=repo, market=market)
+    """交易面服务依赖（持仓仓储 + 行情 + 账本解析）。"""
+    return PositionService(repo=repo, market=market, accounts=accounts)
+
+
+def get_trade_history_service(
+    repo: PositionRepository = Depends(get_position_repository),
+) -> TradeHistoryService:
+    """交易历史服务依赖（持仓仓储：流水 + 持仓联表查询）。"""
+    return TradeHistoryService(repo=repo)
 
 
 def get_portfolio_analytics_service(

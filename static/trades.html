@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>黄金ETF 交易历史查询</title>
+<style>
+  :root {
+    --up: #e03131;      /* 盈利/上涨 → 红（中国习惯） */
+    --down: #2f9e44;    /* 亏损/下跌 → 绿 */
+    --bg: #f7f8fa; --card: #ffffff; --border: #e6e8eb;
+    --text: #1f2329; --muted: #8a919f; --accent: #c9a227;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  /* 顶部导航（与全站一致，置顶） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin-bottom: 12px; }
+  .hero { margin-bottom: 16px; }
+  .hero .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .notice { display: inline-block; margin-top: 8px; font-size: 11.5px; color: #92400e; background: #fff7e6; border: 1px solid #f0e2b6; border-radius: 6px; padding: 3px 10px; }
+  /* 筛选器 */
+  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  .fld { display: flex; flex-direction: column; gap: 4px; }
+  .fld label { font-size: 12px; color: var(--muted); }
+  .fld select, .fld input { border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 13px; color: var(--text); background: #fff; font-family: inherit; }
+  .fld input[type=text] { width: 160px; }
+  .btn { border: 1px solid var(--accent); background: var(--accent); color: #1f2329; border-radius: 8px; padding: 7px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .btn.ghost { background: #fff; color: var(--text); border-color: var(--border); font-weight: 400; }
+  .btn:hover { filter: brightness(1.05); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+  .chips .cl { font-size: 12px; color: var(--muted); }
+  .chip { border: 1px solid var(--border); background: #fff; border-radius: 999px; padding: 4px 12px; font-size: 12.5px; cursor: pointer; color: var(--text); }
+  .chip:hover { border-color: var(--accent); background: #fffaf0; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: #1f2329; font-weight: 600; }
+  /* KPI */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .kpi .k-label { font-size: 12px; color: var(--muted); }
+  .kpi .k-value { font-size: 20px; font-weight: 700; margin-top: 5px; line-height: 1.2; font-variant-numeric: tabular-nums; }
+  .kpi .k-sub { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .up-txt { color: var(--up); }
+  .down-txt { color: var(--down); }
+  /* 表格 */
+  .tbl-wrap { overflow-x: auto; }
+  table.trades { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.trades th, table.trades td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+  table.trades th { color: var(--muted); font-weight: 500; font-size: 12px; background: #fafbfc; position: sticky; top: 0; }
+  table.trades td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.trades tr:hover td { background: #fcfcfd; }
+  .tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 600; color: #fff; }
+  .tag.buy { background: var(--up); }
+  .tag.sell { background: var(--down); }
+  .empty { color: var(--muted); font-size: 13px; padding: 18px 4px; line-height: 1.9; }
+  /* 分页 */
+  .pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+  .pager button { border: 1px solid var(--border); background: #fff; border-radius: 8px; padding: 5px 12px; cursor: pointer; font-size: 12.5px; color: var(--text); }
+  .pager button:disabled { opacity: .45; cursor: not-allowed; }
+  .acc-hint { font-size: 12px; color: #4b5563; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; line-height: 1.8; }
+  .acc-hint b { color: var(--text); }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+<link rel="stylesheet" href="/static/help.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- 顶部导航（统一，置顶；账本切换器由 account.js 注入） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/trades" class="active">交易历史</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/central-bank">央行购金统计</a>
+    </div>
+  </nav>
+
+  <div id="freshnessBar"></div>
+
+  <header class="hero">
+    <h1>交易历史查询</h1>
+    <div class="tagline">按账本 / 方向 / 日期区间 / 持仓筛选每一笔成交，附已实现盈亏与成交后份额，可导出 CSV 对账</div>
+    <div class="notice">仅供研究参考，不构成投资建议</div>
+  </header>
+
+  <!-- 筛选 -->
+  <div class="card">
+    <h2>筛选条件</h2>
+    <div class="acc-hint" id="accHint">账本：<b>加载中…</b>（可在右上角切换；「全部账本」为合并视图）</div>
+    <div class="filters">
+      <div class="fld">
+        <label for="fSide">方向</label>
+        <select id="fSide">
+          <option value="">全部</option>
+          <option value="buy">买入</option>
+          <option value="sell">卖出</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label for="fStart">起始日期</label>
+        <input type="date" id="fStart">
+      </div>
+      <div class="fld">
+        <label for="fEnd">结束日期</label>
+        <input type="date" id="fEnd">
+      </div>
+      <div class="fld">
+        <label for="fPosition">持仓</label>
+        <select id="fPosition"><option value="">全部持仓</option></select>
+      </div>
+      <div class="fld">
+        <label for="fKeyword">关键字</label>
+        <input type="text" id="fKeyword" placeholder="名称或代码，如 518880">
+      </div>
+      <div class="fld">
+        <label for="fSize">每页</label>
+        <select id="fSize">
+          <option value="20">20 条</option>
+          <option value="50" selected>50 条</option>
+          <option value="100">100 条</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>&nbsp;</label>
+        <button class="btn" id="btnQuery" type="button">查询</button>
+      </div>
+      <div class="fld">
+        <label>&nbsp;</label>
+        <button class="btn ghost" id="btnReset" type="button">重置</button>
+      </div>
+      <div class="fld">
+        <label>&nbsp;</label>
+        <button class="btn ghost" id="btnExport" type="button">⬇ 导出 CSV</button>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="cl">快捷区间：</span>
+      <button class="chip" data-days="7" type="button">近 7 天</button>
+      <button class="chip" data-days="30" type="button">近 30 天</button>
+      <button class="chip" data-days="90" type="button">近 90 天</button>
+      <button class="chip" data-days="365" type="button">近 1 年</button>
+      <button class="chip active" data-days="" type="button">全部</button>
+    </div>
+  </div>
+
+  <!-- 汇总 -->
+  <div class="card">
+    <h2>汇总 <span class="sub" id="summaryScope">（覆盖全部筛选结果，非当前页）</span></h2>
+    <div class="kpi-grid" id="kpiArea"></div>
+  </div>
+
+  <!-- 明细 -->
+  <div class="card">
+    <h2>成交明细 <span class="sub" id="listInfo"></span></h2>
+    <div class="tbl-wrap">
+      <table class="trades">
+        <thead>
+          <tr>
+            <th>成交时间</th>
+            <th>账本</th>
+            <th>品种</th>
+            <th>方向</th>
+            <th class="num">数量(份)</th>
+            <th class="num">成交价</th>
+            <th class="num">成交金额</th>
+            <th class="num">手续费</th>
+            <th class="num">已实现盈亏</th>
+            <th class="num">成交后份额</th>
+            <th>持仓</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="11" class="empty">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="pager">
+      <span id="pageInfo"></span>
+      <button id="btnPrev" type="button">上一页</button>
+      <button id="btnNext" type="button">下一页</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/account.js"></script>
+<script src="/static/freshness.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  var API = "/api/v1/trades";
+
+  var state = { page: 1, pageSize: 50, pageCount: 1, total: 0, loading: false };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function fmtMoney(v) {
+    if (v == null) return "—";
+    return Number(v).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function fmtQty(v) {
+    if (v == null) return "—";
+    return Number(v).toLocaleString("zh-CN", { maximumFractionDigits: 4 });
+  }
+  function fmtTime(s) {
+    if (!s) return "—";
+    return String(s).replace("T", " ").slice(0, 16);
+  }
+  function signCls(v) {
+    if (v == null || v === 0) return "";
+    return v > 0 ? "up-txt" : "down-txt";
+  }
+  function signText(v) {
+    if (v == null) return "—";
+    var n = Number(v);
+    return (n > 0 ? "+" : "") + fmtMoney(n);
+  }
+
+  /* ── URL 组装（含当前账本） ── */
+  function buildQuery(withPage) {
+    var parts = [];
+    var acc = Acc.currentId();
+    if (acc) parts.push("account_id=" + encodeURIComponent(acc));
+    var side = $("fSide").value;
+    if (side) parts.push("side=" + side);
+    var start = $("fStart").value;
+    if (start) parts.push("start=" + start);
+    var end = $("fEnd").value;
+    if (end) parts.push("end=" + end);
+    var pos = $("fPosition").value;
+    if (pos) parts.push("position_id=" + pos);
+    var kw = $("fKeyword").value.trim();
+    if (kw) parts.push("keyword=" + encodeURIComponent(kw));
+    if (withPage) {
+      parts.push("page=" + state.page);
+      parts.push("page_size=" + state.pageSize);
+    }
+    return parts.length ? ("?" + parts.join("&")) : "";
+  }
+
+  /* ── 加载汇总 + 明细 ── */
+  function load() {
+    if (state.loading) return;
+    state.loading = true;
+    var url = API + buildQuery(true);
+    $("listInfo").textContent = "（查询中…）";
+    fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (d) {
+        state.page = d.page; state.pageCount = d.page_count;
+        state.total = d.total; state.pageSize = d.page_size;
+        renderSummary(d.summary);
+        renderTable(d.items);
+        $("pageInfo").textContent = "第 " + d.page + " / " + d.page_count + " 页 · 共 " + d.total + " 笔";
+        $("listInfo").textContent = "（筛选结果 " + d.total + " 笔）";
+        $("btnPrev").disabled = d.page <= 1;
+        $("btnNext").disabled = d.page >= d.page_count;
+        renderAccHint();
+      })
+      .catch(function (e) {
+        $("tbody").innerHTML = '<tr><td colspan="11" class="empty">加载失败：' + esc(e.message) +
+          '<br>请确认服务已启动（127.0.0.1:8888）后重试。</td></tr>';
+        $("listInfo").textContent = "";
+      })
+      .then(function () { state.loading = false; });
+  }
+
+  function renderSummary(s) {
+    var pnlCls = signCls(s.realized_pnl);
+    var netCls = s.net_amount > 0 ? "" : "";
+    var cards = [
+      { label: "成交笔数", value: s.count + " 笔", sub: "买入 " + s.buy_count + " / 卖出 " + s.sell_count },
+      { label: "买入金额", value: "¥" + fmtMoney(s.buy_amount), sub: "不含手续费" },
+      { label: "卖出金额", value: "¥" + fmtMoney(s.sell_amount), sub: "不含手续费" },
+      { label: "净流出", value: "¥" + fmtMoney(s.net_amount), sub: "买入 − 卖出", cls: netCls },
+      { label: "手续费合计", value: "¥" + fmtMoney(s.total_fee), sub: "所有成交" },
+      { label: "已实现盈亏", value: signText(s.realized_pnl), sub: "均价法，已扣卖出手续费", cls: pnlCls }
+    ];
+    $("kpiArea").innerHTML = cards.map(function (c) {
+      return '<div class="kpi"><div class="k-label">' + esc(c.label) + '</div>' +
+        '<div class="k-value ' + (c.cls || "") + '">' + esc(c.value) + '</div>' +
+        '<div class="k-sub">' + esc(c.sub) + '</div></div>';
+    }).join("");
+  }
+
+  function renderTable(items) {
+    if (!items || !items.length) {
+      $("tbody").innerHTML = '<tr><td colspan="11" class="empty">' +
+        '当前筛选条件下没有成交记录。<br>可在「持仓与决策」页通过加仓 / 减仓录入交易，' +
+        '或放宽筛选条件（如把日期区间清空、切到「全部账本」）后重试。</td></tr>';
+      return;
+    }
+    $("tbody").innerHTML = items.map(function (i) {
+      var tag = i.side === "buy"
+        ? '<span class="tag buy">买入</span>'
+        : '<span class="tag sell">卖出</span>';
+      return "<tr>" +
+        "<td>" + esc(fmtTime(i.traded_at)) + "</td>" +
+        "<td>" + esc(i.account_name) + "</td>" +
+        "<td>" + esc(i.name) + " <span style='color:var(--muted)'>" + esc(i.symbol) + "</span></td>" +
+        "<td>" + tag + "</td>" +
+        '<td class="num">' + esc(fmtQty(i.quantity)) + "</td>" +
+        '<td class="num">' + esc(fmtMoney(i.price)) + "</td>" +
+        '<td class="num">' + esc(fmtMoney(i.amount)) + "</td>" +
+        '<td class="num">' + esc(fmtMoney(i.fee)) + "</td>" +
+        '<td class="num ' + signCls(i.realized_pnl) + '">' + esc(signText(i.realized_pnl)) + "</td>" +
+        '<td class="num">' + esc(fmtQty(i.post_quantity)) + "</td>" +
+        '<td><a href="/portfolio" style="color:var(--accent);text-decoration:none">#' + esc(i.position_id) + "</a></td>" +
+        "</tr>";
+    }).join("");
+  }
+
+  /* ── 持仓下拉（跟随账本） ── */
+  function loadPositions() {
+    var url = Acc.url("/api/v1/positions");
+    return fetch(url, { headers: { Accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (list) {
+        var cur = $("fPosition").value;
+        var opts = ['<option value="">全部持仓</option>'];
+        (list || []).forEach(function (p) {
+          opts.push('<option value="' + p.id + '">#' + p.id + " " + esc(p.name) +
+            "（" + fmtQty(p.quantity) + " 份）</option>");
+        });
+        $("fPosition").innerHTML = opts.join("");
+        $("fPosition").value = cur;
+      })
+      .catch(function () { /* 忽略：持仓列表失败不影响查询 */ });
+  }
+
+  function renderAccHint() {
+    var isAll = Acc.isAll();
+    var name = isAll ? "全部账本（合并视图）" : Acc.accountName(Acc.currentId());
+    $("accHint").innerHTML = "账本：<b>" + esc(name) + "</b>（右上角可切换；" +
+      (isAll
+        ? "合并视图会汇总所有账本的成交）"
+        : "开仓 / 加仓将记入账本 <b>" + esc(Acc.accountName(Acc.targetAccountId())) + "</b>）");
+  }
+
+  /* ── 快捷区间 ── */
+  function pad(n) { return n < 10 ? "0" + n : String(n); }
+  function isoDaysAgo(days) {
+    var d = new Date();
+    d.setDate(d.getDate() - days);
+    return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+  }
+  function today() { return isoDaysAgo(0); }
+
+  function bindRangeChips() {
+    var chips = document.querySelectorAll(".chips .chip");
+    Array.prototype.forEach.call(chips, function (c) {
+      c.addEventListener("click", function () {
+        Array.prototype.forEach.call(chips, function (x) { x.classList.remove("active"); });
+        c.classList.add("active");
+        var days = c.getAttribute("data-days");
+        if (days) {
+          $("fStart").value = isoDaysAgo(Number(days));
+          $("fEnd").value = today();
+        } else {
+          $("fStart").value = "";
+          $("fEnd").value = "";
+        }
+        state.page = 1;
+        load();
+      });
+    });
+  }
+
+  /* ── 事件绑定 ── */
+  function bind() {
+    $("btnQuery").addEventListener("click", function () { state.page = 1; load(); });
+    $("btnReset").addEventListener("click", function () {
+      $("fSide").value = "";
+      $("fStart").value = "";
+      $("fEnd").value = "";
+      $("fPosition").value = "";
+      $("fKeyword").value = "";
+      $("fSize").value = "50";
+      state.pageSize = 50;
+      state.page = 1;
+      var chips = document.querySelectorAll(".chips .chip");
+      Array.prototype.forEach.call(chips, function (x, idx) {
+        x.classList.toggle("active", idx === chips.length - 1);
+      });
+      load();
+    });
+    $("fSize").addEventListener("change", function () {
+      state.pageSize = Number($("fSize").value) || 50;
+      state.page = 1;
+      load();
+    });
+    $("fKeyword").addEventListener("keydown", function (e) {
+      if (e.key === "Enter") { state.page = 1; load(); }
+    });
+    $("fSide").addEventListener("change", function () { state.page = 1; load(); });
+    $("fPosition").addEventListener("change", function () { state.page = 1; load(); });
+    $("fStart").addEventListener("change", function () { state.page = 1; load(); });
+    $("fEnd").addEventListener("change", function () { state.page = 1; load(); });
+    $("btnPrev").addEventListener("click", function () {
+      if (state.page > 1) { state.page -= 1; load(); }
+    });
+    $("btnNext").addEventListener("click", function () {
+      if (state.page < state.pageCount) { state.page += 1; load(); }
+    });
+    $("btnExport").addEventListener("click", function () {
+      window.location.href = API + "/export" + buildQuery(false);
+    });
+
+    // 账本切换 → 重新加载（持仓下拉与明细一起刷新）
+    document.addEventListener("account-changed", function () {
+      state.page = 1;
+      loadPositions().then(load);
+    });
+  }
+
+  /* ── 启动 ── */
+  bindRangeChips();
+  bind();
+  if (window.Acc) {
+    Acc.onReady(function () {
+      renderAccHint();
+      loadPositions().then(load);
+    });
+  } else {
+    load();
+  }
+
+  if (window.FreshnessBar && typeof window.FreshnessBar.load === "function") {
+    window.FreshnessBar.load();
+  }
+})();
+</script>
+<script src="/static/help.js" defer></script>
+</body>
+</html>

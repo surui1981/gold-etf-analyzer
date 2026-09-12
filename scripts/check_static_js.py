@@ -1,22 +1,23 @@
 """静态页面内联 JS 质量门禁。
 
-本项目前端为「纯静态 HTML + 内联 ``<script>``」结构（无构建步骤），
+本项目前端为「纯静态 HTML + 内联 ``<script>`` + 少量共享 JS」结构（无构建步骤），
 因此 HTML 里的 JS 语法错误不会有任何编译期拦截——一旦写错，
 整个页面的脚本块会全部失效（按钮无响应、数据不加载），
 而服务端日志与后端测试都完全正常，极易漏到线上。
 
-本脚本补齐这一环，做三件事：
+本脚本补齐这一环，做四件事：
 
 1. **语法校验**：抽取每个 ``static/**/*.html`` 的内联脚本，用 ``node --check`` 校验；
+   并同样校验 ``static/**/*.js`` 共享脚本（freshness / help / account）；
 2. **未定义调用检查**：静态比对函数调用与本地声明，揪出拼错的函数名；
-3. **DOM id 一致性检查**：``getElementById("x")`` 引用的 id 必须真实存在于 HTML。
+3. **DOM id 一致性检查**：``getElementById("x")`` 引用的 id 必须真实存在于 HTML
+   （共享脚本运行时注入的 id 通过 ``.id = "x"`` 赋值语句识别，见 :func:`_shared_js_ids`）；
+4. **退出码**：0 = 全部通过；1 = 存在问题（可直接接入 CI / pre-commit）。
 
 用法::
 
     python scripts/check_static_js.py            # 自动探测 node
     python scripts/check_static_js.py <node路径>  # 显式指定 node
-
-退出码：0 = 全部通过；1 = 存在问题（可直接接入 CI / pre-commit）。
 """
 
 from __future__ import annotations
@@ -44,12 +45,16 @@ SHORTHAND_DEF_RE = re.compile(r"\n\s*([A-Za-z_$][\w$]*)\s*\([^()]*\)\s*\{")
 CALL_RE = re.compile(r"(?<![.\w$])([A-Za-z_$][\w$]*)\s*\(")
 # 动态 id 前缀：getElementById("c_" + k) / id="${"c_" + k}"  → 记下 "c_" 前缀
 DYN_PREFIX_RE = re.compile(r'"([A-Za-z_$][\w$]*_)"\s*\+')
+# 共享脚本运行时注入的 id：el.id = "accountSelect"
+SHARED_ID_RE = re.compile(r"\.id\s*=\s*[\"']([^\"']+)[\"']")
 
 # 宿主/浏览器全局与语言关键字——不属于「项目内应定义」的符号
 GLOBALS = {
     "if", "else", "return", "typeof", "new", "delete", "void", "in", "of",
     "instanceof", "await", "async", "catch", "try", "finally", "throw",
     "switch", "case", "default", "break", "continue", "do", "while", "for",
+    # 匿名函数表达式 `function (c) {}` 会被 CALL_RE 误认为调用名为 function 的函数
+    "function", "get", "set",
     "Number", "String", "Boolean", "Array", "Object", "JSON", "Math", "Date",
     "RegExp", "Error", "Promise", "Map", "Set", "Symbol", "WeakMap", "Proxy",
     "Reflect", "BigInt", "Function", "parseFloat", "parseInt", "isNaN",
@@ -59,6 +64,7 @@ GLOBALS = {
     "sessionStorage", "fetch", "require", "module", "exports", "Chart",
     "Blob", "URL", "Intl", "Notification", "getComputedStyle",
     "requestAnimationFrame", "addEventListener", "FileReader",
+    "CustomEvent", "Event", "AbortController", "queueMicrotask",
 }
 
 # 写在 JS 字符串里的 CSS 函数（如 Chart.js 配色 "rgba(...)"、"var(--up)"），
@@ -85,6 +91,32 @@ def _find_node() -> str | None:
 
 def _inline_scripts(html: str) -> list[str]:
     return [b for b in SCRIPT_RE.findall(html) if b.strip()]
+
+
+def _shared_js_ids() -> set[str]:
+    """共享脚本（``static/*.js``）在运行时注入的 DOM id。
+
+    例：``account.js`` 动态创建账本切换器并 ``sel.id = "accountSelect"``，
+    页面脚本再 ``getElementById("accountSelect")``——静态看 HTML 里没有该 id，
+    若不识别会造成误报。
+    """
+    ids: set[str] = set()
+    for path in glob.glob(os.path.join(STATIC_DIR, "**", "*.js"), recursive=True):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                ids |= set(SHARED_ID_RE.findall(fh.read()))
+        except OSError:  # pragma: no cover - 读取失败不影响其余检查
+            continue
+    return ids
+
+
+def _node_syntax_error(path: str, node: str) -> str | None:
+    """用 ``node --check`` 校验文件语法；返回错误首行，通过则返回 None。"""
+    res = subprocess.run([node, "--check", path], capture_output=True, text=True)
+    if res.returncode == 0:
+        return None
+    detail = (res.stdout + res.stderr).strip().splitlines()
+    return detail[0] if detail else "语法错误"
 
 
 def _declared_names(js: str) -> set[str]:
@@ -143,13 +175,9 @@ def _check_file(path: str, node: str | None) -> list[str]:
                 fh.write(block)
                 tmp = fh.name
             try:
-                res = subprocess.run(
-                    [node, "--check", tmp], capture_output=True, text=True,
-                )
-                if res.returncode != 0:
-                    detail = (res.stdout + res.stderr).strip().splitlines()
-                    head = detail[0] if detail else "语法错误"
-                    problems.append(f"{rel} 内联脚本 #{i} 语法错误：{head}")
+                err = _node_syntax_error(tmp, node)
+                if err:
+                    problems.append(f"{rel} 内联脚本 #{i} 语法错误：{err}")
             finally:
                 os.unlink(tmp)
 
@@ -173,7 +201,7 @@ def _check_file(path: str, node: str | None) -> list[str]:
     # 3) DOM id 一致性
     # 动态拼接生成的 id（如 rowHtml("c_" + k, ...)）无法静态判定，
     # 命中已知前缀的一律放过，避免误报。
-    ids_defined = set(ID_RE.findall(html))
+    ids_defined = set(ID_RE.findall(html)) | _shared_js_ids()
     ids_used = set(GET_ID_RE.findall(js))
     dyn_prefixes = tuple(set(DYN_PREFIX_RE.findall(js)))
     missing = sorted(
@@ -206,6 +234,17 @@ def main(argv: list[str]) -> int:
         mark = "FAIL" if problems else "OK  "
         print(f"  [{mark}] {rel}")
 
+    # 共享脚本同样需要语法校验（此前只检查内联脚本，外部 .js 是盲区）
+    js_files = sorted(glob.glob(os.path.join(STATIC_DIR, "**", "*.js"), recursive=True))
+    for path in js_files:
+        rel = os.path.relpath(path, PROJECT_ROOT)
+        err = _node_syntax_error(path, node) if node else None
+        if err:
+            all_problems.append(f"{rel} 语法错误：{err}")
+            print(f"  [FAIL] {rel}")
+        else:
+            print(f"  [OK  ] {rel}")
+
     print()
     if all_problems:
         print(f"[FAIL] 发现 {len(all_problems)} 个问题：")
@@ -213,7 +252,10 @@ def main(argv: list[str]) -> int:
             print(f"  - {p}")
         return 1
 
-    print(f"[OK] {len(files)} 个静态页面内联脚本全部通过（语法 / 引用 / DOM id）")
+    print(
+        f"[OK] {len(files)} 个静态页面内联脚本 + {len(js_files)} 个共享脚本全部通过"
+        "（语法 / 引用 / DOM id）"
+    )
     return 0
 
 

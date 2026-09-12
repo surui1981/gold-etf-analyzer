@@ -48,6 +48,7 @@ class PositionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    account_id: int = Field(1, description="所属账本 ID（单用户多账本，P1 #6）")
     symbol: str
     name: str
     quantity: float

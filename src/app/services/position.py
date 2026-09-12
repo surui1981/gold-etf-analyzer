@@ -16,23 +16,40 @@ logger = get_logger(__name__)
 
 
 class PositionService:
-    """个人交易跟踪：持仓生命周期管理与实时盈亏。"""
+    """个人交易跟踪：持仓生命周期管理与实时盈亏。
+
+    V0.62.0（P1 #6）起支持**单用户多账本**：所有方法接受可选 ``account_id``，
+    ``None`` 表示全部账本（合并视图）；开仓时未指定账本则落到默认账本。
+    """
 
     def __init__(
         self,
         repo: PositionRepository,
         market: MarketDataRepository,
+        accounts: object | None = None,
     ) -> None:
         self._repo = repo
         self._market = market
+        # 账本服务（可选注入：单测可省略，此时退化为单账本 id=1）
+        self._accounts = accounts
 
-    async def open(self, request: PositionCreate) -> PositionOut:
+    async def _resolve_account(self, account_id: int | None) -> int:
+        """解析开仓账本：指定则校验，未指定则取默认账本。"""
+        if self._accounts is None:
+            return account_id if account_id is not None else 1
+        return await self._accounts.resolve(account_id)  # type: ignore[attr-defined]
+
+    async def open(
+        self, request: PositionCreate, account_id: int | None = None
+    ) -> PositionOut:
         """开仓：创建持仓 + 买入流水。"""
+        target_account = await self._resolve_account(account_id)
         position = await self._repo.create_position(
             symbol=request.symbol,
             name=DEFAULT_GOLD_ETF_NAME,
             quantity=request.quantity,
             avg_cost=request.price,
+            account_id=target_account,
         )
         await self._repo.add_trade(
             position_id=position.id,
@@ -41,7 +58,10 @@ class PositionService:
             price=request.price,
             fee=request.fee,
         )
-        logger.info("Position opened: id=%s qty=%s @ %s", position.id, request.quantity, request.price)
+        logger.info(
+            "Position opened: id=%s account=%s qty=%s @ %s",
+            position.id, target_account, request.quantity, request.price,
+        )
         return await self._to_out(position)
 
     async def add_trade(self, position_id: int, request: TradeRequest) -> PositionOut:
@@ -110,11 +130,14 @@ class PositionService:
         logger.info("Position restored: id=%s", position_id)
         return PositionDeleteOut(id=position.id, deleted=False, deleted_at=position.deleted_at)
 
-    async def list_positions(self) -> list[PositionOut]:
-        """当前所有未平仓持仓（含实时估值）。"""
-        positions = await self._repo.list_open()
-        results = [await self._to_out(p) for p in positions]
-        return results
+    async def list_positions(self, account_id: int | None = None) -> list[PositionOut]:
+        """未平仓持仓（含实时估值）。
+
+        Args:
+            account_id: 账本过滤；None=全部账本
+        """
+        positions = await self._repo.list_open(account_id=account_id)
+        return [await self._to_out(p) for p in positions]
 
     async def list_trades(self, position_id: int) -> list[TradeRecordOut]:
         """某持仓的完整成交流水（按时间倒序），用于复盘加仓/减仓过程。
@@ -134,12 +157,16 @@ class PositionService:
         trades = await self._repo.list_trades(position_id)
         return [TradeRecordOut.model_validate(t) for t in trades]
 
-    async def export_csv(self) -> str:
-        """导出当前持仓与交易流水为 CSV 文本（供对账/备份）。"""
+    async def export_csv(self, account_id: int | None = None) -> str:
+        """导出持仓与交易流水为 CSV 文本（供对账/备份）。
+
+        Args:
+            account_id: 账本过滤；None=全部账本
+        """
         import csv
         import io
 
-        positions = await self._repo.list_open()
+        positions = await self._repo.list_open(account_id=account_id)
         buf = io.StringIO()
         w = csv.writer(buf)
         w.writerow(["# 持仓导出", "", "", "", "", "", "", "", "", "", ""])
@@ -162,9 +189,13 @@ class PositionService:
                 w.writerow([t.id, t.position_id, t.side, t.quantity, t.price, t.fee, t.traded_at])
         return buf.getvalue()
 
-    async def summary(self) -> PositionSummary:
-        """持仓摘要：全部未平仓持仓汇总（供决策引擎）。"""
-        positions = await self._repo.list_open()
+    async def summary(self, account_id: int | None = None) -> PositionSummary:
+        """持仓摘要：未平仓持仓汇总（供决策引擎）。
+
+        Args:
+            account_id: 账本过滤；None=全部账本（合并口径）
+        """
+        positions = await self._repo.list_open(account_id=account_id)
         if not positions:
             return PositionSummary()
 

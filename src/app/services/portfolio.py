@@ -122,11 +122,14 @@ class PortfolioAnalyticsService:
         return sorted(price_map), price_map
 
     # ───────────────────────── 收益曲线 ─────────────────────────
-    async def equity_curve(self, days: int = 90) -> EquityCurveOut:
+    async def equity_curve(
+        self, days: int = 90, account_id: int | None = None
+    ) -> EquityCurveOut:
         """回放重建每日收益曲线（持有份数 / 成本 / 市值 / 累计收益率）。
 
         Args:
             days: 展示区间（自然日，向前回溯）；成本累计仍从首笔交易起算。
+            account_id: 账本过滤；None=全部账本（合并口径，同一标的可安全合并）
 
         Returns:
             EquityCurveOut，含逐日点位与区间汇总；无交易时 points 为空。
@@ -134,7 +137,7 @@ class PortfolioAnalyticsService:
         Raises:
             ValueError: 无交易记录或无价格序列（由调用方转 400 / 空态处理）
         """
-        trades = await self._repo.list_all_trades()
+        trades = await self._repo.list_all_trades(account_id=account_id)
         if not trades:
             return EquityCurveOut(days=days, points=[], summary=EquitySummary())
 
@@ -196,14 +199,17 @@ class PortfolioAnalyticsService:
         return EquityCurveOut(days=days, points=points, summary=summary)
 
     # ───────────────────────── 获利分析 ─────────────────────────
-    async def performance(self) -> PerformanceOut:
+    async def performance(self, account_id: int | None = None) -> PerformanceOut:
         """获利分析总结评估：已实现 / 浮动 / 胜率 / 盈亏比 / 平均持仓天数。
+
+        Args:
+            account_id: 账本过滤；None=全部账本
 
         Returns:
             PerformanceOut；无任何交易与持仓时返回空态 + 引导文案。
         """
-        positions = await self._repo.list_all()
-        trades = await self._repo.list_all_trades()
+        positions = await self._repo.list_all(account_id=account_id)
+        trades = await self._repo.list_all_trades(account_id=account_id)
 
         if not trades and not positions:
             return PerformanceOut(

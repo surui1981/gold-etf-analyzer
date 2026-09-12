@@ -9,12 +9,22 @@ from app.models.base import Base
 
 
 class Position(Base):
-    """个人持仓记录（单用户模式，预留 user_id 支持多用户）。"""
+    """个人持仓记录（单用户模式，预留 user_id 支持多用户）。
+
+    V0.62.0 起支持**单用户多账本**：``account_id`` 指向 ``accounts`` 表，
+    默认账本为 id=1 的「默认账户」（迁移把既有持仓全部归入该账本）。
+    """
 
     __tablename__ = "positions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, default=1, comment="预留多用户，当前单用户=1")
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id"),
+        default=1,
+        index=True,
+        comment="所属账本（单用户多账本，P1 #6）",
+    )
 
     symbol: Mapped[str] = mapped_column(String(16), comment="品种代码，如 518880")
     name: Mapped[str] = mapped_column(String(64), comment="品种名称")

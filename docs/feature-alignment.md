@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-12 ｜ 适用版本：**V0.61.0**
+> 生成日期：2026-09-13 ｜ 适用版本：**V0.62.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.61.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.62.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -32,7 +32,7 @@
 | **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **334 用例**，`find tests -name "test_*.py"` = **30 文件**，README 与三文档数字一致（V0.61.0 新增 `test_portfolio_analytics.py` 10 + `test_portfolio_api.py` 6 = 18 用例）。全量回归 288 passed（忽略 `test_irfcl_fetcher.py` / `test_h15_fetcher.py` 两个真实联网用例，耗时约 15 分钟）。
+**测试数对账**：`pytest --collect-only -q` = **375 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例）。全量回归见下节实测结果。
 
 ---
 
@@ -47,7 +47,8 @@
 | 3 | **CI/CD** | 📋 | ❌ 无 `.github/workflows/` | ⚠️ 未做 |
 | 4 | Alembic 迁移 | ✅ | ✅ + 央行购金表 c1b3a1d27e9f | ✅ |
 | 5 | **行情源配置化** | ✅ V0.59.0 | ✅ MARKET_PROVIDER=.env 4 选 1 + 工厂 + bundle 注入 | ✅ |
-| 6 | **多账户 + 交易历史查询页** | 📋 | ❌ `user_id` 仅预留，无前端 | ⚠️ 未做 |
+| 5′ | （application-guide P1 表 #5 长期停留 📋） | ✅ | ✅ 实际 V0.59.0 已落地，**V0.62.0 已修正该陈旧状态** | ✅ 已修正 |
+| 6 | **多账户 + 交易历史查询页** | ✅ V0.62.0 | ✅ 单用户多账本（`accounts` + `positions.account_id`，历史持仓归入默认账户）+ `/accounts` 6 端点 + `/trades` 查询/导出 + `static/account.js` 全站切换器 + `/trades` 页面 | ✅ |
 
 ### P2 · 分析深度
 
@@ -112,7 +113,7 @@
 | 🔴 高 | 规划 P1 #3 CI/CD（GitHub Actions） | 0.5d | 写 pytest + ruff + Docker build workflow |
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
-| 🟢 低 | UX 6.5/6.7 两项（个性化 / 多时间框架） | 各 1-2d | 6.8 V0.58.0 落地；6.10 V0.57.0 落地；P1#5 V0.59.0 落地 |
+| 🟢 低 | UX 6.5/6.7 两项（个性化 / 多时间框架） | 各 1-2d | 6.8 V0.58.0 落地；6.10 V0.57.0 落地；P1#5 V0.59.0 落地；**P1#6 多账本 V0.62.0 落地（P1 仅剩 #3 CI/CD）** |
 
 ---
 

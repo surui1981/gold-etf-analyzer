@@ -87,6 +87,24 @@ async def _migrate_db() -> None:
             await conn.run_sync(Base.metadata.create_all)
 
 
+async def _ensure_default_account() -> None:
+    """保障默认账本存在（V0.62.0 单用户多账本，幂等）。
+
+    老库经运行时补列路径升级时 ``positions.account_id`` 默认为 1，
+    但 ``accounts`` 表可能为空；此处显式建出 id=1 的「默认账户」，
+    使历史持仓在账本视图中可见，避免出现「无归属」的孤儿数据。
+    """
+    try:
+        from app.repositories.account import AccountRepository
+        from app.repositories.db import async_session_factory
+
+        async with async_session_factory() as session:
+            account = await AccountRepository(session).ensure_default()
+        logger.info("default account ready: id=%s name=%s", account.id, account.name)
+    except Exception as exc:  # noqa: BLE001 —— 账本保障失败不阻断启动
+        logger.warning("default account ensure failed (%s)", exc)
+
+
 async def _warm_cache() -> None:
     """非阻塞预热行情缓存 + 首日 served cache：启动后后台拉取三市场数据 + 评估核心。
 
@@ -212,6 +230,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # 运行时保障：补齐历史库缺失的新增列 + WAL/索引优化
     await ensure_sqlite_columns(engine)
     await ensure_sqlite_optimizations(engine)
+    # 单用户多账本：保障默认账本存在（承接历史数据，幂等）
+    await _ensure_default_account()
     logger.info("Database ready (env=%s)", settings.app_env)
     # 非阻塞预热：首屏直接命中缓存，避免长时间空白等待
     asyncio.create_task(_warm_cache())
@@ -223,7 +243,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.61.0",
+    version="0.62.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
@@ -270,6 +290,12 @@ async def news_page() -> RedirectResponse:
 async def central_bank_page() -> RedirectResponse:
     """世界央行黄金购买统计页（按国家 / 季度）。"""
     return RedirectResponse("/static/central_bank.html")
+
+
+@app.get("/trades", include_in_schema=False)
+async def trades_page() -> RedirectResponse:
+    """交易历史查询页（P1 #6：多条件筛选 + 汇总 + CSV 导出）。"""
+    return RedirectResponse("/static/trades.html")
 
 
 # 静态资源（趋势追踪页面等）

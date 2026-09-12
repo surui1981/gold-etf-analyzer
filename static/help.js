@@ -36,6 +36,8 @@
     "/static/news.html": "/news",
     "/central-bank": "/central-bank",
     "/static/central_bank.html": "/central-bank",
+    "/trades": "/trades",
+    "/static/trades.html": "/trades",
   };
   function pageKey() {
     const p = window.location.pathname;
@@ -78,6 +80,17 @@
       "撤销": "恢复软删除的持仓",
       "仓位推荐": "评估指数→建议持仓比例（80/60/40/20/10%）",
     },
+    "账本与业绩类": {
+      "账本": "资金分账容器：持仓、流水、收益曲线与决策均按账本独立统计；「全部账本」为合并视图。归档仅隐藏，数据保留",
+      "已实现盈亏": "卖出时才兑现的盈亏 =（卖出价 − 摊薄成本）× 卖出份额 − 卖出手续费；买入不产生已实现盈亏",
+      "均价法": "摊薄成本法：买入后成本 =（原成本 + 本次买入金额）÷ 总份额；卖出时成本单价不变，故不产生「卖出价 vs 现价」歧义",
+      "手续费": "券商佣金等交易费用；计入「累计投入本金」与已实现盈亏，但不计入摊薄成本单价",
+      "成交后份额": "该笔成交完成后该持仓剩余份数（按成交流水逐笔回放得出）",
+      "净流出": "买入金额 − 卖出金额：正值表示资金净投入，负值表示已净收回",
+      "胜率": "已实现盈亏为正的平仓笔数 ÷ 总平仓笔数",
+      "盈亏比": "总盈利 ÷ 总亏损（profit factor），>1 表示整体赚钱",
+      "最大回撤": "区间内收益率自最高点回落的最大幅度，衡量持有体验",
+    },
     "系统状态类": {
       "live": "实时数据（数据源成功）",
       "stale": "缓存数据（数据源暂不可达，使用上次成功值）",
@@ -119,6 +132,12 @@
       { selector: ".kpi-card", term: "T12M" },
       { selector: ".panel-title", term: "WGC" },
     ],
+    "/trades": [
+      { selector: ".acc-hint", term: "账本" },
+      { selector: "#kpiArea", term: "已实现盈亏" },
+      { selector: "table.trades th:nth-child(9)", term: "成交后份额" },
+      { selector: ".filters", term: "净流出" },
+    ],
   };
 
   // 用于 fallback 显示的术语默认定义（如果 GLOSSARY 没收录）
@@ -151,6 +170,12 @@
       { selector: ".topnav", text: "切换其他页面", pos: "bottom" },
       { selector: "#stackedChart", text: "季度 × 国家堆叠柱状图（Top 10 + Other）", pos: "top" },
       { selector: ".kpi-card", text: "4 个 KPI：T12M / 本季合计 / 参与国数 / 数据截止季", pos: "bottom" },
+    ],
+    "/trades": [
+      { selector: ".topnav", text: "顶栏新增「交易历史」；右上角可切换账本（含「全部账本」合并视图）", pos: "bottom" },
+      { selector: ".filters", text: "筛选：方向 / 日期区间 / 持仓 / 关键字；右侧可导出 CSV（导出全部匹配行）", pos: "top" },
+      { selector: "#kpiArea", text: "汇总覆盖全部匹配结果：笔数 / 买卖金额 / 净流出 / 手续费 / 已实现盈亏", pos: "top" },
+      { selector: "table.trades", text: "每笔卖出附「已实现盈亏」与「成交后份额」（均价法逐笔回放）", pos: "top" },
     ],
   };
 

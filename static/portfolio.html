@@ -117,6 +117,17 @@
   .chip.active { background: var(--accent); border-color: var(--accent); color: #1f2329; font-weight: 600; }
   .trade-preview { flex-basis: 100%; font-size: 12.5px; color: #4b5563; background: #fffaf0; border: 1px dashed #f0e2b6; border-radius: 8px; padding: 9px 12px; line-height: 1.8; }
   .trade-preview b { color: var(--text); }
+  /* ── V0.62.0 账本（P1 #6 单用户多账本）── */
+  .acc-hint { font-size: 12.5px; color: #4b5563; background: #f8f9fa; border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; line-height: 1.8; }
+  .acc-hint b { color: var(--text); }
+  .acc-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; margin-bottom: 8px; flex-wrap: wrap; }
+  .acc-row.cur { border-color: var(--accent); background: #fffaf0; }
+  .acc-row .a-name { font-weight: 600; font-size: 13.5px; }
+  .acc-row .a-meta { font-size: 12px; color: var(--muted); }
+  .acc-row .a-acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .acc-row .a-acts button { border: 1px solid var(--border); background: #fff; border-radius: 7px; padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--text); }
+  .acc-row .a-acts button:hover { border-color: var(--accent); background: #fffaf0; }
+  .acc-row .a-acts button.danger:hover { border-color: var(--down); color: var(--down); }
   /* ── V0.61.0 收益曲线 / 获利分析 ── */
   .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px, 1fr)); gap: 12px; margin-bottom: 14px; }
   .kpi { background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
@@ -144,6 +155,7 @@
     <div class="links">
       <a href="/static/trend.html">趋势追踪</a>
       <a href="/portfolio" class="active">持仓与决策</a>
+      <a href="/trades">交易历史</a>
       <a href="/weights">权重配置</a>
       <a href="/news">消息面评估</a>
       <a href="/central-bank">央行购金统计</a>
@@ -186,6 +198,7 @@
   <!-- 开仓表单 -->
   <div class="card">
     <h2>开仓买入（518880 黄金ETF华安）</h2>
+    <div class="acc-hint" id="openAccHint">开仓将记入账本：<b>加载中…</b></div>
     <form id="openForm">
       <div class="field"><label>成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
       <div class="field"><label>买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" oninput="qtyFromAmount()"></div>
@@ -273,6 +286,26 @@
       </div>
     </div>
   </div>
+  <!-- 账本管理（P1 #6 单用户多账本） -->
+  <div class="card">
+    <h2>账本管理
+      <button class="btn-export" id="btnShowNewAcc" type="button">＋ 新建账本</button>
+    </h2>
+    <div class="acc-hint">账本用于把<b>不同用途的资金</b>分开记账（如主账户 / 家人账户 / 定投实验）；
+      切换账本后，持仓、交易流水、收益曲线、获利分析与决策均只统计该账本。
+      <b>归档</b>仅隐藏账本，数据仍可在交易历史页查询到。</div>
+    <div id="newAccForm" style="display:none">
+      <div class="field"><label>账本名称</label><input id="newAccName" type="text" maxlength="64" placeholder="如 家人账户"></div>
+      <div class="field"><label>备注（选填）</label><input id="newAccNote" type="text" maxlength="255" placeholder="如 父母的定投账本"></div>
+      <div class="quick-row">
+        <button class="chip" type="button" id="btnCreateAcc">创建</button>
+        <button class="chip" type="button" id="btnCancelAcc">取消</button>
+      </div>
+    </div>
+    <div id="accListArea"><div class="empty">加载中…</div></div>
+    <div class="err" id="accErr"></div>
+  </div>
+
   <!-- 撤销提示条 -->
   <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button">撤销</button></div>
   <!-- 主动提醒条 -->
@@ -296,8 +329,22 @@ const ACTION_STYLE = {
   SELL: { txt: "卖出", color: "var(--down)" }, WAIT: { txt: "观望", color: "#868e96" },
 };
 
+// ── 账本上下文（P1 #6 单用户多账本）──
+// 读操作跟随右上角账本切换器；写操作（开仓 / 加仓 / 减仓 / 清仓 / 删除）落到
+// Acc.targetAccountId()——「全部账本」合并视图下即默认账本，避免下单不知归属。
+const ACC_PREFIXES = ["/api/v1/positions", "/api/v1/decision/etf", "/api/v1/portfolio/"];
+function withAccount(url, write) {
+  if (!window.Acc) return url;
+  if (!ACC_PREFIXES.some(p => url.startsWith(p))) return url;
+  const id = write ? Acc.targetAccountId() : Acc.currentId();
+  if (!id) return url;
+  return url + (url.indexOf("?") >= 0 ? "&" : "?") + "account_id=" + encodeURIComponent(id);
+}
+
 async function json(url, opts) {
-  const r = await fetch(url, opts);
+  const method = ((opts && opts.method) || "GET").toUpperCase();
+  const finalUrl = withAccount(url, method !== "GET");
+  const r = await fetch(finalUrl, opts);
   if (!r.ok) { const b = await r.json().catch(() => ({})); throw new Error(b.detail || "HTTP " + r.status); }
   return r.json();
 }
@@ -672,8 +719,9 @@ function setTradeSide(side) {
 function tUpdateMeta() {
   if (!tradeCtx) return;
   const p = tradeCtx.position;
+  const accName = window.Acc ? Acc.accountName(p.account_id) : "";
   document.getElementById("tradeMeta").innerHTML =
-    `持仓 #${p.id} · <b>${p.name}（${p.symbol}）</b>｜持有 <b>${p.quantity}</b> 份｜成本 <b>${p.avg_cost.toFixed(4)}</b> 元/份` +
+    `账本 <b>${escAcc(accName)}</b> · 持仓 #${p.id} · <b>${p.name}（${p.symbol}）</b>｜持有 <b>${p.quantity}</b> 份｜成本 <b>${p.avg_cost.toFixed(4)}</b> 元/份` +
     `｜现价 <b>${p.market_price.toFixed(3)}</b>｜浮动盈亏 <b>${fmtSigned(p.pnl)}</b>（${p.pnl_pct >= 0 ? "+" : ""}${p.pnl_pct.toFixed(2)}%）`;
 }
 
@@ -806,7 +854,7 @@ async function closePos(id) {
 
 document.getElementById("btnExport").addEventListener("click", async () => {
   try {
-    const r = await fetch(API.positions + "/export");
+    const r = await fetch(withAccount(API.positions + "/export", false));
     if (!r.ok) throw new Error("HTTP " + r.status);
     const blob = await r.blob();
     const a = document.createElement("a");
@@ -817,7 +865,173 @@ document.getElementById("btnExport").addEventListener("click", async () => {
   } catch (e) { alert("导出失败：" + e.message); }
 });
 
+// ==================== V0.62.0：账本管理（P1 #6 单用户多账本） ====================
+const ACC_API = API_BASE + "/api/v1/accounts";
+let accCache = [];
+
+function escAcc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
+
+function updateAccHints() {
+  if (!window.Acc) return;
+  const cur = Acc.isAll() ? "全部账本（合并视图）" : Acc.accountName(Acc.currentId());
+  const target = Acc.accountName(Acc.targetAccountId());
+  document.getElementById("openAccHint").innerHTML =
+    `当前视图：<b>${escAcc(cur)}</b> · 开仓与加仓将记入账本：<b>${escAcc(target)}</b>`;
+}
+
+function accRow(a, curId) {
+  const st = a.stats || {};
+  const meta = [
+    a.note ? escAcc(a.note) : "",
+    `持仓 ${st.open_count || 0} 笔在仓 / 共 ${st.position_count || 0} 笔`,
+    `流水 ${st.trade_count || 0} 笔`,
+    st.last_traded_at ? `最近成交 ${String(st.last_traded_at).replace("T", " ").slice(0, 16)}` : "暂无成交",
+  ].filter(Boolean).join(" · ");
+  const isCur = String(a.id) === String(curId);
+  const acts = [];
+  if (!a.archived_at) {
+    if (!isCur) acts.push(`<button type="button" onclick="switchAccount(${a.id})">切换到此账本</button>`);
+    acts.push(`<button type="button" onclick="renameAccount(${a.id})">重命名</button>`);
+    if (!a.is_default) acts.push(`<button type="button" onclick="setDefaultAccount(${a.id})">设为默认</button>`);
+    if (!a.is_default) acts.push(`<button type="button" class="danger" onclick="archiveAccount(${a.id})">归档</button>`);
+  } else {
+    acts.push(`<button type="button" onclick="restoreAccount(${a.id})">恢复</button>`);
+  }
+  const flags = (a.is_default ? ' <span style="color:var(--accent);font-size:11.5px">默认</span>' : "")
+    + (isCur ? ' <span style="color:var(--accent);font-size:11.5px">当前</span>' : "");
+  return `<div class="acc-row${isCur ? " cur" : ""}">
+    <div><div class="a-name">${escAcc(a.name)}${flags}</div><div class="a-meta">${meta}</div></div>
+    <div class="a-acts">${acts.join("")}</div>
+  </div>`;
+}
+
+async function loadAccounts() {
+  try {
+    const d = await json(ACC_API + "?include_archived=true");
+    accCache = d.items || [];
+    const area = document.getElementById("accListArea");
+    document.getElementById("accErr").textContent = "";
+    if (!accCache.length) { area.innerHTML = '<div class="empty">暂无账本</div>'; return; }
+    const curId = window.Acc ? Acc.currentId() : "";
+    const active = accCache.filter((a) => !a.archived_at);
+    const archived = accCache.filter((a) => a.archived_at);
+    let html = active.map((a) => accRow(a, curId)).join("");
+    if (archived.length) {
+      html += '<div class="a-meta" style="margin:14px 0 6px">已归档（数据保留，可在交易历史页查询）</div>'
+        + archived.map((a) => accRow(a, curId)).join("");
+    }
+    area.innerHTML = html;
+  } catch (e) {
+    document.getElementById("accErr").textContent = "账本加载失败：" + e.message;
+  }
+}
+
+async function refreshAccountUi() {
+  await loadAccounts();
+  if (window.Acc) await Acc.reload();
+  updateAccHints();
+}
+
+function switchAccount(id) {
+  const sel = document.getElementById("accountSelect");
+  if (!sel) { alert("账本切换器未就绪，请刷新页面"); return; }
+  sel.value = String(id);
+  sel.dispatchEvent(new Event("change"));
+}
+
+async function renameAccount(id) {
+  const a = accCache.filter((x) => x.id === id)[0];
+  const input = prompt("新的账本名称：", a ? a.name : "");
+  if (input == null) return;
+  const name = input.trim();
+  if (!name) { alert("账本名称不能为空"); return; }
+  try {
+    await json(`${ACC_API}/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    await refreshAccountUi();
+  } catch (e) { alert("重命名失败：" + e.message); }
+}
+
+async function setDefaultAccount(id) {
+  try {
+    await json(`${ACC_API}/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_default: true }),
+    });
+    await refreshAccountUi();
+    if (window.Acc) switchAccount(Acc.defaultAccountId());
+  } catch (e) { alert("设置默认账本失败：" + e.message); }
+}
+
+async function archiveAccount(id) {
+  const a = accCache.filter((x) => x.id === id)[0];
+  const ok = await confirmDialog(
+    "归档账本",
+    `确认归档账本「<b>${escAcc(a ? a.name : id)}</b>」？<div style="margin-top:8px;font-size:13px;color:#4b5563">
+     归档后该账本不再出现在切换器与账本列表中，但<b>持仓与交易流水全部保留</b>，
+     可在「交易历史」页筛选到、也可随时恢复。</div>`,
+    false
+  );
+  if (!ok) return;
+  try {
+    await json(`${ACC_API}/${id}/archive`, { method: "POST" });
+    await refreshAccountUi();
+  } catch (e) { alert("归档失败：" + e.message); }
+}
+
+async function restoreAccount(id) {
+  try {
+    await json(`${ACC_API}/${id}/restore`, { method: "POST" });
+    await refreshAccountUi();
+  } catch (e) { alert("恢复失败：" + e.message); }
+}
+
+async function createAccount() {
+  const nameEl = document.getElementById("newAccName");
+  const noteEl = document.getElementById("newAccNote");
+  const name = (nameEl.value || "").trim();
+  if (!name) { document.getElementById("accErr").textContent = "账本名称不能为空"; return; }
+  try {
+    await json(ACC_API, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, note: (noteEl.value || "").trim() }),
+    });
+    nameEl.value = ""; noteEl.value = "";
+    document.getElementById("newAccForm").style.display = "none";
+    document.getElementById("accErr").textContent = "";
+    await refreshAccountUi();
+  } catch (e) { document.getElementById("accErr").textContent = "创建失败：" + e.message; }
+}
+
+document.getElementById("btnShowNewAcc").addEventListener("click", () => {
+  const f = document.getElementById("newAccForm");
+  f.style.display = f.style.display === "none" ? "block" : "none";
+  document.getElementById("newAccName").focus();
+});
+document.getElementById("btnCancelAcc").addEventListener("click", () => {
+  document.getElementById("newAccForm").style.display = "none";
+});
+document.getElementById("btnCreateAcc").addEventListener("click", createAccount);
+
 (async function init() {
+  // 账本上下文必须先就绪，否则首屏会误取「全部账本」口径
+  if (window.Acc) { try { await Acc.ready; } catch (e) { /* 失败则退化为合并视图 */ } }
+  updateAccHints();
+  loadAccounts();
+  document.addEventListener("account-changed", () => {
+    updateAccHints();
+    if (typeof tradeCtx !== "undefined" && tradeCtx) closeTradePanel();
+    loadDecision();
+    loadPositions();
+    loadEquity();
+    loadPerformance();
+  });
   const q = await json(API.etfQuote).catch(() => null);
   lastNy = await json(API.quote).catch(() => null);
   const ep = etfPrice(q);
@@ -943,5 +1157,6 @@ async function loadPerformance() {
 </script>
   <script src="/static/freshness.js"></script>
   <script src="/static/help.js" defer></script>
+<script src="/static/account.js"></script>
 </body>
 </html>

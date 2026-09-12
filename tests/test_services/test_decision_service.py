@@ -32,7 +32,9 @@ class FakePosition:
     def __init__(self, summary: PositionSummary) -> None:
         self._s = summary
 
-    async def summary(self) -> PositionSummary:
+    async def summary(self, account_id: int | None = None) -> PositionSummary:
+        # V0.62.0：持仓摘要支持按账本过滤（None = 全部账本合并），替身需同步签名
+        self.last_account_id = account_id
         return self._s
 
 
@@ -102,6 +104,18 @@ async def test_suggested_position_mapping() -> None:
     assert _svc(80.0, _empty())._suggest_position(50.0) == (40.0, "中性仓位")
     assert _svc(80.0, _empty())._suggest_position(30.0) == (20.0, "轻仓")
     assert _svc(80.0, _empty())._suggest_position(10.0) == (10.0, "观望空仓")
+
+
+async def test_evaluate_forwards_account_id_to_position_summary() -> None:
+    """V0.62.0 多账本：account_id 必须透传到持仓摘要（None = 全部账本合并口径）。"""
+    fake = FakePosition(_empty())
+    svc = DecisionService(trend=FakeTrend(80.0), position=fake)
+
+    await svc.evaluate(account_id=7)
+    assert fake.last_account_id == 7
+
+    await svc.evaluate()
+    assert fake.last_account_id is None
 
 
 async def test_decision_includes_position_rec() -> None:

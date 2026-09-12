@@ -132,10 +132,11 @@ gold-etf-analyzer/
 │   ├── repositories/        # analysis / market_data(AKShare) / position / snapshot / settings / central_bank / central_bank_data (WGC fetcher)
 │   ├── api/v1/              # health / analysis / market / position / decision / settings / snapshot / central_bank
 │   └── utils/               # 日志
-├── static/                  # trend.html / portfolio.html / weights.html / news.html / central_bank.html
+├── static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html
+│                            #   + account.js（账本切换器，全站共享）
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（334 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析）
+├── tests/                   # pytest（375 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -145,7 +146,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 334 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers + cache + intraday + 业绩分析，不依赖网络）
+python -m pytest -v          # 375 个用例（服务层 + API 集成 + fetcher + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本，不依赖网络）
 python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests
@@ -164,6 +165,7 @@ ruff format src tests
 - [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
 - [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
 - [x] 行情实时性增强（V0.60.0：served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 趋势页 60s 轮询 + visibilitychange + 持仓页 30s）
+- [x] **单用户多账本 + 交易历史查询页（V0.62.0，P1 #6）**：`accounts` 表 + `positions.account_id`（迁移把历史持仓归入 id=1「默认账户」）；`/api/v1/accounts` 账本增改归档（默认账本不可归档、有未平仓持仓不可归档）；`/api/v1/trades` 多条件筛选（账本/方向/日期/持仓/关键字）+ 均价法回放给出每笔卖出的**已实现盈亏**与**成交后份额** + CSV 导出；全站账本切换器（`account.js`，localStorage 记忆，支持「全部账本」合并视图）；持仓 / 收益曲线 / 获利分析 / 决策均按账本隔离
 - [x] 交易闭环与业绩分析（V0.61.0：**ETF 报价口径修正**（`/market/gold/etf-quote`，元/份）+ 加仓/减仓内联面板（金额换算 / 快捷比例 / 摊薄成本与已实现盈亏预览）+ 收益曲线（流水回放重建，含最大回撤）+ 获利分析总结（胜率 / 盈亏比 / 平均持仓天数））
 - [ ] 多时间框架（周线/月线）、指数参数回测校准
 - [ ] 监控告警：数据源失败告警、价格异动提醒

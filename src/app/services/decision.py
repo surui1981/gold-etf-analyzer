@@ -44,12 +44,15 @@ class DecisionService:
         self._trend = trend
         self._position = position
 
-    async def evaluate(self, days: int = 60, target: str = GUIDE_TARGET) -> DecisionOut:
+    async def evaluate(
+        self, days: int = 60, target: str = GUIDE_TARGET, account_id: int | None = None
+    ) -> DecisionOut:
         """生成黄金购买决策。
 
         Args:
             days: 趋势指数覆盖的交易日数量
             target: 指引标的类型，ny（纽约金，默认）/ etf / gram
+            account_id: 账本过滤；None=全部账本（持仓摘要按合并口径）
 
         Returns:
             决策输出（行动 + 置信度 + 理由明细）
@@ -58,7 +61,7 @@ class DecisionService:
             ValueError: 趋势数据不足
         """
         trend = await self._trend.analyze(days=days, target=target)
-        pos = await self._position.summary()
+        pos = await self._position.summary(account_id=account_id)
 
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)
         suggested_position, position_level = self._suggest_position(trend.index.score)

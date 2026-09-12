@@ -19,6 +19,8 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
     ],
     "positions": [
         ("deleted_at", "DATETIME", "NULL"),
+        # V0.62.0 单用户多账本：老库经此路径升级时补列并归入默认账本（id=1）
+        ("account_id", "INTEGER", "1"),
     ],
 }
 
@@ -26,6 +28,7 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
 INDEX_MIGRATIONS: dict[str, list[str]] = {
     "daily_snapshots": ["snapshot_date"],
     "news_scores": ["score_date"],
+    "positions": ["account_id"],
 }
 
 

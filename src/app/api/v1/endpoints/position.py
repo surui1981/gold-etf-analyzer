@@ -1,6 +1,6 @@
 """持仓管理端点：开仓 / 列表 / 加减仓 / 清仓 / 软删除 / 撤销 / 导出。"""
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies import get_position_service
@@ -15,33 +15,41 @@ from app.services.position import PositionService
 
 router = APIRouter(prefix="/positions", tags=["positions"])
 
+ACCOUNT_QUERY = Query(
+    None,
+    description="账本 ID（单用户多账本）；不传=默认账本（开仓）/ 全部账本（查询）",
+)
+
 
 @router.post("", response_model=PositionOut, status_code=201, summary="开仓")
 async def open_position(
     request: PositionCreate,
+    account_id: int | None = ACCOUNT_QUERY,
     service: PositionService = Depends(get_position_service),
 ) -> PositionOut:
-    """建仓买入黄金ETF，记录成本与流水。"""
+    """建仓买入黄金ETF，记录成本与流水；未指定账本时记入默认账本。"""
     try:
-        return await service.open(request)
+        return await service.open(request, account_id=account_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("", response_model=list[PositionOut], summary="持仓列表（含实时盈亏）")
 async def list_positions(
+    account_id: int | None = Query(None, description="账本 ID；不传=全部账本"),
     service: PositionService = Depends(get_position_service),
 ) -> list[PositionOut]:
-    """当前未平仓且未删除持仓，实时市价估值。"""
-    return await service.list_positions()
+    """未平仓且未删除持仓，实时市价估值。"""
+    return await service.list_positions(account_id=account_id)
 
 
 @router.get("/export", response_class=PlainTextResponse, summary="导出持仓与流水 CSV")
 async def export_positions(
+    account_id: int | None = Query(None, description="账本 ID；不传=全部账本"),
     service: PositionService = Depends(get_position_service),
 ) -> PlainTextResponse:
     """导出当前持仓 + 交易流水为 CSV（UTF-8 BOM，Excel 友好）。"""
-    csv_text = await service.export_csv()
+    csv_text = await service.export_csv(account_id=account_id)
     return PlainTextResponse(
         "\ufeff" + csv_text,
         media_type="text/csv; charset=utf-8",
