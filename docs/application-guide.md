@@ -132,7 +132,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 375 个用例（服务层 + API 集成 + fetcher / scheduler / cache / intraday / help / providers / 业绩分析 / 多账本，不依赖网络）
+python -m pytest -v          # 375 用例（离线回归 331 passed，排除 2 个联网 fetcher 文件）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -293,14 +293,15 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-216 + 63 + 24 + 13 + 18 + 41 = 375 个用例覆盖：
+216 + 63 + 24 + 13 + 18 + 41 = 375 个用例（`pytest --collect-only -q`，33 个文件）覆盖：
 
 - **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）、**业绩分析（交易流水回放 / 收益曲线 / 平仓统计 / 空仓与除零边界）**
 - **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**）、**业绩（收益曲线区间校验 / 获利分析）**、快照、消息面、央行购金（3 个 endpoint）、健康检查
 - **数据层**：WGC fetcher（`_parse_chart_series` / `_iso_for_country` / `_find_country_chart` / `load_manual_overrides` / 端到端 mock 32 项）、市场时段判定、SQLite 启动幂等补列
 - **调度层**：央行购金月度调度时间计算（月末动态 28/29/30/31 天 / 年切换 / 环境变量开关 13 项 / 循环节流）
-- 测试通过 `FakeRepo` 注入假数据源，**不依赖网络**
-- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 5 个静态页面的内联 JS 做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
+- 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.62.0 实测 `python -m pytest -q`（排除 2 个联网 fetcher 文件）**331 passed / 0 failed**（29m45s）
+- **例外（既有问题，非本版本引入）**：`tests/test_services/{test_irfcl_fetcher,test_h15_fetcher}.py` 共 44 用例，实测 **43 passed / 1 failed**——失败项 `test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（位于 `.gitignore` 内，新克隆不携带），建议后续加 `skipif` 守卫
+- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **6 个静态页面**的内联 JS + **3 个共享脚本**（`account.js` / `freshness.js` / `help.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
 
 ---
 
@@ -324,7 +325,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | **V0.59.0** | **行情源 provider 配置化（P1 #5）**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块。3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF 主 + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债，全部免费零 KEY）/ **mock**（确定性序列，纯内存、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）。`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容（旧测试零改动）。24 项新测试覆盖：工厂解析（4 provider 名 + 大小写 + 未知名抛错 + 空回退默认）+ Mock provider 数据正确性 + bundle 注入 + XAU chain 解析 + cache_ttl=0 禁用 + 5 mock 取数集成。303 测试全通过（279 → 303） | 行情源配置化 | ✅ |
 | **V0.60.0** | **行情实时性增强（D + B）**：① 后端死代码启用：`repositories/market_data.py` 6 个接口（`get_gold_history` / `get_gold_gram_history` / `get_us_gold_history` / `get_gold_quote` / `get_gold_gram_quote` / `get_us_gold_quote`）启用 `quote_cache_ttl=300` 进程级 cache（V0.59.0 之前是死代码），cache hit 时**不调** `_mark` 保留 `_fetched_at`；② served cache 日内 TTL：`services/cache.py` value 由 `GoldTrendOut` → `(GoldTrendOut, set_at)` 元组；`get_served` 新增 keyword-only `max_age_seconds`（默认 600s，可由 `.env` 配 `SERVED_CACHE_TTL_SECONDS`），超期返回 None 强制重算，旧调用方不传 → 行为完全不变；③ `source_status()` 按 `_fetched_at + cache_ttl` 派生 `"stale"` 状态（不改 `_mark`），前端 freshness 角标"缓存过期"分支自然点亮；④ 日内多次预热：`services/scheduler.py` `daily_capture_loop` 内部串联 `next_intraday_run_utc`（默认 09:30 / 11:30 / 14:00 / 15:30 BJT，可由 `.env` 配 `INTRADAY_REFRESH_HOURS`，`INTRADAY_REFRESH_ENABLED=false` 关闭），取 `min(next_daily, next_intraday)` 最近点触发（`intraday_warm_once` 仅刷新 served cache 不落库）；⑤ 前端轮询：`trend.html` `setInterval(refreshTrendQuotes, 60_000)` + `visibilitychange` 切回前台自动刷新 + 右上角手动 🔄 按钮（带旋转动画）；`portfolio.html` 60s → 30s + `visibilitychange` + 同步 `FreshnessBar.load()`；⑥ `tests/conftest.py` `_reset_db` fixture 同时清空 `_CACHE`（行情 cache）保证跨测试隔离；13 项新测试覆盖（5 cache hit/expire/disabled/key-isolation/stale-promotion/mock-keep + 4 served TTL set/max_age/zero-disable/old-signature + 2 intraday 时间计算/异常静默 + 1 writes-served-cache + 1 stale 派生 + 1 mock 保持）；316 测试全通过（303 → 316） | 行情实时性 | ✅ |
 | **V0.61.0** | **交易闭环与业绩分析**：① P0 修复 **ETF 报价口径错配**——新增 `MarketDataRepository.get_gold_etf_quote()`（518880 元/份，与收益曲线同源）与 `GET /market/gold/etf-quote`（返回 `price` + `currency`/`unit`），`PositionService._current_price()` 改用它（此前误用 XAU/USD 4349.7 美元/盎司当作 9 元/份，持仓收益率虚高至 46670%）；② **加仓 / 减仓内联交易面板**（金额↔份数、快捷比例、一键取现价、摊薄成本与已实现盈亏预览，替代 `prompt()`）+ `GET /positions/{id}/trades`；③ **收益曲线** `GET /portfolio/equity-curve?days=7..730`——交易流水 + ETF 历史价回放重建（不新增表，`bisect` 把非交易日成交顺延），含最大回撤 / 区间最高最低；④ **获利分析** `GET /portfolio/performance`——胜率 / 盈亏比 / 最佳最差平仓 / 平均持仓天数 + 中文复盘；⑤ **手续费口径统一**（回放成本不含 fee，与 `add_trade` 摊薄成本一致），修正同页两个收益率（-4.29% vs -4.25%）；⑥ 新增 `scripts/check_static_js.py` 前端内联 JS 门禁（`make check-web`）；334 测试通过（316 → 334） | 交易闭环与业绩分析 | ✅ |
-| **V0.62.0**（当前） | **单用户多账本 + 交易历史查询页（P1 #6，P1 收官）**：① `accounts` 表（`models/account.py`）+ `positions.account_id`（迁移 `b8e14c7a2f36`，幂等 seed id=1「默认账户」并把历史持仓归入该账本，`db_migrate.py` 同步补列兜底，lifespan `_ensure_default_account()` 自愈）；② `AccountRepository` / `AccountService`（默认账本保障、重名校验、**默认账本不可归档**、**仍有未平仓持仓不可归档**、归档后 `resolve()` 仍可访问以便查询历史）；③ `/api/v1/accounts` 六个端点（list / create / get / patch / archive / restore，list 内嵌持仓与流水统计）；④ `/api/v1/trades` + `/api/v1/trades/export`：按账本 / 方向 / 日期区间 / 持仓 / 关键字筛选 + 分页，**均价法逐笔回放**给出每笔卖出的「已实现盈亏」与「成交后份额」，汇总覆盖全部匹配行；⑤ **回放取完整 scope**（side / 日期过滤只作用于展示）——否则按「卖出」筛选时会丢失买入上下文导致盈亏全部算不出（已加回归测试）；⑥ 账本上下文贯通 `positions` / `portfolio` / `decision`（`?account_id=`，`static/account.js` 全站切换器 + localStorage 记忆 + 「全部账本」合并视图，写操作落 `targetAccountId()`）；⑦ 新增 `/trades` 页面（筛选 / 汇总 KPI / 明细 / 分页 / CSV）与 `portfolio.html` 账本管理面板；⑧ `check_static_js.py` 增强（覆盖 `static/*.js` 语法 + 识别共享脚本注入的 DOM id）；375 测试通过（334 → 375，含决策 `account_id` 透传回归） | 多账本与交易历史（P1 收官） | ✅ |
+| **V0.62.0**（当前） | **单用户多账本 + 交易历史查询页（P1 #6，P1 收官）**：① `accounts` 表（`models/account.py`）+ `positions.account_id`（迁移 `b8e14c7a2f36`，幂等 seed id=1「默认账户」并把历史持仓归入该账本，`db_migrate.py` 同步补列兜底，lifespan `_ensure_default_account()` 自愈）；② `AccountRepository` / `AccountService`（默认账本保障、重名校验、**默认账本不可归档**、**仍有未平仓持仓不可归档**、归档后 `resolve()` 仍可访问以便查询历史）；③ `/api/v1/accounts` 六个端点（list / create / get / patch / archive / restore，list 内嵌持仓与流水统计）；④ `/api/v1/trades` + `/api/v1/trades/export`：按账本 / 方向 / 日期区间 / 持仓 / 关键字筛选 + 分页，**均价法逐笔回放**给出每笔卖出的「已实现盈亏」与「成交后份额」，汇总覆盖全部匹配行；⑤ **回放取完整 scope**（side / 日期过滤只作用于展示）——否则按「卖出」筛选时会丢失买入上下文导致盈亏全部算不出（已加回归测试）；⑥ 账本上下文贯通 `positions` / `portfolio` / `decision`（`?account_id=`，`static/account.js` 全站切换器 + localStorage 记忆 + 「全部账本」合并视图，写操作落 `targetAccountId()`）；⑦ 新增 `/trades` 页面（筛选 / 汇总 KPI / 明细 / 分页 / CSV）与 `portfolio.html` 账本管理面板；⑧ `check_static_js.py` 增强（覆盖 `static/*.js` 语法 + 识别共享脚本注入的 DOM id）；375 用例收集（334 → 375，含决策 `account_id` 透传回归）；离线回归实测 **331 passed / 0 failed**（29m45s，排除 2 个联网 fetcher 文件 44 用例） | 多账本与交易历史（P1 收官） | ✅ |
 
 ---
 

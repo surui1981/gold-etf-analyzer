@@ -32,7 +32,7 @@
 | **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **375 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例）。全量回归见下节实测结果。
+**测试数对账**：`pytest --collect-only -q` = **375 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例）。**V0.62.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 44 用例）= **331 passed / 0 failed**（29m45s）；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.62.0 引入**，建议后续补 `skipif` 守卫。
 
 ---
 
