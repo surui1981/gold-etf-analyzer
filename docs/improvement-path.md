@@ -9,7 +9,7 @@
 
 ## 一、现状评估
 
-### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.63.0）
+### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.63.0，UX P0-P3 专项 9 项已全部落地）
 
 | 模块 | 能力 |
 |------|------|
@@ -32,10 +32,15 @@
 | 决策支持 | ★★★★★ | 仓位推荐 + 理由明细 + 权重实时预览 + 阈值提醒 |
 
 > **结论**：P0-P2 易用性专项已全部落地，当前聚焦 **投资指引基准（纽约金）** 的展示与决策贯通。
+>
+> **关于"P0/P1/P2/P3"编号的语义说明**（避免与 §二 §三 路线图混淆）：
+> - **§一 1.1 / §二**：指**易用性专项**编号（P0 体验杀手 / P1 每日高频 / P2 决策增强 / P3 细节打磨），共 9 项已全部落地。
+> - **§三 实施路线 + application-guide 第 11 章**：指**总改进计划**编号（P1 工程化收口 / P2 分析深度 / P3 产品化），与 UX 编号独立；UX 6.1-6.10 在 §六 UX Roadmap。
+> - 两者侧重点不同：UX 编号针对**用户感知**（页面是否好用），总计划编号针对**系统能力**（回测 / 多品种 / CI/CD 等）。
 
 ---
 
-## 二、痛点诊断与改善方案
+## 二、痛点诊断与改善方案（UX 易用性专项 P0-P3）
 
 ### P0 · 体验杀手（决定"能不能用、敢不敢信"）✅ 已全部落地
 
@@ -128,7 +133,7 @@
 
 ---
 
-## 三、实施路线（版本规划）
+## 三、实施路线（版本规划，含总改进计划 P1 #5 / P1 #6 / P2 #14）
 
 | 版本 | 内容 | 主题 | 状态 |
 |------|------|------|------|
@@ -156,14 +161,72 @@
 | 指标 | 目标 | 当前（V0.63.0） |
 |------|------|------|
 | 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 |
-| 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化，冷启动 ~1.6s |
+| 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化 + 后台预热，冷启动 ~1.6s |
 | 数据源状态可见性 | 100% | ✅ 三态标识 + 健康度 + 备源兜底 |
 | 每日完整操作流程耗时 | ≤ 3 分钟 | ✅ 今日操作清单串联 |
 | 每日打分操作耗时 | ≤ 10 秒 | ✅ 快捷档位 + 沿用上次 |
 | 投资指引基准 | 纽约金（连续/领先） | ✅ V0.51 已切换 |
 | 交易可追溯性 | 逐笔成交可查、可按账本隔离 | ✅ V0.62.0 交易历史页 + 多账本（均价法回放已实现盈亏） |
 | 业绩可见性 | 收益率 / 回撤 / 胜率可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 |
-| 回归测试 | 全绿 | ✅ 377 用例（离线 333 passed / 0 failed） |
+| **指数曲线回看** | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） |
+| 回归测试 | 全绿 | ✅ **383 用例**（离线 **337 passed / 0 failed**，122s） |
+
+---
+
+## 五、部署状态与运行时质量（V0.63.0）
+
+> 截至 2026-09-13，三个部署路径（Windows 本机 / Linux 开发机 / Docker 容器）均可直接跑通；服务以 8888 端口监听 SQLite。本节回答"现在怎么部署 / 跑得怎么样 / 出问题怎么办"。
+
+### 5.1 三种部署方式
+
+| 场景 | 命令 | 入口文件 | 备注 |
+|------|------|---------|------|
+| **Windows 本机常驻（推荐，主用）** | 双击 `start_server.bat` | 自动探测 `C:\Users\DFCFF\.workbuddy\binaries\python\…\python.exe` → 缺失依赖自动 `pip install -e ".[dev]"` → `uvicorn app.main:app --host 127.0.0.1 --port 8888` | 6 秒后自动打开浏览器；端口被占时**一键自愈**（自动 `taskkill` 残留进程后再启动） |
+| **开机自启 + 看门狗** | 右键 `install_startup.ps1` → PowerShell 运行 | 写入 `$APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\GoldPriceAssistant.bat`（登录后自动启动 `watchdog.py --interval 30 --threshold 2`）；管理员权限下额外注册 3 个 Windows 计划任务（`GoldPriceAssistant` 服务 / `GoldPriceAssistantWatchdog` 看门狗 / `GoldPriceAssistantSnapshot` 每日 06:00 + 16:00 采集快照） | 看门狗职责：拉起服务 + 30s 健康巡检（连续 2 次失败拉起新进程）+ 触发快照采集 |
+| **Linux / macOS 开发** | `make dev` 或 `make run` | `Makefile`：`uv sync --extra dev` → `uv run uvicorn app.main:app`（`--reload` 仅 `make dev`） | 推荐 uv（pip 等价命令兼容） |
+| **Docker 容器** | `docker compose up --build` | `Dockerfile` + `docker-compose.yml`：端口 8888 映射、`./data:/app/data` 卷持久化 SQLite、`APP_ENV=prod`、策略 `restart: unless-stopped` | 容器内 SQLite 在宿主机可见，方便备份 |
+
+### 5.2 启动期健壮性（lifespan 钩子，5 步顺序）
+
+`src/app/main.py::lifespan` 按顺序执行：
+
+1. **WAL checkpoint（TRUNCATE）** —— `asyncio.to_thread(sqlite3.PRAGMA wal_checkpoint)` 清理上次异常退出遗留的 `-wal/-shm`，防止新连接卡在恢复/锁等待。**异常强杀（如 -9）不阻断启动**。
+2. **Alembic 升级到 head** —— 以**子进程**方式跑 `alembic upgrade head`（`subprocess.run(..., timeout=60)`），与应用异步引擎完全隔离，避免双写者争 SQLite 写锁导致永久等待；超 60s OS 级 kill 子进程并回退 `Base.metadata.create_all`。
+3. **`ensure_sqlite_columns` + `ensure_sqlite_optimizations`** —— 运行时幂等补齐历史库缺失的新增列（V0.62.0 `positions.account_id` / V0.55.0 `deleted_at` 等）+ WAL/索引优化。
+4. **默认账本保障（`_ensure_default_account`）** —— V0.62.0 引入。`accounts` 表为空时显式 seed id=1「默认账户」，使历史持仓在账本视图中可见，避免「无归属」孤儿数据。
+5. **后台预热 + 调度器启动** —— 异步后台 `asyncio.create_task(_warm_cache())` 拉取 ny/etf/gram 三市场 60 天 K 线 + 预生成当日 served cache（首屏秒级命中）；同时启动 `daily_capture_loop`（07:00 BJT 落快照 + 日内 4 时点 09:30/11:30/14:00/15:30 BJT 预热 served cache）+ `monthly_central_bank_loop`（每月 1/15/末日 07:30 BJT 拉 WGC）。
+
+### 5.3 运行时质量（实测，V0.63.0）
+
+| 指标 | 实测值 | 度量方法 |
+|------|------|---------|
+| **冷启动耗时（pip 安装后首次启动）** | ~30-40s | uvicorn 启动 + alembic 子进程 + 三市场 60 天 K 线预热 + served cache 生成 |
+| **冷启动首屏响应** | < 5s | served cache 预热命中 + Chart.js CDN |
+| **缓存命中首屏** | < 5s（典型 1.6s） | `quote_cache_ttl=300` + `served_cache_ttl_seconds=600` 双层命中 |
+| **离线全量回归** | **383 passed / 0 failed**（排除 2 个联网 fetcher 文件 46 用例，~122s） | `python -m pytest -q --ignore=tests/test_services/test_wgc_fetcher.py --ignore=tests/test_services/test_irfcl_fetcher.py` |
+| **JS 门禁** | 9 个脚本全 OK（6 静态页 + 3 共享） | `python scripts/check_static_js.py` / `make check-web` |
+| **ruff 检查** | 0 错误 | `ruff check src tests` |
+| **行情源灵活度** | 4 选 1（akshare / mock / eastmoney_only / sina_only） | `.env` `MARKET_PROVIDER` |
+| **依赖** | 仅 `fastapi + uvicorn + sqlalchemy + aiosqlite + akshare + pydantic-settings + ruff + pytest` | `pyproject.toml` `[project.optional-dependencies]` |
+
+### 5.4 自愈能力
+
+- **进程内看门狗**：`watchdog.py --interval 30 --threshold 2` 每 30s 巡检 `/api/v1/health`，连续 2 次失败自动拉起新进程。
+- **进程外兜底**：Windows 计划任务每 30s 巡检（看门狗自身也可能挂）。
+- **数据源降级**：`MARKET_PROVIDER=akshare` 任意子源失败 → 自动 fallback chain（goldapi → sina → etf_history）→ 兜底内置 Mock；`source_status()` 实时标记 `live / mock / stale`，前端 `freshness.js` 60s 同步。
+- **启动卡死自愈**：`start_server.bat` 检测到端口被残留进程占用 → `taskkill /F /PID` 后自动重启。
+- **首屏加载**：6 个 `Promise.allSettled` 并发拉取，互不阻塞；任一失败仅记日志不影响其他。
+
+### 5.5 已知部署边界（写在 README 里供首次部署参考）
+
+| 项 | 限制 | 解决方式 |
+|---|---|---|
+| 监听地址 | 默认 `127.0.0.1`（仅本机） | 反向代理 / 防火墙转发；或将 `uvicorn --host 0.0.0.0`（`install_startup.ps1` 计划任务已是 `0.0.0.0`） |
+| 公网鉴权 | 无（设计为单用户本机） | 待 P3 #16 公开部署；当前**仅可信网络环境运行** |
+| SQLite 并发写 | 单写者；高并发下偶发 `database is locked` | 已开启 WAL + 应用内串行写队列；不建议多进程部署 |
+| AKShare 子进程开销 | 首次 import ~3-5s | 后台预热已覆盖；冷启动 < 5s |
+| 数据备份 | SQLite 单文件 | `data/gold_etf.db` 拷走即全量（持仓 / 流水 / 快照 / 央行购金 / 账本全在）；`/positions/export` + `/trades/export` 提供 CSV 对账 |
+| 卸载 | `install_startup.ps1` 启动文件夹版：`Remove-Item "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\GoldPriceAssistant.bat"`；计划任务版：`Unregister-ScheduledTask -TaskName "GoldPriceAssistant" -Confirm:$false`（×3） |
 
 ---
 
@@ -209,9 +272,10 @@
 
 > 实现要点（V0.56.0，纯前端）：持仓决策页新增「🔔 提醒」开关（`localStorage` 记忆 `pm_alert_on`，默认关）；开启时若浏览器支持则请求 `Notification` 授权。页面每 60s 轮询 `decision` + `gold` 行情（`startAlertPolling`），`checkAlerts()` 比较评估指数档位（`bandOf(score)`：强烈偏空/偏空/中性/偏多/强烈偏多）与纽约金价格：档位切换或金价波动 ≥2% 时，触发浏览器 `Notification` + 顶部 `alertBar` 提示条（6s 自动消失）；`renderBriefing()` 在决策区下方常驻展示「今日简报」一句话（指数/档位/建议动作/建议仓位/纽约金现价涨跌）。邮件/微信推送因依赖外部服务与密钥，本期未实现，标注于路线表。
 
-### 6.7 多时间框架与回测可视化（🟢 低 · 增强"指引可信"）🟡 部分落地（V0.61.0）
-- 周/月线趋势与指数（待做）；
-- 评估指数**历史曲线回看**（已有每日快照，补可视化），用历史数据**回测权重有效性**，给用户"过去准不准"的参照（待做）；
+### 6.7 多时间框架与回测可视化（🟢 低 · 增强"指引可信"）🟡 部分落地（V0.61.0 + V0.63.0）
+- 周/月线趋势与指数（待做，P2 #9 独立项）；
+- 评估指数**历史曲线回看** ✅ **V0.63.0 已落地**：综合 / 技术 / 宏观 / **消息面** 4 条线 + 7D / 30D / 90D 区间切换 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX；
+- 用历史数据**回测权重有效性**，给用户"过去准不准"的参照（待做，依赖回测引擎 P3 #13）；
 - ✅ **V0.61.0 已落地「交易业绩可视化」**：账户**收益曲线**（累计收益率 + 持仓市值双轴，30/90/180/365 天区间可切换，含最大回撤）+ **获利分析总结评估**（已实现 / 浮动盈亏、平仓笔数与胜率、盈亏比、最佳/最差平仓、平均持仓天数 + 面向客户的中文复盘总结）。曲线由 `trade_records` 回放重建，历史交易即刻可见，无需等每日快照长期积累。
 
 ### 6.8 新手引导与帮助体系（🟢 低）✅ 已落地（V0.58.0）
@@ -245,7 +309,7 @@
 
 ---
 
-## 五、附：与既有文档的关系
+## 七、附：与既有文档的关系
 
 - 架构 / API / 核心模型 / 改进计划总表：见 [application-guide.md](application-guide.md) 第 11 章
 - 快速开始与功能清单：见 [README.md](../README.md)
