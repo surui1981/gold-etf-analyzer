@@ -73,3 +73,39 @@ async def test_list_snapshots(client: AsyncClient) -> None:
     snap = body["snapshots"][0]
     assert snap["snapshot_date"] == date.today().isoformat()
     assert snap["tech_index"] > 0
+
+
+async def test_v063_list_snapshots_days_one(client: AsyncClient) -> None:
+    """V0.63.0：days=1 边界 —— 应当返回 1 条且为当日。"""
+    resp = await client.get("/api/v1/snapshots?days=1")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["snapshots"][0]["snapshot_date"] == date.today().isoformat()
+
+
+async def test_v063_list_snapshots_days_max(client: AsyncClient) -> None:
+    """V0.63.0：days=365 上限 —— 应当 200 且 total 与 days 兼容（≤ days，惰性补当日仍只有 1 条）。"""
+    resp = await client.get("/api/v1/snapshots?days=365")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] <= 365
+    assert body["total"] >= 1  # 惰性补当日至少 1 条
+
+
+async def test_v063_snapshot_includes_news_index(client: AsyncClient) -> None:
+    """V0.63.0：响应 schema 包含 news_index 字段（消息面曲线的数据来源）。"""
+    resp = await client.get("/api/v1/snapshots?days=1")
+    assert resp.status_code == 200
+    snap = resp.json()["snapshots"][0]
+    assert "news_index" in snap
+    assert isinstance(snap["news_index"], (int, float))
+    # 未打分的 fallback 是 50.0（中性）
+    assert 0 <= snap["news_index"] <= 100
+
+
+async def test_v063_days_query_validation(client: AsyncClient) -> None:
+    """V0.63.0：days 越界（0 / 366）应返回 422 校验错误。"""
+    for bad in ("0", "366", "-1"):
+        resp = await client.get(f"/api/v1/snapshots?days={bad}")
+        assert resp.status_code == 422, f"days={bad} 应被拒：{resp.status_code}"

@@ -122,6 +122,10 @@
   .cl-value { font-size: 12px; color: var(--muted); margin-top: 1px; }
   .cl-btn { font-size: 12px; padding: 4px 13px; border-radius: 999px; background: #1f2329; color: #fff; text-decoration: none; white-space: nowrap; }
   .cl-btn.warn { background: #f59f00; }
+/* V0.63.0：评估指数曲线区间切换按钮 */
+.range-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s; }
+.range-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.range-btn:hover:not(.active) { background: rgba(201, 162, 39, 0.08); }
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
@@ -211,11 +215,24 @@
     <div id="checklistItems"><div class="loading" style="padding:12px 0">加载中…</div></div>
   </div>
 
-  <!-- 每日评估历史（本地快照） -->
+  <!-- 每日评估历史（本地快照） · V0.63.0 升级：区间切换 + 极值卡 -->
   <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:4px">📅 每日评估历史（本地快照） <span style="font-weight:400;font-size:12px;color:var(--muted)" id="snapSub"></span></div>
-    <canvas id="snapChart" style="max-height:240px"></canvas>
-    <div class="summary" id="snapSummary" style="font-size:12px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:600">📅 每日评估历史 · 评估指数曲线 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="snapSub"></span></div>
+      <div id="snapRangeBtns" style="display:flex;gap:6px">
+        <button class="range-btn" data-days="7" type="button">7D</button>
+        <button class="range-btn active" data-days="30" type="button">30D</button>
+        <button class="range-btn" data-days="90" type="button">90D</button>
+      </div>
+    </div>
+    <div class="cards" id="snapStatCards" style="margin-bottom:10px">
+      <div class="card"><div class="label">最新</div><div class="val" id="snapLatest">—</div></div>
+      <div class="card"><div class="label">区间最高</div><div class="val" id="snapMax">—</div></div>
+      <div class="card"><div class="label">区间最低</div><div class="val" id="snapMin">—</div></div>
+      <div class="card"><div class="label">日变</div><div class="val" id="snapDelta">—</div></div>
+    </div>
+    <canvas id="snapChart" style="max-height:260px"></canvas>
+    <div class="summary" id="snapSummary" style="font-size:12px;margin-top:6px"></div>
   </div>
 
   <!-- 上海金（国内金价）对照 -->
@@ -709,37 +726,109 @@ async function loadSge() {
   }
 }
 
-// 每日评估历史（本地快照）
-async function loadSnapshots() {
+// 每日评估历史（本地快照）· V0.63.0 升级：区间切换 + 4 条线 + 极值卡 + 稀疏 UX
+let snapChart = null;  // 模块级：渲染前 destroy 旧实例，防内存泄漏
+let snapLastList = []; // 缓存最近一次结果，供调试 / 后续卡复用
+
+async function loadSnapshots(days = 30) {
+  const subEl = document.getElementById("snapSub");
+  const chartEl = document.getElementById("snapChart");
+  const cardsEl = document.getElementById("snapStatCards");
+  const sumEl = document.getElementById("snapSummary");
   try {
-    const s = await fetchJSON(API_BASE + "/api/v1/snapshots?days=30");
-    if (!s.snapshots.length) { document.getElementById("snapSub").textContent = "暂无快照数据"; return; }
-    const list = [...s.snapshots].reverse(); // 时间升序
-    document.getElementById("snapSub").textContent = `${s.total} 条 · 每日参数与评估值本地持久化`;
-    new Chart(document.getElementById("snapChart"), {
+    const s = await fetchJSON(API_BASE + `/api/v1/snapshots?days=${days}`);
+
+    // —— 空数据 ——
+    if (!s.snapshots.length) {
+      subEl.textContent = "暂无快照数据（每日 07:00 BJT 自动捕获）";
+      cardsEl.style.display = "none";
+      sumEl.textContent = "";
+      if (snapChart) { snapChart.destroy(); snapChart = null; }
+      return;
+    }
+
+    // 时间升序（API 默认降序）
+    const list = [...s.snapshots].reverse();
+    snapLastList = list;
+    cardsEl.style.display = "";
+
+    // —— 稀疏数据 3 档 UX ——
+    let sparseNote = "";
+    if (list.length < 3) {
+      sparseNote = "（数据样本不足 3 天，趋势尚不显著）";
+    } else if (list.length < 7) {
+      sparseNote = `（仅 ${list.length} 天数据）`;
+    }
+    subEl.textContent = `${s.total} 条${sparseNote} · 每日 07:00 BJT 自动捕获`;
+
+    // —— 极值卡 ——
+    const latest = list[list.length - 1];
+    const values = list.map(x => x.trend_index);
+    const max = Math.max(...values);
+    const min = Math.min(...values);
+    const prev = list.length >= 2 ? list[list.length - 2].trend_index : null;
+    const delta = prev != null ? latest.trend_index - prev : null;
+
+    const maxDate = list.find(x => x.trend_index === max)?.snapshot_date || "";
+    const minDate = list.find(x => x.trend_index === min)?.snapshot_date || "";
+
+    document.getElementById("snapLatest").innerHTML =
+      `${latest.trend_index.toFixed(1)} <small style="font-size:11px;color:var(--muted)">${latest.index_level}</small>`;
+    document.getElementById("snapMax").innerHTML =
+      `${max.toFixed(1)} <small style="font-size:11px;color:var(--muted)">${maxDate}</small>`;
+    document.getElementById("snapMin").innerHTML =
+      `${min.toFixed(1)} <small style="font-size:11px;color:var(--muted)">${minDate}</small>`;
+    const deltaEl = document.getElementById("snapDelta");
+    if (delta == null) {
+      deltaEl.textContent = "—";
+    } else {
+      const arrow = delta > 0.05 ? "↑" : delta < -0.05 ? "↓" : "→";
+      const color = delta > 0.05 ? "var(--up)" : delta < -0.05 ? "var(--down)" : "var(--muted)";
+      deltaEl.innerHTML = `<span style="color:${color}">${arrow} ${delta > 0 ? "+" : ""}${delta.toFixed(1)}</span>`;
+    }
+
+    // —— Chart.js：4 条线（综合 / 技术 / 宏观 / 消息）+ 升序 ——
+    if (snapChart) snapChart.destroy();
+    snapChart = new Chart(chartEl, {
       type: "line",
       data: {
         labels: list.map(x => x.snapshot_date),
         datasets: [
-          { label: "综合趋势指数", data: list.map(x => x.trend_index), borderColor: "#c9a227", borderWidth: 2.2, pointRadius: 2, tension: 0.2 },
+          { label: "综合", data: list.map(x => x.trend_index), borderColor: "#c9a227", borderWidth: 2.4, pointRadius: list.length < 7 ? 3 : 2, tension: 0.2 },
           { label: "技术面", data: list.map(x => x.tech_index), borderColor: "#1971c2", borderWidth: 1.2, pointRadius: 0 },
           { label: "宏观参考", data: list.map(x => x.macro_index), borderColor: "#868e96", borderWidth: 1.2, pointRadius: 0 },
+          { label: "消息面", data: list.map(x => x.news_index), borderColor: "#9c36b5", borderWidth: 1.2, pointRadius: 0, borderDash: [4, 4] },
         ],
       },
       options: {
         responsive: true, maintainAspectRatio: false,
         interaction: { mode: "index", intersect: false },
-        plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
-        scales: { x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } }, y: { min: 0, max: 100, ticks: { font: { size: 10 } } } },
+        plugins: {
+          legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(1)}` } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, font: { size: 10 } } },
+          y: { min: 0, max: 100, ticks: { font: { size: 10 }, stepSize: 25 } },
+        },
       },
     });
-    const last = list[list.length - 1];
-    document.getElementById("snapSummary").textContent =
-      `最近快照 ${last.snapshot_date}：综合 ${last.trend_index.toFixed(1)}（${last.index_level}）· 技术 ${last.tech_index.toFixed(1)} · 宏观 ${last.macro_index.toFixed(1)} · 收盘 ${last.close}`;
+
+    sumEl.textContent =
+      `最近 ${latest.snapshot_date} · 综合 ${latest.trend_index.toFixed(1)}（${latest.index_level}）· 收盘 ${latest.close}`;
   } catch (e) {
-    document.getElementById("snapSub").textContent = "快照加载失败：" + e.message;
+    subEl.textContent = "快照加载失败：" + e.message;
   }
 }
+
+// V0.63.0：区间切换按钮（7D / 30D / 90D）
+document.getElementById("snapRangeBtns")?.addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".range-btn");
+  if (!btn) return;
+  document.querySelectorAll("#snapRangeBtns .range-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadSnapshots(parseInt(btn.dataset.days, 10));
+});
 
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {

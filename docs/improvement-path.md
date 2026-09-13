@@ -1,7 +1,7 @@
 # 改进路径 · 易用性提升路线图
 
 > 项目：`gold-etf-analyzer`（黄金价格投资辅助工具）
-> 当前版本：**V0.62.1** ｜ 制定日期：2026-08-31 ｜ 状态：**P0-P2 已全部落地 + P1 #5 行情源配置化（V0.59.0）+ P1 #6 单用户多账本与交易历史查询页（V0.62.0，P1 仅剩 #3 CI/CD）+ V0.60.0 行情实时性增强 + V0.61.0 交易闭环与业绩分析（ETF 报价口径修正 + 加仓/减仓内联面板 + 收益曲线 + 获利分析总结）+ V0.62.1 收益回放口径修复（行情未覆盖的成交归入最后可得交易日）；6.1 数据时效透明 + 6.2 响应式适配 + 6.3 决策可解释性 + 6.4 操作防错与撤销 + 6.6 主动提醒 + 6.7 业绩可视化（收益曲线/获利分析，V0.61.0）+ 6.8 新手引导与帮助体系（V0.58.0）+ 6.10 央行购金数据化与自动化（V0.57.0） 已落地**（6.5 个性化 / 6.7 周月线与回测 / 6.9 离线体验 待规划） ｜ 文档更新：2026-09-13（V0.62.0 多账本 + 交易历史查询页 + 全量文档对账 + V0.62.1 收益回放修复）
+> 当前版本：**V0.63.0** ｜ 制定日期：2026-08-31 ｜ 状态：**P0-P2 已全部落地 + P1 #5 行情源配置化（V0.59.0）+ P1 #6 单用户多账本与交易历史查询页（V0.62.0，P1 仅剩 #3 CI/CD）+ V0.60.0 行情实时性增强 + V0.61.0 交易闭环与业绩分析（ETF 报价口径修正 + 加仓/减仓内联面板 + 收益曲线 + 获利分析总结）+ V0.62.1 收益回放口径修复（行情未覆盖的成交归入最后可得交易日）+ V0.63.0 评估指数历史曲线升级（P2 #14 起步，4 条线 + 区间切换 + 极值卡 + 稀疏 UX）；6.1 数据时效透明 + 6.2 响应式适配 + 6.3 决策可解释性 + 6.4 操作防错与撤销 + 6.6 主动提醒 + 6.7 业绩可视化（收益曲线/获利分析，V0.61.0）+ 6.8 新手引导与帮助体系（V0.58.0）+ 6.10 央行购金数据化与自动化（V0.57.0） 已落地**（6.5 个性化 / 6.7 周月线与回测 / 6.9 离线体验 待规划） ｜ 文档更新：2026-09-13（V0.62.0 多账本 + 交易历史查询页 + 全量文档对账 + V0.62.1 收益回放修复 + V0.63.0 指数曲线升级）
 > 目标：从「能用」走向「好用、可信、随时可用」
 > 投资指引基准：**纽约金（COMEX GC）**——连续交易、夜盘覆盖国内休市时段，对国内金价具领先指示意义；ETF / 上海金作国内对照与交易标的
 
@@ -9,7 +9,7 @@
 
 ## 一、现状评估
 
-### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.62.0）
+### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.63.0）
 
 | 模块 | 能力 |
 |------|------|
@@ -17,7 +17,8 @@
 | 页面 | 趋势追踪 / 持仓与决策 / 权重配置 / 消息面评估 / 世界央行购金 / 交易历史（统一顶部导航 + 账本切换器） |
 | 数据 | 三市场（纽约金 COMEX / 上海金 Au99.99 / 黄金ETF 518880）、宏观 5 因子、每日快照 |
 | 决策 | 买入 / 加仓 / 持有 / 减仓 / 卖出 + **仓位推荐**（评估指数 → 仓位 80/60/40/20/10%） |
-| 工程 | 377 测试通过、本机常驻（看门狗自愈 + `install_startup.ps1` 开机自启）、Alembic 正式迁移、央行购金月度自动调度、前端内联 JS 门禁（`make check-web`） |
+| **可视化** | **评估指数历史曲线**（V0.63.0：综合 / 技术 / 宏观 / 消息面 4 条线 + 7D/30D/90D 区间切换 + 极值卡 + 稀疏 UX）+ 收益曲线 + 获利分析 + 价格曲线 + 宏观因子 |
+| 工程 | 383 测试通过、本机常驻（看门狗自愈 + `install_startup.ps1` 开机自启）、Alembic 正式迁移、央行购金月度自动调度、前端内联 JS 门禁（`make check-web`） |
 
 ### 1.2 易用性自评
 
@@ -137,7 +138,8 @@
 | **V0.57.0** | **6.10 央行购金数据化与自动化**：新增 `/central-bank` 页面（4 KPI + Chart.js 堆叠柱 + Top 10 + 按国家/季度范围筛选明细表）+ 3 个 endpoint；数据源切到 WGC HTML chart JS（绕开 XLSX 403），覆盖 2014Q1–2026Q2 + H1 2026 按国家 + UZB/IRN 手工补丁；cb_gold 宏观因子从表自动汇总 T12M；**月度自动调度** 每月 1/15/末日 07:30 BJT 自动从 WGC 拉取；216 测试通过 | 央行购金数据化 + 自动化 | ✅ |
 | **V0.58.0** | **6.8 新手引导与帮助体系**：新增 `static/help.js` + `static/help.css` 自包含脚本，右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 大类分组 / 数据来源 + 投资警示）；首次访问 5 个页面自动弹 2-4 步 tour 浮层（高亮 + 蒙层 + 步骤切换），`localStorage.pm_help_seen_version` 升级时强制重看；15 项关键术语 inline `?` 图标自动注入（综合指数 / MA5/20/40 / RSI(14) / T12M / Au99.99 / COMEX / 518880 / 仓位推荐 等）；响应式：modal 在 <768px 改为底部抽屉；63 项新测试覆盖 glossary / tour / HTML 注入 / XSS 转义 / 数据源标注；279 测试通过 | 新手引导 + 帮助体系 | ✅ |
 | **V0.59.0** | **P1 #5 行情源配置化**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块；3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债）/ **mock**（确定性序列、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）；`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容；24 项新测试（工厂解析 4 provider 名 + 大小写 + 未知名抛错 + 空回退默认 + Mock 数据正确性 + bundle 注入 + XAU chain + cache_ttl=0 禁用）；303 测试通过（279 → 303） | 行情源配置化 | ✅ |
-| **V0.62.1**（当前） | **收益回放口径修复（验证阶段发现）**：修复 `PortfolioAnalyticsService._replay()` **静默丢单** —— 成交日晚于价格序列最后一个交易日时（**行情源 T-1 滞后 / 盘中录入 / 周末节假日录入**都会触发），`bisect_left` 返回 `len(price_dates)`，原逻辑 `if idx < len(price_dates)` 直接跳过该笔交易，导致同一响应内 **`sell_count` 与 `closed_trades` 自相矛盾**（`sell_count=2` 却 `closed_trades=0`、胜率 0%），「累计投入本金」显示 **0.00 元**、已实现盈亏归零，与持仓页实时持仓完全冲突。现改为把行情未覆盖的成交**归入最后一个可得交易日**，累计投入 / 已实现盈亏 / 胜率 / 盈亏比恢复正确（收益曲线同步受益）。新增 2 项回归测试并断言 `sell_count == closed_trades`；377 用例收集（375 → 377） | 业绩口径可信 | ✅ |
+| **V0.63.0**（当前） | **评估指数历史曲线升级（P2 #14 起步）**：趋势追踪页『每日评估历史』面板前端增强，后端零改动。① **第 4 条曲线**：新增 `news_index` 消息面线（紫色虚线），综合指数的 4 个构成维度（综合 / 技术 / 宏观 / 消息面）一目了然；② **区间切换**：`7D / 30D / 90D` 三档按钮（参考 portfolio 收益曲线 `EQUITY_RANGES` 模式），调用 `/api/v1/snapshots?days=N` 重新渲染；③ **4 个极值卡**：最新（带档位）/ 区间最高（附日期）/ 区间最低（附日期）/ 日变（↑↓→ 红绿色），用现有 `.cards` 网格替代单行 summary；④ **稀疏数据 3 档 UX**：< 3 天「样本不足，趋势尚不显著」+ 隐藏极值卡；< 7 天「仅 N 天数据」；≥ 7 天默认（pointRadius 缩小到 2）；⑤ **chart.destroy 内存管理**：`snapChart` 模块级变量 + 渲染前 `snapChart?.destroy()`，区间切换不堆积 Chart 实例；⑥ **空数据兜底**：`< canvas >` 占位 + 子标题改为「暂无快照数据（每日 07:00 BJT 自动捕获）」，旧 chart 销毁。新增 6 个测试（API 4 + 服务 2）；383 用例通过（377 → 383） | 指数曲线可视化 | ✅ |
+| **V0.62.1** | **收益回放口径修复（验证阶段发现）**：修复 `PortfolioAnalyticsService._replay()` **静默丢单** —— 成交日晚于价格序列最后一个交易日时（**行情源 T-1 滞后 / 盘中录入 / 周末节假日录入**都会触发），`bisect_left` 返回 `len(price_dates)`，原逻辑 `if idx < len(price_dates)` 直接跳过该笔交易，导致同一响应内 **`sell_count` 与 `closed_trades` 自相矛盾**（`sell_count=2` 却 `closed_trades=0`、胜率 0%），「累计投入本金」显示 **0.00 元**、已实现盈亏归零，与持仓页实时持仓完全冲突。现改为把行情未覆盖的成交**归入最后一个可得交易日**，累计投入 / 已实现盈亏 / 胜率 / 盈亏比恢复正确（收益曲线同步受益）。新增 2 项回归测试并断言 `sell_count == closed_trades`；377 用例收集（375 → 377） | 业绩口径可信 | ✅ |
 | **V0.62.0** | **单用户多账本 + 交易历史查询页（P1 #6，P1 收官）**：① **多账本**——新增 `accounts` 表 + `positions.account_id`（迁移 `b8e14c7a2f36` 幂等 seed 默认账本 id=1，既有持仓与流水全部归入），`/api/v1/accounts` 六端点（清单 / 新建 / 改名 / 设默认 / 归档 / 恢复），默认账本自愈（`list` / `create` 均先 `ensure_default`，防新账本抢占 id=1）、重名校验、默认账本不可归档、仍有未平仓持仓不可归档；② **交易历史查询页** `/trades`——`GET /api/v1/trades`（方向 / 持仓 / 品种 / 关键字 / 日期区间 / 分页 + 6 项汇总 KPI）与 `/trades/export` CSV 导出（BOM + 附件头）；③ **均价法逐笔回放**——按时间升序回放算每笔卖出的「已实现盈亏」与「成交后份额」，并采用**双次取数**（scope 供回放 / display 供展示），使按方向或日期筛选不丢失买入上下文；④ **全链路账本隔离**——持仓 / 收益曲线 / 获利分析 / 购买决策均贯通 `?account_id=`，`account_id=None` 表示「全部账本」合并视图，写操作统一落 `targetAccountId()`（合并视图下落到默认账本），避免「看着合并视图下单，持仓却不知归属」；⑤ 前端 `static/account.js` 全站账本切换器（localStorage 记忆 + `account-changed` 事件）+ `/trades` 新页面 + portfolio 账本管理卡片；41 项新测试（账本服务 20 / 交易历史 12 / 账本 API 8 / 决策账本透传 1）；375 测试通过（334 → 375） | 多账本·可追溯 | ✅ |
 | **V0.61.0** | **交易闭环与业绩分析**：① **修复 ETF 报价口径错配**——新增 `get_gold_etf_quote()` + `GET /market/gold/etf-quote`（元/份），持仓估值 / 开仓预填 / 清仓价全部改用 ETF 价（此前误用 XAU/USD 国际金价，收益率虚高数万个百分点）；② **加仓/减仓内联交易面板**——金额↔份数双向换算、快捷比例（1/4·1/2·3/4·全部）、摊薄成本与已实现盈亏实时预览，替代原生 `prompt()`，并新增 `GET /positions/{id}/trades` 流水查询；③ **收益曲线**（`GET /api/v1/portfolio/equity-curve`）——由交易流水 + ETF 历史价回放重建每日持有份数/成本/市值/累计收益率，附最大回撤；④ **获利分析总结评估**（`GET /api/v1/portfolio/performance`）——已实现 / 浮动盈亏、平仓笔数与胜率、盈亏比、最佳/最差平仓、平均持仓天数 + 面向客户的中文总结；⑤ **手续费口径统一**——回放成本不再计入手续费（与 `PositionService.add_trade` 摊薄成本同口径），手续费只体现在「累计投入本金」，修正同一页面收益曲线与获利分析出现两个收益率（-4.29% vs -4.25%）的信任问题；并新增 `scripts/check_static_js.py` 前端内联 JS 门禁（语法 / 未定义调用 / DOM id 一致性，`make check-web`）——本项目前端无构建步骤，JS 写错不会被任何编译期拦截却会让整页脚本失效 | 业绩看得见 | ✅ |
 | **V0.60.0** | **行情实时性增强（D + B）**：① `services/cache.py` value 由 `GoldTrendOut` → `(GoldTrendOut, set_at)` 元组；`get_served` 新增 keyword-only `max_age_seconds`，超期返回 None（默认 600s，可由 `.env` 配 `SERVED_CACHE_TTL_SECONDS`），旧调用方不传 → 行为完全不变；② `repositories/market_data.py` 6 个接口（`get_gold_history` / `get_gold_gram_history` / `get_us_gold_history` / `get_gold_quote` / `get_gold_gram_quote` / `get_us_gold_quote`）启用 `quote_cache_ttl=300` 进程级 cache（V0.59.0 之前是死代码），cache hit 时**不调** `_mark` 保留 `_fetched_at` → `source_status()` 按 `_fetched_at + cache_ttl` 派生 `"stale"` 状态；③ `services/scheduler.py` `daily_capture_loop` 内部串联日内分钟表 `next_intraday_run_utc`（默认 09:30 / 11:30 / 14:00 / 15:30 BJT，可由 `.env` 配 `INTRADAY_REFRESH_HOURS`，`INTRADAY_REFRESH_ENABLED=false` 关闭），取 `min(next_daily, next_intraday)` 最近点触发（`intraday_warm_once` 仅刷新 served cache 不落库）；④ 前端 `trend.html` `setInterval(refreshTrendQuotes, 60_000)` + `visibilitychange` 切回前台自动刷新 + 右上角手动 🔄 按钮（带旋转动画），`portfolio.html` 60s → 30s + `visibilitychange` + 同步 `FreshnessBar.load()`；⑤ `tests/conftest.py` `_reset_db` fixture 同时清空 `_CACHE`（行情 cache）保证跨测试隔离；13 项新测试（5 cache hit/expire/disabled/key-isolation/stale + 4 served TTL + 2 intraday 时间计算 + 1 silent-on-failure + 1 writes-served-cache）；316 测试通过（303 → 316） | 行情实时性 | ✅ |
@@ -151,7 +153,7 @@
 
 ## 四、验收度量
 
-| 指标 | 目标 | 当前（V0.62.0） |
+| 指标 | 目标 | 当前（V0.63.0） |
 |------|------|------|
 | 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 |
 | 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化，冷启动 ~1.6s |

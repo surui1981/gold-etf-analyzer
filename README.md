@@ -49,6 +49,7 @@ docker compose up --build
 | 自动调度 | 每日 07:00 BJT 捕获快照 + 央行购金每月 1/15/末日 07:30 BJT 自动从 WGC 拉取数据 |
 | 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、央行页（KPI/堆叠柱/Top 榜/明细表）、持仓页、权重页 |
 | **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉 |
+| **评估指数历史曲线升级** | 趋势追踪页『每日评估历史』面板升级：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线；7D / 30D / 90D 区间切换按钮；4 个极值卡（最新 / 区间最高 / 区间最低 / 日变，带 ↑↓→ 着色）；稀疏数据 3 档 UX（< 3 天提示样本不足 / < 7 天提示天数 / ≥ 7 天默认）；Chart.js 实例化前 destroy 旧实例防内存泄漏（区间切换安全） |
 | **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；XAU fallback chain 与缓存 TTL 也可配；测试 / 离线演示可直接走 mock 不触网 |
 | **行情实时性增强** | served cache 日内 TTL（默认 10 分钟，`.env` 可配）+ 6 个行情接口启用进程级 cache（`quote_cache_ttl` 真生效）+ 日内 4 个时点（09:30/11:30/14:00/15:30 BJT）自动预热；趋势页 60s 轮询 + 切回前台自动刷新 + 手动 🔄 按钮；持仓页 30s 轮询；freshness 角标自动派生"缓存过期"分支 |
 
@@ -136,7 +137,7 @@ gold-etf-analyzer/
 │                            #   + account.js（账本切换器，全站共享）
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（377 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本）
+├── tests/                   # pytest（383 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本 / 指数曲线）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -146,7 +147,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 377 用例（离线回归 333 passed，排除 2 个联网 fetcher 文件）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本
+python -m pytest -v          # 383 用例（离线回归 337 passed，排除 2 个联网 fetcher 文件）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线
 python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests
@@ -165,6 +166,7 @@ ruff format src tests
 - [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
 - [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
 - [x] 行情实时性增强（V0.60.0：served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 趋势页 60s 轮询 + visibilitychange + 持仓页 30s）
+- [x] **评估指数历史曲线升级（V0.63.0）**：综合 / 技术 / 宏观 / 消息面 4 条线 + 7D/30D/90D 区间切换 + 极值卡（最新/区间最高/区间最低/日变）+ 稀疏数据 3 档 UX + chart.destroy 内存管理
 - [x] **单用户多账本 + 交易历史查询页（V0.62.0，P1 #6）**：`accounts` 表 + `positions.account_id`（迁移把历史持仓归入 id=1「默认账户」）；`/api/v1/accounts` 账本增改归档（默认账本不可归档、有未平仓持仓不可归档）；`/api/v1/trades` 多条件筛选（账本/方向/日期/持仓/关键字）+ 均价法回放给出每笔卖出的**已实现盈亏**与**成交后份额** + CSV 导出；全站账本切换器（`account.js`，localStorage 记忆，支持「全部账本」合并视图）；持仓 / 收益曲线 / 获利分析 / 决策均按账本隔离
 - [x] **收益回放口径修复（V0.62.1）**：修复「成交日晚于行情序列最后一个交易日」时交易被静默丢弃的问题 —— 此前会导出 `sell_count=2` 却 `closed_trades=0`、累计投入本金显示 **0.00 元** 的自相矛盾（行情源 T-1 滞后或周末录入成交时必现）；现改为归入最后一个可得交易日，本金 / 已实现盈亏 / 胜率统计恢复正确
 - [x] 交易闭环与业绩分析（V0.61.0：**ETF 报价口径修正**（`/market/gold/etf-quote`，元/份）+ 加仓/减仓内联面板（金额换算 / 快捷比例 / 摊薄成本与已实现盈亏预览）+ 收益曲线（流水回放重建，含最大回撤）+ 获利分析总结（胜率 / 盈亏比 / 平均持仓天数））

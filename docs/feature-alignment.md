@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-13 ｜ 适用版本：**V0.62.0**
+> 生成日期：2026-09-13 ｜ 适用版本：**V0.63.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.62.1）
+## 一、README 功能清单 vs 代码实际（截至 V0.63.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -31,8 +31,9 @@
 | **获利分析总结评估** | `GET /api/v1/portfolio/performance` + `PortfolioAnalyticsService.performance` | ✅（V0.61.0） |
 | **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
+| **评估指数历史曲线升级** | 趋势页 `loadSnapshots(days)` 重构：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线 + `7D / 30D / 90D` 区间切换按钮 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX + `snapChart.destroy()` 内存管理 | ✅（V0.63.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **377 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例；V0.62.1 新增 `test_portfolio_analytics.py` 回放口径回归 2 = 377）。**V0.62.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 44 用例）= **331 passed / 0 failed**（29m45s）；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.62.0 引入**，建议后续补 `skipif` 守卫。
+**测试数对账**：`pytest --collect-only -q` = **383 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 41 + V0.62.1 新增 2 + V0.63.0 新增 6 = 377 → 383）。**V0.63.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 46 用例）= **337 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.63.0 引入**，建议后续补 `skipif` 守卫。
 
 ---
 
@@ -70,7 +71,7 @@
 |---|------|------|------|------|
 | 12 | **仓位建议（账户本金）** | 📋 | ⚠️ 部分实现（80/60/40/20/10%），无账户本金估算 | ⚠️ 半成品 |
 | 13 | **模拟交易 + 回测引擎** | 📋 | ❌ | ⚠️ 未做 |
-| 14 | **指数时间序列可视化** | 📋 | ⚠️ 数据有（snapshot 表）；V0.61.0 已加**账户收益曲线**，但评估指数自身曲线仍无 | ⚠️ 半成品 |
+| 14 | **指数时间序列可视化** | ✅ V0.63.0 | ✅ V0.63.0 已落地——评估指数曲线（综合 / 技术 / 宏观 / 消息面 4 条线 + 7D/30D/90D 区间切换 + 4 个极值卡 + 稀疏数据 3 档 UX + chart.destroy 内存管理）；账户收益曲线 V0.61.0 已加 | ✅ |
 | 15 | **监控告警** | 📋 | ⚠️ 浏览器通知已做，邮件/微信未做 | ⚠️ 半成品 |
 | 16 | **公开部署** | 📋 | ❌ 当前 `127.0.0.1:8888` 仅本机 | ⚠️ 未做 |
 
@@ -112,6 +113,8 @@
 | 13 | `improvement-path.md` §四 验收度量表头停在「当前（V0.60.0）」 | ✅ 2026-09-13 升 V0.62.0 并补 3 项度量（交易可追溯 / 业绩可见 / 回归全绿） |
 | 14 | `application-guide.md` §5 API 表缺 V0.61.0/V0.62.0 新增端点（`/trades` 页、`etf-quote`、`equity-curve`、`performance`） | ✅ 2026-09-13 补 4 行，并给 positions/decision 行补 `account_id` 参数说明 |
 | 15 | `application-guide.md` §11 状态补遗注「截至 V0.57.0」（实际已到 V0.62.0） | ✅ 2026-09-13 重写为 V0.62.0 口径，补 P2/P3/UX 未做项清单 |
+| 16 | P3 #14「指数时间序列可视化」停留在 ⚠️ 半成品（评估指数自身曲线仍无），实际 V0.63.0 已落地 | ✅ 2026-09-13 升 ✅ V0.63.0 |
+| 17 | V0.63.0 新增 6 个测试（API 4 + 服务 2），三文档测试数声明需同步 377 → 383 | ✅ 2026-09-13 同步 README / application-guide / improvement-path / feature-alignment 四文档 |
 
 ---
 

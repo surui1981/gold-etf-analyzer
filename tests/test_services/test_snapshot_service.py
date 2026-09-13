@@ -77,3 +77,27 @@ async def test_list_history_lazy_capture(db_session: AsyncSession) -> None:
 
     assert result.total >= 1  # 当日无快照时自动捕获
     assert result.snapshots[0].snapshot_date == date.today()
+
+
+async def test_v063_list_history_news_index_present(db_session: AsyncSession) -> None:
+    """V0.63.0：list_history 返回的每条快照都含 news_index 字段（消息面曲线数据来源）。"""
+    svc = _service(db_session)
+    result = await svc.list_history(days=7)
+
+    assert result.total >= 1
+    for snap in result.snapshots:
+        assert hasattr(snap, "news_index")
+        assert isinstance(snap.news_index, (int, float))
+        assert 0 <= snap.news_index <= 100  # 未打分场景下默认 50.0
+
+
+async def test_v063_list_history_no_duplicate_dates(db_session: AsyncSession) -> None:
+    """V0.63.0：list_history(days=N) 返回列表 snapshot_date 无重复（防御 upsert 失败导致翻倍）。"""
+    svc = _service(db_session)
+    # 连续调用两次（均触发惰性补当日）—— 同日只应保留 1 条
+    await svc.list_history(days=5)
+    result = await svc.list_history(days=5)
+
+    dates = [s.snapshot_date for s in result.snapshots]
+    assert len(dates) == len(set(dates)), f"重复日期：{dates}"
+    assert result.total <= 5
