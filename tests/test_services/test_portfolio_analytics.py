@@ -239,6 +239,49 @@ async def test_performance_losing_trade_and_profit_factor(db_session: AsyncSessi
     assert out.closed_positions == 1
 
 
+# ───────── 成交日晚于价格序列末日（行情 T-1 滞后 / 周末录入）─────────
+# FakeMarket 价格序列为 2026-01-01 起连续 120 天 → 末日 2026-04-30。
+# 回归背景（2026-09-13 验证发现）：此前 `bisect_left` 找不到归属交易日就直接
+# 跳过该笔交易，导致同一响应里 sell_count=2 而 closed_trades=0、
+# 累计投入本金 0.00 元，持仓页与业绩页对不上。
+async def test_equity_curve_trade_after_last_price_date_kept(
+    db_session: AsyncSession,
+) -> None:
+    """成交日晚于价格序列末日：归入最后一个可得交易日，不得丢弃。"""
+    pos = await _add_position(db_session, qty=100, avg_cost=8.0)
+    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
+                     at=datetime(2026, 5, 10, tzinfo=timezone.utc))
+
+    out = await _service(db_session).equity_curve(days=90)
+    last = out.points[-1]
+    assert last.quantity == 100, "行情未覆盖的成交应归入最后交易日而非丢失"
+    assert last.cost == 800.0
+    assert out.summary.total_invested == 800.0, "累计投入本金不应为 0"
+
+
+async def test_performance_trade_after_last_price_date_not_zero(
+    db_session: AsyncSession,
+) -> None:
+    """成交日晚于价格序列末日：已实现盈亏与平仓笔数仍须统计（口径自洽）。"""
+    pos = await _add_position(db_session, qty=50, avg_cost=8.0)
+    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
+                     at=datetime(2026, 1, 5, tzinfo=timezone.utc))
+    # 2026-05-10 晚于价格序列末日 2026-04-30
+    await _add_trade(db_session, pos.id, side="sell", qty=50, price=12.0,
+                     at=datetime(2026, 5, 10, tzinfo=timezone.utc))
+
+    out = await _service(db_session).performance()
+    assert out.realized_pnl == 200.0, "卖出已实现盈亏不得因行情滞后而归零"
+    assert out.closed_trades == 1
+    assert out.win_trades == 1
+    assert out.win_rate == 100.0
+    assert out.total_invested == 800.0
+    # 口径自洽：卖出笔数必须等于纳入回放的平仓笔数
+    assert out.sell_count == out.closed_trades, (
+        f"sell_count={out.sell_count} 与 closed_trades={out.closed_trades} 不一致"
+    )
+
+
 async def test_performance_holding_days_and_soft_deleted(db_session: AsyncSession) -> None:
     """平均持仓天数按开仓→平仓计算；软删除持仓不参与统计。"""
     opened = datetime(2026, 1, 1, tzinfo=timezone.utc)

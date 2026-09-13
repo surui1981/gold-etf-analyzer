@@ -5,7 +5,7 @@
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.62.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.62.1）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -32,7 +32,7 @@
 | **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **375 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例）。**V0.62.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 44 用例）= **331 passed / 0 failed**（29m45s）；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.62.0 引入**，建议后续补 `skipif` 守卫。
+**测试数对账**：`pytest --collect-only -q` = **377 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 `test_account_service.py` 20 + `test_trade_history.py` 12 + `test_accounts_api.py` 8 + `test_decision_service.py` 决策账本透传回归 1 = 41 用例；V0.62.1 新增 `test_portfolio_analytics.py` 回放口径回归 2 = 377）。**V0.62.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 44 用例）= **331 passed / 0 failed**（29m45s）；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.62.0 引入**，建议后续补 `skipif` 守卫。
 
 ---
 
@@ -49,6 +49,10 @@
 | 5 | **行情源配置化** | ✅ V0.59.0 | ✅ MARKET_PROVIDER=.env 4 选 1 + 工厂 + bundle 注入 | ✅ |
 | 5′ | （application-guide P1 表 #5 长期停留 📋） | ✅ | ✅ 实际 V0.59.0 已落地，**V0.62.0 已修正该陈旧状态** | ✅ 已修正 |
 | 6 | **多账户 + 交易历史查询页** | ✅ V0.62.0 | ✅ 单用户多账本（`accounts` + `positions.account_id`，历史持仓归入默认账户）+ `/accounts` 6 端点 + `/trades` 查询/导出 + `static/account.js` 全站切换器 + `/trades` 页面 | ✅ |
+
+> **验证阶段发现并修复（V0.62.1）**：端到端验证 V0.62.0 改进项时，发现 `PortfolioAnalyticsService._replay()` 在**成交日晚于价格序列最后一个交易日**时（行情源 T-1 滞后 / 盘中录入 / 周末录入均会触发）用 `if idx < len(price_dates)` 把该笔交易**静默丢弃**，导致同一响应内 `sell_count` 与 `closed_trades` 自相矛盾、「累计投入本金」显示 **0.00 元**、胜率为 0%，与持仓页实时持仓冲突。已改为归入最后一个可得交易日，并补 2 项回归测试（含 `sell_count == closed_trades` 自洽断言）。
+>
+> 验证方法与结论见 §六「对账方法」补充的端到端验证清单。
 
 ### P2 · 分析深度
 
@@ -80,7 +84,7 @@
 | 6.2 | 响应式与移动端 | ✅ V0.53.0 | ✅ | ✅ |
 | 6.3 | 决策可解释性 | ✅ V0.54.0 | ✅ | ✅ |
 | 6.4 | 操作防错与撤销 | ✅ V0.55.0 | ✅ | ✅ |
-| **6.5** | **个性化与上下文记忆** | 🟢 待规划 | ❌ 无主题/标的记忆，无多账户 UI | ⚠️ 未做 |
+| **6.5** | **个性化与上下文记忆** | 🟡 部分（V0.62.0） | ⚠️ V0.62.0 已落地**多账本 + 全站账本切换器 + `localStorage` 账本记忆**；**主题切换与标的/区间记忆仍未做** | ⚠️ 部分 |
 | 6.6 | 主动提醒与推送 | ✅ V0.56.0 | ✅ 浏览器通知（邮件/微信仍欠） | ⚠️ 部分 |
 | **6.7** | **多时间框架 + 回测可视化** | 🟡 部分（V0.61.0） | ⚠️ **收益曲线 + 获利分析总结已落地**；周/月线趋势与权重参数回测未做 | ⚠️ 部分 |
 | **6.8** | **新手引导与帮助** | ✅ V0.58.0 | ✅ help.js + help.css + 5 HTML 注入 | ✅ |
@@ -89,20 +93,25 @@
 
 ---
 
-## 四、文档自身不一致（V0.57.0 / V0.58.0 / V0.59.0 / V0.60.0 同步已完成）
+## 四、文档自身不一致（V0.57.0 → V0.62.1 同步已完成）
 
 | # | 原问题 | 修复 |
 |---|---|---|
-| 1 | `application-guide.md` 头部版本号 V0.53.0 → V0.57.0 → V0.58.0 → V0.59.0 → V0.60.0 | ✅ 已升 V0.60.0 |
+| 1 | `application-guide.md` 头部版本号 V0.53.0 → V0.57.0 → … → V0.60.0 | ✅ 已升 V0.62.1 |
 | 2 | `application-guide.md` 第 10 章缺 V0.54–V0.59 六条 + 表格列错位 | ✅ 已补齐，统一 5 列格式 |
-| 3 | `improvement-path.md` 头部版本号 V0.56.0 → V0.57.0 → V0.58.0 → V0.59.0 → V0.60.0 | ✅ 已升 V0.60.0 |
-| 4 | `improvement-path.md` 实施路线表缺 V0.57.0/V0.58.0/V0.59.0/V0.60.0 行 + 6.10/6.8/P1#5 | ✅ 已补 |
-| 5 | 三文档测试数不一致（67/214/216/279/303 残留 → 316） | ✅ 统一 316 |
+| 3 | `improvement-path.md` 头部版本号 V0.56.0 → … → V0.60.0 | ✅ 已升 V0.62.1 |
+| 4 | `improvement-path.md` 实施路线表缺 V0.57.0/V0.58.0/V0.59.0/V0.60.0 行 + 6.10/6.8/P1#5 | ✅ 已补，V0.62.1 亦已补 |
+| 5 | 三文档测试数不一致（67/214/216/279/303 残留 → 316） | ✅ 统一 377（离线 333 passed） |
 | 6 | `application-guide.md` 第 2 章功能清单缺央行购金/调度/新手引导/行情源 | ✅ 已补 4 行 |
 | 7 | `application-guide.md` 第 5 章 API 表缺 `/news-score`、`/snapshots`、`/central-bank/*` | ✅ 已补全 28 endpoints |
 | 8 | `application-guide.md` 第 7 章数据源"央行购金"硬编码描述 | ✅ 改为 WGC 自动汇总 |
 | 9 | `application-guide.md` 第 12 章数据来源仅 AKShare | ✅ + WGC + 行情源 provider 说明 |
 | 10 | V0.58.0：help.js 内 V0.57.0 央行购金标注 | ✅ renderSourceTab 含 WGC + V0.57.0 |
+| 11 | **P1 表 #5「行情源配置化」长期停留 📋**（实际 V0.59.0 已落地） | ✅ V0.62.0 已修正为 ✅ |
+| 12 | `improvement-path.md` 实施路线表缺 V0.61.0 / V0.62.0 行，且 V0.61.0 仍标「（当前）」 | ✅ 2026-09-13 补 V0.62.0 行并摘掉「（当前）」 |
+| 13 | `improvement-path.md` §四 验收度量表头停在「当前（V0.60.0）」 | ✅ 2026-09-13 升 V0.62.0 并补 3 项度量（交易可追溯 / 业绩可见 / 回归全绿） |
+| 14 | `application-guide.md` §5 API 表缺 V0.61.0/V0.62.0 新增端点（`/trades` 页、`etf-quote`、`equity-curve`、`performance`） | ✅ 2026-09-13 补 4 行，并给 positions/decision 行补 `account_id` 参数说明 |
+| 15 | `application-guide.md` §11 状态补遗注「截至 V0.57.0」（实际已到 V0.62.0） | ✅ 2026-09-13 重写为 V0.62.0 口径，补 P2/P3/UX 未做项清单 |
 
 ---
 
@@ -110,10 +119,11 @@
 
 | 优先级 | 事项 | 估时 | 备注 |
 |---|---|---|---|
-| 🔴 高 | 规划 P1 #3 CI/CD（GitHub Actions） | 0.5d | 写 pytest + ruff + Docker build workflow |
+| 🔴 高 | 规划 P1 #3 CI/CD（GitHub Actions） | 0.5d | 写 pytest + ruff + Docker build workflow（**P1 唯一未完成项**） |
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
-| 🟢 低 | UX 6.5/6.7 两项（个性化 / 多时间框架） | 各 1-2d | 6.8 V0.58.0 落地；6.10 V0.57.0 落地；P1#5 V0.59.0 落地；**P1#6 多账本 V0.62.0 落地（P1 仅剩 #3 CI/CD）** |
+| 🟢 低 | UX 6.5 剩余项（主题切换 / 标的与区间记忆） | 1d | **多账本与账本记忆 V0.62.0 已落地**；剩余为主题与展示偏好记忆 |
+| 🟢 低 | UX 6.7 剩余项（周/月线趋势 + 权重参数回测） | 1-2d | 收益曲线与获利分析 V0.61.0 已落地；后两项依赖回测引擎（P3 #13） |
 
 ---
 
@@ -129,10 +139,48 @@ python -m pytest --collect-only -q 2>&1 | tail -1
 grep -rn "测试\|用例" README.md docs/*.md | grep -E "测试|用例"
 
 # 3. 扫版本号一致性
-grep -rnE "V0\.\d+\.0" README.md docs/*.md
+grep -rnE "V0\.\d+\.\d+" README.md docs/*.md
 
-# 4. 检查功能清单 vs 实际 endpoint
-ls src/app/api/v1/endpoints/  # 与 application-guide 第 5 章 API 表对账
+# 4. 检查功能清单 vs 实际 endpoint（用 openapi.json 自动对账，比人工翻 endpoint 目录更准）
+python - <<'PY'
+import json, re, urllib.request
+d = json.load(urllib.request.urlopen("http://127.0.0.1:8888/openapi.json"))
+api = {re.sub(r"\{[^}]+\}", "{}", p) for p in d["paths"]}
+doc = open("docs/application-guide.md", encoding="utf-8").read()
+sec = doc[doc.index("## 5. API 参考"):doc.index("### 5.1")]
+docp = {re.sub(r"\{[^}]+\}", "{}", p) for p in re.findall(r"`(/[A-Za-z0-9_\-{}/\.]*)`", sec)}
+print("openapi 有、文档缺：", sorted(api - docp) or "无")
+PY
+
+# 5. 前端门禁
+python scripts/check_static_js.py
 ```
 
-输出不一致即更新本表 + 修正对应文档。
+### 端到端验证清单（V0.62.1 起纳入）
+
+文档与接口对账只能证明「声明一致」，证明不了「行为正确」。涉及资金口径的改动，
+必须再跑一次**写路径端到端验证**——用临时实例 + 独立临时库，不触碰正式数据：
+
+```bash
+# 起临时实例（mock 行情源，零网络；独立库避免污染 data/gold_etf.db）
+DATABASE_URL="sqlite+aiosqlite:///./data/verify_tmp.db" \
+MARKET_PROVIDER=mock \
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8899
+```
+
+覆盖要点（V0.62.1 实测 47 项断言全绿）：
+
+| # | 场景 | 期望 |
+|---|------|------|
+| 1 | 空库启动 | 自动创建 id=1「默认账户」，不报错 |
+| 2 | 新建 / 重名 / 改名冲突 | 201 / 400 / 400 |
+| 3 | 均价法回放（买 1000@10 + 买 1000@9 + 卖 500@11，费 3） | 已实现盈亏 = **747**，成交后份额 = **1500** |
+| 4 | **成交日晚于行情序列末日** | 不得丢弃；本金 / 已实现盈亏 / 胜率仍正确 |
+| 5 | 带 `side=sell` 筛选 | 回放上下文保留，盈亏不为空（双次取数回归） |
+| 6 | 账本隔离 | A 账本交易不出现在默认账本；不传 `account_id` = 合并视图 |
+| 7 | 口径自洽 | `sell_count == closed_trades`（V0.62.1 起纳入断言） |
+| 8 | CSV 导出 | BOM + 表头 + N 行成交 + `# 汇总` 块 |
+| 9 | 归档约束 | 默认账本不可归档；有未平仓持仓不可归档；清仓后可归档可恢复 |
+| 10 | 参数校验 | 非法 `side` / `start>end` → 422；账本不存在 → 404 |
+
+> 真实数据（`data/gold_etf.db`）只做**只读**冒烟，写路径一律走临时库。

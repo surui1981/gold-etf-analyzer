@@ -60,11 +60,19 @@ class PortfolioAnalyticsService:
             raise ValueError("无可用交易日价格序列，无法回放收益曲线")
 
         # 交易生效日 = 首个 >= 成交日的交易日（非交易日录入顺延）
+        #
+        # 成交日晚于价格序列最后一天时（当日盘中录入、行情源 T-1 滞后、
+        # 周末/节假日录入），没有“次一交易日”可归属。此时**归入最后一个可得
+        # 交易日**而不是丢弃：否则同一响应会出现「sell_count=2 但
+        # closed_trades=0 / 累计投入本金 0.00 元」的自相矛盾，持仓页看到
+        # 的实时持仓与业绩页完全对不上。
         by_day: dict[date, list[Any]] = defaultdict(list)
+        last_idx = len(price_dates) - 1
         for t in trades:
             idx = bisect.bisect_left(price_dates, t.traded_at.date())
-            if idx < len(price_dates):
-                by_day[price_dates[idx]].append(t)
+            if idx > last_idx:
+                idx = last_idx
+            by_day[price_dates[idx]].append(t)
 
         qty = cost = realized = invested = 0.0
         daily: list[dict[str, Any]] = []

@@ -25,7 +25,7 @@ server_v*.log
 .ruff_cache/
 .coverage
 htmlcov/
-pytest_run*.log
+pytest*.log
 pytest-cache-files-*/
 *.db-journal
 
