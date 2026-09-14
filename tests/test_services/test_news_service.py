@@ -46,11 +46,17 @@ async def test_save_invalidates_served_cache(db_session: AsyncSession) -> None:
     served_cache.invalidate()
     # 用任意 GoldTrendOut 占位（仅测试缓存键是否被清空）
     from datetime import date
+
     from app.schemas.common import DirectionSignal
     from app.schemas.market import (
-        GoldTrendMetrics, GoldTrendOut, GoldTrendPoint,
-        MacroIndexOut, NewsIndexOut, TrendDirection,
-        TrendIndexLevel, TrendIndexOut,
+        GoldTrendMetrics,
+        GoldTrendOut,
+        GoldTrendPoint,
+        MacroIndexOut,
+        NewsIndexOut,
+        TrendDirection,
+        TrendIndexLevel,
+        TrendIndexOut,
     )
     today = date.today()
     placeholder = GoldTrendOut(

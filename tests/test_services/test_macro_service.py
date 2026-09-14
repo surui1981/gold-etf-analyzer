@@ -74,6 +74,7 @@ async def test_macro_evaluate_cb_gold_uses_central_bank_service(
 ) -> None:
     """注入 CentralBankService 后，cb_gold 从 central_bank_purchases 表自动计算（不依赖 STATIC_REF）。"""
     from datetime import date
+
     from app.models.central_bank import CentralBankPurchase
     from app.repositories.central_bank import CentralBankPurchaseRepository
     from app.services.central_bank import CentralBankService
@@ -123,8 +124,9 @@ async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(
 ) -> None:
     """未注入 CentralBankService 时，cb_gold 回退 STATIC_REF 硬编码值（保证系统永远有值）。"""
     async def fake_ust():
-        from app.repositories.market_data import USTYield
         from datetime import date
+
+        from app.repositories.market_data import USTYield
         return USTYield(us10y=4.4, us30y=4.9, data_date=date(2026, 8, 28))
     monkeypatch.setattr(
         "app.repositories.market_data.fetch_us_treasury_h15", fake_ust

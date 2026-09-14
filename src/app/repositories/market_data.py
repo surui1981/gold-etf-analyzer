@@ -13,6 +13,7 @@
 """
 
 import asyncio
+import contextlib
 import csv
 import io
 import json
@@ -200,7 +201,6 @@ class MarketDataRepository:
     ) -> None:
         # 懒加载 market_providers 避免循环依赖
         from app.repositories.market_providers import (
-            AkshareGoldHistoryProvider,
             build_provider_bundle,
         )
 
@@ -304,10 +304,8 @@ class MarketDataRepository:
         if cached is not None:
             return cached
         change = 0.0
-        try:
+        with contextlib.suppress(Exception):
             change = await self._sge_daily_change()
-        except Exception:  # noqa: BLE001
-            pass
 
         for token in self._xau_chain:
             price = await self._fetch_xau_by_token(token)
@@ -337,7 +335,7 @@ class MarketDataRepository:
                 )
                 _cache_set(cache_key, quote)
                 return quote
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("quote from history failed (%s), fallback to mock", exc)
         self._mark("xau", False)
         return GoldQuote(
@@ -390,7 +388,7 @@ class MarketDataRepository:
                 )
                 _cache_set(cache_key, quote)
                 return quote
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("ETF 报价取数失败: %s", exc)
 
         self._mark("etf", False)
@@ -406,13 +404,6 @@ class MarketDataRepository:
         """按 token 从对应源取 XAU 实时价。"""
         token = token.strip().lower()
         if token == "goldapi":
-            from app.repositories.market_providers import AkshareLiveQuoteProvider
-
-            provider = (
-                self._bundle.live
-                if isinstance(self._bundle.live, AkshareLiveQuoteProvider)
-                else AkshareLiveQuoteProvider(self._settings)
-            )
             # 直接走 goldapi（不走 fallback chain）
             url = self._settings.xau_live_api_url
 
@@ -427,7 +418,7 @@ class MarketDataRepository:
                 raw = await asyncio.to_thread(_get)
                 if isinstance(raw, dict) and raw.get("price"):
                     return float(raw["price"])
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("goldapi 取数失败: %s", exc)
             return None
         if token == "sina":
@@ -451,16 +442,15 @@ class MarketDataRepository:
                 price = float(parts[7])
                 if price > 0:
                     return price
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 logger.warning("sina hf_GC 取数失败: %s", exc)
             return None
         if token == "etf_history":
             try:
                 klines = await self._bundle.history.get_history(DEFAULT_GOLD_ETF, days=3)
                 if klines and len(klines) >= 2:
-                    last, prev = klines[-1], klines[-2]
-                    return float(last.close)
-            except Exception as exc:  # noqa: BLE001
+                    return float(klines[-1].close)
+            except Exception as exc:
                 logger.warning("etf_history 取数失败: %s", exc)
             return None
         logger.warning("未知 xau_fallback_chain token: %s", token)
@@ -483,7 +473,7 @@ class MarketDataRepository:
                 self._mark("etf", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty history")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("history from provider failed (%s), fallback to mock", exc)
             self._mark("etf", False)
             return self._mock_history(days)
@@ -512,7 +502,7 @@ class MarketDataRepository:
             )
             _cache_set(cache_key, quote)
             return quote
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("gram quote failed (%s), fallback to mock", exc)
             return GoldQuote(
                 symbol=symbol,
@@ -541,7 +531,7 @@ class MarketDataRepository:
                 self._mark("sge", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty gram history")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("gram history failed (%s), fallback to mock", exc)
             self._mark("sge", False)
             return self._mock_gram_history(days)
@@ -552,7 +542,7 @@ class MarketDataRepository:
             kl = await self.get_gold_gram_history(symbol=DEFAULT_GOLD_GRAM, days=3)
             if len(kl) >= 2 and kl[-2].close:
                 return round((kl[-1].close - kl[-2].close) / kl[-2].close * 100, 2)
-        except Exception:  # noqa: BLE001
+        except Exception:
             pass
         return 0.0
 
@@ -574,10 +564,8 @@ class MarketDataRepository:
             return cached
         # 主源：零KEY公开 XAU/USD 即期报价（与COMEX高度联动）
         change = 0.0
-        try:
+        with contextlib.suppress(Exception):
             change = await self._sge_daily_change()
-        except Exception:  # noqa: BLE001
-            pass
 
         for token in self._xau_chain:
             price = await self._fetch_xau_by_token(token)
@@ -605,7 +593,7 @@ class MarketDataRepository:
                 )
                 _cache_set(cache_key, quote)
                 return quote
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("us gold quote failed (%s), fallback to mock", exc)
         return GoldQuote(
             symbol=symbol,
@@ -634,7 +622,7 @@ class MarketDataRepository:
                 self._mark("ny", True, last_date=klines[-1].date)
                 return klines
             raise RuntimeError("empty us gold history")
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("us gold history failed (%s), fallback to mock", exc)
             self._mark("ny", False)
             return self._mock_us_history(days)
@@ -646,7 +634,7 @@ class MarketDataRepository:
         """
         try:
             result = await self._bundle.treasury.get_treasury_yields()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("treasury provider 调用失败: %s", exc)
             result = None
         if result is not None:

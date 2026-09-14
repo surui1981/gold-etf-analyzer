@@ -75,7 +75,7 @@ class DailySnapshotService:
         if await self._repo.get_by_date(date.today()) is None:
             try:
                 await self.capture_today()
-            except Exception as exc:  # noqa: BLE001 —— 数据源故障不阻塞历史返回
+            except Exception as exc:
                 logger.warning("auto capture failed (%s), return history only", exc)
 
         snapshots = await self._repo.list_recent(days)

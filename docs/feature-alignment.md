@@ -33,7 +33,7 @@
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 | **评估指数历史曲线升级** | 趋势页 `loadSnapshots(days)` 重构：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线 + `7D / 30D / 90D` 区间切换按钮 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX + `snapChart.destroy()` 内存管理 | ✅（V0.63.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **383 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 41 + V0.62.1 新增 2 + V0.63.0 新增 6 = 377 → 383）。**V0.63.0 全量回归实测**：离线 `python -m pytest -q`（排除 2 个联网 fetcher 文件，共 46 用例）= **337 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 failed**——失败项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.63.0 引入**，建议后续补 `skipif` 守卫。
+**测试数对账**：`pytest --collect-only -q` = **383 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 41 + V0.62.1 新增 2 + V0.63.0 新增 6 = 377 → 383）。**V0.63.0 全量回归实测**：离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件，共 **44** 用例）= **339 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.63.0 引入**；**已于 2026-09-14 补 `skipif` 守卫**（文件缺失即跳过，不再误报 failed）。
 
 ---
 
@@ -94,7 +94,7 @@
 
 ---
 
-## 四、文档自身不一致（V0.57.0 → V0.62.1 同步已完成）
+## 四、文档自身不一致（V0.57.0 → V0.63.0 同步已完成）
 
 | # | 原问题 | 修复 |
 |---|---|---|
@@ -115,6 +115,14 @@
 | 15 | `application-guide.md` §11 状态补遗注「截至 V0.57.0」（实际已到 V0.62.0） | ✅ 2026-09-13 重写为 V0.62.0 口径，补 P2/P3/UX 未做项清单 |
 | 16 | P3 #14「指数时间序列可视化」停留在 ⚠️ 半成品（评估指数自身曲线仍无），实际 V0.63.0 已落地 | ✅ 2026-09-13 升 ✅ V0.63.0 |
 | 17 | V0.63.0 新增 6 个测试（API 4 + 服务 2），三文档测试数声明需同步 377 → 383 | ✅ 2026-09-13 同步 README / application-guide / improvement-path / feature-alignment 四文档 |
+| 18 | **代码版本号未随 V0.63.0 更新**：`pyproject.toml` 与 `src/app/main.py` 停在 `0.62.1`，`/openapi.json` 亦返回 0.62.1，而四份文档已全部声明 V0.63.0（feat 提交只改了前端与测试） | ✅ 2026-09-15 升至 `0.63.0` 并重启服务校验 |
+| 19 | **`ruff` 门禁失真**：`select` 使用规则组前缀（`RUF`/`UP`/`B`）+ 依赖范围过宽（`ruff>=0.8,<1.0`），实际装入 0.16.5 后一次报出 **3749 条**（其中 3494 条为中文全角标点的 RUF001/002/003 误报），文档 §5.3 声称的「ruff 0 错误」不成立 | ✅ 2026-09-15 锁定 `ruff>=0.16,<0.17`；显式 ignore 中文标点、`B008`（FastAPI Depends）、`BLE001`（降级捕获）、`UP017`；自动修复 81 条 + 人工修 14 条 → **All checks passed** |
+| 20 | **`test_market_providers.py` 用例被截断并覆盖**（F811）：`test_market_data_repository_backward_compat_provider_kwarg` 被 `_StubHistory` 类定义从中间截断，函数体只剩 docstring，其后又出现同名函数将其覆盖 → 该「旧签名向后兼容」断言等价于从未执行 | ✅ 2026-09-15 合并为单一完整用例（保留 stub 类 + 恢复断言 + 补 docstring） |
+| 21 | `application-guide.md` §11 状态补遗仍写「评估指数自身曲线仍无（#14 半成品）」，与 feature-alignment 的「✅ V0.63.0」自相矛盾 | ✅ 2026-09-15 改为「#14 评估指数历史曲线 → ✅（V0.63.0）」 |
+| 22 | 代码内 **14 处静态检查问题**（未使用变量/导入、`zip` 无 `strict`、`try-except-pass`、`asyncio.create_task` 未持引用等） | ✅ 2026-09-15 全部修复：`main.py` 后台任务改由强引用集合托管（防 GC 回收）等 |
+| 23 | **离线回归命令引用了不存在的文件**：`improvement-path.md` §5.3 写 `--ignore=tests/test_services/test_wgc_fetcher.py`，而仓库中该文件名为 `test_h15_fetcher.py` → 该 `--ignore` 静默失效（pytest 对不存在的 ignore 不报错），**照抄命令实得 351 而非文档声称的 337** | ✅ 2026-09-15 命令修正为 `--ignore=…test_irfcl_fetcher.py --ignore=…test_h15_fetcher.py`（并在 §5.3 / README / application-guide 同步可复现写法） |
+| 24 | **离线回归计数算术错误**：V0.62.1 为 377 用例 / 离线 333（差 44）；V0.63.0 新增 6 → 383，离线应为 **339**，文档却写 **337**；同一处又把 fetcher 用例数写成 **46**（实测 irfcl 32 + h15 12 = **44**） | ✅ 2026-09-15 全仓统一为 **383 收集 / 离线 339 passed / fetcher 44 用例**（README + 三文档） |
+| 25 | **`test_irfcl_fetcher.py` 依赖 gitignore 的数据文件**：`test_load_manual_overrides_returns_uZB_and_irn` 读 `data/central_bank_manual_overrides.json`（`data/` 在 `.gitignore` 内），新克隆必然 failed | ✅ 2026-09-15 补 `skipif` 守卫（`cb_data._OVERRIDES_PATH` 不存在即跳过）→ 该文件 **31 passed / 1 skipped** |
 
 ---
 

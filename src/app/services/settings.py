@@ -5,9 +5,6 @@ import time
 
 from app.repositories.settings import SettingRepository
 from app.schemas.settings import (
-    CombineWeightConfig,
-    MacroWeightConfig,
-    TrendWeightConfig,
     WeightConfig,
 )
 from app.utils.logger import get_logger
@@ -52,7 +49,7 @@ class WeightService:
         if raw:
             try:
                 return WeightConfig.model_validate_json(raw)
-            except Exception as exc:  # noqa: BLE001 —— 脏数据尝试修复
+            except Exception as exc:
                 logger.warning("stored weights invalid (%s), try migrate legacy config", exc)
                 migrated = _migrate_legacy(raw)
                 if migrated is not None:
@@ -127,5 +124,5 @@ def _migrate_legacy(raw: str) -> WeightConfig | None:
             }
     try:
         return WeightConfig.model_validate(data)
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None

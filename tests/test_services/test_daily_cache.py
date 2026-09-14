@@ -5,9 +5,8 @@ from datetime import date, datetime, timedelta, timezone
 import pytest
 
 from app.services import cache as served_cache
-from app.services.scheduler import next_run_utc, _capture_and_warm, daily_capture_loop
-from app.services.trend import TrendService, GUIDE_TARGET
-
+from app.services.scheduler import _capture_and_warm, daily_capture_loop, next_run_utc
+from app.services.trend import GUIDE_TARGET, TrendService
 
 # ---------------- served cache ----------------
 
@@ -16,9 +15,14 @@ def _sample_result(index_score: float = 60.0):
     """构造一个最小可用的 GoldTrendOut mock（仅 cache 测试用）。"""
     from app.schemas.common import DirectionSignal
     from app.schemas.market import (
-        GoldTrendMetrics, GoldTrendOut, GoldTrendPoint,
-        MacroIndexOut, NewsIndexOut, TrendDirection,
-        TrendIndexLevel, TrendIndexOut,
+        GoldTrendMetrics,
+        GoldTrendOut,
+        GoldTrendPoint,
+        MacroIndexOut,
+        NewsIndexOut,
+        TrendDirection,
+        TrendIndexLevel,
+        TrendIndexOut,
     )
 
     today = date.today()
@@ -139,8 +143,9 @@ async def test_capture_and_warm_success(monkeypatch) -> None:
 
     class FakeSnapshot:
         async def capture_today(self):
-            from app.schemas.snapshot import SnapshotOut
             from datetime import date
+
+            from app.schemas.snapshot import SnapshotOut
             return SnapshotOut(
                 snapshot_date=date.today(), symbol="GC", name="纽约金",
                 close=2400.0, change_pct=0.5, high=2410.0, low=2390.0,
@@ -205,8 +210,9 @@ async def test_daily_capture_loop_one_iteration(monkeypatch) -> None:
 
     class FakeSnapshot:
         async def capture_today(self):
-            from app.schemas.snapshot import SnapshotOut
             from datetime import date
+
+            from app.schemas.snapshot import SnapshotOut
             return SnapshotOut(
                 snapshot_date=date.today(), symbol="GC", name="纽约金",
                 close=2400.0, change_pct=0.5, high=2410.0, low=2390.0,

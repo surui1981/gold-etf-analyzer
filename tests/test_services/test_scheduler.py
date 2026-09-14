@@ -20,7 +20,6 @@ from app.services.scheduler import (
     next_central_bank_run_utc,
 )
 
-
 # ── next_central_bank_run_utc 时间计算 ────────────────────────────
 
 
@@ -270,7 +269,7 @@ async def test_v060_intraday_warm_once_silent_on_failure(monkeypatch: pytest.Mon
             raise RuntimeError("provider offline")
 
     # 不应抛异常
-    await sch.intraday_warm_once(FailingTrend())  # noqa: F821
+    await sch.intraday_warm_once(FailingTrend())
 
 
 async def test_v060_intraday_warm_once_writes_served_cache(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -337,7 +336,7 @@ async def test_v060_intraday_warm_once_writes_served_cache(monkeypatch: pytest.M
                 served_at=datetime.now(timezone.utc),
             )
 
-    await sch.intraday_warm_once(FakeTrend())  # noqa: F821
+    await sch.intraday_warm_once(FakeTrend())
     cached = served_cache.get_served(GUIDE_TARGET)
     assert cached is not None
     assert cached.index.score == 70.0

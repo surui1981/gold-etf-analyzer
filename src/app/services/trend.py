@@ -13,7 +13,7 @@
 - ``scheduler.py`` 在北京时间 07:00 自动预生成（首屏直接命中缓存）。
 """
 
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from app.repositories.market_data import (
     DEFAULT_GOLD_ETF,
@@ -29,16 +29,15 @@ from app.schemas.market import (
     GoldTrendMetrics,
     GoldTrendOut,
     GoldTrendPoint,
-    MacroIndexOut,
     NewsIndexOut,
     TrendDirection,
-    TrendIndicatorOut,
     TrendIndexLevel,
     TrendIndexOut,
+    TrendIndicatorOut,
 )
 from app.services import cache as served_cache
-from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
 from app.services.freshness import build_data_freshness
+from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -375,7 +374,7 @@ class TrendService:
         if len(closes) >= 21:
             mom20 = (now_close - closes[-21]) / closes[-21] * 100
         else:
-            mom20 = change_pct = (now_close - closes[0]) / closes[0] * 100 if closes[0] else 0
+            mom20 = (now_close - closes[0]) / closes[0] * 100 if closes[0] else 0
         mom_score = _clamp(50 + mom20 * 8)  # +5% → 90，-5% → 10
         scores["动量"] = (
             mom_score,

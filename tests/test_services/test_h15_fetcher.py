@@ -5,9 +5,7 @@
 
 from datetime import date
 
-from app.repositories import market_data
 from app.repositories.market_data import USTYield, _parse_h15_csv
-
 
 # 真实 H.15 CSV 头部 5 行元数据（截取自联邦储备 H.15 公开 CSV）
 _H15_HEADER = (

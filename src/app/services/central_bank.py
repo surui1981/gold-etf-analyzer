@@ -110,7 +110,7 @@ class CentralBankService:
         t12m = await self._repo.t12m_total()
         if t12m is None:
             return []
-        _, window, latest_q = t12m
+        _, _window, latest_q = t12m
         # 解析窗口
         from app.repositories.central_bank_data import _previous_quarter
 

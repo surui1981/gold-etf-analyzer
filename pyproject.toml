@@ -1,6 +1,6 @@
 [project]
 name = "gold-etf-analyzer"
-version = "0.62.1"
+version = "0.63.0"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,7 +20,9 @@ dev = [
     "pytest>=8.3,<9.0",
     "pytest-asyncio>=0.24,<1.0",
     "httpx>=0.27,<1.0",
-    "ruff>=0.8,<1.0",
+    # 门禁基线锁定 0.16.x：select 使用规则组前缀（RUF/UP/B 等），跨版本升级会引入
+    # 新规则导致门禁突增；升级时须重跑 `ruff check src tests` 并复核 ignore 列表。
+    "ruff>=0.16,<0.17",
 ]
 
 [build-system]
@@ -40,7 +42,15 @@ target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
-ignore = ["E501"]
+ignore = [
+    "E501",    # 行宽由 formatter 处理（line-length=100 已声明）
+    "RUF001",  # 全角标点在中文 docstring / 提示语中是正确用法，非「歧义字符」
+    "RUF002",
+    "RUF003",
+    "B008",    # FastAPI 依赖注入 Depends(...) 作为默认参数是官方推荐写法
+    "BLE001",  # 行情源失败降级需捕获宽泛异常（设计意图，见 repositories/market_data.py）
+    "UP017",   # timezone.utc 在 py311 下依然有效，暂不做 datetime.UTC 现代化
+]
 
 [tool.ruff.format]
 quote-style = "double"

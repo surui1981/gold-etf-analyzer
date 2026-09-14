@@ -20,18 +20,16 @@
 from __future__ import annotations
 
 import asyncio
-import csv
-import io
 import json
 import logging
 import subprocess
 import sys
 import threading
-import time
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Callable, Protocol
+from typing import Protocol
 
 from app.config import Settings, get_settings
 from app.repositories.market_data import (
@@ -142,7 +140,7 @@ def _sina_etf_via_subprocess(symbol: str, days: int) -> list | None:
                 )
                 for r in json.loads(res.stdout)
             ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("sina subprocess 异常: %s", exc)
     return None
 
@@ -167,7 +165,7 @@ def _us_gold_via_subprocess(symbol: str, days: int) -> list | None:
                 )
                 for r in json.loads(res.stdout)
             ]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("us gold subprocess 异常: %s", exc)
     return None
 
@@ -252,7 +250,7 @@ class AkshareGoldHistoryProvider:
                         for _, row in df.iterrows()
                     ]
                 errors.append("em empty")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(f"em: {exc}")
 
             # 备源：新浪（子进程隔离）
@@ -261,7 +259,7 @@ class AkshareGoldHistoryProvider:
                 if sub:
                     return sub
                 errors.append("sina subprocess empty")
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(f"sina: {exc}")
 
             raise RuntimeError(f"AKShare 全部数据源失败: {'; '.join(errors)}")
@@ -304,8 +302,9 @@ class AkshareGoldHistoryProvider:
         self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
     ) -> list[GoldKline]:
         """获取纽约金（COMEX 黄金期货主力 GC，美元/盎司）最近日 K。"""
+        # 延迟导入：仅用于探测 akshare 是否可用，纽约金实际走下方 subprocess 抓取
         try:
-            import akshare as ak  # 延迟导入
+            import akshare as ak  # noqa: F401
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("akshare 未安装，请先 pip install akshare") from exc
 
@@ -440,7 +439,7 @@ class AkshareLiveQuoteProvider:
             raw = await asyncio.to_thread(_http_json, url, 15)
             if isinstance(raw, dict) and raw.get("price"):
                 return float(raw["price"])
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("gold-api.com 取数失败: %s", exc)
         return None
 
@@ -466,7 +465,7 @@ class AkshareLiveQuoteProvider:
             if price <= 0:
                 return None
             return price
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("sina hf_GC 取数失败: %s", exc)
         return None
 
@@ -487,7 +486,7 @@ class AkshareTreasuryYieldProvider:
 
             result = await asyncio.wait_for(asyncio.to_thread(_get_and_parse), timeout=20)
             return result
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("H.15 取数失败: %s", exc)
         return None
 

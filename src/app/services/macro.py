@@ -185,7 +185,7 @@ class MacroFactorService:
                         "cb_gold from central_bank_purchases: t12m=%.1f (%s)",
                         summary.t12m_total, summary.t12m_window,
                     )
-            except Exception as exc:  # noqa: BLE001 —— 失败保持 STATIC_REF
+            except Exception as exc:
                 logger.warning("central_bank summary failed (%s), use static ref", exc)
 
         # 美债 10Y/30Y 实时采集（美联储 H.15 官方源；失败保持静态默认）
@@ -201,7 +201,7 @@ class MacroFactorService:
                 logger.warning("H.15 returned None, use static ref")
                 values["us10y"] = (4.4, "2026-08-28", "静态参考值")
                 values["us30y"] = (4.9, "2026-08-28", "静态参考值")
-        except Exception as exc:  # noqa: BLE001 —— 失败保持静态参考
+        except Exception as exc:
             logger.warning("US bond rate fetch failed (%s), use static ref", exc)
             values["us10y"] = (4.4, "2026-08-28", "静态参考值")
             values["us30y"] = (4.9, "2026-08-28", "静态参考值")

@@ -18,20 +18,18 @@ import pytest
 from app.config import Settings
 from app.repositories.market_data import GoldKline, MarketDataRepository
 from app.repositories.market_providers import (
+    PROVIDER_REGISTRY,
     AkshareGoldHistoryProvider,
     AkshareLiveQuoteProvider,
     AkshareTreasuryYieldProvider,
     EastmoneyOnlyHistoryProvider,
-    MarketProviderBundle,
     MockGoldHistoryProvider,
     MockLiveQuoteProvider,
     MockTreasuryYieldProvider,
-    PROVIDER_REGISTRY,
     SinaOnlyHistoryProvider,
     USTYield,
     build_provider_bundle,
 )
-
 
 # ─────────────── 工厂解析 ───────────────
 
@@ -184,10 +182,6 @@ def test_market_data_repository_with_mock_bundle() -> None:
     assert isinstance(repo._bundle.history, MockGoldHistoryProvider)
 
 
-def test_market_data_repository_backward_compat_provider_kwarg() -> None:
-    """旧签名 MarketDataRepository(provider=FakeProvider()) 仍可用。"""
-
-
 class _StubHistory:
     """最小化历史 provider stub，仅满足 Protocol。"""
 
@@ -201,7 +195,12 @@ class _StubHistory:
         return [GoldKline(date=date(2026, 9, 1), open=4430.0, close=4435.0, high=4440.0, low=4425.0, volume=0)]
 
 
-def test_market_data_repository_backward_compat_provider_kwarg():
+def test_market_data_repository_backward_compat_provider_kwarg() -> None:
+    """旧签名 MarketDataRepository(provider=FakeProvider()) 仍可用。
+
+    历史问题：该用例曾被 ``_StubHistory`` 类定义从中间截断，函数体只剩
+    docstring，随后又被同名函数覆盖 → 等价于从未真正断言。此处已合并修正。
+    """
     repo = MarketDataRepository(provider=_StubHistory())
     assert isinstance(repo._bundle.history, _StubHistory)
     # live/treasury 默认走 akshare 实现

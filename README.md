@@ -147,7 +147,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 383 用例（离线回归 337 passed，排除 2 个联网 fetcher 文件）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线
+python -m pytest -v          # 383 用例（离线回归 339 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线
 python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests

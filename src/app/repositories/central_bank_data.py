@@ -36,9 +36,8 @@ import threading
 import time
 import urllib.request
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
-from typing import Iterable
 
 from app.utils.logger import get_logger
 
@@ -237,7 +236,7 @@ def _fetch_report_charts(year: int, quarter: str) -> list[dict]:
 
     try:
         html = _http_get(url)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("WGC 报告页拉取失败 %s: %s", url, exc)
         _cache_set(cache_key, [])
         return []
@@ -345,7 +344,8 @@ def fetch_global_quarterly_aggregate() -> list[QuarterlyPurchase]:
         if not m:
             continue
         q_num = m.group(1)
-        for year, val in zip(cats, values):
+        # 外部 JS chart 的类目轴与数值轴长度未必严格一致，按较短序列对齐（不抛错）
+        for year, val in zip(cats, values, strict=False):
             try:
                 year_i = int(year)
             except ValueError:
@@ -451,7 +451,7 @@ def load_manual_overrides() -> list[QuarterlyPurchase]:
     try:
         with _OVERRIDES_PATH.open(encoding="utf-8") as f:
             payload = json.load(f)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("手工补丁 JSON 读取失败: %s", exc)
         return []
 

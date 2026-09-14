@@ -23,13 +23,13 @@ from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
 from app.services.news import NewsScoreService
-from app.services.position import PositionService
 from app.services.portfolio import PortfolioAnalyticsService
+from app.services.position import PositionService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
 from app.services.snapshot import DailySnapshotService
-from app.services.trend import TrendService
 from app.services.trades import TradeHistoryService
+from app.services.trend import TrendService
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:

@@ -43,20 +43,19 @@ async def upsert_rows(rows: list[QuarterlyPurchase]) -> int:
         for r in rows
     ]
 
-    async with async_session_factory() as session:
-        async with session.begin():
-            stmt = sqlite_insert(CentralBankPurchase).values(payload)
-            stmt = stmt.on_conflict_do_update(
-                index_elements=["country_iso", "quarter"],
-                set_={
-                    "country_name": stmt.excluded.country_name,
-                    "tonnes_net": stmt.excluded.tonnes_net,
-                    "source": stmt.excluded.source,
-                    "data_date": stmt.excluded.data_date,
-                },
-            )
-            result = await session.execute(stmt)
-            return result.rowcount or 0
+    async with async_session_factory() as session, session.begin():
+        stmt = sqlite_insert(CentralBankPurchase).values(payload)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["country_iso", "quarter"],
+            set_={
+                "country_name": stmt.excluded.country_name,
+                "tonnes_net": stmt.excluded.tonnes_net,
+                "source": stmt.excluded.source,
+                "data_date": stmt.excluded.data_date,
+            },
+        )
+        result = await session.execute(stmt)
+        return result.rowcount or 0
 
 
 async def run_import(include_manual: bool = True) -> int:

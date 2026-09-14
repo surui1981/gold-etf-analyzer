@@ -1,6 +1,6 @@
 """央行购金数据 DB 仓储（CRUD）。"""
 
-from datetime import date, datetime
+from datetime import datetime
 
 from sqlalchemy import desc, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert

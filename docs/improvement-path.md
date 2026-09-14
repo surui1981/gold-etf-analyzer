@@ -169,7 +169,7 @@
 | 交易可追溯性 | 逐笔成交可查、可按账本隔离 | ✅ V0.62.0 交易历史页 + 多账本（均价法回放已实现盈亏） |
 | 业绩可见性 | 收益率 / 回撤 / 胜率可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 |
 | **指数曲线回看** | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） |
-| 回归测试 | 全绿 | ✅ **383 用例**（离线 **337 passed / 0 failed**，122s） |
+| 回归测试 | 全绿 | ✅ **383 用例收集**（离线 **339 passed / 0 failed**，排除 2 个联网 fetcher 文件 44 用例） |
 
 ---
 
@@ -203,11 +203,13 @@
 | **冷启动耗时（pip 安装后首次启动）** | ~30-40s | uvicorn 启动 + alembic 子进程 + 三市场 60 天 K 线预热 + served cache 生成 |
 | **冷启动首屏响应** | < 5s | served cache 预热命中 + Chart.js CDN |
 | **缓存命中首屏** | < 5s（典型 1.6s） | `quote_cache_ttl=300` + `served_cache_ttl_seconds=600` 双层命中 |
-| **离线全量回归** | **383 passed / 0 failed**（排除 2 个联网 fetcher 文件 46 用例，~122s） | `python -m pytest -q --ignore=tests/test_services/test_wgc_fetcher.py --ignore=tests/test_services/test_irfcl_fetcher.py` |
+| **离线全量回归** | **339 passed / 0 failed**（383 用例收集，排除 2 个联网 fetcher 文件 44 用例；本机实测 ~42 min，耗时主要在行情源网络超时重试） | `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py` |
 | **JS 门禁** | 9 个脚本全 OK（6 静态页 + 3 共享） | `python scripts/check_static_js.py` / `make check-web` |
 | **ruff 检查** | 0 错误 | `ruff check src tests` |
 | **行情源灵活度** | 4 选 1（akshare / mock / eastmoney_only / sina_only） | `.env` `MARKET_PROVIDER` |
 | **依赖** | 仅 `fastapi + uvicorn + sqlalchemy + aiosqlite + akshare + pydantic-settings + ruff + pytest` | `pyproject.toml` `[project.optional-dependencies]` |
+
+> **ruff 基线说明（V0.63.0 起）**：`[tool.ruff.lint]` 的 `select` 使用**规则组前缀**（`E/F/I/UP/B/SIM/RUF`），因此**必须配合版本锁定**——ruff 小版本会在组内新增规则，门禁会毫无征兆地从 0 条变成数千条（0.16.5 曾一次报出 3749 条，其中 3494 条为中文全角标点的 `RUF001/002/003` 误报）。现锁 `ruff>=0.16,<0.17`，并显式 ignore：中文全角标点（`RUF001/002/003`）、`B008`（FastAPI `Depends(...)` 默认参数）、`BLE001`（行情源失败降级需捕获宽泛异常）、`UP017`（`timezone.utc`）。**升级 ruff 前请先重跑 `ruff check src tests` 并复核 ignore 列表。**
 
 ### 5.4 自愈能力
 

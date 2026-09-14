@@ -1,6 +1,7 @@
 """权重配置服务单元测试：默认值、保存读取、分组权重。"""
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.settings import SettingRepository
@@ -54,5 +55,5 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
 
 async def test_invalid_sum_rejected() -> None:
     """各组权重和不为 1 应校验失败。"""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         WeightConfig(trend={"structure": 0.5, "momentum": 0.5, "support": 0.1, "momentum_rsi": 0.1, "drawdown": 0.1})

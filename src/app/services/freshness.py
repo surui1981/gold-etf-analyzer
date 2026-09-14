@@ -160,5 +160,5 @@ class FreshnessService:
             else:
                 coro = self._repo.get_gold_history(days=_WARM_DAYS)
             await asyncio.wait_for(coro, timeout=_WARM_TIMEOUT)
-        except Exception as exc:  # noqa: BLE001 —— 冷启动兜底失败仅记录
+        except Exception as exc:
             logger.warning("freshness warm-up failed (%s): %s", market, exc)

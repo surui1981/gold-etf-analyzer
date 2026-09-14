@@ -171,7 +171,7 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
             out.snapshot_date, out.trend_index, out.index_level,
         )
         snap_ok = True
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Daily snapshot capture failed: %s", exc)
 
     # 显式预热 served cache：覆盖缓存（无论快照是否成功）
@@ -183,7 +183,7 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
             "after snapshot" if snap_ok else "fallback (snapshot failed)",
             result.index.score,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Served cache warmup failed: %s", exc)
 
 
@@ -197,7 +197,7 @@ async def intraday_warm_once(trend_svc: TrendService) -> None:
         result = await trend_svc.analyze(days=60, target=GUIDE_TARGET)
         set_served(GUIDE_TARGET, result)
         logger.info("Intraday warmup done (index=%.1f)", result.index.score)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Intraday warmup failed: %s", exc)
 
 
@@ -245,7 +245,7 @@ async def _refresh_central_bank() -> int:
         n = await run_import(include_manual=True)
         logger.info("Central bank auto-refresh OK: %d rows", n)
         return n
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.error("Central bank auto-refresh failed: %s", exc)
         return 0
 

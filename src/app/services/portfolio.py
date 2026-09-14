@@ -11,8 +11,9 @@
 
 import bisect
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any
 
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.position import PositionRepository
@@ -123,7 +124,7 @@ class PortfolioAnalyticsService:
         """ETF 历史价（升序日期 + 映射），任何失败都退化为空序列。"""
         try:
             klines = await self._market.get_gold_history(days=max(days, 30))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("收益曲线取 ETF 历史价失败: %s", exc)
             return [], {}
         price_map = {k.date: k.close for k in klines}

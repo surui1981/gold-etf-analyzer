@@ -94,7 +94,8 @@ class GoldCompareService:
                 etf=round(e / e0 * 100, 2),
                 gram=round(g / g0 * 100, 2),
             )
-            for d, e, g in zip(common_dates, etf_closes, gram_closes)
+            # common_dates 为 ETF/克价日期交集，三者长度必然一致 → strict=True 作不变量断言
+            for d, e, g in zip(common_dates, etf_closes, gram_closes, strict=True)
         ]
 
         etf_series = _series_metrics(

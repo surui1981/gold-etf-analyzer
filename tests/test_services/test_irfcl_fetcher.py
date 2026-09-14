@@ -5,9 +5,7 @@ IMF SDMX 端点（2.1/3.0）实测不可用（3.0=404、2.1=空 DataSet），切
 WGC Gold Demand Trends HTML chart JS。F 接口签名变了，单测同步重写。
 """
 
-import json
 from datetime import date
-from pathlib import Path
 
 import pytest
 
@@ -23,7 +21,6 @@ from app.repositories.central_bank_data import (
     _quarter_to_int,
     load_manual_overrides,
 )
-
 
 # ── 纯函数 helper ───────────────────────────────────────────────
 
@@ -163,6 +160,10 @@ def test_iso_for_country_unknown_returns_input() -> None:
 # ── 手工补丁 ───────────────────────────────────────────────
 
 
+@pytest.mark.skipif(
+    not cb_data._OVERRIDES_PATH.exists(),
+    reason="需本地 data/central_bank_manual_overrides.json（.gitignore 内，新克隆不携带）",
+)
 def test_load_manual_overrides_returns_uZB_and_irn() -> None:
     """UZB + IRN 手工补丁能加载，含 26 季度（2020Q1-2026Q2）。"""
     rows = load_manual_overrides()
