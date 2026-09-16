@@ -255,7 +255,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.63.0",
+    version="0.65.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,

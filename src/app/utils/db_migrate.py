@@ -22,6 +22,11 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         # V0.62.0 单用户多账本：老库经此路径升级时补列并归入默认账本（id=1）
         ("account_id", "INTEGER", "1"),
     ],
+    "news_scores": [
+        # V0.65.0 每日 3 次打分机会：老库补槽位序号与打分时刻
+        ("slot", "INTEGER", "1"),
+        ("scored_at", "DATETIME", "NULL"),
+    ],
 }
 
 # 高频查询字段索引：表名 -> 列名列表
@@ -30,6 +35,16 @@ INDEX_MIGRATIONS: dict[str, list[str]] = {
     "news_scores": ["score_date"],
     "positions": ["account_id"],
 }
+
+# 复合唯一索引：表名 -> [(索引名, [列...])]
+UNIQUE_INDEX_MIGRATIONS: dict[str, list[tuple[str, list[str]]]] = {
+    # V0.65.0：每日由「一条」放宽为「最多 3 条（按 slot 区分）」
+    "news_scores": [("uq_news_scores_date_slot", ["score_date", "slot"])],
+}
+
+# 历史遗留索引：V0.65.0 起同一 score_date 允许多条记录，
+# 旧的 score_date 唯一索引必须移除，否则第 2/3 次打分写入会被拒。
+LEGACY_INDEX_DROPS: list[str] = ["ix_news_scores_score_date"]
 
 
 async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
@@ -79,5 +94,23 @@ async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
                     text(f"CREATE INDEX IF NOT EXISTS {idx} ON {table} ({col})")
                 )
                 logger.info("sqlite index ready: %s on %s(%s)", idx, table, col)
+
+        # 移除历史遗留索引（V0.65.0：news_scores 的 score_date 唯一索引须放开）
+        for legacy in LEGACY_INDEX_DROPS:
+            await conn.execute(text(f"DROP INDEX IF EXISTS {legacy}"))
+
+        # 复合唯一索引（幂等；存量数据冲突时降级为告警，不阻断启动）
+        for table, entries in UNIQUE_INDEX_MIGRATIONS.items():
+            for name, cols in entries:
+                try:
+                    await conn.execute(
+                        text(
+                            f"CREATE UNIQUE INDEX IF NOT EXISTS {name} "
+                            f"ON {table} ({', '.join(cols)})"
+                        )
+                    )
+                    logger.info("sqlite unique index ready: %s on %s(%s)", name, table, ", ".join(cols))
+                except Exception as exc:  # 存量脏数据不应阻断启动
+                    logger.warning("sqlite unique index skipped: %s (%s)", name, exc)
 
         await conn.commit()

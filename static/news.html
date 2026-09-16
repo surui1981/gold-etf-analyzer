@@ -15,7 +15,6 @@
   .hero { background:linear-gradient(135deg,#fffaf0,#fff 60%,#f7f8fa); border:1px solid #f0e2b6; border-radius:12px; padding:18px 22px; margin-bottom:16px; }
   .hero h1 { font-size:22px; }
   .hero .intro { color:#4b5563; font-size:13px; line-height:1.8; margin-top:6px; max-width:780px; }
-  .hero nav { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
   .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 22px; margin-bottom:16px; }
   .card h2 { font-size:15px; margin-bottom:6px; }
   .desc { font-size:12px; color:var(--muted); line-height:1.7; }
@@ -31,9 +30,12 @@
   .gauge i { position:absolute; top:-4px; width:3px; height:18px; background:#1f2329; border-radius:2px; }
   .markers { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); }
   textarea { width:100%; border:1px solid var(--border); border-radius:8px; padding:10px; font-size:13px; min-height:80px; font-family:inherit; }
-  .actions { display:flex; gap:10px; margin-top:14px; }
+  .actions { display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; }
   button { border:none; border-radius:8px; padding:10px 22px; font-size:14px; cursor:pointer; font-weight:600; }
   .btn-save { background:#1f2329; color:#fff; }
+  .btn-save:disabled { background:#c3c7cd; cursor:not-allowed; }
+  .btn-ghost { background:#fff; border:1px solid var(--border); color:var(--text); font-weight:500; padding:6px 14px; font-size:12.5px; }
+  .btn-ghost:hover { border-color:var(--accent); background:#fffaf0; }
   .msg { margin-top:10px; font-size:13px; min-height:18px; }
   .msg.ok { color:var(--down); } .msg.err { color:var(--up); }
   .dir-tag { display:inline-block; padding:2px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:600; }
@@ -48,6 +50,37 @@
   .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
   .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
   .topnav a.active { background: var(--accent, #c9a227); color: #1f2329; font-weight: 600; }
+
+  /* ── V0.65.0：每日 3 次打分 ── */
+  .eff-panel { display:flex; align-items:center; gap:22px; flex-wrap:wrap; background:linear-gradient(135deg,#fffaf0,#fff 70%); border:1px solid #f0e2b6; border-radius:12px; padding:16px 20px; margin:12px 0 14px; }
+  .eff-score { font-size:42px; font-weight:800; line-height:1; }
+  .eff-meta { flex:1; min-width:220px; }
+  .eff-meta .formula { font-size:12px; color:var(--muted); margin-top:6px; font-family:ui-monospace,Consolas,monospace; }
+  .progress { display:flex; gap:6px; margin-top:8px; }
+  .progress span { width:100%; height:6px; border-radius:999px; background:#e6e8eb; }
+  .progress span.on { background:var(--accent); }
+  .slot-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:10px; }
+  .slot-card { border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:#fff; transition:box-shadow .15s,border-color .15s; }
+  .slot-card.filled { border-color:#f0e2b6; background:#fffdf7; }
+  .slot-card.editing { border-color:var(--accent); box-shadow:0 0 0 2px rgba(201,162,39,.18); }
+  .slot-card .hd { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .slot-card .nm { font-size:13px; font-weight:700; }
+  .slot-card .wt { font-size:11px; color:var(--muted); }
+  .slot-card .sc { font-size:28px; font-weight:800; margin:8px 0 2px; }
+  .slot-card .tm { font-size:11px; color:var(--muted); margin-top:6px; }
+  .slot-card .nt { font-size:11.5px; color:#4b5563; margin-top:6px; line-height:1.6; max-height:48px; overflow:hidden; }
+  .slot-card .ops { margin-top:10px; display:flex; gap:6px; flex-wrap:wrap; }
+  .slot-empty { color:var(--muted); font-size:12.5px; line-height:1.7; }
+  table.hist { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+  table.hist th, table.hist td { border-bottom:1px solid var(--border); padding:7px 8px; text-align:left; }
+  table.hist th { color:var(--muted); font-weight:600; font-size:11.5px; }
+  table.hist td.num { font-variant-numeric:tabular-nums; font-weight:700; }
+  .hist-wrap { max-height:320px; overflow:auto; }
+  /* 确认弹窗 */
+  .cd-mask { position:fixed; inset:0; background:rgba(31,35,41,.45); display:flex; align-items:center; justify-content:center; z-index:999; }
+  .cd-box { background:#fff; border-radius:12px; padding:20px 22px; max-width:420px; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .cd-text { font-size:13.5px; line-height:1.8; color:var(--text); }
+  .cd-ops { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
@@ -82,7 +115,7 @@
 
   <div class="hero">
     <h1>消息面评估 · 黄金价格投资辅助工具</h1>
-    <p class="intro">综合趋势指数 = <b>技术面 30%</b> + <b>宏观面 40%</b> + <b>消息面 30%</b>。消息面由<b>您本人</b>基于主流财经网站的<b>投行黄金走势展望与预期</b>研判打分（0-100 看多强度），保存后立即汇入当日评估与购买决策。</p>
+    <p class="intro">综合趋势指数 = <b>技术面 30%</b> + <b>宏观面 40%</b> + <b>消息面 30%</b>。消息面由<b>您本人</b>基于主流财经网站的<b>投行黄金走势展望与预期</b>研判打分（0-100 看多强度）。<b>每日提供 3 次打分机会</b>（第 1/2/3 次），当日有效分值按<b>越晚权重越高</b>的 1:2:3 加权合成后汇入当日评估与购买决策。</p>
   </div>
 
   <!-- 参考信息来源 -->
@@ -99,11 +132,31 @@
     </div>
   </div>
 
-  <!-- 客户打分 -->
+  <!-- 今日打分总览 -->
   <div class="card">
     <h2>✍️ 今日消息面打分 <span id="statusTag"></span></h2>
+    <div class="desc">综合投行展望后打分：<b>50 中性</b> ｜ &gt;55 看多（利多黄金） ｜ &lt;45 看空（利空黄金）。每日 3 次机会，越晚的一次对当日指数影响越大。</div>
     <div id="scoreAlert" style="display:none;margin:8px 0 4px;padding:9px 14px;border-radius:8px;font-size:13px;line-height:1.6"></div>
-    <div class="desc">综合投行展望后打分：<b>50 中性</b> ｜ &gt;55 看多（利多黄金） ｜ &lt;45 看空（利空黄金）。</div>
+
+    <div class="eff-panel">
+      <div>
+        <div class="desc">当日有效消息面分值</div>
+        <div class="eff-score" id="effScore">50.0</div>
+      </div>
+      <div class="eff-meta">
+        <div id="effDir"></div>
+        <div class="formula" id="effFormula">尚未打分，按中性 50 参与评估</div>
+        <div class="progress" id="effProgress"></div>
+      </div>
+    </div>
+
+    <div class="slot-grid" id="slotGrid"></div>
+  </div>
+
+  <!-- 打分编辑器 -->
+  <div class="card" id="editorCard">
+    <h2 id="editorTitle">📝 第 1 次打分</h2>
+    <div class="desc">拖拽或点击快捷档位给出您对黄金<b>后续走势的看多强度</b>；备注可记录所参考的投行观点。</div>
     <div class="score-row">
       <span style="font-size:13px;color:var(--muted)">看空 0</span>
       <input type="range" id="score" min="0" max="100" step="1" value="50" oninput="updateScore()">
@@ -125,20 +178,173 @@
       <textarea id="notes" placeholder="例：高盛上调金价目标至 X 美元/盎司，摩根看多中短期走势……"></textarea>
     </div>
     <div class="actions">
-      <button class="btn-save" onclick="save()">💾 保存打分（汇入今日评估）</button>
+      <button class="btn-save" id="btnSave" onclick="save()">💾 保存第 1 次打分</button>
+      <button class="btn-ghost" id="btnCancelEdit" style="display:none" onclick="renderAll()">取消编辑</button>
     </div>
     <div class="msg" id="msg"></div>
   </div>
 
-  <footer>gold-etf-analyzer · 消息面权重 30% · 打分仅供参考，不构成投资建议</footer>
+  <!-- 历史记录 -->
+  <div class="card">
+    <h2>🕘 最近打分记录</h2>
+    <div class="desc">跨日回看，便于对比不同日期与不同次序的研判变化。</div>
+    <div class="hist-wrap">
+      <table class="hist" id="histTable">
+        <thead><tr><th>日期</th><th>第几次</th><th>权重</th><th>分值</th><th>方向</th><th>打分时刻</th><th>备注</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer>gold-etf-analyzer · 消息面权重 30% · 每日 3 次打分 · 打分仅供参考，不构成投资建议</footer>
 </div>
 
 <script>
-const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
 const API = API_BASE + "/api/v1/news-score";
 
-let saved = null;
-let lastScore = null;
+let state = null;      // 当日打分状态（NewsScoreOut）
+let editSlot = 1;      // 正在编辑的槽位
+let loadedSlot = null; // 已回填到编辑器的槽位（避免打断拖动）
+let forceReload = false;
+
+function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
+function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
+function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#868e96"; }
+function fmtTime(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  const p = n => String(n).padStart(2, "0");
+  return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+const esc = s => (s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ── 渲染 ── */
+function renderAll() {
+  const d = state;
+  if (!d) return;
+
+  // 顶部状态
+  const status = document.getElementById("statusTag");
+  if (d.scored) {
+    status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots}/${d.max_slots} 次 · 有效 ${d.score}</span>`;
+  } else {
+    status.innerHTML = '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
+  }
+
+  // 提示条
+  const alert = document.getElementById("scoreAlert");
+  alert.style.display = "block";
+  if (!d.scored) {
+    alert.style.background = "#fff4e5"; alert.style.color = "#b26a00"; alert.style.border = "1px solid #ffd8a8";
+    alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。今日还有 <b>3</b> 次打分机会，建议查阅上方投行展望后完成第 1 次打分。";
+  } else if (d.remaining_slots > 0) {
+    alert.style.background = "#e7f5ff"; alert.style.color = "#1971c2"; alert.style.border = "1px solid #a5d8ff";
+    alert.innerHTML = `今日已打分 <b>${d.used_slots}</b> 次，还有 <b>${d.remaining_slots}</b> 次机会。随着盘中信息更新，可继续打分——<b>越晚的一次权重越高</b>，对当日指数影响越大。`;
+  } else {
+    alert.style.background = "#e6f4ea"; alert.style.color = "#2f9e44"; alert.style.border = "1px solid #b7e4c7";
+    alert.innerHTML = "今日 <b>3 次打分机会已全部用完</b>，已按 1:2:3 加权汇入综合评估指数与购买决策。如需修正，点击对应槽位的「修改」。";
+  }
+
+  // 有效分值面板
+  document.getElementById("effScore").textContent = Number(d.score).toFixed(1);
+  document.getElementById("effScore").style.color = d.scored ? dirColor(d.direction) : "var(--muted)";
+  document.getElementById("effDir").innerHTML =
+    `<span class="dir-tag" style="background:${dirColor(d.direction)}">${dirTxt(d.direction)}</span>`;
+  document.getElementById("effFormula").textContent = d.formula
+    ? "加权口径：" + d.formula + " = " + Number(d.score).toFixed(1)
+    : (d.scored ? "仅 1 次打分，直接采用该次分值" : "尚未打分，按中性 50 参与评估");
+  document.getElementById("effProgress").innerHTML =
+    [1, 2, 3].map(n => `<span class="${n <= d.used_slots ? "on" : ""}"></span>`).join("");
+
+  // 槽位卡片
+  const bySlot = {};
+  d.slots.forEach(s => { bySlot[s.slot] = s; });
+  document.getElementById("slotGrid").innerHTML = [1, 2, 3].map(n => {
+    const s = bySlot[n];
+    const editing = editSlot === n ? " editing" : "";
+    if (!s) {
+      return `<div class="slot-card${editing}">
+        <div class="hd"><span class="nm">第 ${n} 次</span><span class="wt">权重 ${n}</span></div>
+        <div class="slot-empty" style="margin-top:8px">未打分</div>
+        <div class="ops"><button class="btn-ghost" onclick="startEdit(${n})">打第 ${n} 次</button></div>
+      </div>`;
+    }
+    return `<div class="slot-card filled${editing}">
+      <div class="hd"><span class="nm">第 ${s.slot} 次</span><span class="wt">权重 ${s.weight}</span></div>
+      <div class="sc" style="color:${dirColor(s.direction)}">${Number(s.score).toFixed(1)}</div>
+      <div><span class="dir-tag" style="background:${dirColor(s.direction)};font-size:11px">${dirTxt(s.direction)}</span></div>
+      <div class="tm">提交于 ${fmtTime(s.scored_at)}</div>
+      ${s.notes ? `<div class="nt">${esc(s.notes)}</div>` : ""}
+      <div class="ops">
+        <button class="btn-ghost" onclick="startEdit(${s.slot}, true)">修改</button>
+        <button class="btn-ghost" onclick="removeSlot(${s.slot})">撤销</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  // 编辑器标题与按钮
+  const editingExisting = !!bySlot[editSlot];
+  document.getElementById("editorTitle").textContent =
+    `📝 第 ${editSlot} 次打分（权重 ${editSlot}）` + (editingExisting ? " · 修改" : "");
+  document.getElementById("btnSave").textContent =
+    `💾 ${editingExisting ? "更新" : "保存"}第 ${editSlot} 次打分`;
+  document.getElementById("btnSave").disabled = false;
+  document.getElementById("btnCancelEdit").style.display = editingExisting ? "inline-block" : "none";
+
+  // 沿用上次
+  const btn = document.getElementById("btnReuse");
+  if (d.last_score !== null && d.last_score !== undefined) {
+    btn.style.display = "inline-block";
+    btn.textContent = `沿用上次（${d.last_date}：${Math.round(d.last_score)}）`;
+  } else {
+    btn.style.display = "none";
+  }
+
+  // 编辑器内容：仅在编辑目标变化时回填，避免打断正在拖动的手感
+  if (loadedSlot !== editSlot || forceReload) {
+    const s = bySlot[editSlot];
+    document.getElementById("score").value = s ? Math.round(s.score) : 50;
+    document.getElementById("notes").value = s ? (s.notes || "") : "";
+    loadedSlot = editSlot;
+    forceReload = false;
+    updateScore();
+  }
+}
+
+/* 轻量确认弹窗（替代原生 confirm，风格与全站一致） */
+function confirmDialog(text) {
+  return new Promise(resolve => {
+    const mask = document.createElement("div");
+    mask.className = "cd-mask";
+    mask.innerHTML = `<div class="cd-box">
+      <div class="cd-text">${esc(text)}</div>
+      <div class="cd-ops">
+        <button class="btn-ghost" data-act="no">取消</button>
+        <button class="btn-save" data-act="yes" style="padding:8px 20px;font-size:13px">确定</button>
+      </div>
+    </div>`;
+    mask.addEventListener("click", e => {
+      const act = e.target.getAttribute && e.target.getAttribute("data-act");
+      if (!act) return;
+      document.body.removeChild(mask);
+      resolve(act === "yes");
+    });
+    document.body.appendChild(mask);
+  });
+}
+
+function startEdit(slot, existing) {
+  editSlot = slot;
+  forceReload = true;
+  renderAll();
+  document.getElementById("editorCard").scrollIntoView({ behavior: "smooth", block: "center" });
+  document.getElementById("msg").textContent = existing
+    ? `正在修改第 ${slot} 次打分，保存后将覆盖原值。`
+    : `正在填写第 ${slot} 次打分。`;
+  document.getElementById("msg").className = "msg";
+}
 
 function setScore(v) {
   document.getElementById("score").value = v;
@@ -146,15 +352,11 @@ function setScore(v) {
 }
 
 function reuseLast() {
-  if (lastScore === null) return;
-  setScore(Math.round(lastScore));
+  if (!state || state.last_score === null || state.last_score === undefined) return;
+  setScore(Math.round(state.last_score));
   document.getElementById("msg").className = "msg ok";
-  document.getElementById("msg").textContent = "已填入上次打分 " + Math.round(lastScore) + "，确认后点击保存。";
+  document.getElementById("msg").textContent = "已填入上次打分 " + Math.round(state.last_score) + "，确认后点击保存。";
 }
-
-function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
-function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
-function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#868e96"; }
 
 function updateScore() {
   const v = parseInt(document.getElementById("score").value);
@@ -164,57 +366,81 @@ function updateScore() {
   document.getElementById("dirBox").innerHTML = `<span class="dir-tag" style="background:${dirColor(d)}">${dirTxt(d)}</span>`;
 }
 
+/* ── 交互 ── */
 async function save() {
   const msg = document.getElementById("msg");
-  const body = {
-    score: parseInt(document.getElementById("score").value),
-    direction: dirOf(parseInt(document.getElementById("score").value)),
-    notes: document.getElementById("notes").value,
-  };
+  const v = parseInt(document.getElementById("score").value);
+  const body = { score: v, direction: dirOf(v), notes: document.getElementById("notes").value, slot: editSlot };
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);
-    saved = await r.json();
+    state = await r.json();
     msg.className = "msg ok";
-    msg.textContent = "✅ 已保存，消息面打分已汇入今日评估（综合指数与决策已更新）。";
-  } catch (e) { msg.className = "msg err"; msg.textContent = "保存失败：" + e.message; }
+    msg.textContent = `✅ 第 ${editSlot} 次打分已保存，当日有效分值已更新为 ${Number(state.score).toFixed(1)}（已汇入综合指数与决策）。`;
+    forceReload = true;
+    editSlot = state.next_slot || editSlot;
+    renderAll();
+    loadHistory();
+  } catch (e) {
+    msg.className = "msg err";
+    msg.textContent = "保存失败：" + e.message;
+  }
+}
+
+async function removeSlot(slot) {
+  const ok = await confirmDialog(`确定撤销今日第 ${slot} 次打分？该槽位将被释放，当日有效分值会重新按剩余次数加权计算。`);
+  if (!ok) return;
+  const msg = document.getElementById("msg");
+  try {
+    const r = await fetch(API + "/" + slot, { method: "DELETE" });
+    if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);
+    state = await r.json();
+    msg.className = "msg ok";
+    msg.textContent = `🗑️ 已撤销第 ${slot} 次打分，当日有效分值更新为 ${Number(state.score).toFixed(1)}。`;
+    forceReload = true;
+    editSlot = state.next_slot || 1;
+    renderAll();
+    loadHistory();
+  } catch (e) {
+    msg.className = "msg err";
+    msg.textContent = "撤销失败：" + e.message;
+  }
+}
+
+async function loadHistory() {
+  try {
+    const r = await fetch(API + "/history?limit=15");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d = await r.json();
+    const tb = document.querySelector("#histTable tbody");
+    if (!d.items.length) {
+      tb.innerHTML = '<tr><td colspan="7" style="color:var(--muted)">暂无打分记录</td></tr>';
+      return;
+    }
+    tb.innerHTML = d.items.map(it => `<tr>
+      <td>${it.score_date}</td>
+      <td>第 ${it.slot} 次</td>
+      <td>${it.weight}</td>
+      <td class="num" style="color:${dirColor(it.direction)}">${Number(it.score).toFixed(1)}</td>
+      <td><span class="dir-tag" style="background:${dirColor(it.direction)};font-size:11px">${dirTxt(it.direction)}</span></td>
+      <td>${fmtTime(it.scored_at)}</td>
+      <td style="color:#4b5563">${esc(it.notes) || "—"}</td>
+    </tr>`).join("");
+  } catch (e) {
+    document.querySelector("#histTable tbody").innerHTML =
+      `<tr><td colspan="7" style="color:var(--up)">历史记录加载失败：${esc(e.message)}</td></tr>`;
+  }
 }
 
 (async function init() {
   try {
     const r = await fetch(API);
     if (!r.ok) throw new Error("HTTP " + r.status);
-    const d = await r.json();
-    const alert = document.getElementById("scoreAlert");
-
-    if (!d.scored) {
-      alert.style.display = "block";
-      alert.style.background = "#fff4e5";
-      alert.style.color = "#b26a00";
-      alert.style.border = "1px solid #ffd8a8";
-      alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。建议查阅上方投行展望后完成打分。";
-      document.getElementById("statusTag").innerHTML =
-        '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
-    } else {
-      alert.style.display = "block";
-      alert.style.background = "#e6f4ea";
-      alert.style.color = "#2f9e44";
-      alert.style.border = "1px solid #b7e4c7";
-      alert.innerHTML = "今日已完成打分，消息面已汇入综合评估指数与购买决策。";
-      document.getElementById("statusTag").innerHTML =
-        `<span class="dir-tag" style="background:${dirColor(d.direction)}">今日已打分 ${d.score}</span>`;
-      document.getElementById("score").value = Math.round(d.score);
-      document.getElementById("notes").value = d.notes || "";
-      updateScore();
-    }
-
-    // 上次打分 → 沿用按钮
-    lastScore = d.last_score;
-    if (d.last_score !== null && d.last_score !== undefined) {
-      const btn = document.getElementById("btnReuse");
-      btn.style.display = "inline-block";
-      btn.textContent = `沿用上次（${d.last_date}：${Math.round(d.last_score)}）`;
-    }
+    state = await r.json();
+    editSlot = state.next_slot || 1;
+    loadedSlot = null;
+    renderAll();
+    loadHistory();
   } catch (e) {
     document.getElementById("statusTag").innerHTML = `<span style="color:var(--up);font-size:12px">加载失败：${e.message}</span>`;
   }
