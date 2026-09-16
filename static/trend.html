@@ -259,6 +259,14 @@
   </div>
 
   <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:600">📈 黄金趋势主图 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="trendSub">加载中…</span></div>
+      <div id="klineRangeBtns" style="display:flex;gap:6px" title="V0.64.0 多时间框架">
+        <button class="range-btn active" data-days="60" data-interval="D" type="button">60D</button>
+        <button class="range-btn" data-days="365" data-interval="W" type="button">52W</button>
+        <button class="range-btn" data-days="730" data-interval="M" type="button">24M</button>
+      </div>
+    </div>
     <div id="chartArea"><div class="loading">正在加载行情数据…</div></div>
     <div class="summary" id="summary"></div>
   </div>
@@ -286,9 +294,23 @@ async function fetchJSON(url, timeoutMs = 40000) {
 
 const API = API_BASE + "/api/v1/market/gold/trend?days=60";
 
-async function init() {
+// V0.64.0 多时间框架：主图模块级 chart 实例 + 区间切换入口
+let trendChart = null;
+let currentKlineInterval = "D";  // 当前 interval，供 refresh 复用
+
+// 区间切换副文案（D=日 K / W=周 K / M=月 K）
+const INTERVAL_SUB = {
+  D: "日 K · 60 个交易日",
+  W: "周 K · 聚合至 ISO 周界（52 周 ≈ 1 交易年）",
+  M: "月 K · 聚合至年月界（24 月 ≈ 2 交易年）",
+};
+
+async function loadTrend(days = 60, interval = "D") {
+  currentKlineInterval = interval;
+  const subEl = document.getElementById("trendSub");
+  subEl.textContent = INTERVAL_SUB[interval] || INTERVAL_SUB.D;
   try {
-    const data = await fetchJSON(API);
+    const data = await fetchJSON(API_BASE + `/api/v1/market/gold/trend?days=${days}&interval=${interval}`);
     lastTrend = data;
     renderSourceBar(data);
     render(data);
@@ -298,6 +320,11 @@ async function init() {
       '<div class="error">数据加载失败：' + e.message +
       '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
   }
+}
+
+async function init() {
+  // V0.64.0：init 改为默认加载 60D（保持现状体验）
+  await loadTrend(60, "D");
 }
 
 // 今日操作清单：看指数 → 打消息面分 → 看决策仓位 → 记录交易
@@ -596,7 +623,9 @@ function render(d) {
     { label: "MA40", data: d.points.map(p => p.ma40), borderColor: colors.ma40, borderWidth: 1.2, pointRadius: 0 },
   ];
   document.getElementById("chartArea").innerHTML = '<canvas id="trendChart"></canvas>';
-  new Chart(document.getElementById("trendChart"), {
+  // V0.64.0：渲染前 destroy 旧 chart 实例（区间切换时防内存泄漏）
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(document.getElementById("trendChart"), {
     type: "line",
     data: { labels, datasets },
     options: {
@@ -830,6 +859,15 @@ document.getElementById("snapRangeBtns")?.addEventListener("click", (ev) => {
   loadSnapshots(parseInt(btn.dataset.days, 10));
 });
 
+// V0.64.0：K 线主图区间切换（60D / 52W / 24M —— 多时间框架）
+document.getElementById("klineRangeBtns")?.addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".range-btn");
+  if (!btn) return;
+  document.querySelectorAll("#klineRangeBtns .range-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadTrend(parseInt(btn.dataset.days, 10), btn.dataset.interval);
+});
+
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
@@ -850,7 +888,14 @@ async function refreshTrendQuotes() {
   if (btn) btn.classList.add("refreshing");
   try {
     // 命中后端 cache 时 ms 级返回；超 TTL 时重算 ~200ms
-    await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge()]);
+    // V0.64.0：始终刷新日 K（避免 W/M 主图每分钟重画，浪费带宽 + 用户感知跳动）；
+    // 若当前是 W/M 模式，则补一次对应区间刷新。
+    await Promise.allSettled([loadTrend(60, "D"), loadChecklist(), loadCompare(), loadSge()]);
+    if (currentKlineInterval !== "D") {
+      const active = document.querySelector("#klineRangeBtns .range-btn.active");
+      const days = active ? parseInt(active.dataset.days, 10) : 365;
+      await loadTrend(days, currentKlineInterval);
+    }
   } catch (e) {
     console.warn("refreshTrendQuotes failed:", e);
   } finally {

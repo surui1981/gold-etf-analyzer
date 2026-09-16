@@ -168,3 +168,57 @@ async def test_ny_gold_trend(client: AsyncClient) -> None:
     assert len(body["points"]) == 60
     assert body["metrics"]["change_pct"] > 0
     assert body["metrics"]["end_price"] > 4000  # 美元/盎司量级
+
+
+# ───────────────────── V0.64.0 多时间框架 API 测试 ─────────────────────
+
+
+async def test_v064_gold_trend_interval_w_aggregates_to_weekly(client: AsyncClient) -> None:
+    """V0.64.0：interval=W 后端拉 365 天 → 聚合到 ~52 根周 K。"""
+    resp = await client.get("/api/v1/market/gold/trend?days=365&interval=W")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["interval"] == "W"
+    # 365 天 ≈ 52 个 ISO 周（精度 ±2 兼容边界）；points 数 == trading_days
+    assert 49 <= len(body["points"]) <= 53
+    assert body["metrics"]["trading_days"] == len(body["points"])
+    # W 模式下 indicators 旁路（空列表），但综合指数仍输出
+    assert body["indicators"] == []
+    assert "tech" in body["index"]["components"]
+    # 摘要反映「近 1 年」窗口
+    assert "近 1 年" in body["metrics"]["summary"]
+
+
+async def test_v064_gold_trend_interval_m_aggregates_to_monthly(client: AsyncClient) -> None:
+    """V0.64.0：interval=M 后端拉 730 天 → 聚合到 ~24 根月 K。"""
+    resp = await client.get("/api/v1/market/gold/trend?days=730&interval=M")
+    assert resp.status_code == 200
+    body = resp.json()
+
+    assert body["interval"] == "M"
+    # 730 天 ≈ 24 个月（精度 ±2）
+    assert 22 <= len(body["points"]) <= 26
+    assert body["metrics"]["trading_days"] == len(body["points"])
+    # M 模式 indicators 旁路；MA 在聚合后序列上重算
+    assert body["indicators"] == []
+    last = body["points"][-1]
+    assert last["ma5"] is not None
+    assert last["ma20"] is not None
+    assert last["ma40"] is None  # 24 月数据不够 MA40 窗口
+    # 摘要反映「近 2 年」窗口
+    assert "近 2 年" in body["metrics"]["summary"]
+
+
+async def test_v064_gold_trend_interval_invalid_returns_422(client: AsyncClient) -> None:
+    """V0.64.0：非法 interval 触发 FastAPI 422（Query 正则 ^[DWM]$ 拦截）。"""
+    resp = await client.get("/api/v1/market/gold/trend?days=60&interval=X")
+    assert resp.status_code == 422
+
+
+async def test_v064_gold_trend_days_upper_limit_750(client: AsyncClient) -> None:
+    """V0.64.0：days 上限提升至 750（旧 250 → 新 750 支持 24M 月 K 聚合）。"""
+    resp = await client.get("/api/v1/market/gold/trend?days=750&interval=M")
+    assert resp.status_code == 200  # 750 在新上限内
+    resp_over = await client.get("/api/v1/market/gold/trend?days=900")
+    assert resp_over.status_code == 422  # 超出新上限 750

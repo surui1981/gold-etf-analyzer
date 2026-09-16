@@ -2,10 +2,14 @@
 
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from app.schemas.common import DirectionSignal
+
+# V0.64.0：K 线聚合粒度（趋势页 / 趋势接口共用）
+KlineInterval = Literal["D", "W", "M"]
 
 
 class GoldQuoteOut(BaseModel):
@@ -222,6 +226,11 @@ class GoldTrendOut(BaseModel):
     freshness: DataFreshnessOut | None = Field(
         None,
         description="数据时效（实时/延时/T-1/缓存/演示 + 交易时段），供页面持续标注",
+    )
+    interval: KlineInterval = Field(
+        "D",
+        description="V0.64.0 多时间框架：K 线聚合粒度 D=日 K / W=周 K / M=月 K，"
+        "默认 D（与历史响应兼容）。W/M 模式下 indicators 为空、MA 在聚合后序列上重算。",
     )
     served_at: datetime = Field(
         default_factory=lambda: datetime.now(),

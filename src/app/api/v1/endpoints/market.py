@@ -97,13 +97,22 @@ async def gold_etf_quote(
     )
 
 
-@router.get("/gold/trend", response_model=GoldTrendOut, summary="黄金2个月趋势追踪（投资指引基准）")
+@router.get("/gold/trend", response_model=GoldTrendOut, summary="黄金趋势追踪（投资指引基准，支持多时间框架）")
 async def gold_trend(
-    days: int = Query(60, ge=20, le=250, description="追踪的交易日数量（默认约2个月）"),
+    days: int = Query(
+        60, ge=20, le=750,
+        description="追踪的交易日数量（默认 60；上限 750 ≈ 3 个交易年，支持 24M 月 K 聚合）",
+    ),
     target: str = Query(
         "ny",
         pattern="^(ny|etf|gram)$",
         description="指引标的：ny=纽约金COMEX（默认投资指引基准）/ etf=黄金ETF 518880 / gram=上海金Au99.99",
+    ),
+    interval: str = Query(
+        "D",
+        pattern="^[DWM]$",
+        description="V0.64.0 多时间框架：K 线聚合粒度 D=日 K / W=周 K（ISO 周界）/ M=月 K。"
+        "W/M 模式下 days 需 ≥ 365 / 730 才有完整序列；MA 在聚合后序列上重算。",
     ),
     service: TrendService = Depends(get_trend_service),
 ) -> GoldTrendOut:
@@ -111,25 +120,35 @@ async def gold_trend(
 
     投资指引基准默认为纽约金（COMEX GC，美元/盎司）——连续交易、夜盘覆盖国内休市，
     对国内金价具备领先指示意义；持仓与交易仍以人民币 ETF/上海金计。
+
+    **V0.64.0**：新增 ``interval`` 参数，支持日/周/月三档时间框架切换。
     """
-    return await service.analyze(days=days, target=target)
+    return await service.analyze(days=days, target=target, interval=interval)
 
 
 @router.get("/gold/ny-trend", response_model=GoldTrendOut, summary="纽约金60天趋势曲线")
 async def ny_gold_trend(
-    days: int = Query(60, ge=20, le=250, description="追踪的交易日数量（默认60天）"),
+    days: int = Query(
+        60, ge=20, le=750,
+        description="追踪的交易日数量（默认60天；上限 750 支持多时间框架）",
+    ),
+    interval: str = Query(
+        "D",
+        pattern="^[DWM]$",
+        description="V0.64.0：K 线聚合粒度 D / W / M",
+    ),
     service: TrendService = Depends(get_trend_service),
 ) -> GoldTrendOut:
     """纽约金（COMEX 黄金期货 GC，美元/盎司）连续 N 天价格曲线与趋势。
 
     与国内黄金（ETF/上海金）对照，观察国际金价走势。
     """
-    return await service.analyze(days=days, target="ny")
+    return await service.analyze(days=days, target="ny", interval=interval)
 
 
 @router.get("/gold/compare", response_model=GoldCompareOut, summary="黄金ETF vs 克价对照")
 async def gold_compare(
-    days: int = Query(60, ge=20, le=250, description="对照的交易日数量"),
+    days: int = Query(60, ge=20, le=750, description="对照的交易日数量"),
     service: GoldCompareService = Depends(get_compare_service),
 ) -> GoldCompareOut:
     """黄金ETF（518880）与黄金克价（上海金 Au99.99，元/克）区间表现对照。

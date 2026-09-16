@@ -8,12 +8,21 @@
 每日重算策略
 ------------
 - ``analyze()`` 命中当日缓存时**直接返回 GoldTrendOut**（页面秒级加载）；
-- 缓存由 ``services/cache.py`` 提供，key 为 (target, date)，跨日自动失效；
+- 缓存由 ``services/cache.py`` 提供，key 为 (target, interval, date)，跨日自动失效；
 - 消息面评分更新通过 ``invalidate_for_news()`` 主动失效，下次请求全量重算；
 - ``scheduler.py`` 在北京时间 07:00 自动预生成（首屏直接命中缓存）。
+
+多时间框架（V0.64.0）
+-------------------
+- ``analyze()`` 新增 ``interval`` 参数：D=日 K（默认）/ W=周 K / M=月 K；
+- 周 K 按 ISO 周界聚合（``(year, week)``），月 K 按 ``(year, month)`` 聚合；
+- 聚合后 MA5/MA20/MA40 在新序列上重算（周线 MA5 ≈ 1 交易月，月线 MA5 ≈ 5 交易月）；
+- W/M 模式下技术面 indicators 旁路（指标对日 K 序列敏感，聚合后无意义）；
+  宏观 + 消息面仍正常合成综合指数。
 """
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from app.repositories.market_data import (
     DEFAULT_GOLD_ETF,
@@ -22,6 +31,7 @@ from app.repositories.market_data import (
     DEFAULT_GOLD_GRAM_NAME,
     DEFAULT_NY_GOLD,
     DEFAULT_NY_GOLD_NAME,
+    GoldKline,
     MarketDataRepository,
 )
 from app.schemas.common import DirectionSignal
@@ -41,6 +51,9 @@ from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFact
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+# V0.64.0：K 线聚合粒度（趋势页 / 趋势接口共用）
+KlineInterval = Literal["D", "W", "M"]
 
 # 趋势维度权重（典型经验，合计 1.0）
 TREND_WEIGHTS: dict[str, float] = {
@@ -83,6 +96,67 @@ def moving_average(values: list[float], window: int) -> list[float | None]:
         if i >= window - 1:
             result[i] = round(acc / window, 3)
     return result
+
+
+def aggregate_klines(
+    daily: list[GoldKline],
+    interval: KlineInterval,
+) -> list[GoldKline]:
+    """按 ISO 周（"W"）或 年月（"M"）聚合日 K（V0.64.0 多时间框架核心函数）。
+
+    聚合规则（每桶）：
+        - open  = 桶首日 open
+        - close = 桶末日 close
+        - high  = 桶内 max(high)
+        - low   = 桶内 min(low)
+        - volume= 桶内 sum(volume)
+        - date  = 桶首日
+
+    Args:
+        daily: 按日期升序的日 K 序列（>= 0 项）。
+        interval: "D" 原样返回；"W" 按 ISO 周界聚合；"M" 按 (year, month) 聚合。
+
+    Returns:
+        聚合后的新 K 线序列（保持升序）。
+
+    Note:
+        - W：ISO 周严格按 ``(year, ww)`` 分组，不受月份影响（跨月周界仍属同一桶）。
+        - M：自然月，与日历一致。
+        - 空输入返回 []；单点桶正常输出（OHLC = 自己）。
+    """
+    if interval == "D":
+        return list(daily)
+    if not daily:
+        return []
+
+    buckets: dict[tuple, list[GoldKline]] = {}
+    order: list[tuple] = []  # 保持聚合顺序（按首次出现）
+
+    for k in daily:
+        if interval == "W":
+            yy, ww, _ = k.date.isocalendar()
+            key = (yy, ww)
+        else:  # "M"
+            key = (k.date.year, k.date.month)
+        if key not in buckets:
+            buckets[key] = []
+            order.append(key)
+        buckets[key].append(k)
+
+    out: list[GoldKline] = []
+    for key in order:
+        group = buckets[key]
+        out.append(
+            GoldKline(
+                date=group[0].date,
+                open=group[0].open,
+                close=group[-1].close,
+                high=max(k.high for k in group),
+                low=min(k.low for k in group),
+                volume=sum(k.volume for k in group),
+            ),
+        )
+    return out
 
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
@@ -146,7 +220,12 @@ class TrendService:
         """
         return served_cache.invalidate(target)
 
-    async def analyze(self, days: int = 60, target: str = GUIDE_TARGET) -> GoldTrendOut:
+    async def analyze(
+        self,
+        days: int = 60,
+        target: str = GUIDE_TARGET,
+        interval: KlineInterval = "D",
+    ) -> GoldTrendOut:
         """分析黄金近 N 个交易日趋势并合成追踪指数。
 
         默认基准为纽约金（``GUIDE_TARGET``），投资指引口径与之一致。
@@ -154,9 +233,17 @@ class TrendService:
         **每日重算策略**：命中当日缓存时直接返回 GoldTrendOut；
         未命中则全量计算并写入缓存。消息面评分更新会失效缓存。
 
+        **V0.64.0 多时间框架**：新增 ``interval`` 参数。
+        - "D"：日 K（默认，原行为不变）
+        - "W"：周 K（按 ISO 周界聚合，后台拉更长天数）
+        - "M"：月 K（按年月聚合）
+        W/M 模式下技术面 5 维度 indicators 旁路（指标对日 K 敏感），
+        宏观与消息面仍正常合成综合指数。
+
         Args:
-            days: 覆盖的交易日数量
+            days: 覆盖的交易日数量（W/M 模式下需 ≥ 730 才有 24 个月 K）。
             target: 标的类型，ny（纽约金COMEX，默认指引基准）/ etf（518880）/ gram（上海金克价）
+            interval: K 线聚合粒度，D / W / M。
 
         Returns:
             趋势追踪结果（序列 + 指标 + 参数 + 指数）
@@ -165,29 +252,45 @@ class TrendService:
             ValueError: 历史数据不足（<2 个交易日）
         """
         target = target if target in _TARGET_UNITS else GUIDE_TARGET
+        interval = (interval or "D").upper()[:1]
+        if interval not in ("D", "W", "M"):
+            interval = "D"  # 防御性回退：非法值按日 K 处理
 
         # 命中当日缓存：直接返回，避免重复 K 线/宏观/合成
         # V0.60.0：按 settings.served_cache_ttl_seconds 派生日内 TTL；
-        # 超期返回 None，强制下次请求全量重算
-        # 注意：self._settings 在 TrendService 中是 WeightService 实例，
-        # TTL 应通过全局 get_settings() 读 Settings.served_cache_ttl_seconds。
+        # V0.64.0：缓存 key 扩展为 (target, interval, date)，W/M 独立缓存。
         from app.config import get_settings
 
         ttl = get_settings().served_cache_ttl_seconds
-        cached = served_cache.get_served(target, max_age_seconds=ttl)
+        cached = served_cache.get_served(target, max_age_seconds=ttl, interval=interval)
         if cached is not None:
-            logger.debug("Trend cache hit: target=%s", target)
+            logger.debug("Trend cache hit: target=%s interval=%s", target, interval)
             return cached
 
-        result = await self._analyze_uncached(days=days, target=target)
-        served_cache.set_served(target, result)
+        result = await self._analyze_uncached(days=days, target=target, interval=interval)
+        served_cache.set_served(target, result, interval=interval)
         return result
 
-    async def _analyze_uncached(self, days: int, target: str) -> GoldTrendOut:
-        """实际计算：K 线 + 均线 + 技术指数 + 宏观 + 消息面 + 合成（不走缓存）。"""
+    async def _analyze_uncached(
+        self,
+        days: int,
+        target: str,
+        interval: KlineInterval = "D",
+    ) -> GoldTrendOut:
+        """实际计算：K 线 + 均线 + 技术指数 + 宏观 + 消息面 + 合成（不走缓存）。
+
+        V0.64.0：W/M 模式下，K 线从日聚合到周/月；MA 在聚合后序列上重算；
+        技术面 indicators（结构/动量/支撑/动能/回撤）对日 K 敏感，W/M 时旁路。
+        """
         klines, symbol, name = await self._load_klines(days=days, target=target)
         if len(klines) < 2:
             raise ValueError("历史数据不足，无法进行趋势分析")
+
+        # V0.64.0：按 interval 聚合（"D" 时返回 list 副本）
+        if interval != "D":
+            klines = aggregate_klines(klines, interval)
+            if len(klines) < 2:
+                raise ValueError(f"历史数据不足，无法按 interval={interval} 聚合")
 
         closes = [k.close for k in klines]
         highs = [k.high for k in klines]
@@ -226,7 +329,7 @@ class TrendService:
             change_pct_5d=change_5d,
             direction=direction,
             unit=unit,
-            summary=self._summarize(direction, change_pct, end_price, unit),
+            summary=self._summarize(direction, change_pct, end_price, unit, interval),
         )
 
         # 权重：用户配置优先（趋势维度 + 技术/宏观/消息面合成比），否则内置默认
@@ -237,7 +340,18 @@ class TrendService:
             tech_weights = TREND_WEIGHTS
             tech_w, macro_w, news_w = TECH_WEIGHT, MACRO_WEIGHT, NEWS_WEIGHT
 
-        indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights, unit=unit)
+        # V0.64.0：W/M 模式 indicators 旁路（指标对日 K 敏感）
+        if interval == "D":
+            indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights, unit=unit)
+        else:
+            indicators = []
+            tech_index = TrendIndexOut(
+                score=50.0,
+                level=TrendIndexLevel.SIDEWAYS,
+                direction=DirectionSignal.NEUTRAL,
+                summary=f"聚合后（interval={interval}）技术面 5 维度不适用，已按中性 50 处理",
+                components={},
+            )
         macro_index = await self._macro.evaluate()
 
         # 消息面：客户当日打分（未打分 → 中性 50）
@@ -281,8 +395,8 @@ class TrendService:
             scored=news_scored,
         )
         logger.info(
-            "Trend analyzed: %s days, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%, news=%.1f×%.0f%%)",
-            len(klines), direction.value, change_pct,
+            "Trend analyzed: interval=%s %s bars, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%, news=%.1f×%.0f%%)",
+            interval, len(klines), direction.value, change_pct,
             combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100, news_score, news_w * 100,
         )
         status = getattr(self._repo, "source_status", None)
@@ -313,6 +427,7 @@ class TrendService:
             data_sources=sources,
             degraded=degraded,
             freshness=freshness,
+            interval=interval,
             served_at=datetime.now(),
         )
 
@@ -568,15 +683,26 @@ class TrendService:
         return TrendDirection.SIDEWAYS
 
     @staticmethod
-    def _summarize(direction: TrendDirection, change_pct: float, end_price: float, unit: str) -> str:
-        """生成面向客户的中文趋势摘要。"""
+    def _summarize(
+        direction: TrendDirection,
+        change_pct: float,
+        end_price: float,
+        unit: str,
+        interval: KlineInterval = "D",
+    ) -> str:
+        """生成面向客户的中文趋势摘要。
+
+        V0.64.0：``interval`` 用于调整时间窗描述（D=近 2 个月 / W=近 1 年 / M=近 2 年）。
+        """
         emoji = {"up": "↗", "down": "↘", "sideways": "→"}[direction.value]
         labels = {
             TrendDirection.UP: "上升趋势",
             TrendDirection.DOWN: "下降趋势",
             TrendDirection.SIDEWAYS: "震荡整理",
         }
+        window_label = {"D": "近 2 个月", "W": "近 1 年", "M": "近 2 年"}.get(interval, "近 2 个月")
+        ma_label = {"D": "20 日", "W": "20 周", "M": "20 月"}.get(interval, "20 日")
         return (
-            f"近2个月{labels[direction]} {emoji}，区间涨跌 {change_pct:+.2f}%，"
-            f"最新价 {end_price:.3f} {unit}，价格{'位于' if change_pct >= 0 else '低于'}20日均线"
+            f"{window_label}{labels[direction]} {emoji}，区间涨跌 {change_pct:+.2f}%，"
+            f"最新价 {end_price:.3f} {unit}，价格{'位于' if change_pct >= 0 else '低于'}{ma_label}均线"
         )

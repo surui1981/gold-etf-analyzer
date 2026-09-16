@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-13 ｜ 适用版本：**V0.63.0**
+> 生成日期：2026-09-14 ｜ 适用版本：**V0.64.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.63.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.64.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -32,8 +32,9 @@
 | **收益口径一致性** | 回放成本不含手续费（对齐 `add_trade` 摊薄成本），fee 并入 `total_invested`；两面板收益率一致（回归测试 2 例守护） | ✅（V0.61.0） |
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 | **评估指数历史曲线升级** | 趋势页 `loadSnapshots(days)` 重构：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线 + `7D / 30D / 90D` 区间切换按钮 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX + `snapChart.destroy()` 内存管理 | ✅（V0.63.0） |
+| **多时间框架（周/月线）** | 趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 | ✅（V0.64.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **383 用例**，`find tests -name "test_*.py"` = **33 文件**，README 与三文档数字一致（V0.62.0 新增 41 + V0.62.1 新增 2 + V0.63.0 新增 6 = 377 → 383）。**V0.63.0 全量回归实测**：离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件，共 **44** 用例）= **339 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.63.0 引入**；**已于 2026-09-14 补 `skipif` 守卫**（文件缺失即跳过，不再误报 failed）。
+**测试数对账**：`pytest --collect-only -q` = **397 用例**，新增 14 个（V0.64.0 服务 4 + API 4 + 工具 6）。**V0.64.0 全量回归实测**：离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件，共 32 用例）= **365 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.64.0 引入**；**skipif 守卫已补**（文件缺失即跳过，不再误报 failed）。
 
 ---
 
@@ -61,7 +62,7 @@
 |---|------|------|------|------|
 | 7 | **宏观×技术共振**（双维度信号/背离） | 📋 | ❌ 仅有宏观因子表，无共振/背离判定 | ⚠️ 未做 |
 | 8 | **克数持仓跟踪** | 📋 | ❌ 持仓只按 ETF 份数 | ⚠️ 未做 |
-| 9 | **多时间框架（周/月线）** | 📋 | ❌ 仅 60 天日 K | ⚠️ 未做 |
+| 9 | **多时间框架（周/月线）** | ✅ V0.64.0 | ✅ V0.64.0 已落地——趋势页 K 线主图加 60D / 52W / 24M 三档区间按钮；服务端抽 730 天日 K → ISO 周界聚合 ~52 根周 K / 年月聚合 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路；`/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) | ✅ |
 | 10 | **指数参数校准（回测）** | 📋 | ❌ 无回测引擎 | ⚠️ 未做 |
 | 11 | **多品种（白银）** | 📋 | ❌ | ⚠️ 未做 |
 
@@ -87,7 +88,7 @@
 | 6.4 | 操作防错与撤销 | ✅ V0.55.0 | ✅ | ✅ |
 | **6.5** | **个性化与上下文记忆** | 🟡 部分（V0.62.0） | ⚠️ V0.62.0 已落地**多账本 + 全站账本切换器 + `localStorage` 账本记忆**；**主题切换与标的/区间记忆仍未做** | ⚠️ 部分 |
 | 6.6 | 主动提醒与推送 | ✅ V0.56.0 | ✅ 浏览器通知（邮件/微信仍欠） | ⚠️ 部分 |
-| **6.7** | **多时间框架 + 回测可视化** | 🟡 部分（V0.61.0） | ⚠️ **收益曲线 + 获利分析总结已落地**；周/月线趋势与权重参数回测未做 | ⚠️ 部分 |
+| **6.7** | **多时间框架 + 回测可视化** | 🟡 部分（V0.64.0） | ⚠️ **V0.61.0 收益曲线 + 获利分析总结** + **V0.64.0 周/月线趋势已落地**（趋势页 K 线主图 60D / 52W / 24M 切换）；权重参数回测未做 | ⚠️ 部分 |
 | **6.8** | **新手引导与帮助** | ✅ V0.58.0 | ✅ help.js + help.css + 5 HTML 注入 | ✅ |
 | **6.9** | **加载与离线体验** | 🟡 中 | ⚠️ 有进度条 + V0.60.0 加 60s 轮询 + visibilitychange，**仍无 Service Worker 离线缓存** | ⚠️ 部分 |
 | **6.10** | **央行购金数据化与自动化** | ✅ V0.57.0 | ✅ | ✅ |
@@ -123,6 +124,7 @@
 | 23 | **离线回归命令引用了不存在的文件**：`improvement-path.md` §5.3 写 `--ignore=tests/test_services/test_wgc_fetcher.py`，而仓库中该文件名为 `test_h15_fetcher.py` → 该 `--ignore` 静默失效（pytest 对不存在的 ignore 不报错），**照抄命令实得 351 而非文档声称的 337** | ✅ 2026-09-15 命令修正为 `--ignore=…test_irfcl_fetcher.py --ignore=…test_h15_fetcher.py`（并在 §5.3 / README / application-guide 同步可复现写法） |
 | 24 | **离线回归计数算术错误**：V0.62.1 为 377 用例 / 离线 333（差 44）；V0.63.0 新增 6 → 383，离线应为 **339**，文档却写 **337**；同一处又把 fetcher 用例数写成 **46**（实测 irfcl 32 + h15 12 = **44**） | ✅ 2026-09-15 全仓统一为 **383 收集 / 离线 339 passed / fetcher 44 用例**（README + 三文档） |
 | 25 | **`test_irfcl_fetcher.py` 依赖 gitignore 的数据文件**：`test_load_manual_overrides_returns_uZB_and_irn` 读 `data/central_bank_manual_overrides.json`（`data/` 在 `.gitignore` 内），新克隆必然 failed | ✅ 2026-09-15 补 `skipif` 守卫（`cb_data._OVERRIDES_PATH` 不存在即跳过）→ 该文件 **31 passed / 1 skipped** |
+| 18 | V0.64.0 多时间框架落地：服务端 ISO 周界 / 年月聚合 + MA 重算 + 技术面旁路 + 三档区间按钮；测试数 383 → 397（+14：服务 4 + API 4 + 工具 6）；P2 #9 由 ⚠️ 未做 升 ✅ V0.64.0；UX 6.7 进一步落地（周/月线部分） | ✅ 2026-09-16 同步 README / application-guide / improvement-path / feature-alignment 四文档 |
 
 ---
 

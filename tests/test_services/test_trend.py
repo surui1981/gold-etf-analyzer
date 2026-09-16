@@ -168,3 +168,65 @@ async def test_multi_target_symbols() -> None:
 
     etf = await service.analyze(days=60, target="etf")
     assert etf.symbol == "518880"
+
+
+# ───────────────────── V0.64.0 多时间框架（周/月线聚合）─────────────────────
+
+
+async def test_v064_analyze_interval_field_default_d() -> None:
+    """V0.64.0：默认 interval="D"，响应字段 interval=D，行为与之前一致（5 维 indicators 仍输出）。"""
+    closes = [round(1 + i * 0.01, 3) for i in range(60)]
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=60)
+    assert result.interval == "D"
+    assert len(result.indicators) == 5
+
+
+async def test_v064_analyze_interval_w_aggregates_and_skips_indicators() -> None:
+    """V0.64.0：interval="W" 触发聚合 + 技术面 indicators 旁路 + 宏观/消息面仍正常合成。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(14)]  # 14 个日 K 跨 2 个 ISO 周
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=14, interval="W")
+
+    assert result.interval == "W"
+    assert result.metrics.trading_days == 2  # 14 个日 K 聚合到 2 个周 K
+    assert len(result.points) == 2
+    # W 模式下 indicators 旁路（空列表 + 技术面按中性 50）
+    assert result.indicators == []
+    assert result.index.components.get("tech") == 50.0
+    # 宏观 + 消息面仍正常合成（默认 50）
+    assert result.macro.score == 50.0
+    assert result.news.score == 50.0
+    # 摘要反映「周 K」口径
+    assert "近 1 年" in result.metrics.summary
+
+
+async def test_v064_analyze_interval_m_aggregates_24_months() -> None:
+    """V0.64.0：interval="M" 跨 24 个月聚合，输出 ~24 个点 + MA 在聚合序列上重算。"""
+    # 730 个日 K → ~24 个月 K（按日期升序跨 24 个月）
+    closes = [round(100 + i * 0.05, 3) for i in range(730)]
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=730, interval="M")
+
+    assert result.interval == "M"
+    # 24 月聚合
+    assert 20 <= result.metrics.trading_days <= 25
+    assert len(result.points) == result.metrics.trading_days
+    # M 模式 indicators 旁路
+    assert result.indicators == []
+    # MA 在聚合后序列上重算：MA5/MA20 满足窗口（24 ≥ 5/20），MA40 不满足窗口 → None
+    last = result.points[-1]
+    assert last.ma5 is not None
+    assert last.ma20 is not None
+    assert last.ma40 is None  # 24 个点不够算 MA40
+    # 摘要反映「月 K」口径
+    assert "近 2 年" in result.metrics.summary
+
+
+async def test_v064_analyze_interval_invalid_falls_back_to_d() -> None:
+    """V0.64.0：非法 interval 自动回退 D 模式（防御性设计）。"""
+    closes = [round(1 + i * 0.01, 3) for i in range(60)]
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=60, interval="X")  # type: ignore[arg-type]
+    assert result.interval == "D"
+    assert len(result.indicators) == 5  # 与日 K 一致
