@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-14 ｜ 适用版本：**V0.64.0**
+> 生成日期：2026-09-16 ｜ 适用版本：**V0.66.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.64.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.66.0）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -33,8 +33,12 @@
 | **前端内联 JS 门禁** | `scripts/check_static_js.py` / `make check-web`：语法 + 未定义调用 + DOM id 一致性 | ✅（V0.61.0） |
 | **评估指数历史曲线升级** | 趋势页 `loadSnapshots(days)` 重构：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线 + `7D / 30D / 90D` 区间切换按钮 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX + `snapChart.destroy()` 内存管理 | ✅（V0.63.0） |
 | **多时间框架（周/月线）** | 趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 | ✅（V0.64.0） |
+| **消息面每日 3 次打分** | `models/news.py` `slot`(1-3) / `scored_at` + `(score_date, slot)` 复合唯一；`services/news.py` 自动占位 + `Σ(i×scoreᵢ)/Σi` 加权 + 用尽拦截（400）+ 显式覆盖修正；`DELETE /news-score/{slot}` + `GET /news-score/history`；`static/news.html` 三槽位卡片 + 加权算式面板 | ✅（V0.65.0） |
+| **研判复盘与准确率校准** | `models/review.py`（`gold_price_daily`）+ `repositories/review.py`（`upsert_many` 合并后重算涨跌幅）+ `services/review.py`（`backfill` / `journal` / `stats` / `hint_for_score`）+ 6 个 review 接口 + `static/review.html`；`news_scores.basis` / `review_note` / `backfilled` | ✅（V0.66.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **397 用例**，新增 14 个（V0.64.0 服务 4 + API 4 + 工具 6）。**V0.64.0 全量回归实测**：离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件，共 32 用例）= **365 passed / 0 failed**；两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非 V0.64.0 引入**；**skipif 守卫已补**（文件缺失即跳过，不再误报 failed）。
+**测试数对账**：`pytest --collect-only -q` = **432 用例 / 37 个测试模块**。纵向演变：V0.64.0 = 397 → **V0.65.0 = 410**（新增 `test_api/test_news_api.py` 7 例 + 重写 `test_news_service.py` 5 → 11 例，净 +13）→ **V0.66.0 = 432**（新增 `test_services/test_review_service.py` 13 例 + `test_api/test_review_api.py` 9 例，净 +22）。
+
+**V0.66.0 回归实测**：① 全量（含联网 fetcher）`python -m pytest -q` = **431 passed / 1 skipped / 0 failed**（432 collected，19m59s）；② 离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件共 **44** 用例）= **388 passed / 0 failed**（27m05s）。两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非本版本引入**；**skipif 守卫已补**（文件缺失即跳过，不再误报 failed）。
 
 ---
 
@@ -92,6 +96,8 @@
 | **6.8** | **新手引导与帮助** | ✅ V0.58.0 | ✅ help.js + help.css + 5 HTML 注入 | ✅ |
 | **6.9** | **加载与离线体验** | 🟡 中 | ⚠️ 有进度条 + V0.60.0 加 60s 轮询 + visibilitychange，**仍无 Service Worker 离线缓存** | ⚠️ 部分 |
 | **6.10** | **央行购金数据化与自动化** | ✅ V0.57.0 | ✅ | ✅ |
+| **消息面 3 次打分** | （非路线图项，由缺陷排查延伸） | ✅ V0.65.0 | ✅ 槽位模型 + 1:2:3 加权 + 撤销 + 历史 | ✅ |
+| **6.11** | **研判复盘与准确率校准** | ✅ V0.66.0（新增项） | ✅ `/review` 页 + 6 个接口 + 金价日历 + 命中率/校准曲线/标签胜率 | ✅ |
 
 ---
 
@@ -124,7 +130,9 @@
 | 23 | **离线回归命令引用了不存在的文件**：`improvement-path.md` §5.3 写 `--ignore=tests/test_services/test_wgc_fetcher.py`，而仓库中该文件名为 `test_h15_fetcher.py` → 该 `--ignore` 静默失效（pytest 对不存在的 ignore 不报错），**照抄命令实得 351 而非文档声称的 337** | ✅ 2026-09-15 命令修正为 `--ignore=…test_irfcl_fetcher.py --ignore=…test_h15_fetcher.py`（并在 §5.3 / README / application-guide 同步可复现写法） |
 | 24 | **离线回归计数算术错误**：V0.62.1 为 377 用例 / 离线 333（差 44）；V0.63.0 新增 6 → 383，离线应为 **339**，文档却写 **337**；同一处又把 fetcher 用例数写成 **46**（实测 irfcl 32 + h15 12 = **44**） | ✅ 2026-09-15 全仓统一为 **383 收集 / 离线 339 passed / fetcher 44 用例**（README + 三文档） |
 | 25 | **`test_irfcl_fetcher.py` 依赖 gitignore 的数据文件**：`test_load_manual_overrides_returns_uZB_and_irn` 读 `data/central_bank_manual_overrides.json`（`data/` 在 `.gitignore` 内），新克隆必然 failed | ✅ 2026-09-15 补 `skipif` 守卫（`cb_data._OVERRIDES_PATH` 不存在即跳过）→ 该文件 **31 passed / 1 skipped** |
-| 18 | V0.64.0 多时间框架落地：服务端 ISO 周界 / 年月聚合 + MA 重算 + 技术面旁路 + 三档区间按钮；测试数 383 → 397（+14：服务 4 + API 4 + 工具 6）；P2 #9 由 ⚠️ 未做 升 ✅ V0.64.0；UX 6.7 进一步落地（周/月线部分） | ✅ 2026-09-16 同步 README / application-guide / improvement-path / feature-alignment 四文档 |
+| 26 | V0.64.0 多时间框架落地：服务端 ISO 周界 / 年月聚合 + MA 重算 + 技术面旁路 + 三档区间按钮；测试数 383 → 397（+14：服务 4 + API 4 + 工具 6）；P2 #9 由 ⚠️ 未做 升 ✅ V0.64.0；UX 6.7 进一步落地（周/月线部分） | ✅ 2026-09-16 同步 README / application-guide / improvement-path / feature-alignment 四文档（**原编号误标为「18」，本次修正为 26**） |
+| 27 | **V0.65.0 / V0.66.0 落地后文档整体滞后**：README 与三份 docs 版本号仍停在 V0.64.0，功能清单 / API 表 / 版本历史 / 路线图 / 测试数（397）全部未同步；`improvement-path.md` 缺 V0.65.0 / V0.66.0 路线行，`application-guide.md` 缺两版版本历史 | ✅ 2026-09-16 四文档同步至 V0.66.0：README 功能清单 +2 行、API 表 +7 行、架构树更新；application-guide 功能清单 +2 行、API 表 +9 行、版本历史 +2 行、数据源 +1 行、测试数 397 → 432；improvement-path 新增 §6.11 + 两版路线行 + 验收度量更新；feature-alignment 对账表 +2 行 |
+| 28 | **上游版本号曾不一致**（V0.63.0 遗留）：`pyproject.toml` 与 `src/app/main.py` 曾停 0.62.1 / 0.63.0，`/openapi.json` 与文档声明不符 | ✅ V0.65.0 已一并修正，现两处均为 **0.66.0**，线上 `/openapi.json` 实测返回 `0.66.0` |
 
 ---
 
@@ -136,7 +144,8 @@
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
 | 🟢 低 | UX 6.5 剩余项（主题切换 / 标的与区间记忆） | 1d | **多账本与账本记忆 V0.62.0 已落地**；剩余为主题与展示偏好记忆 |
-| 🟢 低 | UX 6.7 剩余项（周/月线趋势 + 权重参数回测） | 1-2d | 收益曲线与获利分析 V0.61.0 已落地；后两项依赖回测引擎（P3 #13） |
+| 🟢 低 | UX 6.7 剩余项（权重参数回测） | 1-2d | 收益曲线 V0.61.0 + 指数曲线 V0.63.0 + 周/月线 V0.64.0 均已落地；**仅剩权重参数回测**，依赖回测引擎（P3 #13） |
+| 🟡 中 | 复盘统计样本积累（V0.66.0 能力已就绪） | 持续 | 金价回填受行情源限制最深约 60 个交易日（2026-06-25 起）；统计页在样本 <20 天前标注「仅供参考」；补录样本按设计**不计入**命中率 |
 
 ---
 

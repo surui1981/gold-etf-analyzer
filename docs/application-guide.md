@@ -1,7 +1,7 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.64.0**
-> 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.66.0**
+> 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
 
@@ -29,7 +29,8 @@
 | 趋势评估指数 | 5 维度加权合成 0-100 指数（结构/动量/支撑/动能/回撤） | ✅ |
 | 宏观参考因子 | 美元指数/美债10Y·30Y/VIX/央行购金 → 宏观参考指数，与技术面合成综合指数 | ✅ |
 | 权重配置 | `GET/PUT /settings/weights` + `/weights` 页面：技术面/宏观面/合成比三组权重可调 | ✅ |
-| 消息面评估 | `GET/PUT /api/v1/news-score` + `/news` 页面：客户基于投行展望给消息面打分（沿用昨日 / 快捷档位） | ✅ |
+| 消息面评估 | `GET/PUT /api/v1/news-score` + `/news` 页面：客户基于投行展望给消息面打分。**每日 3 次机会**（按序号第 1/2/3 次，各自记录提交时刻），当日有效分值按 **1:2:3 加权**（越晚权重越高）合成；支持 12 个依据标签多选 + 备注 + 复盘批注；三次用尽后留空提交报 400（不再静默覆盖），可修改指定槽位或撤销 | ✅ V0.65.0 |
+| **研判复盘** | `GET /api/v1/review/{meta,journal,stats,hint,horizons}` + `POST /api/v1/review/backfill` + `/review` 页面：按日期归档研判（分值/方向/依据/备注）对齐金价日历，给出 **T+1 / T+3 / T+5** 涨跌与命中判定；统计面板含总命中率 / 按方向 / 按窗口 / 分值分箱校准曲线 / 依据标签胜率；支持补录（标记 `backfilled`，统计默认排除） | ✅ V0.66.0 |
 | 每日快照 | `POST/GET /snapshots`：每日参数+评估值本地持久化（daily_snapshots 表），指数历史序列 | ✅ |
 | 个人交易跟踪 | `POST/GET /api/v1/positions` 开仓/持仓/加仓/减仓/清仓，实时盈亏 + **软删除/撤销 + CSV 导出** | ✅ |
 | 购买决策引擎 | `GET /api/v1/decision/etf` 参数面×交易面 → 买入/加仓/持有/减仓/卖出 + **仓位推荐 + 决策可解释性红绿对照** | ✅ |
@@ -69,7 +70,7 @@ src/app/
 ├── main.py              # 入口：路由装配、CORS、lifespan、静态文件、调度器启动
 ├── config.py            # pydantic-settings 配置（.env / 环境变量）
 ├── dependencies.py      # 依赖注入容器（测试可整体替换）
-├── models/              # SQLAlchemy 2.0 ORM（analysis / position / snapshot / settings / central_bank / account）
+├── models/              # SQLAlchemy 2.0 ORM（analysis / position / snapshot / settings / central_bank / account / news / review）
 ├── schemas/             # Pydantic v2 请求/响应模型 + 枚举
 ├── services/
 │   ├── scoring.py       # 宏观机会评分引擎（FACTOR_RULES）
@@ -81,7 +82,8 @@ src/app/
 │   ├── trades.py        # 交易历史：多条件筛选 + 均价法回放 + 汇总 + CSV 导出（P1 #6）
 │   ├── compare.py       # ETF vs 克价对照
 │   ├── freshness.py     # 数据时效与三市场时段判定
-│   ├── news.py          # 消息面评分（沿用昨日 / 快捷档位）
+│   ├── news.py          # 消息面评分（每日 3 槽位 + 1:2:3 加权合成 + 依据标签）
+│   ├── review.py        # 研判复盘（金价回填 / 按日对齐 T+1·3·5 / 命中率·校准·标签胜率）
 │   ├── snapshot.py      # 每日评估快照服务
 │   ├── settings.py      # 权重配置持久化
 │   ├── central_bank.py  # 央行购金业务编排（T12M / Top / 范围筛选）
@@ -94,15 +96,17 @@ src/app/
 │   ├── account.py       # 账本仓储（默认账本自愈 / 重名校验 / 归档）
 │   ├── snapshot.py      # 快照仓储
 │   ├── settings.py      # 权重配置仓储
+│   ├── news.py          # 消息面打分仓储（(score_date, slot) 复合唯一 + 区间查询）
+│   ├── review.py        # 金价日历仓储（upsert 合并后重算涨跌幅 / 取 T 之后第一个交易日）
 │   ├── central_bank.py  # 央行购金 DB CRUD（按国家/季度查询 + upsert）
 │   ├── central_bank_data.py  # WGC HTML chart JS fetcher（季度合计 + H1 按国家）
 │   └── db.py            # async 引擎与会话工厂
-├── api/v1/endpoints/    # health / analysis / market / position / account / trades / decision / settings / snapshot / news / central_bank
+├── api/v1/endpoints/    # health / analysis / market / position / account / trades / decision / settings / snapshot / news / review / central_bank
 ├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入）
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
-static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html
+static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html
                          #   + account.js（账本切换器）/ freshness.js / help.js / responsive.css
-tests/                   # pytest（397 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架）
+tests/                   # pytest（432 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘）
 ```
 
 ### 3.3 数据流
@@ -134,7 +138,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 397 用例（离线回归 365 passed，排除 2 个联网 fetcher 文件）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架
+python -m pytest -v          # 432 用例（离线回归 388 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -186,12 +190,20 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | GET | `/api/v1/trades/export` | 交易历史 CSV 导出（含汇总） | 同上（无分页） |
 | GET | `/api/v1/decision/etf` | 购买决策（趋势指数×持仓 + 仓位推荐 + 红绿理由） | `days`(20-250)、`account_id` |
 | GET/PUT | `/api/v1/settings/weights` | 权重配置读取/保存 | body: `{tech, macro, news}` 等 |
-| GET/PUT | `/api/v1/news-score` | 消息面打分（客户评估） | body: `{score, note}` |
+| GET/PUT | `/api/v1/news-score` | 消息面打分（客户评估；当日 3 槽位 + 加权有效分值） | body: `{score, notes, slot?, basis?, review_note?, score_date?}` |
+| DELETE | `/api/v1/news-score/{slot}` | 撤销当日某一次打分（释放槽位） | `score_date`（可选，默认当日） |
+| GET | `/api/v1/news-score/history` | 历史打分记录（跨日回看） | `limit`(1-100) |
 | POST | `/api/v1/snapshots/capture` | 捕获当日评估快照 | - |
 | GET | `/api/v1/snapshots` | 历史评估快照（自动补当日） | `limit` |
 | GET | `/api/v1/central-bank/summary` | **央行购金摘要（T12M 总量 / 参与国数 / 最新季度）** | - |
 | GET | `/api/v1/central-bank/top-buyers` | **某年度 Top N 买家** | `year`(2020-2030)、`limit`(1-20) |
 | GET | `/api/v1/central-bank/purchases` | **央行购金明细（按国家 / 季度范围筛选）** | `from_q`、`to_q`、`country` |
+| GET | `/api/v1/review/meta` | **复盘元信息（标的 / 判定窗口 / 12 个依据标签 / 价格日历覆盖）** | `target`(ny/etf/gram，默认 ny) |
+| GET | `/api/v1/review/journal` | **研判日志（按日期倒序：基准收盘 → T+N 收盘 + 命中判定）** | `days`(1-365)、`horizon`(1/3/5)、`target` |
+| GET | `/api/v1/review/stats` | **复盘统计（命中率 / 方向分组 / 窗口分组 / 分值分箱校准 / 标签胜率）** | `days`(1-730)、`horizon`、`target` |
+| GET | `/api/v1/review/hint` | **打分校准提示（该分值区间历史命中率与上涨概率）** | `score`(0-100)、`days`、`target` |
+| GET | `/api/v1/review/horizons` | 可用判定窗口（T+1 / T+3 / T+5）与默认值 | - |
+| POST | `/api/v1/review/backfill` | **回填历史金价日历（幂等，建立对比基准）** | `days`(5-730)、`target` |
 
 ### 5.1 机会分析示例
 
@@ -277,6 +289,7 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | 黄金 ETF（518880） | 主源 AKShare `fund_etf_hist_sina`（新浪）｜ 备选 `fund_etf_hist_em`（东方财富）｜ 元 |
 | 宏观 5 因子 | 美元指数 / 美债 10Y·30Y（实时采集 `bond_zh_us_rate`）/ VIX |
 | **央行购金（V0.57.0 升级）** | **WGC Gold Demand Trends HTML chart JS（`fsapi.gold.org/api/v12/charts/js/...`）**——绕开 XLSX 403 反爬；季度合计 2014Q1–2026Q2 + H1 2026 按国家 + UZB/IRN 手工补丁；月度 1/15/末日 07:30 BJT 自动从 WGC 拉取并 upsert 到 `central_bank_purchases` 表；cb_gold 宏观因子从表汇总 T12M，无数据时回退 STATIC_REF（1019 吨/年） |
+| **金价日历（V0.66.0 新增）** | `gold_price_daily` 表：按 `target`(ny/etf/gram) + `price_date` 唯一，存 `close` / `change_pct` / `source`。**只存客观价格、与 `daily_snapshots` 解耦**，故可回填、可长期积累；由 `POST /api/v1/review/backfill` 从 `/gold/ny-trend` 批量写入（upsert 时在合并后的时间序列上重算涨跌幅，重复回填不抹平已有值）。当前行情源提供约 60 个交易日历史（实测回填 2026-06-25 ~ 09-16） |
 | 兜底 | 数据源三态：实时 `live` / 磁盘缓存 `stale` / 演示 `mock`（页面顶部状态条 + 健康度可见） |
 
 > 采集策略：AKShare 为同步阻塞库，经 `asyncio.to_thread` 放入线程池；按源分锁（`etf`/`sge`/`ny`）并发采集避免 V8 全局锁崩溃；统一 30s 超时快速失败而非挂起；内存 + 独立 SQLite 双写缓存（TTL 300s，冷启动 ~1.6s）。WGC fetcher 走异步 HTTP（`httpx.AsyncClient`），同样 30s 超时。
@@ -299,15 +312,16 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-216 + 63 + 24 + 13 + 18 + 43 + 20 = 397 个用例（`pytest --collect-only -q`，34 个文件）覆盖：
+**432 个用例**（`pytest --collect-only -q`，**37 个测试模块**）覆盖：
 
-- **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面、快照、决策、设置、央行购金（T12M / Top / 范围筛选）、**业绩分析（交易流水回放 / 收益曲线 / 平仓统计 / 空仓与除零边界）**
-- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**）、**业绩（收益曲线区间校验 / 获利分析）**、快照、消息面、央行购金（3 个 endpoint）、健康检查
-- **数据层**：WGC fetcher（`_parse_chart_series` / `_iso_for_country` / `_find_country_chart` / `load_manual_overrides` / 端到端 mock 32 项）、市场时段判定、SQLite 启动幂等补列
+- **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面（**V0.65.0 每日 3 槽位：自动分配 / 1:2:3 加权 / 用尽拦截 / 覆盖修正 / 撤销重归一**）、快照、决策、设置、央行购金（T12M / Top / 范围筛选）、业绩分析（交易流水回放 / 收益曲线 / 平仓统计 / 空仓与除零边界）、**研判复盘（V0.66.0：命中判定口径 / 交易日对齐 / 待验证 / 补录排除 / 校准分箱 / 标签胜率）**
+- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**）、业绩（收益曲线区间校验 / 获利分析）、快照、**消息面（3 槽位 + 撤销 + 历史 + 422/400/404 边界）**、央行购金（3 个 endpoint）、**复盘（meta / journal / stats / hint / horizons / backfill + 边界）**、健康检查
+- **数据层**：WGC fetcher（`_parse_chart_series` / `_iso_for_country` / `_find_country_chart` / `load_manual_overrides` / 端到端 mock 32 项）、市场时段判定、SQLite 启动幂等补列、**K 线聚合（日 K identity / ISO 周界 / 年月跨年 / 单点桶 / volume 求和 / 空输入兜底）**
 - **调度层**：央行购金月度调度时间计算（月末动态 28/29/30/31 天 / 年切换 / 环境变量开关 13 项 / 循环节流）
-- 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.64.0 实测 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件 44 用例）**365 passed / 0 failed**
+- 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.66.0 实测 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件 44 用例）**388 passed / 0 failed**（27m05s）
+- **全量回归（含联网 fetcher）**：**431 passed / 1 skipped / 0 failed**（432 collected，19m59s）
 - **例外（既有问题，非本版本引入）**：`tests/test_services/{test_irfcl_fetcher,test_h15_fetcher}.py` 共 44 用例，实测 **43 passed / 1 skipped**——跳过项 `test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（位于 `.gitignore` 内，新克隆不携带）；已加 `skipif` 守卫（文件缺失即跳过，不再误报 failed）
-- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **6 个静态页面**的内联 JS + **3 个共享脚本**（`account.js` / `freshness.js` / `help.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
+- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **7 个静态页面**的内联 JS + **3 个共享脚本**（`account.js` / `freshness.js` / `help.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
 
 ---
 
@@ -331,7 +345,9 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 | **V0.59.0** | **行情源 provider 配置化（P1 #5）**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块。3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF 主 + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债，全部免费零 KEY）/ **mock**（确定性序列，纯内存、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）。`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容（旧测试零改动）。24 项新测试覆盖：工厂解析（4 provider 名 + 大小写 + 未知名抛错 + 空回退默认）+ Mock provider 数据正确性 + bundle 注入 + XAU chain 解析 + cache_ttl=0 禁用 + 5 mock 取数集成。303 测试全通过（279 → 303） | 行情源配置化 | ✅ |
 | **V0.60.0** | **行情实时性增强（D + B）**：① 后端死代码启用：`repositories/market_data.py` 6 个接口（`get_gold_history` / `get_gold_gram_history` / `get_us_gold_history` / `get_gold_quote` / `get_gold_gram_quote` / `get_us_gold_quote`）启用 `quote_cache_ttl=300` 进程级 cache（V0.59.0 之前是死代码），cache hit 时**不调** `_mark` 保留 `_fetched_at`；② served cache 日内 TTL：`services/cache.py` value 由 `GoldTrendOut` → `(GoldTrendOut, set_at)` 元组；`get_served` 新增 keyword-only `max_age_seconds`（默认 600s，可由 `.env` 配 `SERVED_CACHE_TTL_SECONDS`），超期返回 None 强制重算，旧调用方不传 → 行为完全不变；③ `source_status()` 按 `_fetched_at + cache_ttl` 派生 `"stale"` 状态（不改 `_mark`），前端 freshness 角标"缓存过期"分支自然点亮；④ 日内多次预热：`services/scheduler.py` `daily_capture_loop` 内部串联 `next_intraday_run_utc`（默认 09:30 / 11:30 / 14:00 / 15:30 BJT，可由 `.env` 配 `INTRADAY_REFRESH_HOURS`，`INTRADAY_REFRESH_ENABLED=false` 关闭），取 `min(next_daily, next_intraday)` 最近点触发（`intraday_warm_once` 仅刷新 served cache 不落库）；⑤ 前端轮询：`trend.html` `setInterval(refreshTrendQuotes, 60_000)` + `visibilitychange` 切回前台自动刷新 + 右上角手动 🔄 按钮（带旋转动画）；`portfolio.html` 60s → 30s + `visibilitychange` + 同步 `FreshnessBar.load()`；⑥ `tests/conftest.py` `_reset_db` fixture 同时清空 `_CACHE`（行情 cache）保证跨测试隔离；13 项新测试覆盖（5 cache hit/expire/disabled/key-isolation/stale-promotion/mock-keep + 4 served TTL set/max_age/zero-disable/old-signature + 2 intraday 时间计算/异常静默 + 1 writes-served-cache + 1 stale 派生 + 1 mock 保持）；316 测试全通过（303 → 316） | 行情实时性 | ✅ |
 | **V0.61.0** | **交易闭环与业绩分析**：① P0 修复 **ETF 报价口径错配**——新增 `MarketDataRepository.get_gold_etf_quote()`（518880 元/份，与收益曲线同源）与 `GET /market/gold/etf-quote`（返回 `price` + `currency`/`unit`），`PositionService._current_price()` 改用它（此前误用 XAU/USD 4349.7 美元/盎司当作 9 元/份，持仓收益率虚高至 46670%）；② **加仓 / 减仓内联交易面板**（金额↔份数、快捷比例、一键取现价、摊薄成本与已实现盈亏预览，替代 `prompt()`）+ `GET /positions/{id}/trades`；③ **收益曲线** `GET /portfolio/equity-curve?days=7..730`——交易流水 + ETF 历史价回放重建（不新增表，`bisect` 把非交易日成交顺延），含最大回撤 / 区间最高最低；④ **获利分析** `GET /portfolio/performance`——胜率 / 盈亏比 / 最佳最差平仓 / 平均持仓天数 + 中文复盘；⑤ **手续费口径统一**（回放成本不含 fee，与 `add_trade` 摊薄成本一致），修正同页两个收益率（-4.29% vs -4.25%）；⑥ 新增 `scripts/check_static_js.py` 前端内联 JS 门禁（`make check-web`）；334 测试通过（316 → 334） | 交易闭环与业绩分析 | ✅ |
-| **V0.64.0**（当前） | **多时间框架（周/月线趋势，P2 #9）**：趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）—— ① 后端抽 730 天日 K 后按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；② MA 在聚合后序列上重算（周线 MA5≈1 交易月、MA20≈季线、MA40≈半年线）；③ W/M 模式技术面 5 维度旁路（指标对日 K 敏感），宏观与消息面仍正常合成综合指数；⑤ `/gold/trend?interval=W\|M` + `days` 上限 250 → 750；⑥ 缓存 key 扩展为 (target, interval, date) 三维独立（避免 W/M 结果被 D 请求误命中）；⑦ 趋势页 `trendChart.destroy()` 内存管理（仿 V0.63.0 snapChart 模式）；⑧ 60s 轮询只刷日 K，避免每分钟重画周/月。新增 14 个测试（服务 4 个：默认 D / W 聚合 + 技术面旁路 / M 聚合 + MA 重算 / 非法 interval 回退；API 4 个：W 52 点 / M 24 点 / interval=X 422 / days 上限 750；工具 6 个：日 K identity / 周聚合 ISO 周界 / 月聚合跨年 / 单点桶 / volume 求和 / 空输入兜底）；397 用例通过（383 → 397），离线回归 **365 passed / 0 failed**（排除 2 个联网 fetcher 文件 32 用例） | 多时间框架 | ✅ |
+| **V0.66.0**（当前） | **研判复盘与准确率校准（消息面闭环）**：① 新增 `gold_price_daily` 金价日历表（`target` + `price_date` 唯一，存 `close`/`change_pct`/`source`）——**只存客观价格、与 `daily_snapshots` 解耦**，可回填、可长期积累；② `news_scores` 增 `basis`（JSON 依据标签）/ `review_note`（事后批注）/ `backfilled`（补录标记）；③ 新增 `ReviewService`：`backfill(days)` 从 `/gold/ny-trend` 幂等回填（`upsert_many` 在**合并后的时间序列**上重算涨跌幅，重复回填不抹平已有值）/ `journal(days)` 按**交易日**对齐（基准 = 研判日或之前最近交易日收盘，T+N 取价格序列第 N 个后继，自动跳过周末与休市）/ `stats(days)` 输出总命中率、按方向分组、按窗口分组、**分值分箱校准曲线**、**依据标签胜率**（含补录的日期整日排除以防前视偏差，样本 < 20 标注「仅供参考」）/ `hint_for_score()` 供打分页即时提示；④ **命中口径**：看多须涨、看空须跌、看平 `\|涨跌\| ≤ 0.3%`；⑤ 新增 6 个 review 接口 + `/review` 页面（统计面板 + 按日期倒序研判日志卡片：分值/依据/备注 + 基准收盘 → T+N 收盘 + 命中标记）+ 5 个既有页面导航加入口；⑥ `news.html` 增 12 个依据标签多选、复盘批注与打分时历史校准提示；⑦ 迁移 `a3d9e1f7b2c4`（建表 + 补列）；路由 32 → 40 条；新增 22 个用例（服务 13 + API 9），用例 410 → 432 | 研判复盘·准确率校准 | ✅ |
+| **V0.65.0** | **消息面每日 3 次打分（1:2:3 加权）+ 修复同日静默覆盖**：① 原缺陷——`news_scores.score_date` 带唯一约束且保存走 upsert，同日第二次打分**静默覆盖**第一次，页面仍提示「已保存」，等于每天只有一条记录；② `models/news.py` 增 `slot`(1-3) / `scored_at` 并改 `(score_date, slot)` 复合唯一；③ `NewsScoreService` 自动占用下一个空闲槽位，当日有效分值按**越晚权重越高** `Σ(i × scoreᵢ) / Σi` 合成（1 次即该次分值 / 2 次 `(s₁+2s₂)/3` / 3 次 `(s₁+2s₂+3s₃)/6`）；三次用尽后留空 slot 提交返回 **400**（提示指定槽位修改），显式 slot 可覆盖修正；④ 新增 `DELETE /news-score/{slot}` 撤销（剩余次数按权重重新归一）与 `GET /news-score/history`；⑤ 前端 `news.html` 重做：三槽位卡片 + 加权算式与进度条 + 剩余次数提示 + 历史记录表 + 撤销二次确认，`API_BASE` 改同源；⑥ 老库经迁移 `f2a7b4c9d1e3` 放开旧唯一索引并把存量行归入 `slot=1`（运行时 `db_migrate` 同步处理，无需手工干预）；新增 13 个用例（API 7 + 重写服务 5→11），用例 397 → 410 | 消息面 3 次打分 | ✅ |
+| **V0.64.0** | **多时间框架（周/月线趋势，P2 #9）**：趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）—— ① 后端抽 730 天日 K 后按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；② MA 在聚合后序列上重算（周线 MA5≈1 交易月、MA20≈季线、MA40≈半年线）；③ W/M 模式技术面 5 维度旁路（指标对日 K 敏感），宏观与消息面仍正常合成综合指数；⑤ `/gold/trend?interval=W\|M` + `days` 上限 250 → 750；⑥ 缓存 key 扩展为 (target, interval, date) 三维独立（避免 W/M 结果被 D 请求误命中）；⑦ 趋势页 `trendChart.destroy()` 内存管理（仿 V0.63.0 snapChart 模式）；⑧ 60s 轮询只刷日 K，避免每分钟重画周/月。新增 14 个测试（服务 4 个：默认 D / W 聚合 + 技术面旁路 / M 聚合 + MA 重算 / 非法 interval 回退；API 4 个：W 52 点 / M 24 点 / interval=X 422 / days 上限 750；工具 6 个：日 K identity / 周聚合 ISO 周界 / 月聚合跨年 / 单点桶 / volume 求和 / 空输入兜底）；397 用例通过（383 → 397），离线回归 **365 passed / 0 failed**（排除 2 个联网 fetcher 文件 32 用例） | 多时间框架 | ✅ |
 | **V0.63.0** | **评估指数历史曲线升级（P2 #14 起步）**：趋势页『每日评估历史』面板前端增强，**后端零改动**——① **第 4 条曲线**：新增 `news_index` 消息面线（紫色虚线），4 条线反映完整综合指数构成（综合 / 技术 / 宏观 / 消息面）；② **区间切换**：`7D / 30D / 90D` 三档按钮（参考 portfolio 收益曲线 `EQUITY_RANGES` 模式），调用 `/api/v1/snapshots?days=N` 重新渲染；③ **4 个极值卡**：最新（带档位）/ 区间最高（附日期）/ 区间最低（附日期）/ 日变（↑↓→ 红绿色），用现有 `.cards` 网格；④ **稀疏数据 3 档 UX**：< 3 天「样本不足，趋势尚不显著」+ 隐藏极值卡；< 7 天「仅 N 天数据」；≥ 7 天默认；⑤ **chart.destroy 内存管理**：`snapChart` 模块级变量 + 渲染前 `snapChart?.destroy()` 防内存泄漏；⑥ **空数据兜底**：`!s.snapshots.length` 时 destroy 旧 chart + 隐藏极值卡 + 子标题改为「暂无快照数据（每日 07:00 BJT 自动捕获）」。新增 6 个测试（API 4 个：days=1/365/校验 + news_index 字段存在；服务 2 个：news_index 字段存在 + 无重复日期）；383 用例通过（377 → 383），离线回归 **339 passed / 0 failed**（排除 2 个联网 fetcher 文件 44 用例） | 指数曲线可视化 | ✅ |
 | **V0.62.1** | **收益回放口径修复（验证阶段发现）**：修复 `PortfolioAnalyticsService._replay()` 的**静默丢单** —— 成交日晚于价格序列最后一个交易日时（**行情源 T-1 滞后、盘中录入、周末/节假日录入**均会触发），`bisect.bisect_left` 返回 `len(price_dates)`，原逻辑 `if idx < len(price_dates)` 直接跳过该笔交易。后果是同一响应内口径自相矛盾：**`sell_count=2` 却 `closed_trades=0`、胜率 0%**，「累计投入本金」显示 **0.00 元**、已实现盈亏归零，与持仓页看到的实时持仓完全冲突。现改为把行情未覆盖的成交**归入最后一个可得交易日**（`idx > last_idx → last_idx`），累计投入 / 已实现盈亏 / 胜率 / 盈亏比恢复正确，收益曲线同步受益。新增 2 项回归测试（`test_equity_curve_trade_after_last_price_date_kept`、`test_performance_trade_after_last_price_date_not_zero`，后者显式断言 `sell_count == closed_trades` 自洽）；377 用例收集（375 → 377） | 业绩口径可信 | ✅ |
 | **V0.62.0** | **单用户多账本 + 交易历史查询页（P1 #6，P1 收官）**：① `accounts` 表（`models/account.py`）+ `positions.account_id`（迁移 `b8e14c7a2f36`，幂等 seed id=1「默认账户」并把历史持仓归入该账本，`db_migrate.py` 同步补列兜底，lifespan `_ensure_default_account()` 自愈）；② `AccountRepository` / `AccountService`（默认账本保障、重名校验、**默认账本不可归档**、**仍有未平仓持仓不可归档**、归档后 `resolve()` 仍可访问以便查询历史）；③ `/api/v1/accounts` 六个端点（list / create / get / patch / archive / restore，list 内嵌持仓与流水统计）；④ `/api/v1/trades` + `/api/v1/trades/export`：按账本 / 方向 / 日期区间 / 持仓 / 关键字筛选 + 分页，**均价法逐笔回放**给出每笔卖出的「已实现盈亏」与「成交后份额」，汇总覆盖全部匹配行；⑤ **回放取完整 scope**（side / 日期过滤只作用于展示）——否则按「卖出」筛选时会丢失买入上下文导致盈亏全部算不出（已加回归测试）；⑥ 账本上下文贯通 `positions` / `portfolio` / `decision`（`?account_id=`，`static/account.js` 全站切换器 + localStorage 记忆 + 「全部账本」合并视图，写操作落 `targetAccountId()`）；⑦ 新增 `/trades` 页面（筛选 / 汇总 KPI / 明细 / 分页 / CSV）与 `portfolio.html` 账本管理面板；⑧ `check_static_js.py` 增强（覆盖 `static/*.js` 语法 + 识别共享脚本注入的 DOM id）；375 用例收集（334 → 375，含决策 `account_id` 透传回归）；离线回归实测 **331 passed / 0 failed**（29m45s，排除 2 个联网 fetcher 文件 44 用例） | 多账本与交易历史（P1 收官） | ✅ |
@@ -362,8 +378,8 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 |---|------|------|------|
 | 7 | **宏观 × 技术共振**：宏观机会评分叠加趋势页，双维度信号（共振/背离），消息面权重生效 | 📋 | 核心差异化能力 |
 | 8 | **克数持仓跟踪**：实物金/积存金按克持仓，与 ETF 持仓并列盈亏对照 | 📋 | 「买克数」完整闭环 |
-| 9 | **多时间框架**：周线/月线趋势与指数 | 📋 | 中期趋势判断 |
-| 10 | **指数参数校准**：用历史数据回测权重与阈值 | 📋 | 模型可信度 |
+| 9 | **多时间框架**：周线/月线趋势与指数 | ✅ V0.64.0 | 中期趋势判断 |
+| 10 | **指数参数校准**：用历史数据回测权重与阈值 | 📋（V0.66.0 已落地消息面打分校准曲线，指数权重回测待做） | 模型可信度 |
 | 11 | 多品种扩展：白银 ETF / 现货 | 📋 | 贵金属全景 |
 
 ### P3 · 长期（2-3 月）—— 产品化
@@ -378,11 +394,12 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 > 已在 V0.11 完成：AKShare 三市场数据源（ETF 新浪/东财、上海金 SGE、纽约金英为财情）、趋势追踪 + 评估指数、交易面（持仓/流水/盈亏）、购买决策引擎、ETF vs 克价对照、纽约金 60 天曲线、指数置顶与运算方法展示、网站命题更新、akshare 并发稳定性修复（全局串行锁）、41 测试。
 >
-> 状态补遗（截至 V0.64.0）：
+> 状态补遗（截至 V0.66.0）：
 > - P1 #1（V0.50 发布）→ ✅；#2 权重配置页 → ✅；#4 Alembic → ✅；#5 行情源配置化 → ✅（V0.59.0）；#6 多账户 + 交易历史查询页 → ✅（V0.62.0）；**#3 CI/CD 仍 📋（P1 唯一未完成项）**
-> - P2 #7 宏观×技术共振 / #8 克数持仓 / #10 参数回测校准 / #11 多品种 → 均 📋 未做；**#9 多时间框架（周/月线趋势）→ ✅ V0.64.0**
+> - P2 #7 宏观×技术共振 / #8 克数持仓 / #11 多品种 → 均 📋 未做；**#9 多时间框架（周/月线趋势）→ ✅ V0.64.0**；#10 指数参数回测校准 → 📋 未做（但 **V0.66.0 已落地消息面打分校准曲线**，为后续回测引擎积累对照样本）
 > - P3 #12 仓位推荐（80/60/40/20/10%）已实现但**未结合账户本金**（#12 半成品）；#13 模拟交易与回测引擎 → ❌ 未做；#14 评估指数自身曲线（V0.63.0 综合/技术/宏观/消息面 4 条线 + 区间切换 + 极值卡）+ 账户收益曲线（V0.61.0）已落地，#14 ✅；#15 浏览器通知已做（V0.56.0 6.6）但**邮件/微信推送未做**（#15 半成品）；#16 公开部署 → ❌ 未做（当前 `127.0.0.1:8888` 仅本机）
-> - UX 6.5 个性化与上下文记忆 → ❌ 未做（多账本 V0.62.0 已部分覆盖「标的/账本记忆」语义）；6.7 多时间框架 → 🟡 部分（V0.61.0 收益曲线 + V0.64.0 K 线主图多时间框架已落地，权重回测未做）；6.9 加载与离线 → 🟡 部分（进度条 + 轮询已做，Service Worker 离线缓存未做）
+> - UX 6.5 个性化与上下文记忆 → 🟡 部分（多账本 V0.62.0 已覆盖「账本记忆」语义，主题切换 / 标的与区间记忆未做）；6.7 多时间框架与回测可视化 → 🟡 部分（V0.61.0 收益曲线 + V0.63.0 指数曲线 + V0.64.0 K 线多时间框架已落地，权重回测未做）；6.9 加载与离线 → 🟡 部分（进度条 + 轮询已做，Service Worker 离线缓存未做）
+> - **新增能力（非原路线图项）**：6.11 研判复盘与准确率校准 → ✅ V0.66.0；消息面每日 3 次打分 → ✅ V0.65.0（详见 [improvement-path.md](improvement-path.md) 第六章）
 
 ---
 
