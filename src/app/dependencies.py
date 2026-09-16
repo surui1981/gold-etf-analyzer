@@ -14,6 +14,7 @@ from app.repositories.market_data import MarketDataRepository
 from app.repositories.market_providers import build_provider_bundle
 from app.repositories.news import NewsScoreRepository
 from app.repositories.position import PositionRepository
+from app.repositories.review import GoldPriceRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.services.account import AccountService
@@ -25,6 +26,7 @@ from app.services.freshness import FreshnessService
 from app.services.news import NewsScoreService
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
+from app.services.review import ReviewService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
 from app.services.snapshot import DailySnapshotService
@@ -141,26 +143,28 @@ async def get_snapshot_repository(
     return SnapshotRepository(session)
 
 
-async def get_news_repository(
-    session: AsyncSession = Depends(get_db_session),
-) -> NewsScoreRepository:
-    """消息面打分仓储依赖。"""
-    return NewsScoreRepository(session)
-
-
-def get_news_score_service(
-    repo: NewsScoreRepository = Depends(get_news_repository),
-) -> NewsScoreService:
-    """消息面评估服务依赖。"""
-    return NewsScoreService(repo)
-
-
 def get_snapshot_service(
     repo: SnapshotRepository = Depends(get_snapshot_repository),
     trend: TrendService = Depends(get_trend_service),
 ) -> DailySnapshotService:
     """每日快照服务依赖（快照仓储 + 趋势评估）。"""
     return DailySnapshotService(repo=repo, trend=trend)
+
+
+async def get_gold_price_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> GoldPriceRepository:
+    """黄金价格日历仓储依赖（研判复盘的对比基准）。"""
+    return GoldPriceRepository(session)
+
+
+def get_review_service(
+    gold: GoldPriceRepository = Depends(get_gold_price_repository),
+    news: NewsScoreRepository = Depends(get_news_repository),
+    trend: TrendService = Depends(get_trend_service),
+) -> ReviewService:
+    """研判复盘服务依赖（价格日历 + 打分明细 + 趋势服务用于回填）。"""
+    return ReviewService(gold=gold, news=news, trend=trend)
 
 
 async def get_position_repository(

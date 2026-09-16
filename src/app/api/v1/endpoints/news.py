@@ -1,4 +1,10 @@
-"""消息面评估端点：客户每日打分（V0.65.0：每日最多 3 次机会）。"""
+"""消息面评估端点：客户每日打分（V0.65.0：每日最多 3 次机会）。
+
+V0.66.0：打分支持结构化研判依据（``basis``）、事后批注（``review_note``）
+与按指定日期补录（``score_date``，标记 backfilled，复盘统计默认排除）。
+"""
+
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -24,8 +30,10 @@ async def save_today_score(
 ) -> NewsScoreOut:
     """客户根据主流财经网站投行黄金展望研判后打分（0-100），汇入每日评估。
 
-    ``slot`` 留空自动占用下一个空闲槽位；三次用尽后留空提交返回 400，
-    需显式指定 ``slot`` 以修改对应槽位。
+    - ``slot`` 留空自动占用下一个空闲槽位；三次用尽后留空提交返回 400，
+      需显式指定 ``slot`` 以修改对应槽位；
+    - ``basis`` 传研判依据标签，``review_note`` 传事后批注；
+    - ``score_date`` 传历史日期即为**补录**（标记 backfilled，复盘统计默认排除）。
     """
     try:
         return await service.save_today(payload)
@@ -33,14 +41,15 @@ async def save_today_score(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/{slot}", response_model=NewsScoreOut, summary="撤销当日某一次打分")
+@router.delete("/{slot}", response_model=NewsScoreOut, summary="撤销某一次打分")
 async def delete_today_slot(
     slot: int,
+    score_date: date | None = Query(None, description="目标日期；留空为当日（补录需指定）"),
     service: NewsScoreService = Depends(get_news_score_service),
 ) -> NewsScoreOut:
-    """撤销当日第 ``slot`` 次打分并释放该槽位；不存在返回 404。"""
+    """撤销指定日期第 ``slot`` 次打分并释放该槽位；不存在返回 404。"""
     try:
-        return await service.delete_slot(slot)
+        return await service.delete_slot(slot, score_date)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

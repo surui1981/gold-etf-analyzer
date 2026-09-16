@@ -1,4 +1,7 @@
-"""消息面打分仓储（V0.65.0：每日最多 3 次，按 slot 区分）。"""
+"""消息面打分仓储（V0.65.0：每日最多 3 次，按 slot 区分）。
+
+V0.66.0 起补充研判依据（``basis``）与复盘支持：区间批量查询、补录标记。
+"""
 
 from datetime import date, datetime, timezone
 
@@ -21,6 +24,20 @@ class NewsScoreRepository:
             .where(NewsScore.score_date == score_date)
             .order_by(NewsScore.slot)
         )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_between(self, start: date, end: date) -> list[NewsScore]:
+        """区间内全部打分记录，按 (日期, 槽位) 升序（供复盘按日归档）。"""
+        stmt = (
+            select(NewsScore)
+            .where(NewsScore.score_date >= start, NewsScore.score_date <= end)
+            .order_by(NewsScore.score_date, NewsScore.slot)
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def list_dates(self) -> list[date]:
+        """存在打分记录的全部日期（升序），用于决定复盘起始点。"""
+        stmt = select(NewsScore.score_date).distinct().order_by(NewsScore.score_date)
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def get_by_slot(self, score_date: date, slot: int) -> NewsScore | None:
@@ -75,6 +92,9 @@ class NewsScoreRepository:
         score: float,
         direction: str,
         notes: str = "",
+        basis: str = "",
+        review_note: str = "",
+        backfilled: int = 0,
     ) -> NewsScore:
         """写入指定槽位；已存在则覆盖（用于修正），并刷新打分时刻。"""
         now = datetime.now(timezone.utc)
@@ -86,6 +106,9 @@ class NewsScoreRepository:
                 score=score,
                 direction=direction,
                 notes=notes,
+                basis=basis,
+                review_note=review_note,
+                backfilled=backfilled,
                 scored_at=now,
             )
             self._session.add(record)
@@ -93,6 +116,10 @@ class NewsScoreRepository:
             existing.score = score
             existing.direction = direction
             existing.notes = notes
+            existing.basis = basis
+            # 复盘批注可就地补充，不必重打分数
+            existing.review_note = review_note or existing.review_note
+            existing.backfilled = backfilled
             existing.scored_at = now
             record = existing
         await self._session.commit()

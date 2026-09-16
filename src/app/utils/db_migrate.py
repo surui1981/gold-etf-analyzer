@@ -26,6 +26,10 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         # V0.65.0 每日 3 次打分机会：老库补槽位序号与打分时刻
         ("slot", "INTEGER", "1"),
         ("scored_at", "DATETIME", "NULL"),
+        # V0.66.0 研判复盘：结构化研判依据 + 事后批注 + 补录标记
+        ("basis", "TEXT", "''"),
+        ("review_note", "TEXT", "''"),
+        ("backfilled", "INTEGER", "0"),
     ],
 }
 

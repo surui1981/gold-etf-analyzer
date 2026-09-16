@@ -3,6 +3,10 @@
 V0.65.0 起由「每日一条」升级为「每日最多 3 次打分机会」：
 同一 ``score_date`` 下按 ``slot`` 1/2/3 序号占用槽位，每次记录实际提交时刻，
 当日有效分值按「越晚权重越高」的 1:2:3 加权合成（见 ``services/news.py``）。
+
+V0.66.0 起为每条打分补充**结构化研判依据**（``basis`` 标签数组）与
+**复盘支持字段**（``review_note`` 事后批注、``backfilled`` 补录标记），
+供 ``services/review.py`` 按日期归档并统计「研判 → 后续金价」的命中率。
 """
 
 from datetime import date, datetime
@@ -32,6 +36,8 @@ class NewsScore(Base):
     - ``scored_at``：该次打分的实际提交时刻（前端展示、判断先后）
     - ``score`` 0-100：>55 看多展望、<45 看空、50 中性
     - ``notes`` 客户研判备注（参考的投行观点/链接）
+    - ``basis`` 研判依据（JSON 字符串数组，标签来自 ``services/review.py`` 预置清单）
+    - ``backfilled`` 1 表示事后补录：补录时已知道后续走势，统计默认排除
     """
 
     __tablename__ = "news_scores"
@@ -51,6 +57,15 @@ class NewsScore(Base):
         String(12), default="neutral", comment="bullish/bearish/neutral"
     )
     notes: Mapped[str] = mapped_column(Text, default="", comment="客户研判备注（参考投行观点/链接）")
+    basis: Mapped[str] = mapped_column(
+        Text, default="", comment="研判依据标签（JSON 数组字符串）"
+    )
+    review_note: Mapped[str] = mapped_column(
+        Text, default="", comment="事后复盘批注（结果出来后的反思）"
+    )
+    backfilled: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", comment="1=事后补录（统计默认排除）"
+    )
     scored_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

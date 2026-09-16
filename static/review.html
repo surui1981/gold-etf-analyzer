@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>研判复盘 · 黄金价格投资辅助工具</title>
+<style>
+  :root { --up:#e03131; --down:#2f9e44; --bg:#f7f8fa; --card:#fff; --border:#e6e8eb; --text:#1f2329; --muted:#8a919f; --accent:#c9a227; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .warn-banner { background:#1f2329; color:#eef0f3; border-radius:12px; padding:14px 20px; margin-bottom:16px; border-left:4px solid var(--accent); }
+  .warn-banner .w-title { color:#f5d97a; font-weight:700; font-size:14px; margin-bottom:6px; letter-spacing:1px; }
+  .warn-banner li { font-size:12px; line-height:1.9; color:#d6d9dd; }
+  .hero { background:linear-gradient(135deg,#fffaf0,#fff 60%,#f7f8fa); border:1px solid #f0e2b6; border-radius:12px; padding:18px 22px; margin-bottom:16px; }
+  .hero h1 { font-size:22px; }
+  .hero .intro { color:#4b5563; font-size:13px; line-height:1.8; margin-top:6px; max-width:860px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 22px; margin-bottom:16px; }
+  .card h2 { font-size:15px; margin-bottom:6px; }
+  .desc { font-size:12px; color:var(--muted); line-height:1.7; }
+  .toolbar { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  select, button { font-family:inherit; }
+  select { border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:13px; background:#fff; color:var(--text); }
+  button { border:none; border-radius:8px; padding:9px 18px; font-size:13px; cursor:pointer; font-weight:600; }
+  .btn-save { background:#1f2329; color:#fff; }
+  .btn-save:disabled { background:#c3c7cd; cursor:not-allowed; }
+  .btn-ghost { background:#fff; border:1px solid var(--border); color:var(--text); font-weight:500; padding:7px 14px; font-size:12.5px; }
+  .btn-ghost:hover { border-color:var(--accent); background:#fffaf0; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin-top:12px; }
+  .kpi { border:1px solid var(--border); border-radius:10px; padding:12px 14px; background:#fff; }
+  .kpi .k { font-size:11.5px; color:var(--muted); }
+  .kpi .v { font-size:24px; font-weight:800; margin-top:4px; line-height:1.15; }
+  .kpi .s { font-size:11px; color:var(--muted); margin-top:3px; }
+  .banner { border-radius:8px; padding:9px 14px; font-size:12.5px; line-height:1.7; margin-top:10px; }
+  .banner.warn { background:#fff4e5; color:#b26a00; border:1px solid #ffd8a8; }
+  .banner.info { background:#e7f5ff; color:#1971c2; border:1px solid #a5d8ff; }
+  .banner.ok { background:#e6f4ea; color:#2f9e44; border:1px solid #b7e4c7; }
+  .bars { margin-top:8px; }
+  .bar-row { display:grid; grid-template-columns:96px 1fr 128px; gap:10px; align-items:center; padding:5px 0; font-size:12.5px; }
+  .bar-track { height:14px; border-radius:999px; background:#eef0f3; overflow:hidden; position:relative; }
+  .bar-fill { height:100%; border-radius:999px; }
+  .bar-note { font-size:11.5px; color:var(--muted); text-align:right; font-variant-numeric:tabular-nums; }
+  table.hist { width:100%; border-collapse:collapse; font-size:12.5px; margin-top:10px; }
+  table.hist th, table.hist td { border-bottom:1px solid var(--border); padding:7px 8px; text-align:left; }
+  table.hist th { color:var(--muted); font-weight:600; font-size:11.5px; }
+  table.hist td.num { font-variant-numeric:tabular-nums; font-weight:700; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .tag { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; background:#f1f3f5; color:#495057; }
+  .dir-tag { display:inline-block; padding:2px 12px; border-radius:999px; color:#fff; font-size:12px; font-weight:600; }
+  /* 研判日志 */
+  .day { border:1px solid var(--border); border-radius:12px; padding:14px 16px; margin-top:10px; background:#fff; }
+  .day.hit { border-left:4px solid var(--up); }
+  .day.miss { border-left:4px solid var(--down); }
+  .day.pending { border-left:4px solid #ced4da; }
+  .day-hd { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; }
+  .day-hd .d { font-size:15px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .day-hd .w { font-size:12px; color:var(--muted); }
+  .day-hd .sc { font-size:20px; font-weight:800; margin-left:auto; font-variant-numeric:tabular-nums; }
+  .day-body { display:grid; grid-template-columns:1fr 300px; gap:16px; margin-top:10px; }
+  .day-left .lbl { font-size:11.5px; color:var(--muted); margin-top:8px; }
+  .day-left .txt { font-size:12.5px; line-height:1.7; color:#374151; margin-top:3px; }
+  .outcome { border:1px solid var(--border); border-radius:10px; padding:10px 12px; background:#fbfcfd; }
+  .outcome .row { display:flex; justify-content:space-between; font-size:12.5px; padding:3px 0; }
+  .outcome .row b { font-variant-numeric:tabular-nums; }
+  .slots { margin-top:10px; }
+  .slot-line { display:flex; gap:8px; align-items:center; font-size:11.5px; color:#4b5563; padding:3px 0; flex-wrap:wrap; }
+  .slot-line .n { font-weight:700; color:var(--muted); min-width:44px; }
+  .slot-line .v { font-weight:700; font-variant-numeric:tabular-nums; min-width:34px; }
+  footer { text-align:center; color:var(--muted); font-size:12px; margin-top:20px; }
+  .empty { color:var(--muted); font-size:13px; line-height:2; padding:8px 0; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent, #c9a227); color: #1f2329; font-weight: 600; }
+  @media (max-width: 760px) { .day-body { grid-template-columns:1fr; } .bar-row { grid-template-columns:80px 1fr 104px; } }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/trades">交易历史</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/review" class="active">研判复盘</a>
+      <a href="/central-bank">央行购金统计</a>
+    </div>
+  </nav>
+
+  <div id="freshnessBar"></div>
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
+    </ol>
+  </div>
+
+  <div class="hero">
+    <h1>研判复盘 · 判断与结果对齐</h1>
+    <p class="intro">
+      把每天的<b>研判（分值 + 依据 + 备注）</b>与<b>之后的实际金价</b>放在同一张表里对齐：
+      当日收盘 → 第 1 / 3 / 5 个交易日收盘的涨跌幅，按方向判定<b>命中或偏离</b>。
+      统计反馈（命中率 / 校准曲线 / 依据胜率）用于逐步校正打分习惯。
+    </p>
+  </div>
+
+  <!-- 控制条 -->
+  <div class="card">
+    <h2>⚙️ 复盘设置</h2>
+    <div class="desc">基准价默认取<b>纽约金 COMEX</b>（与投资指引口径一致）；窗口按<b>交易日</b>对齐，自动跳过周末。</div>
+    <div class="toolbar" style="margin-top:12px">
+      <label class="desc">基准标的
+        <select id="selTarget"></select>
+      </label>
+      <label class="desc">判定窗口
+        <select id="selHorizon"></select>
+      </label>
+      <label class="desc">回看天数
+        <select id="selDays">
+          <option value="30">近 30 天</option>
+          <option value="90" selected>近 90 天</option>
+          <option value="180">近 180 天</option>
+          <option value="365">近 365 天</option>
+        </select>
+      </label>
+      <button class="btn-save" id="btnRefresh" onclick="reload()">🔄 刷新</button>
+      <button class="btn-ghost" id="btnBackfill" onclick="backfill()">📥 回填历史金价</button>
+    </div>
+    <div id="ctlMsg" class="desc" style="margin-top:8px"></div>
+  </div>
+
+  <!-- 命中率总览 -->
+  <div class="card">
+    <h2>🎯 命中率总览 <span id="statScope" class="desc"></span></h2>
+    <div class="kpis" id="kpis"></div>
+    <div id="statBanner"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px" id="statGrid">
+      <div>
+        <div class="desc" style="font-weight:600;color:var(--text)">按研判方向</div>
+        <div class="bars" id="dirBars"></div>
+      </div>
+      <div>
+        <div class="desc" style="font-weight:600;color:var(--text)">按判定窗口</div>
+        <div class="bars" id="hzBars"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 校准曲线 -->
+  <div class="card">
+    <h2>📐 分值校准（打多少分时，实际上涨概率多大）</h2>
+    <div class="desc">
+      把当日有效分值分成 5 档，统计每档之后窗口中<b>实际上涨的比例</b>。
+      理想的打分应当<b>单调递增</b>——分数越高，上涨概率越大。若高分档并不比低分档更高，说明打分存在高估。
+    </div>
+    <div class="bars" id="calBars"></div>
+    <div id="calInsight"></div>
+  </div>
+
+  <!-- 依据标签胜率 -->
+  <div class="card">
+    <h2>🏷️ 研判依据胜率（哪类依据更可靠）</h2>
+    <div class="desc">统计每个依据标签出现时的方向命中率；样本量越大越可信（≥5 次才列出参考值）。</div>
+    <div style="overflow:auto;max-height:340px">
+      <table class="hist" id="tagTable">
+        <thead><tr><th>依据标签</th><th>出现次数</th><th>命中</th><th>命中率</th><th>参考度</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 研判日志 -->
+  <div class="card">
+    <h2>📅 研判日志（按日期归档 + 后续表现）</h2>
+    <div class="desc" id="journalDesc">每日研判的分值、依据与备注，以及之后第 1/3/5 个交易日的金价对比。</div>
+    <div id="journal"></div>
+  </div>
+
+  <footer>gold-etf-analyzer · 研判复盘 · 统计仅为个人打分习惯的自我校正，不构成投资建议</footer>
+</div>
+
+<script>
+const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
+const API = API_BASE + "/api/v1/review";
+
+let meta = null;
+let stats = null;
+let journal = null;
+let cfg = { target: "ny", horizon: 1, days: 90 };
+
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function dirTxt(d) { return { bullish: "看多", bearish: "看空", neutral: "看平" }[d] || d; }
+function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#868e96"; }
+function chgColor(v) { return v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "#868e96"; }
+function pct(v) { return v == null ? "—" : Number(v).toFixed(1) + "%"; }
+function signed(v) { return v == null ? "—" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%"; }
+
+async function getJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "HTTP " + r.status);
+  return r.json();
+}
+
+/* ── 元信息 ── */
+async function loadMeta() {
+  meta = await getJSON(API + "/meta?target=" + cfg.target);
+  document.getElementById("selTarget").innerHTML =
+    meta.targets.map(t => `<option value="${t.key}"${t.key === cfg.target ? " selected" : ""}>${esc(t.label)}</option>`).join("");
+  document.getElementById("selHorizon").innerHTML =
+    meta.horizons.map(h => `<option value="${h}"${h === cfg.horizon ? " selected" : ""}>T+${h} 个交易日</option>`).join("");
+  const lt = meta.latest_price_date
+    ? `价格日历已积累 <b>${meta.price_days}</b> 个交易日，最新 ${meta.latest_price_date}（${meta.latest_price}）。`
+    : "价格日历为空，请先点「回填历史金价」。";
+  document.getElementById("ctlMsg").innerHTML = lt;
+}
+
+/* ── 统计 ── */
+async function loadStats() {
+  stats = await getJSON(`${API}/stats?days=${cfg.days}&target=${cfg.target}&horizon=${cfg.horizon}`);
+  const s = stats;
+  document.getElementById("statScope").textContent = `（近 ${s.days} 天 · T+${s.horizon} 判定 · 样本 ${s.evaluated} 天）`;
+
+  const kpi = [
+    { k: "方向命中率", v: pct(s.hit_rate), c: s.hit_rate == null ? "var(--muted)" : (s.hit_rate >= 50 ? "var(--up)" : "var(--down)"), s: `${s.hits} / ${s.evaluated} 天` },
+    { k: "有效样本", v: s.evaluated, c: "", s: s.pending ? `另有 ${s.pending} 天待验证` : "无待验证" },
+    { k: "平均研判分值", v: s.avg_score == null ? "—" : Number(s.avg_score).toFixed(1), c: "", s: "当日加权有效分" },
+    { k: "平均后续涨跌", v: signed(s.avg_change), c: chgColor(s.avg_change || 0), s: `T+${s.horizon} 窗口` },
+    { k: "补录排除", v: s.backfilled_excluded, c: "", s: "避免前视偏差" },
+  ];
+  document.getElementById("kpis").innerHTML = kpi.map(x => `
+    <div class="kpi"><div class="k">${x.k}</div>
+      <div class="v" style="color:${x.c || "inherit"}">${x.v}</div>
+      <div class="s">${esc(x.s)}</div></div>`).join("");
+
+  const bn = document.getElementById("statBanner");
+  if (!s.evaluated) {
+    bn.innerHTML = `<div class="banner info">暂无可统计样本。命中率需要「历史研判 + 之后价格」两者齐备；请先在<a href="/news">消息面评估</a>页打分，并确保价格日历已回填。</div>`;
+  } else if (s.sample_warning) {
+    bn.innerHTML = `<div class="banner warn">⚠️ 样本仅 <b>${s.evaluated}</b> 天，统计波动较大，<b>仅作趋势参考</b>。建议持续积累到 20 天以上再据此调整打分习惯。</div>`;
+  } else {
+    bn.innerHTML = `<div class="banner ok">样本 <b>${s.evaluated}</b> 天，已具备基本参考价值。（${esc(s.note)}）</div>`;
+  }
+
+  document.getElementById("dirBars").innerHTML = s.by_direction.map(x => barRow(
+    esc(x.label), x.hit_rate, dirColor(x.direction), `${x.hits}/${x.samples} 次`
+  )).join("") || '<div class="desc">暂无数据</div>';
+
+  document.getElementById("hzBars").innerHTML = s.by_horizon.map(x => barRow(
+    `T+${x.horizon} 交易日`, x.hit_rate, "#1971c2", `${x.hits}/${x.samples} 次`
+  )).join("");
+
+  document.getElementById("calBars").innerHTML = s.calibration.map(b => barRow(
+    `${b.key} 分`, b.up_rate, "#c9a227", `${b.samples} 天 · 上涨 ${pct(b.up_rate)}`
+  )).join("");
+  document.getElementById("calInsight").innerHTML = calibrationInsight(s);
+}
+
+function barRow(label, value, color, note) {
+  const w = value == null ? 0 : Math.max(0, Math.min(100, value));
+  return `<div class="bar-row">
+    <span>${label}</span>
+    <span class="bar-track"><span class="bar-fill" style="width:${w}%;background:${color}"></span></span>
+    <span class="bar-note">${value == null ? "样本不足" : Number(value).toFixed(1) + "%"} · ${esc(note)}</span>
+  </div>`;
+}
+
+/* 校准洞察：高分档是否确实比中低分档更容易上涨 */
+function calibrationInsight(s) {
+  const used = s.calibration.filter(b => b.samples > 0 && b.up_rate != null);
+  if (used.length < 2) {
+    return `<div class="banner info">样本尚不足以判断校准度，继续积累后再看。</div>`;
+  }
+  const low = used[0], high = used[used.length - 1];
+  const gap = high.up_rate - low.up_rate;
+  if (gap >= 15) {
+    return `<div class="banner ok">校准良好：最高分档（${high.key}）上涨概率 <b>${high.up_rate}%</b>，最低分档（${low.key}）为 <b>${low.up_rate}%</b>，分差 <b>+${gap.toFixed(1)}pt</b>——分数越高、上涨概率越大，打分区分度有效。</div>`;
+  }
+  if (gap <= 0) {
+    return `<div class="banner warn">⚠️ 校准偏差：最高分档上涨概率仅 <b>${high.up_rate}%</b>，并未高于最低分档 <b>${low.up_rate}%</b>（分差 ${gap.toFixed(1)}pt）。说明<b>高分并不代表更高的上涨概率</b>，建议收紧高分的使用、或在打分前回看高分档的历史表现。</div>`;
+  }
+  return `<div class="banner info">校准偏弱：最高分档比最低分档高 <b>${gap.toFixed(1)}pt</b>，区分度有限。可结合「依据标签胜率」找出更可靠的判断依据。</div>`;
+}
+
+/* ── 标签胜率 ── */
+function renderTags() {
+  const tb = document.querySelector("#tagTable tbody");
+  const rows = stats.tags || [];
+  if (!rows.length) {
+    tb.innerHTML = '<tr><td colspan="5" class="desc">暂无依据标签数据——在打分时勾选「研判依据」后即可统计。</td></tr>';
+    return;
+  }
+  tb.innerHTML = rows.map(t => {
+    const ref = t.samples >= 5
+      ? (t.hit_rate >= 60 ? "较可靠" : t.hit_rate >= 40 ? "中性" : "需警惕")
+      : "样本少";
+    const rc = t.samples >= 5 ? (t.hit_rate >= 60 ? "var(--up)" : t.hit_rate >= 40 ? "#868e96" : "var(--down)") : "var(--muted)";
+    return `<tr>
+      <td><span class="tag">${esc(t.tag)}</span></td>
+      <td class="num">${t.samples}</td>
+      <td class="num">${t.hits}</td>
+      <td class="num" style="color:${rc}">${pct(t.hit_rate)}</td>
+      <td style="color:${rc}">${ref}</td>
+    </tr>`;
+  }).join("");
+}
+
+/* ── 研判日志 ── */
+async function loadJournal() {
+  journal = await getJSON(`${API}/journal?days=${cfg.days}&target=${cfg.target}&horizon=${cfg.horizon}`);
+  const box = document.getElementById("journal");
+  document.getElementById("journalDesc").innerHTML =
+    `近 ${journal.days} 天共 <b>${journal.total}</b> 天有研判，其中 <b>${journal.pending}</b> 天待验证（T+${journal.horizon} 尚未到期）。`;
+
+  if (!journal.items.length) {
+    box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news">消息面评估</a> 页完成打分；若想补录历史研判，可在该页填写并指定日期。</div>`;
+    return;
+  }
+  box.innerHTML = journal.items.map(renderDay).join("");
+}
+
+function renderDay(d) {
+  const primary = (d.outcomes || []).find(o => o.horizon === journal.horizon) || {};
+  const cls = primary.status === "hit" ? "hit" : primary.status === "miss" ? "miss" : "pending";
+  const badge = primary.status === "hit"
+    ? `<span class="dir-tag" style="background:var(--up)">✅ 命中</span>`
+    : primary.status === "miss"
+      ? `<span class="dir-tag" style="background:var(--down)">❌ 偏离</span>`
+      : `<span class="dir-tag" style="background:#adb5bd">⏳ 待验证</span>`;
+
+  const slots = (d.slots || []).map(s => `
+    <div class="slot-line">
+      <span class="n">第 ${s.slot} 次</span>
+      <span class="v" style="color:${dirColor(s.direction)}">${Number(s.score).toFixed(0)}</span>
+      <span style="color:${dirColor(s.direction)}">${dirTxt(s.direction)}</span>
+      ${s.backfilled ? '<span class="tag" style="background:#fff4e5;color:#b26a00">补录</span>' : ""}
+      ${(s.basis || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
+      ${s.notes ? `<span style="color:#6b7280">· ${esc(s.notes)}</span>` : ""}
+    </div>`).join("");
+
+  const outcomes = (d.outcomes || []).map(o => {
+    const mark = o.status === "hit" ? "✅" : o.status === "miss" ? "❌" : "⏳";
+    const txt = o.status === "pending"
+      ? `<span style="color:var(--muted)">${esc(o.label)}</span>`
+      : `<b style="color:${chgColor(o.change_pct)}">${signed(o.change_pct)}</b>`;
+    return `<div class="row"><span>T+${o.horizon} 交易日 ${mark}</span><span>${esc(o.date || "—")} ${txt}</span></div>`;
+  }).join("");
+
+  return `<div class="day ${cls}">
+    <div class="day-hd">
+      <span class="d">${d.score_date}</span>
+      <span class="w">${esc(d.weekday)}</span>
+      ${d.backfilled ? '<span class="tag" style="background:#fff4e5;color:#b26a00">含补录 · 不计入统计</span>' : ""}
+      ${badge}
+      <span class="sc" style="color:${dirColor(d.direction)}">${Number(d.effective_score).toFixed(1)}</span>
+    </div>
+    <div class="day-body">
+      <div class="day-left">
+        ${d.formula ? `<div class="lbl">加权口径</div><div class="txt" style="font-family:ui-monospace,Consolas,monospace">${esc(d.formula)} = ${Number(d.effective_score).toFixed(1)}</div>` : ""}
+        <div class="lbl">分次明细</div>
+        <div class="slots">${slots || '<div class="desc">—</div>'}</div>
+        ${d.basis && d.basis.length ? `<div class="lbl">当日研判依据</div><div class="txt"><div class="chips">${d.basis.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div></div>` : ""}
+        ${d.notes ? `<div class="lbl">研判备注</div><div class="txt">${esc(d.notes)}</div>` : ""}
+        ${d.review_note ? `<div class="lbl">复盘批注</div><div class="txt">${esc(d.review_note)}</div>` : ""}
+      </div>
+      <div>
+        <div class="outcome">
+          <div class="row"><span style="color:var(--muted)">基准收盘</span><span><b>${d.price_close == null ? "—" : Number(d.price_close).toFixed(2)}</b> ${esc(d.price_date || "")}</span></div>
+          ${outcomes}
+          <div class="row" style="border-top:1px solid var(--border);margin-top:6px;padding-top:7px">
+            <span style="color:var(--muted)">判定</span><span style="font-size:12px">${esc(primary.label || "—")}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ── 动作 ── */
+async function backfill() {
+  const btn = document.getElementById("btnBackfill");
+  btn.disabled = true; btn.textContent = "⏳ 回填中…";
+  try {
+    const r = await fetch(`${API}/backfill?days=120&target=${cfg.target}`, { method: "POST" });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "HTTP " + r.status);
+    const d = await r.json();
+    document.getElementById("ctlMsg").innerHTML =
+      `✅ 已回填 <b>${d.written}</b> 条（${d.start_date} ~ ${d.end_date}，来源 ${esc(d.source)}），价格日历现有 <b>${d.price_days}</b> 个交易日。`;
+    await loadMeta();
+    await reload();
+  } catch (e) {
+    document.getElementById("ctlMsg").innerHTML = `<span style="color:var(--up)">回填失败：${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "📥 回填历史金价";
+  }
+}
+
+async function reload() {
+  cfg.target = document.getElementById("selTarget").value || cfg.target;
+  cfg.horizon = parseInt(document.getElementById("selHorizon").value || cfg.horizon);
+  cfg.days = parseInt(document.getElementById("selDays").value || cfg.days);
+  try {
+    await loadStats();
+    renderTags();
+    await loadJournal();
+  } catch (e) {
+    document.getElementById("statBanner").innerHTML =
+      `<div class="banner warn">加载失败：${esc(e.message)}</div>`;
+  }
+}
+
+["selTarget", "selHorizon", "selDays"].forEach(id => {
+  document.getElementById(id).addEventListener("change", reload);
+});
+
+(async function init() {
+  try {
+    await loadMeta();
+    await reload();
+  } catch (e) {
+    document.getElementById("statBanner").innerHTML =
+      `<div class="banner warn">初始化失败：${esc(e.message)}</div>`;
+  }
+})();
+</script>
+<script src="/static/freshness.js"></script>
+<script src="/static/account.js"></script>
+</body>
+</html>

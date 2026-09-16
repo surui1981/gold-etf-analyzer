@@ -255,7 +255,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.65.0",
+    version="0.66.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
@@ -296,6 +296,12 @@ async def weights_page() -> RedirectResponse:
 async def news_page() -> RedirectResponse:
     """消息面评估页（客户打分）。"""
     return RedirectResponse("/static/news.html")
+
+
+@app.get("/review", include_in_schema=False)
+async def review_page() -> RedirectResponse:
+    """研判复盘页（按日期归档研判 + 次日金价对比 + 准确率统计）。"""
+    return RedirectResponse("/static/review.html")
 
 
 @app.get("/central-bank", include_in_schema=False)
