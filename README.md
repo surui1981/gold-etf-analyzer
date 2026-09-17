@@ -6,6 +6,7 @@
 
 > 📖 完整说明文档（架构 / API 参考 / 核心模型 / 改进计划）：[docs/application-guide.md](docs/application-guide.md)
 > 🧭 易用性改善路径（现状评估 + P0-P3 改善方案与版本规划）：[docs/improvement-path.md](docs/improvement-path.md)
+> 🎨 UX 与应用能力路线（V0.68.0 → V0.75.0，导航 / 主题 / a11y / i18n / 自定义 / 多用户）：[docs/ux-roadmap.md](docs/ux-roadmap.md)
 > ✅ README ↔ 代码 ↔ 文档三方对账报告（已落实 / 待完善）：[docs/feature-alignment.md](docs/feature-alignment.md)
 
 ## 快速开始

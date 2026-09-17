@@ -4,6 +4,7 @@
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
+> 相关文档：[README](../README.md) · [improvement-path（工程路线）](./improvement-path.md) · **[ux-roadmap（应用 / UX 路线，V0.68.0 → V0.75.0）](./ux-roadmap.md)** · [feature-alignment（对账）](./feature-alignment.md)
 
 ---
 
