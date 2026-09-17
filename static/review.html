@@ -435,5 +435,9 @@ async function reload() {
 </script>
 <script src="/static/freshness.js"></script>
 <script src="/static/account.js"></script>
+  <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->
+  <script src="/static/telemetry.js" defer></script>
+  <script src="/static/nav-drawer.js" defer></script>
+  <script src="/static/command-palette.js" defer></script>
 </body>
 </html>

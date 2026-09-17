@@ -1,6 +1,6 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-16 ｜ 适用版本：**V0.67.0**
+> 生成日期：2026-09-18 ｜ 适用版本：**V0.68.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
@@ -36,10 +36,11 @@
 | **消息面每日 3 次打分** | `models/news.py` `slot`(1-3) / `scored_at` + `(score_date, slot)` 复合唯一；`services/news.py` 自动占位 + `Σ(i×scoreᵢ)/Σi` 加权 + 用尽拦截（400）+ 显式覆盖修正；`DELETE /news-score/{slot}` + `GET /news-score/history`；`static/news.html` 三槽位卡片 + 加权算式面板 | ✅（V0.65.0） |
 | **研判复盘与准确率校准** | `models/review.py`（`gold_price_daily`）+ `repositories/review.py`（`upsert_many` 合并后重算涨跌幅 + V0.67.0 schema 校验）+ `services/review.py`（`backfill` / `journal` / `stats` / `hint_for_score`）+ 6 个 review 接口 + `static/review.html`；`news_scores.basis` / `review_note` / `backfilled` | ✅（V0.66.0） |
 | **框架基础补齐（CI/CD + trace_id + 价格校验）** | `app/middleware/trace.py` `TraceIdMiddleware`（纯 ASGI，X-Request-ID 入站沿用 / UUIDv4 自动生成 / 响应头回写 / contextvars 注入）+ `utils/logger.py` 自动附加 trace_id；`repositories/review.py` `upsert_many` schema 校验（`close > 0` 含 NaN 检测 / `source` 白名单 / 单日涨跌幅 ±50% 跳过）；`.github/workflows/ci.yml` Python 3.11/3.12 matrix + uv 缓存 + concurrency | ✅（V0.67.0） |
+| **导航折叠 + 全局搜索 + 客户端埋点底座** | 后端 `models/telemetry.py` `TelemetryEvent`（append-only + `(event_type, created_at)` 复合索引）+ `repositories/telemetry.py` + `services/telemetry.py`（白名单 10 类事件 + page `/` 开头校验 + payload ≤50 字段）+ `api/v1/endpoints/telemetry.py`（`POST /ingest` + `GET /stats?days=N`，trace_id 透传）+ 迁移 `b7c5d9e3f1a2`；前端 `static/telemetry.js`（sendBeacon 批量 + visibilitychange / pagehide / error 兜底 + localStorage 会话）+ `static/nav-drawer.js`（自注入 CSS + 汉堡按钮 + 抽屉 + 遮罩，≤768px 自动折叠）+ `static/command-palette.js`（⌘K 唤起 + 13 命令 + ↑↓/Enter/Esc + pm-range-change / pm-theme-change CustomEvent）；7 页统一注入 | ✅（V0.68.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **454 用例 / 38 个测试模块**。纵向演变：V0.64.0 = 397 → **V0.65.0 = 410**（新增 `test_api/test_news_api.py` 7 例 + 重写 `test_news_service.py` 5 → 11 例，净 +13）→ **V0.66.0 = 432**（新增 `test_services/test_review_service.py` 13 例 + `test_api/test_review_api.py` 9 例，净 +22）→ **V0.67.0 = 454**（新增 `test_middleware/test_trace_id.py` 8 例 + `test_services/test_price_calendar_validation.py` 12 例 + `test_utils/test_logger_trace_id.py` 2 例，净 +22）。
+**测试数对账**：`pytest --collect-only -q` = **468 用例 / 40 个测试模块**。纵向演变：V0.64.0 = 397 → **V0.65.0 = 410**（新增 `test_api/test_news_api.py` 7 例 + 重写 `test_news_service.py` 5 → 11 例，净 +13）→ **V0.66.0 = 432**（新增 `test_services/test_review_service.py` 13 例 + `test_api/test_review_api.py` 9 例，净 +22）→ **V0.67.0 = 454**（新增 `test_middleware/test_trace_id.py` 8 例 + `test_services/test_price_calendar_validation.py` 12 例 + `test_utils/test_logger_trace_id.py` 2 例，净 +22）→ **V0.68.0 = 468**（新增 `test_services/test_telemetry_service.py` 9 例 + `test_api/test_telemetry_api.py` 5 例，净 +14）。
 
-**V0.67.0 回归实测**：① 离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件共 **44** 用例）= **410 passed / 0 failed**（2m32s）；② `ruff check src tests` = **All checks passed**；③ `ruff format --check src tests` = **128 files already formatted**；④ `python scripts/check_static_js.py` = **7 静态页 + 3 共享脚本全部通过**（语法 / 引用 / DOM id）。
+**V0.68.0 回归实测**：① `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件共 44 用例）= **424 passed / 0 failed**（3m49s）；② `ruff check src tests` = **All checks passed**；③ `python scripts/check_static_js.py` = **7 静态页 + 6 共享脚本全部通过**（语法 / 引用 / DOM id；新增 telemetry.js / nav-drawer.js / command-palette.js 三个共享脚本）。
 
 ---
 
@@ -100,6 +101,7 @@
 | **消息面 3 次打分** | （非路线图项，由缺陷排查延伸） | ✅ V0.65.0 | ✅ 槽位模型 + 1:2:3 加权 + 撤销 + 历史 | ✅ |
 | **6.11** | **研判复盘与准确率校准** | ✅ V0.66.0（新增项） | ✅ `/review` 页 + 6 个接口 + 金价日历 + 命中率/校准曲线/标签胜率 | ✅ |
 | **6.12** | **框架基础补齐（CI/CD + trace_id + 价格校验）** | ✅ V0.67.0（新增项） | ✅ `.github/workflows/ci.yml` + `app/middleware/trace.py` + `repositories/review.py` schema 校验 + 22 个新测试 | ✅ |
+| **6.13** | **导航折叠 + 全局搜索 + 客户端埋点底座** | ✅ V0.68.0（新增项） | ✅ `nav-drawer.js`（≤768px 汉堡抽屉，自注入不改 HTML）+ `command-palette.js`（⌘K / Ctrl+K，13 命令：7 页导航 + 刷新 + 时间区间 1D/5D/1M + 主题切换预埋 + 帮助重看）+ `telemetry.js`（sendBeacon 批量 + visibilitychange / pagehide / error 兜底 + localStorage 会话）+ `telemetry_events` 表（append-only，复合索引 `(event_type, created_at)`）+ 2 个 telemetry 接口 + 7 页统一注入 + 14 个新测试 | ✅ |
 
 ---
 
@@ -149,6 +151,7 @@
 | 🟢 低 | UX 6.7 剩余项（权重参数回测） | 1-2d | 收益曲线 V0.61.0 + 指数曲线 V0.63.0 + 周/月线 V0.64.0 均已落地；**仅剩权重参数回测**，依赖回测引擎（P3 #13） |
 | 🟡 中 | 复盘统计样本积累（V0.66.0 能力已就绪） | 持续 | 金价回填受行情源限制最深约 60 个交易日（2026-06-25 起）；统计页在样本 <20 天前标注「仅供参考」；补录样本按设计**不计入**命中率 |
 | 🟢 已闭环 | **工程路线 §三·五 + UX 路线双视图** | ✅ 2026-09-18 | 新增 [`docs/ux-roadmap.md`](ux-roadmap.md) —— 面向应用能力 + 用户体验的下一阶段路线（V0.68.0 → V0.75.0，8 版本）；与 [`improvement-path.md §三·五`](improvement-path.md) 工程路线（CI / 可观测 / 部署）形成「应用 vs 工程」双视图；重叠版本（V0.68.0 / V0.69.0 / V0.71.0 / V0.72.0）在两文档 cross-link；仅 UX 视角独有的 4 版（V0.70.0 共振卡片 / V0.73.0 i18n / V0.74.0 仪表盘自定义 / V0.75.0 多用户登录）填补 §三·五 空白 |
+| 🟢 已闭环 | **UX 路线 V0.68.0 启动版（导航 + 搜索 + 埋点）落地** | ✅ 2026-09-18 | V0.68.0 实际交付 UX 路线第一版（而非原 §三·五 计划的 Prometheus + SW + 一致性 + 性能基准）—— 决策原因已在 `improvement-path.md §三·五 V0.68.0` 顶部标注；原计划项顺延到 V0.68.1 微版本或 V0.69.0 合并；UX 6.13 由 📋 升 ✅ |
 
 ---
 

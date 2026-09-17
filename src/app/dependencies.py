@@ -17,6 +17,7 @@ from app.repositories.position import PositionRepository
 from app.repositories.review import GoldPriceRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
+from app.repositories.telemetry import TelemetryRepository
 from app.services.account import AccountService
 from app.services.analysis import AnalysisService
 from app.services.central_bank import CentralBankService
@@ -30,6 +31,7 @@ from app.services.review import ReviewService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
 from app.services.snapshot import DailySnapshotService
+from app.services.telemetry import TelemetryService
 from app.services.trades import TradeHistoryService
 from app.services.trend import TrendService
 
@@ -239,3 +241,20 @@ def get_freshness_service(
 ) -> FreshnessService:
     """数据时效服务依赖（行情仓储的采集元信息 + 交易时段）。"""
     return FreshnessService(repo=repo)
+
+
+# V0.68.0 —— 前端埋点（白名单校验 + append-only 入库）
+
+
+async def get_telemetry_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> TelemetryRepository:
+    """埋点事件仓储依赖。"""
+    return TelemetryRepository(session)
+
+
+def get_telemetry_service(
+    repo: TelemetryRepository = Depends(get_telemetry_repository),
+) -> TelemetryService:
+    """埋点业务编排服务依赖。"""
+    return TelemetryService(repo=repo)
