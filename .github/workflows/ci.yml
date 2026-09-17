@@ -1,0 +1,84 @@
+# GitHub Actions CI · gold-etf-analyzer
+# V0.67.0 P0：首次为项目引入自动化质量门禁
+#
+# 触发：push / pull_request 到 main
+# 内容：
+#   1. ruff 静态检查（lint + format --check）
+#   2. pytest 全量回归（默认排除 2 个联网 fetcher 文件，避免 CI 网络抖动阻塞）
+#   3. check_static_js.py 前端内联 JS 门禁（项目无构建步骤，必须另设关卡）
+#
+# 设计要点：
+#   - Python matrix 3.11 / 3.12（pyproject 要求 >=3.11）
+#   - uv 缓存（~/.cache/uv + .venv）跨 job 复用
+#   - ruff 版本由 pyproject.lock 决定，不在 CI 硬锁
+#   - pytest 加 -p no:cacheprovider（CI 不需要 .pytest_cache）
+#   - 不跑联网 fetcher 文件（irfcl / h15），由 main 分支 nightly job 单独跑（TODO V0.67.x）
+#
+# 自定义：在 PR 描述里写「Closes #N」可关联 issue（项目未来启用 Issues 后生效）
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# 取消同分支重复触发的旧 run（PR push 频繁时省 CI 分钟）
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: ruff + JS gate + pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false  # matrix 任一失败不全停，方便定位哪个版本坏
+      matrix:
+          python-version: ["3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-dependency-glob: |
+            uv.lock
+            pyproject.toml
+
+      - name: Install system deps (gcc for aiosqlite)
+        run: sudo apt-get update -qq && sudo apt-get install -yqq build-essential
+
+      - name: Install Python deps (with dev)
+        run: uv sync --frozen --extra dev
+
+      - name: ruff lint
+        run: uv run ruff check src tests
+
+      - name: ruff format check
+        run: uv run ruff format --check src tests
+
+      - name: pytest (offline regression, exclude network fetchers)
+        run: |
+          uv run pytest -q \
+            --tb=short \
+            -p no:cacheprovider \
+            --ignore=tests/test_services/test_irfcl_fetcher.py \
+            --ignore=tests/test_services/test_h15_fetcher.py
+
+      - name: Frontend inline JS gate
+        run: uv run python scripts/check_static_js.py
+
+      - name: Upload pytest junit (失败时方便定位)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pytest-results-py${{ matrix.python-version }}
+          path: .pytest_results/
+          if-no-files-found: ignore
+          retention-days: 7
