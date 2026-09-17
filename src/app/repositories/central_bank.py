@@ -72,9 +72,8 @@ class CentralBankPurchaseRepository:
 
     async def list_all(self) -> list[CentralBankPurchase]:
         """全部记录，按 quarter 倒序 + country_iso 正序。"""
-        stmt = (
-            select(CentralBankPurchase)
-            .order_by(desc(CentralBankPurchase.quarter), CentralBankPurchase.country_iso)
+        stmt = select(CentralBankPurchase).order_by(
+            desc(CentralBankPurchase.quarter), CentralBankPurchase.country_iso
         )
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
@@ -102,9 +101,9 @@ class CentralBankPurchaseRepository:
 
     async def latest_quarter(self) -> str | None:
         """最新数据季度（字符串）。"""
-        stmt = select(CentralBankPurchase.quarter).order_by(
-            desc(CentralBankPurchase.quarter)
-        ).limit(1)
+        stmt = (
+            select(CentralBankPurchase.quarter).order_by(desc(CentralBankPurchase.quarter)).limit(1)
+        )
         result = await self._session.execute(stmt)
         row = result.scalar_one_or_none()
         return row

@@ -102,7 +102,9 @@ _CACHE: dict = {}
 _CACHE_LOCK = threading.Lock()
 
 # 手工补丁路径
-_OVERRIDES_PATH = Path(__file__).resolve().parents[3] / "data" / "central_bank_manual_overrides.json"
+_OVERRIDES_PATH = (
+    Path(__file__).resolve().parents[3] / "data" / "central_bank_manual_overrides.json"
+)
 
 
 @dataclass(frozen=True)
@@ -212,7 +214,7 @@ def _parse_chart_series(chart_js: str) -> tuple[list[str], dict[str, list[float]
         values: list[float] = []
         for v in re.split(r",\s*", values_str):
             v = v.strip()
-            if v in ('"null"', 'null', 'Null'):
+            if v in ('"null"', "null", "Null"):
                 values.append(0.0)
             else:
                 try:
@@ -305,8 +307,11 @@ def _iso_for_country(name: str) -> str:
         "Kyrgyz Republic": "KGZ",
         "Slovenia, Republic of": "SVN",
         "Egypt, Arab Republic of": "EGY",
-        "India": "IND", "Qatar": "QAT", "Iraq": "IRQ",
-        "Brazil": "BRA", "Czech Republic": "CZE",
+        "India": "IND",
+        "Qatar": "QAT",
+        "Iraq": "IRQ",
+        "Brazil": "BRA",
+        "Czech Republic": "CZE",
         "Türkiye, Republic of": "TUR",
         "China, People's Republic of": "CHN",
         "Kazakhstan, Republic of": "KAZ",
@@ -326,7 +331,9 @@ def fetch_global_quarterly_aggregate() -> list[QuarterlyPurchase]:
     返回 13×4 = 52 行，country_iso="WGC_AGGR"。
     """
     charts = _fetch_report_charts(2026, "q2")
-    c8 = _find_country_chart(charts, "central bank buying rebounded") or _find_country_chart(charts, "Quarterly central bank")
+    c8 = _find_country_chart(charts, "central bank buying rebounded") or _find_country_chart(
+        charts, "Quarterly central bank"
+    )
     if c8 is None:
         # fallback：找标题含 "tonnes" 的第一个 chart
         c8 = next((c for c in charts if "tonnes" in c["title"].lower()), None)
@@ -373,7 +380,9 @@ def fetch_h1_2026_by_country() -> list[QuarterlyPurchase]:
     H1 = Q1 + Q2，按全球合计 Q1/Q2 比例拆分（避免只存合计 H1）。
     """
     charts = _fetch_report_charts(2026, "q2")
-    c9 = _find_country_chart(charts, "poland in pole position") or _find_country_chart(charts, "y-t-d reported central bank")
+    c9 = _find_country_chart(charts, "poland in pole position") or _find_country_chart(
+        charts, "y-t-d reported central bank"
+    )
     if c9 is None:
         logger.warning("WGC Q2 2026 未找到 Chart 9 (by country)")
         return []
@@ -478,8 +487,11 @@ def load_manual_overrides() -> list[QuarterlyPurchase]:
     return results
 
 
-async def build_full_dataset(start: str = "2020-01", end: str | None = None) -> list[QuarterlyPurchase]:
+async def build_full_dataset(
+    start: str = "2020-01", end: str | None = None
+) -> list[QuarterlyPurchase]:
     """编排：拉 WGC Chart 8（全球季度合计）+ Chart 9（H1 2026 按国家）+ 手工补丁。"""
+
     def _fetch_all():
         items: list[QuarterlyPurchase] = []
         items.extend(fetch_global_quarterly_aggregate())

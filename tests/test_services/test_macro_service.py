@@ -39,6 +39,7 @@ def test_positive_correlation_mapping() -> None:
 
 async def test_macro_evaluate(monkeypatch) -> None:
     """指数合成：5 因子、分数与方向、贡献求和（绕过 TTL 缓存直接测合成逻辑）。"""
+
     async def fake_collect(self):
         return {
             "dxy": (96.5, "2026-08-28", "静态参考值"),
@@ -53,7 +54,11 @@ async def test_macro_evaluate(monkeypatch) -> None:
 
     assert len(out.factors) == 5
     assert 0 <= out.score <= 100
-    assert out.direction in (DirectionSignal.BULLISH, DirectionSignal.BEARISH, DirectionSignal.NEUTRAL)
+    assert out.direction in (
+        DirectionSignal.BULLISH,
+        DirectionSignal.BEARISH,
+        DirectionSignal.NEUTRAL,
+    )
     assert sum(f.contribution for f in out.factors) == pytest.approx(out.score, abs=0.5)
     assert all(0 <= f.score <= 100 for f in out.factors)
     # 美债 4.4% → 友好度 10（偏利空）
@@ -69,9 +74,7 @@ async def test_macro_evaluate(monkeypatch) -> None:
     assert "Q2 2026" in cb.source  # 数据源含 WGC 季度报告标识
 
 
-async def test_macro_evaluate_cb_gold_uses_central_bank_service(
-    monkeypatch, db_session
-) -> None:
+async def test_macro_evaluate_cb_gold_uses_central_bank_service(monkeypatch, db_session) -> None:
     """注入 CentralBankService 后，cb_gold 从 central_bank_purchases 表自动计算（不依赖 STATIC_REF）。"""
     from datetime import date
 
@@ -88,8 +91,12 @@ async def test_macro_evaluate_cb_gold_uses_central_bank_service(
     ]:
         db_session.add(
             CentralBankPurchase(
-                country_iso="CHN", country_name="中国", quarter=q,
-                tonnes_net=t, source="IMF IRFCL", data_date=date(2026, 6, 30),
+                country_iso="CHN",
+                country_name="中国",
+                quarter=q,
+                tonnes_net=t,
+                source="IMF IRFCL",
+                data_date=date(2026, 6, 30),
             )
         )
     await db_session.commit()
@@ -101,13 +108,14 @@ async def test_macro_evaluate_cb_gold_uses_central_bank_service(
     # 避免真实抓 H.15：monkeypatch 美债拉取
     async def fake_ust():
         from app.repositories.market_data import USTYield
+
         return USTYield(us10y=4.4, us30y=4.9, data_date=date(2026, 8, 28))
-    monkeypatch.setattr(
-        "app.repositories.market_data.fetch_us_treasury_h15", fake_ust
-    )
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
 
     # 绕过 10min TTL 缓存
     from app.services.macro import _CACHE
+
     _CACHE.update(ts=0.0, result=None)
 
     out = await svc.evaluate()
@@ -119,20 +127,20 @@ async def test_macro_evaluate_cb_gold_uses_central_bank_service(
     assert cb.direction == DirectionSignal.BULLISH
 
 
-async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(
-    monkeypatch, db_session
-) -> None:
+async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(monkeypatch, db_session) -> None:
     """未注入 CentralBankService 时，cb_gold 回退 STATIC_REF 硬编码值（保证系统永远有值）。"""
+
     async def fake_ust():
         from datetime import date
 
         from app.repositories.market_data import USTYield
+
         return USTYield(us10y=4.4, us30y=4.9, data_date=date(2026, 8, 28))
-    monkeypatch.setattr(
-        "app.repositories.market_data.fetch_us_treasury_h15", fake_ust
-    )
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
 
     from app.services.macro import _CACHE
+
     _CACHE.update(ts=0.0, result=None)
 
     # 不传 central_bank

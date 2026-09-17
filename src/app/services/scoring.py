@@ -158,8 +158,7 @@ class OpportunityScoringService:
         """生成一句话结论。"""
         if score >= 70:
             return (
-                f"综合评分 {score:.1f}/100：宏观环境显著利多黄金，"
-                "处于强机会窗口，可积极布局黄金ETF"
+                f"综合评分 {score:.1f}/100：宏观环境显著利多黄金，处于强机会窗口，可积极布局黄金ETF"
             )
         if score >= 55:
             return f"综合评分 {score:.1f}/100：中等机会窗口，建议逢低分批配置黄金ETF"

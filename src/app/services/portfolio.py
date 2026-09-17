@@ -100,10 +100,15 @@ class PortfolioAnalyticsService:
                     cost -= avg * sq
                     qty -= sq
                     sells.append((pnl, t.traded_at))
-            daily.append({
-                "date": day, "qty": qty, "cost": cost,
-                "realized": realized, "invested": invested,
-            })
+            daily.append(
+                {
+                    "date": day,
+                    "qty": qty,
+                    "cost": cost,
+                    "realized": realized,
+                    "invested": invested,
+                }
+            )
         return daily, sells
 
     @staticmethod
@@ -131,9 +136,7 @@ class PortfolioAnalyticsService:
         return sorted(price_map), price_map
 
     # ───────────────────────── 收益曲线 ─────────────────────────
-    async def equity_curve(
-        self, days: int = 90, account_id: int | None = None
-    ) -> EquityCurveOut:
+    async def equity_curve(self, days: int = 90, account_id: int | None = None) -> EquityCurveOut:
         """回放重建每日收益曲线（持有份数 / 成本 / 市值 / 累计收益率）。
 
         Args:
@@ -163,17 +166,19 @@ class PortfolioAnalyticsService:
             unrealized = market_value - st["cost"]
             total = st["realized"] + unrealized
             ret = (total / st["invested"] * 100) if st["invested"] else 0.0
-            points_all.append(EquityPoint(
-                date=st["date"].isoformat(),
-                price=round(price, 3),
-                quantity=round(st["qty"], 2),
-                cost=round(st["cost"], 2),
-                market_value=round(market_value, 2),
-                realized_pnl=round(st["realized"], 2),
-                unrealized_pnl=round(unrealized, 2),
-                total_pnl=round(total, 2),
-                return_pct=round(ret, 2),
-            ))
+            points_all.append(
+                EquityPoint(
+                    date=st["date"].isoformat(),
+                    price=round(price, 3),
+                    quantity=round(st["qty"], 2),
+                    cost=round(st["cost"], 2),
+                    market_value=round(market_value, 2),
+                    realized_pnl=round(st["realized"], 2),
+                    unrealized_pnl=round(unrealized, 2),
+                    total_pnl=round(total, 2),
+                    return_pct=round(ret, 2),
+                )
+            )
 
         # 只展示最近 days 个自然日（回放成本已含更早交易）
         if points_all:
@@ -203,7 +208,9 @@ class PortfolioAnalyticsService:
         )
         logger.info(
             "Equity curve: %s points, latest %+.2f%%, maxDD %.2f%%",
-            len(points), summary.latest_return_pct, summary.max_drawdown_pct,
+            len(points),
+            summary.latest_return_pct,
+            summary.max_drawdown_pct,
         )
         return EquityCurveOut(days=days, points=points, summary=summary)
 
@@ -223,7 +230,7 @@ class PortfolioAnalyticsService:
         if not trades and not positions:
             return PerformanceOut(
                 summary="暂无交易记录。记录第一笔买入后，这里会给出已实现盈亏、胜率、"
-                        "盈亏比与持仓天数分析，帮助你复盘每一笔决策。",
+                "盈亏比与持仓天数分析，帮助你复盘每一笔决策。",
             )
 
         price_dates, price_map = await self._prices(30)
@@ -286,7 +293,10 @@ class PortfolioAnalyticsService:
         out.summary = self._summarize(out, len(positions))
         logger.info(
             "Performance: total %+.2f (%+.2f%%), realized %+.2f, trades=%s",
-            out.total_pnl, out.total_return_pct, out.realized_pnl, closed_trades,
+            out.total_pnl,
+            out.total_return_pct,
+            out.realized_pnl,
+            closed_trades,
         )
         return out
 

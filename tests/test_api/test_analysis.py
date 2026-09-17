@@ -25,9 +25,7 @@ async def test_evaluate_opportunity_returns_score(client: AsyncClient) -> None:
     assert body["record_id"] is not None
     assert len(body["factors"]) == 5
     # 因子明细含方向字段，供前端红绿着色区分利多/利空
-    assert all(
-        f["direction"] in {"bullish", "bearish", "neutral"} for f in body["factors"]
-    )
+    assert all(f["direction"] in {"bullish", "bearish", "neutral"} for f in body["factors"])
 
 
 async def test_history_after_evaluation(client: AsyncClient) -> None:

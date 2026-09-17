@@ -110,26 +110,53 @@ def ny_gold_session(now: datetime | None = None) -> MarketSession:
     market, name = "ny", "纽约金（COMEX GC）"
 
     if wd == 5:  # 周六
-        return _session(market, name, SessionState.CLOSED, windows,
-                        "周日 18:00（美东）开盘", "周末休市，最新价为上一交易日收盘静态价")
+        return _session(
+            market,
+            name,
+            SessionState.CLOSED,
+            windows,
+            "周日 18:00（美东）开盘",
+            "周末休市，最新价为上一交易日收盘静态价",
+        )
     if wd == 6:  # 周日
         if t >= time(18, 0):
-            return _session(market, name, SessionState.OPEN, windows,
-                            "周五 17:00（美东）收盘", "新交易周已开盘")
-        return _session(market, name, SessionState.PRE, windows,
-                        "今日 18:00（美东）开盘", "周末休市，等待开盘")
+            return _session(
+                market, name, SessionState.OPEN, windows, "周五 17:00（美东）收盘", "新交易周已开盘"
+            )
+        return _session(
+            market, name, SessionState.PRE, windows, "今日 18:00（美东）开盘", "周末休市，等待开盘"
+        )
     if wd == 4:  # 周五
         if t < time(17, 0):
-            return _session(market, name, SessionState.OPEN, windows,
-                            "今日 17:00（美东）进入周末休市", "交易中，临近周末收盘")
-        return _session(market, name, SessionState.CLOSED, windows,
-                        "周日 18:00（美东）开盘", "周末休市，最新价为收盘静态价")
+            return _session(
+                market,
+                name,
+                SessionState.OPEN,
+                windows,
+                "今日 17:00（美东）进入周末休市",
+                "交易中，临近周末收盘",
+            )
+        return _session(
+            market,
+            name,
+            SessionState.CLOSED,
+            windows,
+            "周日 18:00（美东）开盘",
+            "周末休市，最新价为收盘静态价",
+        )
     # 周一~周四
     if time(17, 0) <= t < time(18, 0):
-        return _session(market, name, SessionState.BREAK, windows,
-                        "今日 18:00（美东）恢复交易", "每日结算间歇，报价短暂停更")
-    return _session(market, name, SessionState.OPEN, windows,
-                    "次日 17:00（美东）结算间歇", "交易中")
+        return _session(
+            market,
+            name,
+            SessionState.BREAK,
+            windows,
+            "今日 18:00（美东）恢复交易",
+            "每日结算间歇，报价短暂停更",
+        )
+    return _session(
+        market, name, SessionState.OPEN, windows, "次日 17:00（美东）结算间歇", "交易中"
+    )
 
 
 def sge_session(now: datetime | None = None) -> MarketSession:
@@ -152,38 +179,54 @@ def sge_session(now: datetime | None = None) -> MarketSession:
     market, name = "sge", "上海金（SGE Au99.99）"
 
     if wd >= 5:  # 周末
-        return _session(market, name, SessionState.CLOSED, windows,
-                        "周一 09:00 开盘", "周末休市")
+        return _session(market, name, SessionState.CLOSED, windows, "周一 09:00 开盘", "周末休市")
     if t < time(2, 30):
         # 凌晨 00:00-02:30 属前一交易日夜盘延续（周二至周五凌晨有夜盘）
         if wd >= 1:
-            return _session(market, name, SessionState.OPEN, windows,
-                            "今日 02:30 夜盘结束", "夜盘交易中（前一交易日夜盘延续）")
-        return _session(market, name, SessionState.PRE, windows,
-                        "今日 09:00 早盘开盘", "周一凌晨无夜盘，等待早盘")
+            return _session(
+                market,
+                name,
+                SessionState.OPEN,
+                windows,
+                "今日 02:30 夜盘结束",
+                "夜盘交易中（前一交易日夜盘延续）",
+            )
+        return _session(
+            market,
+            name,
+            SessionState.PRE,
+            windows,
+            "今日 09:00 早盘开盘",
+            "周一凌晨无夜盘，等待早盘",
+        )
     if t < time(9, 0):
-        return _session(market, name, SessionState.PRE, windows,
-                        "今日 09:00 早盘开盘", "盘前")
+        return _session(market, name, SessionState.PRE, windows, "今日 09:00 早盘开盘", "盘前")
     if t < time(11, 30):
-        return _session(market, name, SessionState.OPEN, windows,
-                        "11:30 早盘收市", "早盘交易中")
+        return _session(market, name, SessionState.OPEN, windows, "11:30 早盘收市", "早盘交易中")
     if t < time(13, 30):
-        return _session(market, name, SessionState.BREAK, windows,
-                        "13:30 午盘开盘", "午间休市")
+        return _session(market, name, SessionState.BREAK, windows, "13:30 午盘开盘", "午间休市")
     if t < time(15, 30):
-        return _session(market, name, SessionState.OPEN, windows,
-                        "15:30 日盘收市", "午盘交易中")
+        return _session(market, name, SessionState.OPEN, windows, "15:30 日盘收市", "午盘交易中")
     if t < time(20, 0):
         if wd <= 3:  # 周一至周四：日盘收市后等待夜盘
-            return _session(market, name, SessionState.BREAK, windows,
-                            "20:00 夜盘开盘", "日盘已收市，等待夜盘")
-        return _session(market, name, SessionState.CLOSED, windows,
-                        "周一 09:00 开盘", "周五无夜盘，进入周末休市")
+            return _session(
+                market, name, SessionState.BREAK, windows, "20:00 夜盘开盘", "日盘已收市，等待夜盘"
+            )
+        return _session(
+            market,
+            name,
+            SessionState.CLOSED,
+            windows,
+            "周一 09:00 开盘",
+            "周五无夜盘，进入周末休市",
+        )
     if wd <= 3:
-        return _session(market, name, SessionState.OPEN, windows,
-                        "次日 02:30 夜盘结束", "夜盘交易中")
-    return _session(market, name, SessionState.CLOSED, windows,
-                    "周一 09:00 开盘", "周五无夜盘，进入周末休市")
+        return _session(
+            market, name, SessionState.OPEN, windows, "次日 02:30 夜盘结束", "夜盘交易中"
+        )
+    return _session(
+        market, name, SessionState.CLOSED, windows, "周一 09:00 开盘", "周五无夜盘，进入周末休市"
+    )
 
 
 def etf_session(now: datetime | None = None) -> MarketSession:
@@ -205,23 +248,19 @@ def etf_session(now: datetime | None = None) -> MarketSession:
     market, name = "etf", "黄金ETF（518880）"
 
     if wd >= 5:  # 周末
-        return _session(market, name, SessionState.CLOSED, windows,
-                        "周一 09:30 开盘", "周末休市")
+        return _session(market, name, SessionState.CLOSED, windows, "周一 09:30 开盘", "周末休市")
     if t < time(9, 30):
-        return _session(market, name, SessionState.PRE, windows,
-                        "今日 09:30 开盘", "盘前")
+        return _session(market, name, SessionState.PRE, windows, "今日 09:30 开盘", "盘前")
     if t < time(11, 30):
-        return _session(market, name, SessionState.OPEN, windows,
-                        "11:30 早盘收市", "早盘交易中")
+        return _session(market, name, SessionState.OPEN, windows, "11:30 早盘收市", "早盘交易中")
     if t < time(13, 0):
-        return _session(market, name, SessionState.BREAK, windows,
-                        "13:00 午盘开盘", "午间休市")
+        return _session(market, name, SessionState.BREAK, windows, "13:00 午盘开盘", "午间休市")
     if t < time(15, 0):
-        return _session(market, name, SessionState.OPEN, windows,
-                        "15:00 收盘", "午盘交易中")
+        return _session(market, name, SessionState.OPEN, windows, "15:00 收盘", "午盘交易中")
     next_open = "下周一 09:30 开盘" if wd == 4 else "明日 09:30 开盘"
-    return _session(market, name, SessionState.CLOSED, windows,
-                    next_open, "已收盘，最新价为当日收盘静态价")
+    return _session(
+        market, name, SessionState.CLOSED, windows, next_open, "已收盘，最新价为当日收盘静态价"
+    )
 
 
 class FreshnessLevel(StrEnum):

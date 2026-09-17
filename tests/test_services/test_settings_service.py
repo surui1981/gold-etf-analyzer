@@ -30,7 +30,13 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
     """保存后重新读取返回用户配置。"""
     svc = _service(db_session)
     custom = WeightConfig(
-        trend={"structure": 0.40, "momentum": 0.20, "support": 0.20, "momentum_rsi": 0.10, "drawdown": 0.10},
+        trend={
+            "structure": 0.40,
+            "momentum": 0.20,
+            "support": 0.20,
+            "momentum_rsi": 0.10,
+            "drawdown": 0.10,
+        },
         macro={"dxy": 0.30, "us10y": 0.20, "us30y": 0.10, "vix": 0.20, "cb_gold": 0.20},
         combine={"tech": 0.50, "macro": 0.30, "news": 0.20},
     )
@@ -56,4 +62,12 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
 async def test_invalid_sum_rejected() -> None:
     """各组权重和不为 1 应校验失败。"""
     with pytest.raises(ValidationError):
-        WeightConfig(trend={"structure": 0.5, "momentum": 0.5, "support": 0.1, "momentum_rsi": 0.1, "drawdown": 0.1})
+        WeightConfig(
+            trend={
+                "structure": 0.5,
+                "momentum": 0.5,
+                "support": 0.1,
+                "momentum_rsi": 0.1,
+                "drawdown": 0.1,
+            }
+        )

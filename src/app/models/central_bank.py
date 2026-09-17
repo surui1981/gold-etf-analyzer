@@ -33,29 +33,20 @@ class CentralBankPurchase(Base):
     country_iso: Mapped[str] = mapped_column(String(3), index=True, comment="ISO 3 字母代码")
     country_name: Mapped[str] = mapped_column(String(64), comment="国家中文名")
     quarter: Mapped[str] = mapped_column(String(6), index=True, comment="季度，如 2026Q2")
-    tonnes_net: Mapped[float] = mapped_column(
-        Float, comment="季度净购金（吨），正=买入/负=卖出"
-    )
+    tonnes_net: Mapped[float] = mapped_column(Float, comment="季度净购金（吨），正=买入/负=卖出")
     source: Mapped[str] = mapped_column(
         String(32), default="IMF IRFCL", comment="数据源：IMF IRFCL / WGC 手工"
     )
     data_date: Mapped[date] = mapped_column(Date, comment="数据截止日（季度最后一日）")
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
         onupdate=func.now(),
     )
 
-    __table_args__ = (
-        UniqueConstraint("country_iso", "quarter", name="uq_cb_country_quarter"),
-    )
+    __table_args__ = (UniqueConstraint("country_iso", "quarter", name="uq_cb_country_quarter"),)
 
     def __repr__(self) -> str:  # pragma: no cover
-        return (
-            f"<CentralBankPurchase {self.country_iso} {self.quarter} "
-            f"{self.tonnes_net:+.1f}t>"
-        )
+        return f"<CentralBankPurchase {self.country_iso} {self.quarter} {self.tonnes_net:+.1f}t>"

@@ -24,9 +24,7 @@ class TradeHistoryItem(BaseModel):
     realized_pnl: float | None = Field(
         None, description="该笔卖出的已实现盈亏（元，均价法）；买入为 null"
     )
-    post_quantity: float | None = Field(
-        None, description="该笔成交后该持仓剩余份数（均价法回放）"
-    )
+    post_quantity: float | None = Field(None, description="该笔成交后该持仓剩余份数（均价法回放）")
     traded_at: datetime
 
 

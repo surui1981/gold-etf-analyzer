@@ -18,7 +18,9 @@ async def _make_engine(tmp_path) -> AsyncEngine:
             )
         )
         await conn.execute(
-            text("INSERT INTO daily_snapshots (snapshot_date, trend_index) VALUES ('2026-01-01', 60.0)")
+            text(
+                "INSERT INTO daily_snapshots (snapshot_date, trend_index) VALUES ('2026-01-01', 60.0)"
+            )
         )
     return engine
 

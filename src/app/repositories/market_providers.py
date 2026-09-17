@@ -53,15 +53,21 @@ class GoldHistoryProvider(Protocol):
     """黄金历史 K 线数据源接口。"""
 
     async def get_history(
-        self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_ETF,
+        days: int = 60,
     ) -> list[GoldKline]: ...
 
     async def get_gram_history(
-        self, symbol: str = DEFAULT_GOLD_GRAM, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_GRAM,
+        days: int = 60,
     ) -> list[GoldKline]: ...
 
     async def get_us_gold_history(
-        self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
+        self,
+        symbol: str = DEFAULT_NY_GOLD,
+        days: int = 60,
     ) -> list[GoldKline]: ...
 
 
@@ -126,7 +132,9 @@ def _sina_etf_via_subprocess(symbol: str, days: int) -> list | None:
     try:
         res = subprocess.run(
             [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if res.returncode == 0 and res.stdout.strip():
             return [
@@ -151,7 +159,9 @@ def _us_gold_via_subprocess(symbol: str, days: int) -> list | None:
     try:
         res = subprocess.run(
             [sys.executable, "-c", code],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if res.returncode == 0 and res.stdout.strip():
             return [
@@ -208,7 +218,9 @@ class AkshareGoldHistoryProvider:
         self._settings = settings or get_settings()
 
     async def get_history(
-        self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_ETF,
+        days: int = 60,
     ) -> list[GoldKline]:
         """获取黄金 ETF 最近日 K。"""
         try:
@@ -267,7 +279,9 @@ class AkshareGoldHistoryProvider:
         return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
     async def get_gram_history(
-        self, symbol: str = DEFAULT_GOLD_GRAM, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_GRAM,
+        days: int = 60,
     ) -> list[GoldKline]:
         """获取黄金克价（上海黄金交易所 Au99.99，元/克）最近日 K。"""
         try:
@@ -299,7 +313,9 @@ class AkshareGoldHistoryProvider:
         return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
     async def get_us_gold_history(
-        self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
+        self,
+        symbol: str = DEFAULT_NY_GOLD,
+        days: int = 60,
     ) -> list[GoldKline]:
         """获取纽约金（COMEX 黄金期货主力 GC，美元/盎司）最近日 K。"""
         # 延迟导入：仅用于探测 akshare 是否可用，纽约金实际走下方 subprocess 抓取
@@ -332,7 +348,9 @@ class EastmoneyOnlyHistoryProvider:
         self._settings = settings or get_settings()
 
     async def get_history(
-        self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_ETF,
+        days: int = 60,
     ) -> list[GoldKline]:
         try:
             import akshare as ak
@@ -367,13 +385,17 @@ class EastmoneyOnlyHistoryProvider:
         return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
 
     async def get_gram_history(
-        self, symbol: str = DEFAULT_GOLD_GRAM, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_GRAM,
+        days: int = 60,
     ) -> list[GoldKline]:
         # 克价仍走 AKShare SGE（仅 ETF 历史受 V8 影响）
         return await AkshareGoldHistoryProvider(self._settings).get_gram_history(symbol, days)
 
     async def get_us_gold_history(
-        self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
+        self,
+        symbol: str = DEFAULT_NY_GOLD,
+        days: int = 60,
     ) -> list[GoldKline]:
         # 纽约金仍走英为财情（V8）
         return await AkshareGoldHistoryProvider(self._settings).get_us_gold_history(symbol, days)
@@ -389,7 +411,9 @@ class SinaOnlyHistoryProvider:
         self._settings = settings or get_settings()
 
     async def get_history(
-        self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_ETF,
+        days: int = 60,
     ) -> list[GoldKline]:
         prefix = "sh" if symbol.startswith(("5", "6")) else "sz"
         sub = await asyncio.to_thread(_sina_etf_via_subprocess, f"{prefix}{symbol}", days)
@@ -398,12 +422,16 @@ class SinaOnlyHistoryProvider:
         return sub
 
     async def get_gram_history(
-        self, symbol: str = DEFAULT_GOLD_GRAM, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_GRAM,
+        days: int = 60,
     ) -> list[GoldKline]:
         return await AkshareGoldHistoryProvider(self._settings).get_gram_history(symbol, days)
 
     async def get_us_gold_history(
-        self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
+        self,
+        symbol: str = DEFAULT_NY_GOLD,
+        days: int = 60,
     ) -> list[GoldKline]:
         return await AkshareGoldHistoryProvider(self._settings).get_us_gold_history(symbol, days)
 
@@ -575,17 +603,23 @@ class MockGoldHistoryProvider:
     """
 
     async def get_history(
-        self, symbol: str = DEFAULT_GOLD_ETF, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_ETF,
+        days: int = 60,
     ) -> list[GoldKline]:
         return _mock_history(base=5.42, days=days)
 
     async def get_gram_history(
-        self, symbol: str = DEFAULT_GOLD_GRAM, days: int = 60,
+        self,
+        symbol: str = DEFAULT_GOLD_GRAM,
+        days: int = 60,
     ) -> list[GoldKline]:
         return _mock_gram_history(days=days)
 
     async def get_us_gold_history(
-        self, symbol: str = DEFAULT_NY_GOLD, days: int = 60,
+        self,
+        symbol: str = DEFAULT_NY_GOLD,
+        days: int = 60,
     ) -> list[GoldKline]:
         return _mock_us_history(days=days)
 
@@ -658,7 +692,5 @@ def build_provider_bundle(settings: Settings | None = None) -> MarketProviderBun
     name = (s.market_provider or "akshare").strip().lower()
     factory = PROVIDER_REGISTRY.get(name)
     if factory is None:
-        raise ValueError(
-            f"未知 MARKET_PROVIDER={name!r}，可选：{sorted(PROVIDER_REGISTRY.keys())}"
-        )
+        raise ValueError(f"未知 MARKET_PROVIDER={name!r}，可选：{sorted(PROVIDER_REGISTRY.keys())}")
     return factory(s)

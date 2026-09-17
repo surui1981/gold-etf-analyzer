@@ -37,9 +37,7 @@ class ReviewMetaOut(BaseModel):
     """复盘页配置元信息（前端据此渲染选择器与标签多选）。"""
 
     target: str = DEFAULT_REVIEW_TARGET
-    targets: list[dict] = Field(
-        default_factory=list, description="可选基准标的 [{key,label}]"
-    )
+    targets: list[dict] = Field(default_factory=list, description="可选基准标的 [{key,label}]")
     horizons: list[int] = Field(default_factory=lambda: list(REVIEW_HORIZONS))
     basis_tags: list[str] = Field(default_factory=lambda: list(BASIS_TAGS))
     neutral_band_pct: float = NEUTRAL_BAND_PCT
@@ -176,7 +174,5 @@ class ReviewStatsOut(BaseModel):
     by_horizon: list[HorizonStatsOut] = Field(default_factory=list)
     calibration: list[CalibrationBucketOut] = Field(default_factory=list)
     tags: list[TagStatsOut] = Field(default_factory=list)
-    sample_warning: bool = Field(
-        False, description="样本不足（<20）时置 True，前端标注仅供参考"
-    )
+    sample_warning: bool = Field(False, description="样本不足（<20）时置 True，前端标注仅供参考")
     note: str = ""

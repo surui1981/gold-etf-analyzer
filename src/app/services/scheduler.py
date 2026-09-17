@@ -80,11 +80,7 @@ def next_intraday_run_utc(now_utc: datetime | None = None) -> datetime:
     """
     now = now_utc or datetime.now(timezone.utc)
     now_bjt = now.astimezone(BJT)
-    triggers = (
-        get_settings().intraday_refresh_hour_list
-        if is_intraday_refresh_enabled()
-        else []
-    )
+    triggers = get_settings().intraday_refresh_hour_list if is_intraday_refresh_enabled() else []
     for hh, mm in triggers:
         cand = now_bjt.replace(hour=hh, minute=mm, second=0, microsecond=0)
         if cand > now_bjt:
@@ -94,7 +90,10 @@ def next_intraday_run_utc(now_utc: datetime | None = None) -> datetime:
     if triggers:
         hh, mm = triggers[0]
         fallback = (now_bjt + timedelta(days=1)).replace(
-            hour=hh, minute=mm, second=0, microsecond=0,
+            hour=hh,
+            minute=mm,
+            second=0,
+            microsecond=0,
         )
     return fallback.astimezone(timezone.utc)
 
@@ -117,12 +116,19 @@ def next_central_bank_run_utc() -> datetime:
     # 生成当前月候选触发日列表（升序）
     last_day = calendar.monthrange(now_bjt.year, now_bjt.month)[1]
     candidates_bjt = [
-        now_bjt.replace(day=1, hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT,
-                        second=0, microsecond=0),
-        now_bjt.replace(day=15, hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT,
-                        second=0, microsecond=0),
-        now_bjt.replace(day=last_day, hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT,
-                        second=0, microsecond=0),
+        now_bjt.replace(
+            day=1, hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT, second=0, microsecond=0
+        ),
+        now_bjt.replace(
+            day=15, hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT, second=0, microsecond=0
+        ),
+        now_bjt.replace(
+            day=last_day,
+            hour=CB_TRIGGER_HOUR_BJT,
+            minute=CB_TRIGGER_MINUTE_BJT,
+            second=0,
+            microsecond=0,
+        ),
     ]
 
     # 找下一个未到的触发日；若当前月都过了，下个月 1 日
@@ -134,9 +140,13 @@ def next_central_bank_run_utc() -> datetime:
     next_month_year = now_bjt.year + (1 if now_bjt.month == 12 else 0)
     next_month = 1 if now_bjt.month == 12 else now_bjt.month + 1
     return now_bjt.replace(
-        year=next_month_year, month=next_month, day=1,
-        hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT,
-        second=0, microsecond=0,
+        year=next_month_year,
+        month=next_month,
+        day=1,
+        hour=CB_TRIGGER_HOUR_BJT,
+        minute=CB_TRIGGER_MINUTE_BJT,
+        second=0,
+        microsecond=0,
     ).astimezone(timezone.utc)
 
 
@@ -150,7 +160,10 @@ def next_run_utc() -> datetime:
     now_utc = datetime.now(timezone.utc)
     now_bjt = now_utc.astimezone(BJT)
     target_bjt = now_bjt.replace(
-        hour=DAILY_TRIGGER_HOUR_BJT, minute=0, second=0, microsecond=0,
+        hour=DAILY_TRIGGER_HOUR_BJT,
+        minute=0,
+        second=0,
+        microsecond=0,
     )
     if now_bjt >= target_bjt:
         target_bjt += timedelta(days=1)
@@ -168,7 +181,9 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
         out = await snapshot_svc.capture_today()
         logger.info(
             "Daily snapshot OK: date=%s, trend=%.1f (%s)",
-            out.snapshot_date, out.trend_index, out.index_level,
+            out.snapshot_date,
+            out.trend_index,
+            out.index_level,
         )
         snap_ok = True
     except Exception as exc:
@@ -223,7 +238,9 @@ async def daily_capture_loop(
         wait = max(0.0, (next_run - datetime.now(timezone.utc)).total_seconds())
         logger.info(
             "Scheduler next: %s (in %.0fs, type=%s)",
-            next_run.isoformat(), wait, "intraday" if is_intra else "daily",
+            next_run.isoformat(),
+            wait,
+            "intraday" if is_intra else "daily",
         )
         await asyncio.sleep(wait)
         if is_intra:
@@ -268,7 +285,9 @@ async def monthly_central_bank_loop() -> None:
     logger.info(
         "Central bank auto-refresh scheduler started: monthly on day 1, 15, and last day "
         "at %02d:%02d BJT (env %s controls switch)",
-        CB_TRIGGER_HOUR_BJT, CB_TRIGGER_MINUTE_BJT, CB_AUTO_REFRESH_ENV,
+        CB_TRIGGER_HOUR_BJT,
+        CB_TRIGGER_MINUTE_BJT,
+        CB_AUTO_REFRESH_ENV,
     )
 
     while True:
@@ -276,7 +295,9 @@ async def monthly_central_bank_loop() -> None:
         wait = max(0.0, (next_run - datetime.now(timezone.utc)).total_seconds())
         logger.info(
             "Central bank scheduler: next run at %s (in %.0f seconds, %.1f hours)",
-            next_run.isoformat(), wait, wait / 3600,
+            next_run.isoformat(),
+            wait,
+            wait / 3600,
         )
         await asyncio.sleep(wait)
         await _refresh_central_bank()

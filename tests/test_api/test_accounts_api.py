@@ -26,20 +26,38 @@ class FakeMarket:
         return [
             GoldKline(
                 date=today - timedelta(days=119 - i),
-                open=10.0, close=10.0, high=10.0, low=10.0, volume=0.0,
+                open=10.0,
+                close=10.0,
+                high=10.0,
+                low=10.0,
+                volume=0.0,
             )
             for i in range(120)
         ]
 
     async def get_gold_etf_quote(self, symbol: str = "518880"):
-        return type("Q", (), {
-            "symbol": symbol, "price_usd": 10.0, "change_pct": 0.0, "updated_at": date.today(),
-        })()
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": symbol,
+                "price_usd": 10.0,
+                "change_pct": 0.0,
+                "updated_at": date.today(),
+            },
+        )()
 
     async def get_gold_quote(self, symbol: str = "XAU"):
-        return type("Q", (), {
-            "symbol": symbol, "price_usd": 4349.7, "change_pct": 0.0, "updated_at": date.today(),
-        })()
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": symbol,
+                "price_usd": 4349.7,
+                "change_pct": 0.0,
+                "updated_at": date.today(),
+            },
+        )()
 
 
 @pytest.fixture(autouse=True)
@@ -195,9 +213,7 @@ async def test_trades_after_open_and_account_isolation(client: AsyncClient) -> N
 
 async def test_trades_validation(client: AsyncClient) -> None:
     assert (await client.get("/api/v1/trades?side=xx")).status_code == 422
-    assert (
-        await client.get("/api/v1/trades?start=2026-09-10&end=2026-09-01")
-    ).status_code == 422
+    assert (await client.get("/api/v1/trades?start=2026-09-10&end=2026-09-01")).status_code == 422
     assert (await client.get("/api/v1/trades?page=0")).status_code == 422
     assert (await client.get("/api/v1/trades?page_size=9999")).status_code == 422
 

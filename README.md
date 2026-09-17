@@ -121,6 +121,8 @@ docker compose up --build
 
 > **研判复盘（V0.66.0）**：`/review` 页面按日期归档研判（分值 / 方向 / 依据 / 备注），对齐金价日历给出 **T+1 / T+3 / T+5** 三个交易日的涨跌与命中判定（看多须涨、看空须跌、看平容差 ±0.3%），并汇总总命中率、**分值分箱校准曲线**与**依据标签胜率**，用于回看「判断准不准、哪类依据更可靠」。金价日历 `gold_price_daily` 独立于快照表，只存客观价格，可长期积累与回填。
 
+> **框架基础补齐（V0.67.0）**：CI/CD（GitHub Actions + Python 3.11/3.12 matrix + uv 缓存）落地；`X-Request-ID` 全链路追踪（中间件 + contextvars + 日志自动附加）—— 任意一行日志都能 grep 到对应 HTTP 请求；价格日历入库前 schema 校验（`close>0`、source 白名单、涨跌幅 ±50% 边界），脏数据整批拒绝不入库。
+
 **宏观参考（5 因子）**：
 
 | 因子 | 权重 | 与黄金关系 | 100 分位 | 0 分位 |
@@ -162,7 +164,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 432 用例（离线回归 388 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线 + 多时间框架 + 消息面槽位 + 研判复盘
+python -m pytest -v          # 454 用例（离线回归 410 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线 + 多时间框架 + 消息面槽位 + 研判复盘 + trace_id + 价格校验
 python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests
@@ -174,8 +176,9 @@ ruff format src tests
 
 - [ ] 宏观×技术共振深化：决策引擎纳入宏观机会评分（消息面权重生效）
 - [ ] 克数持仓跟踪：实物金/积存金按克持仓，与 ETF 并列盈亏
-- [ ] CI/CD（GitHub Actions 自动 pytest + ruff，tag 触发构建）
+- [x] **CI/CD + trace_id + 价格校验（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix，uv 缓存，concurrency 取消旧 PR，`fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地
 - [x] **研判复盘与准确率校准（V0.66.0）**：新增 `gold_price_daily` 金价日历（客观价格，独立于快照表，可回填）+ `news_scores.basis/review_note/backfilled`；`/review` 页面按日期归档研判并与金价对齐，给出 **T+1 / T+3 / T+5** 三窗口涨跌与命中判定（看多须涨、看空须跌、看平 ±0.3%）；统计面板含总命中率 / 方向分组 / 窗口分组 / **分值分箱校准曲线** / **依据标签胜率**；补录标记 `backfilled` 且统计默认排除（避免前视偏差）；打分页实时显示该分值区间历史胜率；新增 6 个 review 接口 + `/review` 路由（路由 32 → 40 条），新增 24 个测试（服务 16 + API 8）
+- [x] **框架基础补齐（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR + `fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地
 - [x] **消息面每日 3 次打分（V0.65.0）**：`news_scores` 增 `slot`(1-3) / `scored_at` 并改 `(score_date, slot)` 复合唯一；当日有效分值按 **1:2:3 加权**（越晚权重越高）合成；三次用尽后留空提交返回 400（**修复同日第二次打分被静默覆盖**的原缺陷）；`DELETE /news-score/{slot}` 撤销 + `GET /news-score/history`；前端三槽位卡片 + 加权算式面板 + 剩余次数提示
 - [x] 每日快照定时任务（V0.50 看门狗 06:00/16:00 自动捕获）✅
 - [x] Alembic 数据库迁移（替代启动时 create_all，V0.50 已落地）

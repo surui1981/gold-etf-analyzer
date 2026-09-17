@@ -94,9 +94,7 @@ async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
         for table, columns in INDEX_MIGRATIONS.items():
             for col in columns:
                 idx = f"idx_{table}_{col}"
-                await conn.execute(
-                    text(f"CREATE INDEX IF NOT EXISTS {idx} ON {table} ({col})")
-                )
+                await conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx} ON {table} ({col})"))
                 logger.info("sqlite index ready: %s on %s(%s)", idx, table, col)
 
         # 移除历史遗留索引（V0.65.0：news_scores 的 score_date 唯一索引须放开）
@@ -113,7 +111,9 @@ async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
                             f"ON {table} ({', '.join(cols)})"
                         )
                     )
-                    logger.info("sqlite unique index ready: %s on %s(%s)", name, table, ", ".join(cols))
+                    logger.info(
+                        "sqlite unique index ready: %s on %s(%s)", name, table, ", ".join(cols)
+                    )
                 except Exception as exc:  # 存量脏数据不应阻断启动
                     logger.warning("sqlite unique index skipped: %s (%s)", name, exc)
 

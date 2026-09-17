@@ -31,6 +31,7 @@ EXPECTED_PAGES = [
 
 # ─────────────── help.js 解析辅助 ───────────────
 
+
 def _extract_const(name: str) -> str:
     """从 help.js 抽取出 const <NAME> = { ... };  字面量文本。"""
     src = HELP_JS.read_text(encoding="utf-8")
@@ -57,7 +58,7 @@ def _extract_balanced_object(text: str, key: str) -> dict:
         elif c == "}":
             depth -= 1
         i += 1
-    body = text[start:i - 1]
+    body = text[start : i - 1]
     # 抽取 "term": "def" 形式
     entries: dict[str, str] = {}
     for tm in re.finditer(r'"([^"\\]+)"\s*:\s*"((?:[^"\\]|\\.)*)"', body):
@@ -80,7 +81,7 @@ def _extract_array_of_objects(text: str, key: str) -> list[dict]:
         elif c == "]":
             depth -= 1
         i += 1
-    body = text[start:i - 1]
+    body = text[start : i - 1]
     objs: list[dict] = []
     # 在 body 中切分顶层 {...}
     depth2 = 0
@@ -93,7 +94,7 @@ def _extract_array_of_objects(text: str, key: str) -> list[dict]:
         elif ch == "}":
             depth2 -= 1
             if depth2 == 0 and obj_start is not None:
-                obj_body = body[obj_start:idx + 1]
+                obj_body = body[obj_start : idx + 1]
                 obj: dict = {}
                 for tm in re.finditer(r'(\w+)\s*:\s*"((?:[^"\\]|\\.)*)"', obj_body):
                     obj[tm.group(1)] = tm.group(2)
@@ -125,7 +126,15 @@ def test_glossary_has_seven_categories() -> None:
     """GLOSSARY 至少 7 个分组（评估/指标/宏观/品种/交易/系统/时段）。"""
     text = _extract_const("GLOSSARY")
     cats = re.findall(r'"([^"\\]+)"\s*:\s*\{', text)
-    expected = {"评估指数类", "指标/均线类", "宏观因子类", "品种代码类", "交易动作类", "系统状态类", "时段类"}
+    expected = {
+        "评估指数类",
+        "指标/均线类",
+        "宏观因子类",
+        "品种代码类",
+        "交易动作类",
+        "系统状态类",
+        "时段类",
+    }
     assert expected.issubset(set(cats)), f"GLOSSARY 缺少分组：{expected - set(cats)}"
 
 
@@ -136,18 +145,49 @@ def test_glossary_has_at_least_30_terms() -> None:
     assert len(entries) >= 30, f"术语数 {len(entries)} 不足 30"
 
 
-@pytest.mark.parametrize("term", [
-    "综合指数", "技术面", "宏观面", "消息面", "RSI(14)",
-    "MA5 / MA20 / MA40", "T12M", "DXY (美元指数)", "美债 10Y / 30Y", "VIX",
-    "cb_gold", "Au99.99", "COMEX", "SGE", "518880", "ETF",
-    "开仓", "加仓 / 减仓", "清仓", "软删除", "撤销", "仓位推荐",
-    "live", "stale", "mock", "BJT",
-])
+@pytest.mark.parametrize(
+    "term",
+    [
+        "综合指数",
+        "技术面",
+        "宏观面",
+        "消息面",
+        "RSI(14)",
+        "MA5 / MA20 / MA40",
+        "T12M",
+        "DXY (美元指数)",
+        "美债 10Y / 30Y",
+        "VIX",
+        "cb_gold",
+        "Au99.99",
+        "COMEX",
+        "SGE",
+        "518880",
+        "ETF",
+        "开仓",
+        "加仓 / 减仓",
+        "清仓",
+        "软删除",
+        "撤销",
+        "仓位推荐",
+        "live",
+        "stale",
+        "mock",
+        "BJT",
+    ],
+)
 def test_glossary_contains_key_term(term: str) -> None:
     """关键术语必须在 GLOSSARY 中可查到（且定义非空）。"""
     text = _extract_const("GLOSSARY")
-    for cat in ("评估指数类", "指标/均线类", "宏观因子类", "品种代码类",
-                "交易动作类", "系统状态类", "时段类"):
+    for cat in (
+        "评估指数类",
+        "指标/均线类",
+        "宏观因子类",
+        "品种代码类",
+        "交易动作类",
+        "系统状态类",
+        "时段类",
+    ):
         cat_obj = _extract_balanced_object(text, cat)
         if cat_obj.get(term):
             return
@@ -201,27 +241,48 @@ def test_localstorage_namespace_is_pm_help() -> None:
 # ─────────────── HTML 注入验证 ───────────────
 
 
-@pytest.mark.parametrize("page", [
-    "trend.html", "portfolio.html", "weights.html", "news.html", "central_bank.html",
-])
+@pytest.mark.parametrize(
+    "page",
+    [
+        "trend.html",
+        "portfolio.html",
+        "weights.html",
+        "news.html",
+        "central_bank.html",
+    ],
+)
 def test_html_injects_help_css(page: str) -> None:
     """5 个 HTML 页面均需引入 help.css。"""
     html = (ROOT / "static" / page).read_text(encoding="utf-8")
     assert 'href="/static/help.css"' in html, f"{page} 未引入 help.css"
 
 
-@pytest.mark.parametrize("page", [
-    "trend.html", "portfolio.html", "weights.html", "news.html", "central_bank.html",
-])
+@pytest.mark.parametrize(
+    "page",
+    [
+        "trend.html",
+        "portfolio.html",
+        "weights.html",
+        "news.html",
+        "central_bank.html",
+    ],
+)
 def test_html_injects_help_js(page: str) -> None:
     """5 个 HTML 页面均需引入 help.js（defer）。"""
     html = (ROOT / "static" / page).read_text(encoding="utf-8")
     assert 'src="/static/help.js" defer' in html, f"{page} 未引入 help.js"
 
 
-@pytest.mark.parametrize("page", [
-    "trend.html", "portfolio.html", "weights.html", "news.html", "central_bank.html",
-])
+@pytest.mark.parametrize(
+    "page",
+    [
+        "trend.html",
+        "portfolio.html",
+        "weights.html",
+        "news.html",
+        "central_bank.html",
+    ],
+)
 def test_help_css_loaded_after_responsive(page: str) -> None:
     """help.css 必须在 responsive.css 之后加载（保证覆盖样式生效）。"""
     html = (ROOT / "static" / page).read_text(encoding="utf-8")

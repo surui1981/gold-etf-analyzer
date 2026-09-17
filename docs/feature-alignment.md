@@ -1,6 +1,6 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-16 ｜ 适用版本：**V0.66.0**
+> 生成日期：2026-09-16 ｜ 适用版本：**V0.67.0**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
@@ -34,11 +34,12 @@
 | **评估指数历史曲线升级** | 趋势页 `loadSnapshots(days)` 重构：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线 + `7D / 30D / 90D` 区间切换按钮 + 4 个极值卡（最新 / 区间最高 / 区间最低 / 日变）+ 稀疏数据 3 档 UX + `snapChart.destroy()` 内存管理 | ✅（V0.63.0） |
 | **多时间框架（周/月线）** | 趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 | ✅（V0.64.0） |
 | **消息面每日 3 次打分** | `models/news.py` `slot`(1-3) / `scored_at` + `(score_date, slot)` 复合唯一；`services/news.py` 自动占位 + `Σ(i×scoreᵢ)/Σi` 加权 + 用尽拦截（400）+ 显式覆盖修正；`DELETE /news-score/{slot}` + `GET /news-score/history`；`static/news.html` 三槽位卡片 + 加权算式面板 | ✅（V0.65.0） |
-| **研判复盘与准确率校准** | `models/review.py`（`gold_price_daily`）+ `repositories/review.py`（`upsert_many` 合并后重算涨跌幅）+ `services/review.py`（`backfill` / `journal` / `stats` / `hint_for_score`）+ 6 个 review 接口 + `static/review.html`；`news_scores.basis` / `review_note` / `backfilled` | ✅（V0.66.0） |
+| **研判复盘与准确率校准** | `models/review.py`（`gold_price_daily`）+ `repositories/review.py`（`upsert_many` 合并后重算涨跌幅 + V0.67.0 schema 校验）+ `services/review.py`（`backfill` / `journal` / `stats` / `hint_for_score`）+ 6 个 review 接口 + `static/review.html`；`news_scores.basis` / `review_note` / `backfilled` | ✅（V0.66.0） |
+| **框架基础补齐（CI/CD + trace_id + 价格校验）** | `app/middleware/trace.py` `TraceIdMiddleware`（纯 ASGI，X-Request-ID 入站沿用 / UUIDv4 自动生成 / 响应头回写 / contextvars 注入）+ `utils/logger.py` 自动附加 trace_id；`repositories/review.py` `upsert_many` schema 校验（`close > 0` 含 NaN 检测 / `source` 白名单 / 单日涨跌幅 ±50% 跳过）；`.github/workflows/ci.yml` Python 3.11/3.12 matrix + uv 缓存 + concurrency | ✅（V0.67.0） |
 
-**测试数对账**：`pytest --collect-only -q` = **432 用例 / 37 个测试模块**。纵向演变：V0.64.0 = 397 → **V0.65.0 = 410**（新增 `test_api/test_news_api.py` 7 例 + 重写 `test_news_service.py` 5 → 11 例，净 +13）→ **V0.66.0 = 432**（新增 `test_services/test_review_service.py` 13 例 + `test_api/test_review_api.py` 9 例，净 +22）。
+**测试数对账**：`pytest --collect-only -q` = **454 用例 / 38 个测试模块**。纵向演变：V0.64.0 = 397 → **V0.65.0 = 410**（新增 `test_api/test_news_api.py` 7 例 + 重写 `test_news_service.py` 5 → 11 例，净 +13）→ **V0.66.0 = 432**（新增 `test_services/test_review_service.py` 13 例 + `test_api/test_review_api.py` 9 例，净 +22）→ **V0.67.0 = 454**（新增 `test_middleware/test_trace_id.py` 8 例 + `test_services/test_price_calendar_validation.py` 12 例 + `test_utils/test_logger_trace_id.py` 2 例，净 +22）。
 
-**V0.66.0 回归实测**：① 全量（含联网 fetcher）`python -m pytest -q` = **431 passed / 1 skipped / 0 failed**（432 collected，19m59s）；② 离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件共 **44** 用例）= **388 passed / 0 failed**（27m05s）。两个 fetcher 文件单独实测 = **43 passed / 1 skipped**——跳过项 `test_irfcl_fetcher.py::test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（该文件在 `.gitignore` 内，新克隆不携带），属**既有测试设计问题，非本版本引入**；**skipif 守卫已补**（文件缺失即跳过，不再误报 failed）。
+**V0.67.0 回归实测**：① 离线 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件共 **44** 用例）= **410 passed / 0 failed**（2m32s）；② `ruff check src tests` = **All checks passed**；③ `ruff format --check src tests` = **128 files already formatted**；④ `python scripts/check_static_js.py` = **7 静态页 + 3 共享脚本全部通过**（语法 / 引用 / DOM id）。
 
 ---
 
@@ -50,7 +51,7 @@
 |---|------|------|------|------|
 | 1 | V0.50 发布 | ✅ | ✅ | ✅ |
 | 2 | 权重配置页 | ✅ | ✅ | ✅ |
-| 3 | **CI/CD** | 📋 | ❌ 无 `.github/workflows/` | ⚠️ 未做 |
+| 3 | **CI/CD** | ✅ V0.67.0 | ✅ `.github/workflows/ci.yml`（Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR + `fail-fast: false` + pytest + ruff + JS 门禁） | ✅ |
 | 4 | Alembic 迁移 | ✅ | ✅ + 央行购金表 c1b3a1d27e9f | ✅ |
 | 5 | **行情源配置化** | ✅ V0.59.0 | ✅ MARKET_PROVIDER=.env 4 选 1 + 工厂 + bundle 注入 | ✅ |
 | 5′ | （application-guide P1 表 #5 长期停留 📋） | ✅ | ✅ 实际 V0.59.0 已落地，**V0.62.0 已修正该陈旧状态** | ✅ 已修正 |
@@ -98,6 +99,7 @@
 | **6.10** | **央行购金数据化与自动化** | ✅ V0.57.0 | ✅ | ✅ |
 | **消息面 3 次打分** | （非路线图项，由缺陷排查延伸） | ✅ V0.65.0 | ✅ 槽位模型 + 1:2:3 加权 + 撤销 + 历史 | ✅ |
 | **6.11** | **研判复盘与准确率校准** | ✅ V0.66.0（新增项） | ✅ `/review` 页 + 6 个接口 + 金价日历 + 命中率/校准曲线/标签胜率 | ✅ |
+| **6.12** | **框架基础补齐（CI/CD + trace_id + 价格校验）** | ✅ V0.67.0（新增项） | ✅ `.github/workflows/ci.yml` + `app/middleware/trace.py` + `repositories/review.py` schema 校验 + 22 个新测试 | ✅ |
 
 ---
 
@@ -140,7 +142,7 @@
 
 | 优先级 | 事项 | 估时 | 备注 |
 |---|---|---|---|
-| 🔴 高 | 规划 P1 #3 CI/CD（GitHub Actions） | 0.5d | 写 pytest + ruff + Docker build workflow（**P1 唯一未完成项**） |
+| 🟢 已闭环 | 规划 P1 #3 CI/CD（GitHub Actions） | ✅ V0.67.0 | `.github/workflows/ci.yml` 已落地：pytest + ruff + JS 门禁 + Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR；P1 三项（CI/CD / 权重配置页 / 多时间框架）已全部闭环 |
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |
 | 🟢 低 | UX 6.5 剩余项（主题切换 / 标的与区间记忆） | 1d | **多账本与账本记忆 V0.62.0 已落地**；剩余为主题与展示偏好记忆 |

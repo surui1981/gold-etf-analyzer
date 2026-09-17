@@ -15,7 +15,9 @@ _H15_HEADER = (
     '"Currency:","NA","NA","NA","NA"\n'
     '"Unique Identifier: ","H15/H15/...","H15/H15/...","H15/H15/RIFLGFCY10_N.B","H15/H15/RIFLGFCY30_N.B"\n'
 )
-_H15_COL_HEADER = '"Time Period","RIFLGFCM01_N.B","RIFLGFCM03_N.B","RIFLGFCY10_N.B","RIFLGFCY30_N.B"\n'
+_H15_COL_HEADER = (
+    '"Time Period","RIFLGFCM01_N.B","RIFLGFCM03_N.B","RIFLGFCY10_N.B","RIFLGFCY30_N.B"\n'
+)
 
 
 def _build_h15_csv(rows: list[tuple[str, str, str, str]]) -> str:
@@ -28,23 +30,27 @@ def _build_h15_csv(rows: list[tuple[str, str, str, str]]) -> str:
 
 def test_parse_h15_csv_basic() -> None:
     """正常 CSV：返回最近一行双非空的 10Y/30Y。"""
-    csv_text = _build_h15_csv([
-        ("2026-09-01", "3.85", "3.92", "4.79", "5.27"),
-        ("2026-09-02", "3.83", "3.92", "4.79", "5.27"),
-        ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),  # 最新
-    ])
+    csv_text = _build_h15_csv(
+        [
+            ("2026-09-01", "3.85", "3.92", "4.79", "5.27"),
+            ("2026-09-02", "3.83", "3.92", "4.79", "5.27"),
+            ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),  # 最新
+        ]
+    )
     result = _parse_h15_csv(csv_text)
     assert result == USTYield(us10y=4.77, us30y=5.25, data_date=date(2026, 9, 3))
 
 
 def test_parse_h15_csv_skips_empty_tail() -> None:
     """尾部有空行（节假日/未公布）：跳过 10Y/30Y 为空的行。"""
-    csv_text = _build_h15_csv([
-        ("2026-09-01", "3.85", "3.92", "4.79", "5.27"),
-        ("2026-09-02", "", "", "", ""),  # 完全空行
-        ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),
-        ("2026-09-04", "3.85", "", "", ""),  # 仅 1M 有值
-    ])
+    csv_text = _build_h15_csv(
+        [
+            ("2026-09-01", "3.85", "3.92", "4.79", "5.27"),
+            ("2026-09-02", "", "", "", ""),  # 完全空行
+            ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),
+            ("2026-09-04", "3.85", "", "", ""),  # 仅 1M 有值
+        ]
+    )
     result = _parse_h15_csv(csv_text)
     # 从末尾反向找 → 9-04 空 → 9-03 双非空 ✓
     assert result == USTYield(us10y=4.77, us30y=5.25, data_date=date(2026, 9, 3))
@@ -52,10 +58,12 @@ def test_parse_h15_csv_skips_empty_tail() -> None:
 
 def test_parse_h15_csv_partial_null_only_10y() -> None:
     """尾部仅 10Y 有值而 30Y 空：跳过，找上一个双非空行。"""
-    csv_text = _build_h15_csv([
-        ("2026-09-02", "3.83", "3.92", "4.79", "5.27"),
-        ("2026-09-03", "3.83", "3.89", "4.77", ""),  # 仅 30Y 缺失
-    ])
+    csv_text = _build_h15_csv(
+        [
+            ("2026-09-02", "3.83", "3.92", "4.79", "5.27"),
+            ("2026-09-03", "3.83", "3.89", "4.77", ""),  # 仅 30Y 缺失
+        ]
+    )
     result = _parse_h15_csv(csv_text)
     assert result == USTYield(us10y=4.79, us30y=5.27, data_date=date(2026, 9, 2))
 
@@ -89,9 +97,11 @@ async def test_fetch_h15_success(monkeypatch) -> None:
     """网络成功：AkshareTreasuryYieldProvider.get_treasury_yields 返回 USTYield。"""
     import io
 
-    sample_csv = _build_h15_csv([
-        ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),
-    ])
+    sample_csv = _build_h15_csv(
+        [
+            ("2026-09-03", "3.83", "3.89", "4.77", "5.25"),
+        ]
+    )
 
     class FakeResp:
         def __init__(self, text: str):

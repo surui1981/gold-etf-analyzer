@@ -134,9 +134,7 @@ async def test_last_score_from_history(db_session: AsyncSession) -> None:
     """无当日打分时，「沿用上次」取历史最近一次。"""
     yesterday = date.today() - timedelta(days=1)
     db_session.add(
-        NewsScore(
-            score_date=yesterday, slot=1, score=35.0, direction="bearish", notes="昨日看空"
-        )
+        NewsScore(score_date=yesterday, slot=1, score=35.0, direction="bearish", notes="昨日看空")
     )
     await db_session.commit()
 
@@ -183,23 +181,42 @@ async def test_save_invalidates_served_cache(db_session: AsyncSession) -> None:
         TrendIndexLevel,
         TrendIndexOut,
     )
+
     today = date.today()
     placeholder = GoldTrendOut(
-        symbol="GC", name="test", days=1,
+        symbol="GC",
+        name="test",
+        days=1,
         points=[GoldTrendPoint(date=today, close=1.0, ma5=None, ma20=None, ma40=None)],
         metrics=GoldTrendMetrics(
-            start_date=today, end_date=today, trading_days=1,
-            start_price=1.0, end_price=1.0, change_pct=0.0,
-            high=1.0, low=1.0, ma20=None, ma40=None,
-            change_pct_1d=0.0, change_pct_5d=0.0,
-            direction=TrendDirection.SIDEWAYS, unit="", summary="",
+            start_date=today,
+            end_date=today,
+            trading_days=1,
+            start_price=1.0,
+            end_price=1.0,
+            change_pct=0.0,
+            high=1.0,
+            low=1.0,
+            ma20=None,
+            ma40=None,
+            change_pct_1d=0.0,
+            change_pct_5d=0.0,
+            direction=TrendDirection.SIDEWAYS,
+            unit="",
+            summary="",
         ),
         indicators=[],
-        index=TrendIndexOut(score=50.0, level=TrendIndexLevel.SIDEWAYS,
-                            direction=DirectionSignal.NEUTRAL, summary=""),
+        index=TrendIndexOut(
+            score=50.0,
+            level=TrendIndexLevel.SIDEWAYS,
+            direction=DirectionSignal.NEUTRAL,
+            summary="",
+        ),
         macro=MacroIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary=""),
         news=NewsIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, note="", scored=False),
-        data_sources={}, degraded=False, freshness=None,
+        data_sources={},
+        degraded=False,
+        freshness=None,
     )
     served_cache.set_served("ny", placeholder)
     assert served_cache.get_served("ny") is placeholder

@@ -186,13 +186,23 @@ class _StubHistory:
     """最小化历史 provider stub，仅满足 Protocol。"""
 
     async def get_history(self, symbol="518880", days=60):
-        return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100)]
+        return [
+            GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100)
+        ]
 
     async def get_gram_history(self, symbol="Au99.99", days=60):
-        return [GoldKline(date=date(2026, 9, 1), open=990.0, close=991.0, high=992.0, low=989.0, volume=0)]
+        return [
+            GoldKline(
+                date=date(2026, 9, 1), open=990.0, close=991.0, high=992.0, low=989.0, volume=0
+            )
+        ]
 
     async def get_us_gold_history(self, symbol="GC", days=60):
-        return [GoldKline(date=date(2026, 9, 1), open=4430.0, close=4435.0, high=4440.0, low=4425.0, volume=0)]
+        return [
+            GoldKline(
+                date=date(2026, 9, 1), open=4430.0, close=4435.0, high=4440.0, low=4425.0, volume=0
+            )
+        ]
 
 
 def test_market_data_repository_backward_compat_provider_kwarg() -> None:
@@ -284,7 +294,11 @@ async def test_v060_cache_hit_returns_same_list_instance() -> None:
     class CountingProvider:
         async def get_history(self, symbol, days=60):
             call_count()
-            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0
+                )
+            ]
 
         async def get_gram_history(self, symbol="Au99.99", days=60):
             call_count()
@@ -310,7 +324,11 @@ async def test_v060_cache_disabled_when_ttl_zero() -> None:
     class CountingProvider:
         async def get_history(self, symbol, days=60):
             call_count()
-            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0
+                )
+            ]
 
         async def get_gram_history(self, symbol="Au99.99", days=60):
             return []
@@ -326,15 +344,43 @@ async def test_v060_cache_disabled_when_ttl_zero() -> None:
 
 async def test_v060_cache_keys_isolated_by_tuple() -> None:
     """V0.60.0：不同 cache key（days 不同 / etf vs gram）互不干扰。"""
+
     class SimpleProvider:
         async def get_history(self, symbol, days=60):
-            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=float(days), high=5.2, low=4.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1),
+                    open=5.0,
+                    close=float(days),
+                    high=5.2,
+                    low=4.9,
+                    volume=100.0,
+                )
+            ]
 
         async def get_gram_history(self, symbol="Au99.99", days=60):
-            return [GoldKline(date=date(2026, 9, 1), open=9.0, close=float(days) + 1000.0, high=9.2, low=8.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1),
+                    open=9.0,
+                    close=float(days) + 1000.0,
+                    high=9.2,
+                    low=8.9,
+                    volume=100.0,
+                )
+            ]
 
         async def get_us_gold_history(self, symbol="GC", days=60):
-            return [GoldKline(date=date(2026, 9, 1), open=4.0, close=float(days) + 2000.0, high=4.2, low=3.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1),
+                    open=4.0,
+                    close=float(days) + 2000.0,
+                    high=4.2,
+                    low=3.9,
+                    volume=100.0,
+                )
+            ]
 
     repo = MarketDataRepository(provider=SimpleProvider())
     etf_10 = await repo.get_gold_history(days=10)
@@ -353,7 +399,11 @@ async def test_v060_source_status_promotes_to_stale_after_ttl() -> None:
 
     class SimpleProvider:
         async def get_history(self, symbol, days=60):
-            return [GoldKline(date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0)]
+            return [
+                GoldKline(
+                    date=date(2026, 9, 1), open=5.0, close=5.1, high=5.2, low=4.9, volume=100.0
+                )
+            ]
 
         async def get_gram_history(self, symbol="Au99.99", days=60):
             return []

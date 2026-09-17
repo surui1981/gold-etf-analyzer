@@ -32,17 +32,47 @@ async def test_summary_t12m_and_window(db_session: AsyncSession) -> None:
     """T12M = 最近 4 季度合计；窗口标签格式 "2025Q3–2026Q2"。"""
     rows = [
         # T12M（2025Q3–2026Q2）
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q3",
-         "tonnes_net": 30.0, "source": "IMF IRFCL", "data_date": date(2025, 9, 30)},
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q4",
-         "tonnes_net": 25.0, "source": "IMF IRFCL", "data_date": date(2025, 12, 31)},
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2026Q1",
-         "tonnes_net": 5.0, "source": "IMF IRFCL", "data_date": date(2026, 3, 31)},
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2026Q2",
-         "tonnes_net": 33.0, "source": "IMF IRFCL", "data_date": date(2026, 6, 30)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q3",
+            "tonnes_net": 30.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 9, 30),
+        },
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q4",
+            "tonnes_net": 25.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 12, 31),
+        },
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q1",
+            "tonnes_net": 5.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 3, 31),
+        },
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 33.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
         # T12M 之外（应被排除）
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q2",
-         "tonnes_net": 999.0, "source": "IMF IRFCL", "data_date": date(2025, 6, 30)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q2",
+            "tonnes_net": 999.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 6, 30),
+        },
     ]
     await _seed(db_session, rows)
 
@@ -59,17 +89,47 @@ async def test_summary_t12m_and_window(db_session: AsyncSession) -> None:
 async def test_top_buyers_by_year(db_session: AsyncSession) -> None:
     """某年度 Top N：按当年 4 季度合计降序。"""
     rows = [
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q1",
-         "tonnes_net": 30.0, "source": "IMF IRFCL", "data_date": date(2025, 3, 31)},
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q2",
-         "tonnes_net": 25.0, "source": "IMF IRFCL", "data_date": date(2025, 6, 30)},
-        {"country_iso": "POL", "country_name": "波兰", "quarter": "2025Q1",
-         "tonnes_net": 50.0, "source": "IMF IRFCL", "data_date": date(2025, 3, 31)},
-        {"country_iso": "TUR", "country_name": "土耳其", "quarter": "2025Q2",
-         "tonnes_net": 40.0, "source": "IMF IRFCL", "data_date": date(2025, 6, 30)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q1",
+            "tonnes_net": 30.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 3, 31),
+        },
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q2",
+            "tonnes_net": 25.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 6, 30),
+        },
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2025Q1",
+            "tonnes_net": 50.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 3, 31),
+        },
+        {
+            "country_iso": "TUR",
+            "country_name": "土耳其",
+            "quarter": "2025Q2",
+            "tonnes_net": 40.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 6, 30),
+        },
         # 2024 年（应被排除）
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2024Q4",
-         "tonnes_net": 999.0, "source": "IMF IRFCL", "data_date": date(2024, 12, 31)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2024Q4",
+            "tonnes_net": 999.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2024, 12, 31),
+        },
     ]
     await _seed(db_session, rows)
 
@@ -86,12 +146,30 @@ async def test_top_buyers_by_year(db_session: AsyncSession) -> None:
 async def test_list_purchases_filters(db_session: AsyncSession) -> None:
     """list_purchases 支持 (from_q, to_q, country) 过滤。"""
     rows = [
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2025Q1",
-         "tonnes_net": 30.0, "source": "IMF IRFCL", "data_date": date(2025, 3, 31)},
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2026Q2",
-         "tonnes_net": 33.0, "source": "IMF IRFCL", "data_date": date(2026, 6, 30)},
-        {"country_iso": "POL", "country_name": "波兰", "quarter": "2026Q2",
-         "tonnes_net": 51.0, "source": "IMF IRFCL", "data_date": date(2026, 6, 30)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2025Q1",
+            "tonnes_net": 30.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2025, 3, 31),
+        },
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 33.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2026Q2",
+            "tonnes_net": 51.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
     ]
     await _seed(db_session, rows)
 
@@ -111,10 +189,22 @@ async def test_list_purchases_filters(db_session: AsyncSession) -> None:
 async def test_list_purchases_summary_and_top_included(db_session: AsyncSession) -> None:
     """list_purchases 响应同时包含 summary + top_buyers + items 三段。"""
     rows = [
-        {"country_iso": "CHN", "country_name": "中国", "quarter": "2026Q2",
-         "tonnes_net": 33.0, "source": "IMF IRFCL", "data_date": date(2026, 6, 30)},
-        {"country_iso": "POL", "country_name": "波兰", "quarter": "2026Q2",
-         "tonnes_net": 51.0, "source": "IMF IRFCL", "data_date": date(2026, 6, 30)},
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 33.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2026Q2",
+            "tonnes_net": 51.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
     ]
     await _seed(db_session, rows)
 

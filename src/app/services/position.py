@@ -39,9 +39,7 @@ class PositionService:
             return account_id if account_id is not None else 1
         return await self._accounts.resolve(account_id)  # type: ignore[attr-defined]
 
-    async def open(
-        self, request: PositionCreate, account_id: int | None = None
-    ) -> PositionOut:
+    async def open(self, request: PositionCreate, account_id: int | None = None) -> PositionOut:
         """开仓：创建持仓 + 买入流水。"""
         target_account = await self._resolve_account(account_id)
         position = await self._repo.create_position(
@@ -60,7 +58,10 @@ class PositionService:
         )
         logger.info(
             "Position opened: id=%s account=%s qty=%s @ %s",
-            position.id, target_account, request.quantity, request.price,
+            position.id,
+            target_account,
+            request.quantity,
+            request.price,
         )
         return await self._to_out(position)
 
@@ -92,7 +93,11 @@ class PositionService:
         )
         logger.info(
             "Trade %s on position %s: qty=%s @ %s, remaining=%s",
-            request.side, position_id, request.quantity, request.price, position.quantity,
+            request.side,
+            position_id,
+            request.quantity,
+            request.price,
+            position.quantity,
         )
         return await self._to_out(position)
 
@@ -171,15 +176,37 @@ class PositionService:
         w = csv.writer(buf)
         w.writerow(["# 持仓导出", "", "", "", "", "", "", "", "", "", ""])
         w.writerow(
-            ["id", "symbol", "name", "quantity", "avg_cost", "status",
-             "opened_at", "market_price", "market_value", "pnl", "pnl_pct"]
+            [
+                "id",
+                "symbol",
+                "name",
+                "quantity",
+                "avg_cost",
+                "status",
+                "opened_at",
+                "market_price",
+                "market_value",
+                "pnl",
+                "pnl_pct",
+            ]
         )
         for p in positions:
             out = await self._to_out(p)
-            w.writerow([
-                out.id, out.symbol, out.name, out.quantity, out.avg_cost, out.status,
-                out.opened_at, out.market_price, out.market_value, out.pnl, out.pnl_pct,
-            ])
+            w.writerow(
+                [
+                    out.id,
+                    out.symbol,
+                    out.name,
+                    out.quantity,
+                    out.avg_cost,
+                    out.status,
+                    out.opened_at,
+                    out.market_price,
+                    out.market_value,
+                    out.pnl,
+                    out.pnl_pct,
+                ]
+            )
         w.writerow([])
         w.writerow(["# 交易流水", "", "", "", "", "", ""])
         w.writerow(["id", "position_id", "side", "quantity", "price", "fee", "traded_at"])

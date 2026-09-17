@@ -78,14 +78,19 @@ async def run_import(include_manual: bool = True) -> int:
         await conn.run_sync(Base.metadata.create_all)
 
     n = await upsert_rows(rows)
-    logger.info("导入完成：%d 行（countries=%d, sources=%s）",
-                n, len({r.country_iso for r in rows}),
-                dict(Counter(r.source for r in rows)))
+    logger.info(
+        "导入完成：%d 行（countries=%d, sources=%s）",
+        n,
+        len({r.country_iso for r in rows}),
+        dict(Counter(r.source for r in rows)),
+    )
     return n
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="导入 WGC GDT HTML + 手工补丁 → central_bank_purchases 表")
+    parser = argparse.ArgumentParser(
+        description="导入 WGC GDT HTML + 手工补丁 → central_bank_purchases 表"
+    )
     parser.add_argument("--dry-run", action="store_true", help="只打印，不落库")
     parser.add_argument("--no-manual", action="store_true", help="跳过 UZB/IRN 手工补丁")
     args = parser.parse_args()
@@ -104,7 +109,9 @@ async def main() -> None:
     quarter_set = sorted({r.quarter for r in rows})
     source_counter = Counter(r.source for r in rows)
     print(f"[import] rows={len(rows)} countries={country_count}")
-    print(f"[import] quarter range: {quarter_set[0]} → {quarter_set[-1]} ({len(quarter_set)} quarters)")
+    print(
+        f"[import] quarter range: {quarter_set[0]} → {quarter_set[-1]} ({len(quarter_set)} quarters)"
+    )
     print(f"[import] sources: {dict(source_counter)}")
 
     # Top 5 buyer preview (T12M = 最近 4 个季度合计)

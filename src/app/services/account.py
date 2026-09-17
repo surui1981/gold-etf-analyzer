@@ -176,16 +176,12 @@ class AccountService:
 
         stats = (await self._positions.stats_by_account()).get(account_id)
         if stats and stats.open_count > 0:
-            raise ValueError(
-                f"该账本仍有 {stats.open_count} 笔未平仓持仓，请先平仓或转移后再归档"
-            )
+            raise ValueError(f"该账本仍有 {stats.open_count} 笔未平仓持仓，请先平仓或转移后再归档")
 
         account.archived_at = utcnow()
         await self._repo.save(account)
         logger.info("账本已归档: id=%s", account_id)
-        return AccountArchiveOut(
-            id=account.id, archived=True, archived_at=account.archived_at
-        )
+        return AccountArchiveOut(id=account.id, archived=True, archived_at=account.archived_at)
 
     async def restore(self, account_id: int) -> AccountArchiveOut:
         """恢复已归档账本。
@@ -201,9 +197,7 @@ class AccountService:
 
         conflict = await self._repo.get_by_name(account.name)
         if conflict is not None and conflict.id != account.id:
-            raise ValueError(
-                f"存在同名在用账本「{account.name}」，请先修改本账本名称再恢复"
-            )
+            raise ValueError(f"存在同名在用账本「{account.name}」，请先修改本账本名称再恢复")
 
         account.archived_at = None
         await self._repo.save(account)

@@ -40,9 +40,7 @@ class GoldPriceDaily(Base):
     """黄金每日收盘价（按 ``target`` + ``price_date`` 唯一）。"""
 
     __tablename__ = "gold_price_daily"
-    __table_args__ = (
-        UniqueConstraint("target", "price_date", name="uq_gold_price_target_date"),
-    )
+    __table_args__ = (UniqueConstraint("target", "price_date", name="uq_gold_price_target_date"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     target: Mapped[str] = mapped_column(
@@ -56,9 +54,7 @@ class GoldPriceDaily(Base):
     source: Mapped[str] = mapped_column(
         String(32), default="", comment="数据来源标识（live/mock/...）"
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

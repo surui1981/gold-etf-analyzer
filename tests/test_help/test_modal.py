@@ -25,6 +25,7 @@ HELP_JS = ROOT / "static" / "help.js"
 
 # ─────────────── JS 抽取 ───────────────
 
+
 def _extract_function(name: str) -> str:
     """从 help.js 中抽取 function <name>(...) { ... } 的完整源码。"""
     src = HELP_JS.read_text(encoding="utf-8")
@@ -42,12 +43,15 @@ def _extract_function(name: str) -> str:
         elif c == "}":
             depth -= 1
         i += 1
-    return src[m.start():i]
+    return src[m.start() : i]
 
 
 def _make_js_env() -> str:
     """构造一段 JS 上下文：暴露 escapeHtml + renderGuideTab + renderTermsTab + renderSourceTab。"""
-    funcs = [_extract_function(n) for n in ("escapeHtml", "renderGuideTab", "renderTermsTab", "renderSourceTab")]
+    funcs = [
+        _extract_function(n)
+        for n in ("escapeHtml", "renderGuideTab", "renderTermsTab", "renderSourceTab")
+    ]
     # GLOSSARY 在闭包内被 renderTermsTab 引用，需额外抽取
     src = HELP_JS.read_text(encoding="utf-8")
     glossary_match = re.search(r"const GLOSSARY = (\{[\s\S]*?\n  \});", src)
@@ -75,16 +79,20 @@ def _run_js() -> dict:
     """通过 Node 子进程执行抽取的 JS 并解析结果。"""
     import json
     import subprocess
+
     js = _make_js_env()
     proc = subprocess.run(
         ["node", "-e", js],
-        capture_output=True, text=True, timeout=10,
+        capture_output=True,
+        text=True,
+        timeout=10,
     )
     assert proc.returncode == 0, f"Node 执行失败: {proc.stderr}"
     return json.loads(proc.stdout)
 
 
 # ─────────────── 缓存（避免每个用例重复执行 Node） ───────────────
+
 
 @pytest.fixture(scope="module")
 def rendered() -> dict:
@@ -116,15 +124,31 @@ def test_renderGuideTab_links_to_four_main_pages(rendered: dict) -> None:
 def test_renderTermsTab_includes_seven_categories(rendered: dict) -> None:
     """术语 tab 包含 7 个分类标题。"""
     html = rendered["terms"]
-    for cat in ("评估指数类", "指标/均线类", "宏观因子类", "品种代码类",
-                "交易动作类", "系统状态类", "时段类"):
+    for cat in (
+        "评估指数类",
+        "指标/均线类",
+        "宏观因子类",
+        "品种代码类",
+        "交易动作类",
+        "系统状态类",
+        "时段类",
+    ):
         assert cat in html, f"terms tab 缺少分类 {cat}"
 
 
 def test_renderTermsTab_lists_key_terms(rendered: dict) -> None:
     """术语 tab 包含关键术语（<dt>...</dt>）。"""
     html = rendered["terms"]
-    for term in ("综合指数", "MA5 / MA20 / MA40", "RSI(14)", "T12M", "Au99.99", "COMEX", "518880", "仓位推荐"):
+    for term in (
+        "综合指数",
+        "MA5 / MA20 / MA40",
+        "RSI(14)",
+        "T12M",
+        "Au99.99",
+        "COMEX",
+        "518880",
+        "仓位推荐",
+    ):
         # term 可能出现在 <dt> 标签内
         assert f">{term}<" in html or f">{term} <" in html, f"术语 {term} 未在 terms tab 出现"
 
@@ -140,8 +164,13 @@ def test_renderSourceTab_warns_disclaimer(rendered: dict) -> None:
 def test_renderSourceTab_lists_data_sources(rendered: dict) -> None:
     """数据来源 tab 列出 5 类数据源。"""
     html = rendered["source"]
-    for src in ("纽约金（COMEX GC）", "上海金（SGE Au99.99）", "黄金 ETF（518880）",
-                "美债 10Y / 30Y", "央行购金"):
+    for src in (
+        "纽约金（COMEX GC）",
+        "上海金（SGE Au99.99）",
+        "黄金 ETF（518880）",
+        "美债 10Y / 30Y",
+        "央行购金",
+    ):
         assert src in html, f"source tab 缺少 {src}"
 
 
@@ -155,13 +184,15 @@ def test_renderSourceTab_mentions_central_bank_v057(rendered: dict) -> None:
 def test_escapeHtml_handles_all_special_chars() -> None:
     """escapeHtml 对 4 类特殊字符的转义均正确。"""
     import subprocess
+
     js = _make_js_env().replace(
         "process.stdout.write(JSON.stringify({",
-        "process.stdout.write(JSON.stringify({_e: escapeHtml('<a href=\"x\">&'),"
+        "process.stdout.write(JSON.stringify({_e: escapeHtml('<a href=\"x\">&'),",
     )
     proc = subprocess.run(["node", "-e", js], capture_output=True, text=True, timeout=10)
     assert proc.returncode == 0, proc.stderr
     import json
+
     out = json.loads(proc.stdout)
     assert out["_e"] == "&lt;a href=&quot;x&quot;&gt;&amp;"
 
@@ -185,8 +216,13 @@ def test_no_xss_in_xss_attempt_term() -> None:
     runner = "process.stdout.write(JSON.stringify({terms: renderTermsTab()}));"
     import json
     import subprocess
-    proc = subprocess.run(["node", "-e", glossary_src + "\n" + funcs + "\n" + runner],
-                          capture_output=True, text=True, timeout=10)
+
+    proc = subprocess.run(
+        ["node", "-e", glossary_src + "\n" + funcs + "\n" + runner],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
     assert proc.returncode == 0, proc.stderr
     out = json.loads(proc.stdout)
     # 必须转义为 &lt;script&gt; 而非原文 <script>

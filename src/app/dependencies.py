@@ -132,7 +132,10 @@ def get_trend_service(
     T12M（不再依赖 STATIC_REF 硬编码）。空表时回退 STATIC_REF，单测时不注入也保持兼容。
     """
     return TrendService(
-        repo=repo, settings=settings, news=news, central_bank=central_bank,
+        repo=repo,
+        settings=settings,
+        news=news,
+        central_bank=central_bank,
     )
 
 

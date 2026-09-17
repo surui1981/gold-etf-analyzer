@@ -1,7 +1,8 @@
 # 改进路径 · 易用性提升路线图
 
 > 项目：`gold-etf-analyzer`（黄金价格投资辅助工具）
-> 当前版本：**V0.66.0** ｜ 制定日期：2026-08-31 ｜ 状态：**P0-P2 已全部落地 + P1 #5 行情源配置化（V0.59.0）+ P1 #6 单用户多账本与交易历史查询页（V0.62.0，P1 仅剩 #3 CI/CD）+ V0.60.0 行情实时性增强 + V0.61.0 交易闭环与业绩分析（ETF 报价口径修正 + 加仓/减仓内联面板 + 收益曲线 + 获利分析总结）+ V0.62.1 收益回放口径修复（行情未覆盖的成交归入最后可得交易日）+ V0.63.0 评估指数历史曲线升级（P2 #14 起步，4 条线 + 区间切换 + 极值卡 + 稀疏 UX）+ V0.64.0 多时间框架（周/月线趋势，P2 #9，60D / 52W / 24M 三档区间 + ISO 周界 / 年月聚合 + MA 重算）+ V0.65.0 消息面每日 3 次打分（1:2:3 加权，修复同日静默覆盖）+ **V0.66.0 研判复盘与准确率校准（金价日历 + T+1/3/5 对比 + 命中率·校准曲线·标签胜率）**；6.1 数据时效透明 + 6.2 响应式适配 + 6.3 决策可解释性 + 6.4 操作防错与撤销 + 6.6 主动提醒 + 6.7 业绩可视化（收益曲线 V0.61.0 + 指数曲线 V0.63.0 + 周月线 V0.64.0）+ 6.8 新手引导与帮助体系（V0.58.0）+ 6.10 央行购金数据化与自动化（V0.57.0）+ 6.11 研判复盘与准确率校准（V0.66.0，非原路线图项） 已落地**（6.5 主题/偏好记忆、6.9 离线体验 待规划；6.7 权重参数回测 待规划） ｜ 文档更新：2026-09-16（V0.65.0 + V0.66.0 落地 + 全量文档对账）
+> 当前版本：**V0.67.0** ｜ 制定日期：2026-08-31 ｜ 最近更新：2026-09-16（V0.67.0 框架基础补齐落地 — CI/CD + trace_id + 价格校验，评估 81.5 → 84.3）
+> 状态：**P0-P2 已全部落地 + P1 #3 CI/CD + P1 #5 行情源配置化（V0.59.0）+ P1 #6 单用户多账本与交易历史查询页（V0.62.0，P1 全部闭环）+ V0.60.0 行情实时性增强 + V0.61.0 交易闭环与业绩分析（ETF 报价口径修正 + 加仓/减仓内联面板 + 收益曲线 + 获利分析总结）+ V0.62.1 收益回放口径修复（行情未覆盖的成交归入最后可得交易日）+ V0.63.0 评估指数历史曲线升级（P2 #14 起步，4 条线 + 区间切换 + 极值卡 + 稀疏 UX）+ V0.64.0 多时间框架（周/月线趋势，P2 #9，60D / 52W / 24M 三档区间 + ISO 周界 / 年月聚合 + MA 重算）+ V0.65.0 消息面每日 3 次打分（1:2:3 加权，修复同日静默覆盖）+ V0.66.0 研判复盘与准确率校准（金价日历 + T+1/3/5 对比 + 命中率·校准曲线·标签胜率）+ **V0.67.0 框架基础补齐（CI/CD + X-Request-ID 全链路追踪 + 价格日历 schema 校验，工程评估 81.5 → 84.3）**；6.1 数据时效透明 + 6.2 响应式适配 + 6.3 决策可解释性 + 6.4 操作防错与撤销 + 6.6 主动提醒 + 6.7 业绩可视化 + 6.8 新手引导与帮助体系 + 6.10 央行购金数据化与自动化 + 6.11 研判复盘与准确率校准 + **6.12 框架基础补齐（V0.67.0，非原路线图项）** 已落地**（6.5 主题/偏好记忆、6.9 离线体验 待规划；6.7 权重参数回测 待规划） ｜ 工程性评估 B+（84.3/100），下一阶段路线见 §三·五
 > 目标：从「能用」走向「好用、可信、随时可用」
 > 投资指引基准：**纽约金（COMEX GC）**——连续交易、夜盘覆盖国内休市时段，对国内金价具领先指示意义；ETF / 上海金作国内对照与交易标的
 
@@ -9,7 +10,7 @@
 
 ## 一、现状评估
 
-### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.66.0，UX P0-P3 专项 9 项已全部落地）
+### 1.1 当前已具备的能力（V0.51 基线 + 迭代至 V0.67.0，UX P0-P3 专项 9 项已全部落地）
 
 | 模块 | 能力 |
 |------|------|
@@ -32,12 +33,22 @@
 | 操作效率 | ★★★★☆ | 今日操作清单串联每日流程 + 持仓录入简化 |
 | 决策支持 | ★★★★★ | 仓位推荐 + 理由明细 + 权重实时预览 + 阈值提醒 |
 
-> **结论**：P0-P2 易用性专项已全部落地，当前聚焦 **投资指引基准（纽约金）** 的展示与决策贯通。
+### 1.3 工程性评估（2026-09-16 三维量化 · V0.67.0 后更新）
+
+| 维度 | 权重 | 得分（V0.66.0 → V0.67.0） | 评估亮点 | 主要短板 |
+|---|---|---|---|---|
+| **数据** | 35% | **82 → 84 / 100** | 4 个行情 provider + WGC + 手工补丁 + Mock 兜底；`freshness.js` 三态；Alembic 6 迁移 + 启动幂等补列；D/W/M 聚合；V0.66.0 价格日历幂等回填；**V0.67.0 schema 校验（close>0 / source 白名单 / ±50% 涨跌幅）** | 无跨源一致性 / 单 DB |
+| **框架** | 35% | **78 → 84 / 100** | 三层 + DI + Protocol；Pydantic v2 严格；**454 用例 38 模块**（V0.67.0 +22）；OpenAPI 自动；ruff 0.16.x 锁版；**V0.67.0 GitHub Actions CI（matrix 3.11/3.12 + uv + concurrency）+ X-Request-ID 中间件 + contextvars + 日志 trace_id** | 无 metrics / 无性能基准 |
+| **易用性** | 30% | **85 / 100** | 7 页面 + 40 端点；响应式 + 帮助体系 + tour + glossary；freshness 6 页；3 槽位打分 + 加权；研判复盘 + 校准曲线 + 标签胜率 | 无 Service Worker / 无主题切换 / 无 a11y / 邮件推送未做 |
+| **综合** | 100% | **81.5 → 84.3 / 100** | **B+ 级** | — |
+
+> **结论**：V0.67.0 完成 P0 路线首版（CI/CD + trace_id + 数据校验），评估分 **81.5 → 84.3（+2.8）**，下一阶段路线见 §三·五（V0.68.0 目标 87.0）。
 >
 > **关于"P0/P1/P2/P3"编号的语义说明**（避免与 §二 §三 路线图混淆）：
 > - **§一 1.1 / §二**：指**易用性专项**编号（P0 体验杀手 / P1 每日高频 / P2 决策增强 / P3 细节打磨），共 9 项已全部落地。
 > - **§三 实施路线 + application-guide 第 11 章**：指**总改进计划**编号（P1 工程化收口 / P2 分析深度 / P3 产品化），与 UX 编号独立；UX 6.1-6.10 在 §六 UX Roadmap。
-> - 两者侧重点不同：UX 编号针对**用户感知**（页面是否好用），总计划编号针对**系统能力**（回测 / 多品种 / CI/CD 等）。
+> - **§三·五 下一阶段路线**：指**工程优先级**（P0 框架基础 → P1 可观测性 → P2 体验+业务 → P3 部署），与上述两层编号均独立。
+> - 三个编号侧重点不同：UX 编号针对**用户感知**（页面是否好用），总计划编号针对**系统能力**（回测 / 多品种 / CI/CD 等），工程优先级针对**质量门禁**（CI / 监控 / 测试 / 部署）。
 
 ---
 
@@ -144,7 +155,8 @@
 | **V0.57.0** | **6.10 央行购金数据化与自动化**：新增 `/central-bank` 页面（4 KPI + Chart.js 堆叠柱 + Top 10 + 按国家/季度范围筛选明细表）+ 3 个 endpoint；数据源切到 WGC HTML chart JS（绕开 XLSX 403），覆盖 2014Q1–2026Q2 + H1 2026 按国家 + UZB/IRN 手工补丁；cb_gold 宏观因子从表自动汇总 T12M；**月度自动调度** 每月 1/15/末日 07:30 BJT 自动从 WGC 拉取；216 测试通过 | 央行购金数据化 + 自动化 | ✅ |
 | **V0.58.0** | **6.8 新手引导与帮助体系**：新增 `static/help.js` + `static/help.css` 自包含脚本，右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 大类分组 / 数据来源 + 投资警示）；首次访问 5 个页面自动弹 2-4 步 tour 浮层（高亮 + 蒙层 + 步骤切换），`localStorage.pm_help_seen_version` 升级时强制重看；15 项关键术语 inline `?` 图标自动注入（综合指数 / MA5/20/40 / RSI(14) / T12M / Au99.99 / COMEX / 518880 / 仓位推荐 等）；响应式：modal 在 <768px 改为底部抽屉；63 项新测试覆盖 glossary / tour / HTML 注入 / XSS 转义 / 数据源标注；279 测试通过 | 新手引导 + 帮助体系 | ✅ |
 | **V0.59.0** | **P1 #5 行情源配置化**：`repositories/market_data.py` 重构为 Provider 抽象入口，新增 `repositories/market_providers.py` 工厂模块；3 个窄接口（GoldHistoryProvider / GoldLiveQuoteProvider / TreasuryYieldProvider）+ `MarketProviderBundle` 三件套 + `build_provider_bundle(settings)` 工厂；4 个内置 provider：**akshare**（默认：东财 ETF + 新浪 ETF 备 + 英为财情外盘 + gold-api 实时 + H.15 美债）/ **mock**（确定性序列、零依赖、零网络）/ **eastmoney_only**（仅东财，省去新浪子进程开销）/ **sina_only**（仅新浪，适用东财 403 场景）；`.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，启动时一次性读取；`XAU_FALLBACK_CHAIN=goldapi,sina,etf_history` 与 `QUOTE_CACHE_TTL=300` 也可配；旧 `MarketDataRepository(provider=...)` 签名保留向后兼容；24 项新测试（工厂解析 4 provider 名 + 大小写 + 未知名抛错 + 空回退默认 + Mock 数据正确性 + bundle 注入 + XAU chain + cache_ttl=0 禁用）；303 测试通过（279 → 303） | 行情源配置化 | ✅ |
-| **V0.66.0**（当前） | **6.11 研判复盘与准确率校准（新增项）**：① 新增 `gold_price_daily` 金价日历表（`target` + `price_date` 唯一，存 `close`/`change_pct`/`source`），**只存客观价格、与 `daily_snapshots` 解耦**，可回填可长期积累；② `news_scores` 增 `basis`（JSON 依据标签）/ `review_note`（事后批注）/ `backfilled`（补录标记）；③ `ReviewService`：`backfill(days)` 从 `/gold/ny-trend` 幂等回填 / `journal(days)` 按**交易日**对齐（基准 = 研判日或之前最近交易日收盘，T+N 取第 N 个后继，自动跳过周末休市）/ `stats(days)` 输出总命中率 + 方向分组 + 窗口分组 + **分值分箱校准曲线** + **依据标签胜率**（补录日期整日排除防前视偏差，样本 <20 标注「仅供参考」）/ `hint_for_score()` 打分页即时提示；④ 命中口径：看多须涨、看空须跌、看平 `\|涨跌\| ≤ 0.3%`；⑤ 6 个 review 接口 + `/review` 页面（统计面板 + 按日期倒序研判日志卡片）+ 5 页导航入口；⑥ `news.html` 增 12 个依据标签多选 + 复盘批注 + 打分时历史校准提示；⑦ 迁移 `a3d9e1f7b2c4`；路由 32 → 40；新增 22 用例（服务 13 + API 9），用例 410 → 432 | 研判复盘·准确率校准 | ✅ |
+| **V0.67.0**（当前） | **框架基础补齐（P0 路线首版 / 工程评估三项落地）**：① **CI/CD** 新增 `.github/workflows/ci.yml`（`push`/`pull_request` 触发，Python 3.11/3.12 matrix + `fail-fast: false` + `astral-sh/setup-uv@v5` + uv 缓存 `cache-dependency-glob` + `concurrency` 取消旧 PR；步骤：`uv sync --frozen --extra dev` → `ruff check` → `ruff format --check` → `pytest -q` 排除 2 个联网 fetcher 文件 → `python scripts/check_static_js.py`）；② **可观测性** 新增 `src/app/middleware/trace.py` `TraceIdMiddleware`（**纯 ASGI** 避开 starlette#420 contextvar 丢失，仅 `scope["type"]=="http"` 生效）：入站沿用客户端 `X-Request-ID` 或自动生成 UUIDv4 hex（无连字符、32 字符、便于 grep），入站值经清洗（8-128 字符、仅 alnum+-._ 防日志注入），进程内通过 `contextvars.ContextVar` 暴露给任意调用栈；响应头回写 `X-Request-ID` 让客户端可串联；`utils/logger.py` 集成 `TraceIdFilter`（每条 LogRecord 自动附加 `trace_id`）+ `_Formatter`（`时间 \| 级别 \| trace_id \| logger \| 消息`）；提供 `set_trace_id`/`reset_trace_id` 供后台任务手动绑定；中间件注册在 `CORSMiddleware` 之前（CORS 预检失败场景也能看到 trace_id）；③ **数据守门** 价格日历 `upsert_many` 入库前 schema 校验——新增 `_validate_bar`（`close <= 0` 或 NaN 拒、`source` 必须在白名单 `{live, manual, import, test}` 内，`test` 为保留以兼容 V0.66.0 单测 fixture）与 `_validate_change_pct`（单日涨跌幅超 ±50% 跳过该条目其余正常，**整批 schema 失败时拒绝写入 + `logger.warning`**，部分失败仅 `logger.info`）；④ 8 个中间件测试（自动生成 / 客户端沿用 / 非法字符 / 长度 < 8 / 404 响应头 / 默认 dash / set+reset / lifespan 直通）+ 12 个价格校验测试（单元 8 + 集成 4）+ 2 个 logger 集成 = 新增 **22 个测试**（432 → 454，离线回归 410 passed / 0 failed / 2m32s）；⑤ ruff 全绿（`ruff check` 0 errors、`ruff format` 128 files 已格式化、JS 门禁 OK） | CI/CD + trace_id + 数据校验 | ✅ |
+| **V0.66.0** | **6.11 研判复盘与准确率校准（新增项）**：① 新增 `gold_price_daily` 金价日历表（`target` + `price_date` 唯一，存 `close`/`change_pct`/`source`），**只存客观价格、与 `daily_snapshots` 解耦**，可回填可长期积累；② `news_scores` 增 `basis`（JSON 依据标签）/ `review_note`（事后批注）/ `backfilled`（补录标记）；③ `ReviewService`：`backfill(days)` 从 `/gold/ny-trend` 幂等回填 / `journal(days)` 按**交易日**对齐（基准 = 研判日或之前最近交易日收盘，T+N 取第 N 个后继，自动跳过周末休市）/ `stats(days)` 输出总命中率 + 方向分组 + 窗口分组 + **分值分箱校准曲线** + **依据标签胜率**（补录日期整日排除防前视偏差，样本 <20 标注「仅供参考」）/ `hint_for_score()` 打分页即时提示；④ 命中口径：看多须涨、看空须跌、看平 `\|涨跌\| ≤ 0.3%`；⑤ 6 个 review 接口 + `/review` 页面（统计面板 + 按日期倒序研判日志卡片）+ 5 页导航入口；⑥ `news.html` 增 12 个依据标签多选 + 复盘批注 + 打分时历史校准提示；⑦ 迁移 `a3d9e1f7b2c4`；路由 32 → 40；新增 22 用例（服务 13 + API 9），用例 410 → 432 | 研判复盘·准确率校准 | ✅ |
 | **V0.65.0** | **消息面每日 3 次打分（1:2:3 加权）+ 修复同日静默覆盖**：① 原缺陷——`news_scores.score_date` 唯一约束 + upsert 保存，同日第二次打分**静默覆盖**第一次且页面仍提示「已保存」；② 增 `slot`(1-3) / `scored_at`，改 `(score_date, slot)` 复合唯一；③ 当日有效分值按**越晚权重越高** `Σ(i × scoreᵢ) / Σi` 合成；三次用尽后留空 slot 提交返回 400（不再静默覆盖），显式 slot 可覆盖修正；④ 新增 `DELETE /news-score/{slot}` 撤销（剩余次数重新归一）与 `GET /news-score/history`；⑤ 前端 `news.html` 重做（三槽位卡片 + 加权算式 + 剩余次数 + 历史表 + 撤销确认）；⑥ 迁移 `f2a7b4c9d1e3` 放开旧唯一索引、存量行归入 `slot=1`；新增 13 用例（API 7 + 重写服务 5→11），用例 397 → 410 | 消息面 3 次打分 | ✅ |
 | **V0.64.0** | **多时间框架（周/月线趋势，P2 #9）**：趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）—— ① 后端抽 730 天日 K 后按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K（`aggregate_klines(daily, interval)` 核心函数）；② MA 在聚合后序列上重算（周线 MA5≈1 交易月、MA20≈季线、MA40≈半年线）；③ W/M 模式技术面 5 维度旁路（指标对日 K 敏感），宏观与消息面仍正常合成综合指数；④ `/gold/trend?interval=W\|M` + `days` 上限 250 → 750；⑤ 缓存 key 扩展为 (target, interval, date) 三维独立（避免 W/M 结果被 D 请求误命中）；⑥ 趋势页 `trendChart.destroy()` 内存管理（仿 V0.63.0 snapChart 模式）；⑦ 60s 轮询只刷日 K，避免每分钟重画周/月主图；⑧ 摘要自适应（"近 1 年" / "近 2 年"）。新增 14 个测试（服务 4 + API 4 + 工具 6）；397 用例通过（383 → 397），离线回归 **365 passed / 0 failed**（130s） | 多时间框架 | ✅ |
 | **V0.63.0** | **评估指数历史曲线升级（P2 #14 起步）**：趋势追踪页『每日评估历史』面板前端增强，后端零改动。① **第 4 条曲线**：新增 `news_index` 消息面线（紫色虚线），综合指数的 4 个构成维度（综合 / 技术 / 宏观 / 消息面）一目了然；② **区间切换**：`7D / 30D / 90D` 三档按钮（参考 portfolio 收益曲线 `EQUITY_RANGES` 模式），调用 `/api/v1/snapshots?days=N` 重新渲染；③ **4 个极值卡**：最新（带档位）/ 区间最高（附日期）/ 区间最低（附日期）/ 日变（↑↓→ 红绿色），用现有 `.cards` 网格替代单行 summary；④ **稀疏数据 3 档 UX**：< 3 天「样本不足，趋势尚不显著」+ 隐藏极值卡；< 7 天「仅 N 天数据」；≥ 7 天默认（pointRadius 缩小到 2）；⑤ **chart.destroy 内存管理**：`snapChart` 模块级变量 + 渲染前 `snapChart?.destroy()`，区间切换不堆积 Chart 实例；⑥ **空数据兜底**：`< canvas >` 占位 + 子标题改为「暂无快照数据（每日 07:00 BJT 自动捕获）」，旧 chart 销毁。新增 6 个测试（API 4 + 服务 2）；383 用例通过（377 → 383） | 指数曲线可视化 | ✅ |
@@ -160,22 +172,170 @@
 
 ---
 
+## 三·五、下一阶段路线（V0.67.0 → V0.72.0）· 工程化补齐 → 业务深度 → 产品化
+
+> 制定日期：2026-09-16 ｜ 工程性评估基线（V0.67.0 后更新）：**84.3 / 100（B+）**（数据 84 / 框架 84 / 易用性 85）
+> 目标：**V0.72.0 完工后 90 / 100（A-）**
+> 计划周期：6 个版本 / 约 8-10 周（单人开发，按周节奏）
+> 编号语义：本节 **P0-P3 是工程优先级**（不是 §二 UX 编号）；§二 UX P0-P3 9 项已全部落地，本节不再涉及
+
+### 总览
+
+| 优先级 | 主题 | 版本 | 综合分提升 | 关键产物 | 工作量 |
+|---|---|---|---|---|---|
+| **P0** | CI/CD + trace_id + 价格校验 | V0.67.0 | 81.5 → 83.5（+2） | `.github/workflows/ci.yml`；`app/middleware/trace.py`；`services/review.py` schema 校验 | 2.5 人天 |
+| **P1** | Prometheus + 跨源一致性 + Service Worker + 性能基准 | V0.68.0 | 83.5 → 87（+3.5） | `/metrics` 端点；`data_consistency_audit` 表；`static/sw.js` + 离线 fallback；`tests/perf/` | 4 人天 |
+| **P2-a** | 主题切换 + 无障碍 + 价格日历扩窗 | V0.69.0 | 87 → 89（+2） | 3 主题切换；axe-core 0 critical；backfill 60→365 天 | 3 人天 |
+| **P2-b** | P2 #7 宏观×技术共振 + P2 #8 克数持仓 | V0.70.0 | 89 → 90（+1） | `services/resonance.py` 4 类信号；`positions.grams_held` | 4 人天 |
+| **P3-a** | P2 #11 多品种白银 + P2 #10 参数回测校准 | V0.71.0 | 90 → 90.5（+0.5） | `silver/silver_gram` 标的接入；`/backtest` 页 + `POST /api/v1/backtest/run` | 6 人天 |
+| **P3-b** | P3 #15 邮件/微信推送 + P3 #16 公开部署 | V0.72.0 | 90.5 → 91（+0.5） | `services/notify.py` 抽象 + SMTP/Server酱；`docker-compose.prod.yml` + Nginx + Let's Encrypt | 5 人天 |
+
+### P0 · V0.67.0（1 周）· 框架基础补齐 ✅ 已落地
+
+**目标分**：81.5 → 84.3 ｜ **风险**：高 ｜ **依赖**：无 ｜ **实际工期**：~2.5 人天
+
+| # | 事项 | 子项 | 验收 | 状态 |
+|---|---|---|---|---|
+| 1 | **CI/CD** | `.github/workflows/ci.yml`：push/PR 触发 `pytest -q --tb=short` + `ruff check src tests` + `python scripts/check_static_js.py`；matrix Python 3.11 / 3.12；缓存 `.venv` + `~/.cache/uv`；README 加徽章 | PR 必须绿才能 merge | ✅ |
+| 2 | **trace_id 中间件** | `app/middleware/trace.py`：`X-Request-ID` 入站优先 / 自动 UUIDv4 生成；注入 `contextvars`；`logger.py` 自动附加；429/422/5xx 响应头回传 `X-Request-ID` | 任意 5xx 日志含同 trace_id 可串联 | ✅ |
+| 3 | **价格日历 schema 校验** | `repositories/review.py` `upsert_many`：`close > 0`（含 NaN 检测）/ `source ∈ {live, manual, import, test}`；`change_pct ∈ [-50%, +50%]` 超界跳过该条目其余正常；schema 失败整批拒绝 + `WARN` 日志 | 14 个新单测（含异常注入） | ✅ |
+
+**测试增量**：+22 → **454 用例 / 38 模块**（trace_id 中间件 8 + 价格校验 12 + logger 集成 2）→ 实测离线回归 **410 passed / 0 failed / 2m32s**
+**文档更新**：`README.md` 功能清单 + 待办 + 测试行；`docs/application-guide.md` §2 / §9 / §10；`docs/feature-alignment.md` P1 #3 行
+**关键工程决策**：
+- 中间件用**纯 ASGI**实现（避开 starlette#420 BaseHTTPMiddleware contextvar 丢失）
+- 入站 `X-Request-ID` 严格 8-128 字符 alnum+-._（防日志注入）
+- 价格校验使用「整批 schema 拒绝 + 部分 change_pct 跳过」混合策略（区别对待「确定性错误」与「概率性异常」）
+- CI `concurrency` 块 `cancel-in-progress: true`（旧 PR 推送自动取消，避免资源浪费）
+- 中间件注册在 `CORSMiddleware` **之前**（add_middleware LIFO，CORS 拦截场景也能看到 trace_id）
+
+### P1 · V0.68.0（2 周）· 可观测性 + 离线体验
+
+**目标分**：83.5 → 87 ｜ **依赖**：V0.67.0 trace_id 落地
+
+| # | 事项 | 子项 | 验收 |
+|---|---|---|---|
+| 4 | **Prometheus `/metrics`** | `app/metrics.py`：自定义 `Counter`（请求 / 缓存命中 / 回填天数 / scheduler 触发）+ `Histogram`（请求延迟 / DB 查询 / AKShare 抓取耗时）+ `Gauge`（进程内存 / 活跃连接 / served cache 条数）；`/metrics` 端点绕过 auth | 抓取一次可见 ≥10 个指标族；含 `_cache_hits_total`、`_request_duration_seconds` |
+| 5 | **NY/ETF/克价跨源一致性** | `services/consistency.py` 每日 23:00 BJT 跑：NY 收盘 ↔ ETF 折算 ↔ 上海金克价 三向对比，超阈值（如 NY/ETF 偏离 >1.5%）写 `WARN` + 落 `data_consistency_audit` 表；前端 `/admin/audit` 只读页（轻量） | 偏离单 + 调度各 1 项 |
+| 6 | **Service Worker 离线缓存** | `static/sw.js` + `static/manifest.json`：策略 cache-first 静态资源（HTML / JS / CSS / icon）+ stale-while-revalidate 接口（`/gold` / `/gold/trend?days=60&interval=D` / `/news-score`）；`/portfolio` 等高交互页注册 `navigator.serviceWorker.register()`；离线 fallback 页 `static/offline.html`（含「数据为最后一次缓存」提示 + 最近一次有效快照链接） | Chrome DevTools → Application → Service Workers 可见激活；Network → Offline 仍可开页 |
+| 7 | **性能基准回归** | `tests/perf/` 新增 `test_perf_kline.py`：600 天 D 聚合 < 500ms / W 聚合 < 300ms / M 聚合 < 300ms；CI 跑超时即 fail（基线 +50% 容忍） | `pytest tests/perf/ -q` 全过 |
+
+**测试增量**：+22（metrics 6 + consistency 6 + SW 4 + perf 6） → **468 用例**
+**文档更新**：`docs/feature-alignment.md` P1 #3 由 📋 升 ✅ V0.67.0；P3 #9 加载离线升 ✅ V0.68.0
+
+### P2-a · V0.69.0（1 周）· 体验打磨
+
+**目标分**：87 → 89 ｜ **依赖**：无
+
+| # | 事项 | 子项 | 验收 |
+|---|---|---|---|
+| 8 | **主题切换** | `static/theme.js` + `static/themes.css`：3 主题（light / dark / auto 跟系统）；`localStorage.pm_theme` 记忆；右上角 🌗 按钮；所有页面覆盖 | 切换 < 200ms 无闪烁；不依赖 CDN |
+| 9 | **键盘导航 / 无障碍** | 全站 7 页面：所有交互元素 `tabindex` + `aria-label`；Chart.js canvas 加 `role="img"` + `aria-label`；键盘 ⬆⬇ 切换 K 线区间；Skip-to-content 链接 | axe-core 0 critical violations |
+| 10 | **价格日历覆盖延长** | 默认 backfill 从 60 → 365 天；扩展 `_fetch_all` 拼接 `/gold/ny-trend?days=730` 二次抓取 | 1 年历史覆盖 |
+
+**测试增量**：+9（theme 3 + a11y 4 + 扩窗 2） → **477 用例**
+
+### P2-b · V0.70.0（2 周）· 业务深度
+
+**目标分**：89 → 90 ｜ **依赖**：V0.66.0 review 已有口径
+
+| # | 事项 | 子项 | 验收 |
+|---|---|---|---|
+| 11 | **P2 #7 宏观×技术共振** | `services/resonance.py`：双维度背离检测（技术 5 维 vs 宏观 5 因子 vs 消息面 ≥55 或 ≤45）；输出 4 类信号（同向强 / 同向弱 / 背离 / 中性）+ 置信度；前端趋势页加「📡 共振信号」卡片 | 服务 8 + API 3 测试 |
+| 12 | **P2 #8 克数持仓跟踪** | `positions` 表增 `grams_held`；交易面板支持按克数（输入克数自动按市价折算份数）；收益曲线按「克数 × 金价」重算；`/portfolio` 显示总持仓克数 | 服务 10 + API 4 测试 |
+
+**测试增量**：+25 → **502 用例**
+**文档更新**：`improvement-path.md` P2 #7 / #8 由 📋 升 ✅ V0.70.0
+
+### P3-a · V0.71.0（2 周）· 多样化 + 回测
+
+**目标分**：90 → 90.5
+
+| # | 事项 | 子项 | 验收 |
+|---|---|---|---|
+| 13 | **P2 #11 多品种（白银）** | `models/market.py` 标的扩展 `silver/silver_gram`；`repositories/market_data.py` 接入新浪白银；K 线 / 评估 / 决策复用；`/portfolio` 多标的支持；新增 `/silver` 静态页 | 端到端白银 vs 黄金相关性展示 |
+| 14 | **P2 #10 参数回测校准** | `services/backtest.py`：对历史 N 天跑参数组合 → 输出 sharpe / 最大回撤 / 胜率；`/backtest` 页面 + API `POST /api/v1/backtest/run`（带节奏保护 5 分钟 1 次） | 服务 12 + API 5 测试 |
+
+**测试增量**：+30 → **532 用例**
+
+### P3-b · V0.72.0（2 周）· 监控 + 部署
+
+**目标分**：90.5 → 91
+
+| # | 事项 | 子项 | 验收 |
+|---|---|---|---|
+| 15 | **P3 #15 邮件/微信推送** | `services/notify.py`：抽象 Notifier 协议；新增 SMTP + Server 酱微信 webhook；`alert_rules.json` 用户配置（指数档位穿越 / 单日波动 ≥3%）；与 V0.56.0 浏览器通知并存 | 配置生效 / 失败重试 |
+| 16 | **P3 #16 公开部署** | `Dockerfile` 多阶段构建 + `docker-compose.yml` 加 Nginx 反代 + Let's Encrypt；`.env.prod` 模板；Caddy 反代示例 | 一键 `docker compose -f docker-compose.prod.yml up -d` 公网可达 |
+
+**测试增量**：+12 → **544 用例**
+
+### 各维度分提升轨迹
+
+```
+ V0.66.0   V0.67.0   V0.68.0   V0.69.0   V0.70.0   V0.71.0   V0.72.0
+数据       82       84       86        87       87       88       88
+框架       78       84        88        89       89       89       90
+易用性     85       85        87        89       91       91       92
+──────────────────────────────────────────────────────────────────────
+综合       81.5     84.3     87.0      88.3     89.0     89.4     90.0
+```
+
+### 风险与回退
+
+| 风险 | 影响 | 缓解 |
+|---|---|---|
+| CI 引入新环境导致 flaky test | CI 失去信任 | V0.67.0 同期新建 `quarantine/` 标记不稳定用例（`pytest.mark.flaky`）；2 周内必须修复 |
+| Service Worker 缓存陈旧导致用户看不到新版本 | 用户困惑 | `sw.js` 版本号 + `skipWaiting` + `clients.claim`；新部署首日监测 console 错误率 |
+| Prometheus 引入性能损耗 | 边缘延迟 +5% | 默认采样 100%；metrics 暴露路径排除主请求热路径 |
+| 公开部署暴露 `/api/v1/review/backfill` 等写端点 | 安全风险 | V0.72.0 前引入 admin token（环境变量）+ 限速中间件 |
+
+### 与远端合作的最小动作
+
+由于远程已领先本地（surui1981 可能在同步推进），每个版本完成后建议：
+
+```bash
+git fetch origin && git rebase origin/main    # 先看是否有新冲突
+git push https://oauth2:<classic-PAT>@github.com/surui1981/gold-etf-analyzer.git main
+```
+
+（PAT 凭据见 `memory/github-pat-token.md`，过期 2026-12-09）
+
+---
+
+**一句话总结**：未来 6 个版本聚焦「先补工程债（P0-P1 框架分 +9），再拓业务深度（P2），最后扩部署能力（P3）」；预计 V0.72.0 后稳定在 **90 分 A-**，可面向小范围公测。
+
+---
+
 ## 四、验收度量
 
-| 指标 | 目标 | 当前（V0.66.0） |
-|------|------|------|
-| 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 |
-| 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化 + 后台预热，冷启动 ~1.6s |
-| 数据源状态可见性 | 100% | ✅ 三态标识 + 健康度 + 备源兜底 |
-| 每日完整操作流程耗时 | ≤ 3 分钟 | ✅ 今日操作清单串联 |
-| 每日打分操作耗时 | ≤ 10 秒 | ✅ 每日 3 次机会（1:2:3 加权）+ 快捷档位 + 逐次可改可撤 |
-| 投资指引基准 | 纽约金（连续/领先） | ✅ V0.51 已切换 |
-| 交易可追溯性 | 逐笔成交可查、可按账本隔离 | ✅ V0.62.0 交易历史页 + 多账本（均价法回放已实现盈亏） |
-| 业绩可见性 | 收益率 / 回撤 / 胜率可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 |
-| **指数曲线回看** | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） |
-| **多时间框架 K 线主图** | 60D / 52W / 24M 三档区间切换 + ISO 周界 / 年月聚合 + MA 重算 | ✅ **V0.64.0 已落地**（趋势页 K 线主图加 3 档按钮 + 服务端 ISO 周界 / 年月聚合 + MA 在聚合序列上重算 + W/M 模式技术面旁路 + `days` 上限 250 → 750） |
-| **消息面打分准确率可校准** | 按日期归档研判 + 次日/3 日/5 日金价对比 + 命中率与分箱校准 | ✅ **V0.66.0 已落地**（`gold_price_daily` 金价日历 + `/review` 按日期归档 + T+1/3/5 判定 + 命中率/校准曲线/标签胜率；补录样本默认排除） |
-| 回归测试 | 全绿 | ✅ **432 用例 / 37 个测试模块**（离线 **388 passed / 0 failed**，27m05s；全量含联网 fetcher **431 passed / 1 skipped / 0 failed**） |
+| 指标 | 目标 | 当前（V0.67.0） | 下一阶段目标（V0.68.0 → V0.72.0） |
+|------|------|------|------|
+| **工程性评估综合分** | 90 / 100（A-） | 84.3 / 100（B+）V0.67.0 | V0.68.0 = 87.0 → V0.69.0 = 88.3 → V0.70.0 = 89.0 → V0.71.0 = 89.4 → **V0.72.0 = 90.0** |
+| 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 | — |
+| 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化 + 后台预热，冷启动 ~1.6s | — |
+| 数据源状态可见性 | 100% | ✅ 三态标识 + 健康度 + 备源兜底 | — |
+| **CI 必跑门禁** | PR 必绿 | ✅ V0.67.0：GitHub Actions matrix 3.11/3.12 + pytest + ruff + JS 门禁 | — |
+| **trace 串联** | 5xx 一键定位 | ✅ V0.67.0：`X-Request-ID` 中间件 + `contextvars` 注入日志 | — |
+| **可观测性** | 指标可抓取 | ❌ 无 metrics | **V0.68.0**：`/metrics` Prometheus 端点（≥10 指标族） |
+| **离线可用性** | Service Worker 缓存 | ❌ 无 | **V0.68.0**：cache-first + SWR 策略 + `offline.html` fallback |
+| **性能基准** | CI 防回归 | ❌ 无 | **V0.68.0**：`tests/perf/` K 线聚合 < 500ms 基线 |
+| **跨源一致性** | NY/ETF/克价日检 | ❌ 无 | **V0.68.0**：23:00 BJT 调度 + `data_consistency_audit` 表 |
+| **主题 + 无障碍** | 暗色 / 跟随系统 + axe-core 0 critical | ❌ 仅亮色 | **V0.69.0**：3 主题切换 + 全站 a11y |
+| 每日完整操作流程耗时 | ≤ 3 分钟 | ✅ 今日操作清单串联 | — |
+| 每日打分操作耗时 | ≤ 10 秒 | ✅ 每日 3 次机会（1:2:3 加权）+ 快捷档位 + 逐次可改可撤 | — |
+| 投资指引基准 | 纽约金（连续/领先） | ✅ V0.51 已切换 | — |
+| **共振信号** | 宏观×技术×消息面背离检测 | ❌ 无 | **V0.70.0**：4 类信号 + 置信度 + 趋势页卡片 |
+| **克数持仓** | 按克数交易 + 收益曲线按克数重算 | ❌ 仅份数 | **V0.70.0**：`positions.grams_held` + 双口径换算 |
+| 交易可追溯性 | 逐笔成交可查、可按账本隔离 | ✅ V0.62.0 交易历史页 + 多账本（均价法回放已实现盈亏） | — |
+| 业绩可见性 | 收益率 / 回撤 / 胜率 可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 | — |
+| **多品种** | 白银 K 线 + 评估 + 决策 | ❌ 仅黄金 | **V0.71.0**：`silver/silver_gram` 接入 + `/silver` 页 |
+| **参数回测** | 历史 sharpe / 最大回撤 / 胜率 | ❌ 无 | **V0.71.0**：`/backtest` 页 + `POST /api/v1/backtest/run` |
+| **邮件/微信推送** | 指数档位穿越 + 异动告警 | ⚠️ 仅浏览器 | **V0.72.0**：SMTP + Server 酱 webhook |
+| **公开部署** | Docker + Nginx + HTTPS 一键 | ❌ 仅 `127.0.0.1:8888` | **V0.72.0**：`docker-compose.prod.yml` + Caddy + Let's Encrypt |
+| 指数曲线回看 | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） | — |
+| 多时间框架 K 线主图 | 60D / 52W / 24M 三档区间切换 + ISO 周界 / 年月聚合 + MA 重算 | ✅ **V0.64.0 已落地**（趋势页 K 线主图加 3 档按钮 + 服务端 ISO 周界 / 年月聚合 + MA 在聚合序列上重算 + W/M 模式技术面旁路 + `days` 上限 250 → 750） | — |
+| 消息面打分准确率可校准 | 按日期归档研判 + 次日/3 日/5 日金价对比 + 命中率与分箱校准 | ✅ **V0.66.0 已落地**（`gold_price_daily` 金价日历 + `/review` 按日期归档 + T+1/3/5 判定 + 命中率/校准曲线/标签胜率；补录样本默认排除） | — |
+| 回归测试 | 全绿 + 单调增长 | ✅ **454 用例 / 38 个测试模块**（离线 **410 passed / 0 failed**，2m32s；含 trace_id 8 + 价格校验 12 + logger 集成 2 = V0.67.0 新增 22 个） | **V0.68.0 = 476 → V0.69.0 = 485 → V0.70.0 = 510 → V0.71.0 = 540 → V0.72.0 = 552**（含 perf/metrics/一致性/无障碍新增） |
 
 ---
 
@@ -327,6 +487,16 @@
 
 **V0.66.0 实现要点**：新增 `models/review.py`（`GoldPriceDaily` 表，`target` + `price_date` 唯一）+ `repositories/review.py`（`list_range` / `get_on` / `latest_before` / `upsert_many` —— **在合并后的时间序列上重算涨跌幅**，重复回填不抹平已有值）+ `services/review.py`（`backfill` / `journal` / `stats` / `hint_for_score`）；`news_scores` 增 `basis` / `review_note` / `backfilled` 三列（迁移 `a3d9e1f7b2c4`，运行时 `db_migrate` 兜底）；`NewsScoreService` 抽出公共 `aggregate_slots`，使复盘与打分页口径同源；新增 `static/review.html`（统计面板 + 研判日志）并在 5 个既有页面加导航入口；`news.html` 增 12 个依据标签多选与打分时校准提示。
 
+### 6.12 框架基础补齐（🟡 中 · 从「能用」到「可观测、可信赖」）✅ 已落地（V0.67.0）
+
+> **非原 UX 路线图项** —— 由工程性评估 B+ 81.5/100（数据 35% / 框架 35% / 易用性 30% 三维度）抽出的 P0 三项，先补工程债再拓业务深度。
+
+- **CI/CD（GitHub Actions）**：PR 必跑 `pytest` + `ruff check` + `ruff format --check` + `JS 门禁`；Python 3.11/3.12 matrix + `fail-fast: false` + uv 缓存 + `concurrency` 取消旧 PR（避免 PR 反复触发浪费 runner）；**这是 P1 路线**「权重配置页 / 行情源配置化 / CI/CD」**三项的最后一项**；
+- **`X-Request-ID` 全链路追踪**：纯 ASGI `TraceIdMiddleware` 入站沿用或 UUIDv4 hex 自动生成（无连字符、32 字符、便于 grep），入站值经清洗（8-128 字符、仅 alnum+-._ 防日志注入），响应头回写让客户端可串联；进程内通过 `contextvars.ContextVar` 暴露给任意调用栈；日志格式器自动附加 `trace_id` —— **任意一行日志都能 grep 到对应 HTTP 请求**，5xx 排查从「翻全文日志」缩到「一次 grep」；
+- **价格日历 schema 守门**：`upsert_many` 入库前 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；整批 schema 失败时拒绝写入 + `WARN` 日志，部分失败仅 `INFO` 日志；**保证数据库不被脏数据污染，下游统计永远可信**。
+
+**V0.67.0 实现要点**：新增 `src/app/middleware/trace.py`（`TraceIdMiddleware` + `_trace_id_var` ContextVar + `set_trace_id`/`reset_trace_id` 手动管理后台任务）；修改 `src/app/utils/logger.py`（`TraceIdFilter` + `_Formatter` + `get_logger` 工厂）；`src/app/main.py` 注册中间件在 CORS 之前；`repositories/review.py` 加 `_validate_bar` + `_validate_change_pct` 常量与函数；新增 `.github/workflows/ci.yml`；新增 `tests/test_middleware/__init__.py` + `test_trace_id.py`（8 例）+ `tests/test_services/test_price_calendar_validation.py`（12 例）+ `tests/test_utils/test_logger_trace_id.py`（2 例）= **22 个新测试**，用例 432 → 454，离线回归 **410 passed / 0 failed / 2m32s**；`ruff check` 0 errors、`ruff format` 128 files 已格式化、JS 门禁 7 页 + 3 共享脚本全部通过。
+
 **建议落地顺序**：6.1（信任）→ 6.2 / 6.3（看懂用顺）→ 6.6（主动触达）→ 6.10（数据化）→ 6.4 / 6.5 / 6.7 / 6.8 / 6.9 → 6.11（复盘校准，V0.66.0 已落地）。
 
 ---
@@ -336,3 +506,4 @@
 - 架构 / API / 核心模型 / 改进计划总表：见 [application-guide.md](application-guide.md) 第 11 章
 - 快速开始与功能清单：见 [README.md](../README.md)
 - 本文档聚焦**易用性**维度的改善路径，与技术改进计划（数据源扩展、回测、CI/CD 等）互补。
+- **下一阶段路线（V0.67.0 → V0.72.0）**：见 §三·五——工程性评估驱动的工程优先级（CI/CD / trace_id / Prometheus / Service Worker / 主题 / 无障碍 / 共振信号 / 克数持仓 / 多品种 / 回测 / 推送 / 公开部署）；计划基于 §一.3 工程性评估（81.5/100）排序。

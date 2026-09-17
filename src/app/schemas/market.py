@@ -175,7 +175,9 @@ class MarketSessionOut(BaseModel):
 
     market: str = Field(..., description="市场标识 ny/sge/etf")
     name: str = Field(..., description="市场名称")
-    state: str = Field(..., description="状态 open（交易中）/pre（盘前）/break（盘中休整）/closed（休市）")
+    state: str = Field(
+        ..., description="状态 open（交易中）/pre（盘前）/break（盘中休整）/closed（休市）"
+    )
     state_label: str = Field(..., description="状态中文名")
     windows: list[str] = Field(default_factory=list, description="交易时段说明")
     next_event: str = Field("", description="下一时间点提示（如 15:00 收盘）")

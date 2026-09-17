@@ -97,10 +97,16 @@ async def gold_etf_quote(
     )
 
 
-@router.get("/gold/trend", response_model=GoldTrendOut, summary="黄金趋势追踪（投资指引基准，支持多时间框架）")
+@router.get(
+    "/gold/trend",
+    response_model=GoldTrendOut,
+    summary="黄金趋势追踪（投资指引基准，支持多时间框架）",
+)
 async def gold_trend(
     days: int = Query(
-        60, ge=20, le=750,
+        60,
+        ge=20,
+        le=750,
         description="追踪的交易日数量（默认 60；上限 750 ≈ 3 个交易年，支持 24M 月 K 聚合）",
     ),
     target: str = Query(
@@ -129,7 +135,9 @@ async def gold_trend(
 @router.get("/gold/ny-trend", response_model=GoldTrendOut, summary="纽约金60天趋势曲线")
 async def ny_gold_trend(
     days: int = Query(
-        60, ge=20, le=750,
+        60,
+        ge=20,
+        le=750,
         description="追踪的交易日数量（默认60天；上限 750 支持多时间框架）",
     ),
     interval: str = Query(

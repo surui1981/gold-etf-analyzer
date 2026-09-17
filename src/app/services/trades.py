@@ -144,35 +144,63 @@ class TradeHistoryService:
         writer.writerow(["# 交易历史导出", "", "", "", "", "", "", "", "", "", ""])
         writer.writerow(
             [
-                "成交时间", "账本", "品种代码", "品种名称", "方向", "数量(份)",
-                "成交价(元/份)", "成交金额(元)", "手续费(元)", "已实现盈亏(元)",
-                "成交后份额", "持仓ID", "流水ID",
+                "成交时间",
+                "账本",
+                "品种代码",
+                "品种名称",
+                "方向",
+                "数量(份)",
+                "成交价(元/份)",
+                "成交金额(元)",
+                "手续费(元)",
+                "已实现盈亏(元)",
+                "成交后份额",
+                "持仓ID",
+                "流水ID",
             ]
         )
         for item in items:
             writer.writerow(
                 [
-                    item.traded_at, item.account_name, item.symbol, item.name,
+                    item.traded_at,
+                    item.account_name,
+                    item.symbol,
+                    item.name,
                     "买入" if item.side == "buy" else "卖出",
-                    item.quantity, item.price, item.amount, item.fee,
+                    item.quantity,
+                    item.price,
+                    item.amount,
+                    item.fee,
                     "" if item.realized_pnl is None else item.realized_pnl,
                     "" if item.post_quantity is None else item.post_quantity,
-                    item.position_id, item.id,
+                    item.position_id,
+                    item.id,
                 ]
             )
         writer.writerow([])
         writer.writerow(["# 汇总", "", "", "", "", "", "", "", "", "", ""])
         writer.writerow(
             [
-                "笔数", "买入笔数", "卖出笔数", "买入金额", "卖出金额",
-                "净流出", "手续费合计", "已实现盈亏",
+                "笔数",
+                "买入笔数",
+                "卖出笔数",
+                "买入金额",
+                "卖出金额",
+                "净流出",
+                "手续费合计",
+                "已实现盈亏",
             ]
         )
         writer.writerow(
             [
-                summary.count, summary.buy_count, summary.sell_count,
-                summary.buy_amount, summary.sell_amount, summary.net_amount,
-                summary.total_fee, summary.realized_pnl,
+                summary.count,
+                summary.buy_count,
+                summary.sell_count,
+                summary.buy_amount,
+                summary.sell_amount,
+                summary.net_amount,
+                summary.total_fee,
+                summary.realized_pnl,
             ]
         )
         return buf.getvalue()
@@ -255,7 +283,5 @@ class TradeHistoryService:
             sell_amount=sell_amount,
             net_amount=round(buy_amount - sell_amount, 2),
             total_fee=round(sum(i.fee for i in items), 2),
-            realized_pnl=round(
-                sum(i.realized_pnl or 0.0 for i in sell), 2
-            ),
+            realized_pnl=round(sum(i.realized_pnl or 0.0 for i in sell), 2),
         )

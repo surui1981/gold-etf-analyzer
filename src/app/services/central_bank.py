@@ -39,9 +39,7 @@ class CentralBankService:
         t12m_total, t12m_window, latest_q = t12m if t12m else (0.0, "-", items[0].quarter)
 
         # 当前季度合计（latest_q）
-        current_total = sum(
-            float(it.tonnes_net) for it in items if it.quarter == latest_q
-        )
+        current_total = sum(float(it.tonnes_net) for it in items if it.quarter == latest_q)
 
         # 参与国家数（distinct country_iso）
         country_count = len({it.country_iso for it in items})

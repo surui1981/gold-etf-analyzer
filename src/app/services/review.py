@@ -60,7 +60,11 @@ _WEEKDAYS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日
 
 # 分值分箱（用于校准曲线：看「打多少分时实际上涨概率多大」）
 _SCORE_BUCKETS: tuple[tuple[float, float], ...] = (
-    (0, 20), (20, 40), (40, 60), (60, 80), (80, 100),
+    (0, 20),
+    (20, 40),
+    (40, 60),
+    (60, 80),
+    (80, 100),
 )
 
 # 样本不足阈值：低于此值标注「仅供参考」
@@ -118,9 +122,7 @@ class ReviewService:
 
     # ---------- 价格回填 ----------
 
-    async def backfill(
-        self, days: int = 60, target: str = DEFAULT_REVIEW_TARGET
-    ) -> BackfillOut:
+    async def backfill(self, days: int = 60, target: str = DEFAULT_REVIEW_TARGET) -> BackfillOut:
         """从行情接口回填历史日收盘价，建立/刷新价格日历。
 
         价格日历是对比基准，与评估值解耦：可随时重跑，幂等覆盖。
@@ -136,8 +138,11 @@ class ReviewService:
 
         logger.info(
             "Review price backfilled: target=%s days=%d written=%d (%s ~ %s)",
-            target, days, written,
-            bars[0][0] if bars else "-", bars[-1][0] if bars else "-",
+            target,
+            days,
+            written,
+            bars[0][0] if bars else "-",
+            bars[-1][0] if bars else "-",
         )
         return BackfillOut(
             target=target,
@@ -195,9 +200,7 @@ class ReviewService:
             base_close = price_close.get(base_date) if base_date else None
 
             outcomes = [
-                self._outcome(
-                    prices, price_dates, base_idx, base_close, effective, h
-                )
+                self._outcome(prices, price_dates, base_idx, base_close, effective, h)
                 for h in horizons
             ]
 
@@ -231,9 +234,7 @@ class ReviewService:
                     ],
                     basis=tags,
                     notes=rows[-1].notes or "",
-                    review_note=next(
-                        (r.review_note for r in reversed(rows) if r.review_note), ""
-                    ),
+                    review_note=next((r.review_note for r in reversed(rows) if r.review_note), ""),
                     backfilled=any(bool(r.backfilled) for r in rows),
                     price_date=base_date,
                     price_close=base_close,
@@ -254,13 +255,9 @@ class ReviewService:
         """计算某个窗口的对比结果（基准日 → 之后第 horizon 个交易日）。"""
         target_idx = base_idx + horizon
         if base_close is None or base_idx < 0:
-            return OutcomeOut(
-                horizon=horizon, status="pending", label="缺基准价，无法对比"
-            )
+            return OutcomeOut(horizon=horizon, status="pending", label="缺基准价，无法对比")
         if target_idx >= len(price_dates):
-            return OutcomeOut(
-                horizon=horizon, status="pending", label=f"T+{horizon} 尚未到期"
-            )
+            return OutcomeOut(horizon=horizon, status="pending", label=f"T+{horizon} 尚未到期")
 
         target_date = price_dates[target_idx]
         close = float(prices[target_idx].close)
@@ -389,9 +386,7 @@ class ReviewService:
     def _by_horizon(usable: list[JournalDayOut]) -> list[HorizonStatsOut]:
         out: list[HorizonStatsOut] = []
         for h in REVIEW_HORIZONS:
-            pairs = [
-                next((o for o in d.outcomes if o.horizon == h), None) for d in usable
-            ]
+            pairs = [next((o for o in d.outcomes if o.horizon == h), None) for d in usable]
             done = [o for o in pairs if o is not None and o.status != "pending"]
             hits = sum(1 for o in done if o.hit)
             out.append(
@@ -409,14 +404,14 @@ class ReviewService:
         """分值分箱校准：理想情况下「打 80 分」的上涨概率应显著高于「打 20 分」。"""
         buckets: list[CalibrationBucketOut] = []
         for lower, upper in _SCORE_BUCKETS:
-            group = [d for d in resolved if lower <= d.effective_score < upper or (
-                upper == 100 and d.effective_score == 100
-            )]
+            group = [
+                d
+                for d in resolved
+                if lower <= d.effective_score < upper or (upper == 100 and d.effective_score == 100)
+            ]
             if not group:
                 buckets.append(
-                    CalibrationBucketOut(
-                        key=f"{int(lower)}-{int(upper)}", lower=lower, upper=upper
-                    )
+                    CalibrationBucketOut(key=f"{int(lower)}-{int(upper)}", lower=lower, upper=upper)
                 )
                 continue
             changes = [primary(d).change_pct for d in group if primary(d).change_pct is not None]
@@ -428,9 +423,7 @@ class ReviewService:
                     lower=lower,
                     upper=upper,
                     samples=len(group),
-                    avg_score=round(
-                        sum(d.effective_score for d in group) / len(group), 1
-                    ),
+                    avg_score=round(sum(d.effective_score for d in group) / len(group), 1),
                     up_rate=round(ups / len(changes) * 100, 1) if changes else None,
                     hit_rate=round(hits / len(group) * 100, 1),
                 )

@@ -65,12 +65,19 @@ class DecisionService:
 
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)
         suggested_position, position_level = self._suggest_position(trend.index.score)
-        reason_items = self._build_reason_items(action, trend, pos, suggested_position, position_level)
+        reason_items = self._build_reason_items(
+            action, trend, pos, suggested_position, position_level
+        )
         summary = self._summarize(action, confidence, trend, pos)
 
         logger.info(
             "Decision: %s (conf=%s) idx=%.1f pos_ratio=%.0f%% has_pos=%s pnl=%.1f%%",
-            action, confidence, trend.index.score, suggested_position, pos.has_position, pos.pnl_pct,
+            action,
+            confidence,
+            trend.index.score,
+            suggested_position,
+            pos.has_position,
+            pos.pnl_pct,
         )
         return DecisionOut(
             action=action,
@@ -164,7 +171,9 @@ class DecisionService:
             ),
         ]
         if pos.has_position:
-            trade_dir = "bullish" if pos.pnl_pct > 0 else "bearish" if pos.pnl_pct < 0 else "neutral"
+            trade_dir = (
+                "bullish" if pos.pnl_pct > 0 else "bearish" if pos.pnl_pct < 0 else "neutral"
+            )
             items.append(
                 ReasonItem(
                     text=(
@@ -185,8 +194,14 @@ class DecisionService:
             "SELL": "浮盈可观且趋势动能衰减，建议止盈兑现",
             "WAIT": "信号不明或趋势偏弱，观望等待更优时机",
         }[action]
-        action_dir = {"BUY": "bullish", "ADD": "bullish", "SELL": "bearish",
-                      "REDUCE": "bearish", "HOLD": "neutral", "WAIT": "neutral"}[action]
+        action_dir = {
+            "BUY": "bullish",
+            "ADD": "bullish",
+            "SELL": "bearish",
+            "REDUCE": "bearish",
+            "HOLD": "neutral",
+            "WAIT": "neutral",
+        }[action]
         items.append(ReasonItem(text=f"决策依据：{rule_hint}", direction=action_dir))
 
         items.append(

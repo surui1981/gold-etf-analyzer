@@ -139,27 +139,45 @@ async def test_equity_curve_holding_after_buy(db_session: AsyncSession) -> None:
 async def test_equity_curve_realized_after_partial_sell(db_session: AsyncSession) -> None:
     """部分卖出：已实现盈亏按均价法计入，剩余成本同步减少。"""
     pos = await _add_position(db_session, qty=100, avg_cost=8.0)
-    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
-                     at=datetime(2026, 1, 5, tzinfo=timezone.utc))
-    await _add_trade(db_session, pos.id, side="sell", qty=50, price=12.0,
-                     at=datetime(2026, 1, 20, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=100,
+        price=8.0,
+        at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+    )
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="sell",
+        qty=50,
+        price=12.0,
+        at=datetime(2026, 1, 20, tzinfo=timezone.utc),
+    )
 
     out = await _service(db_session).equity_curve(days=90)
     last = out.points[-1]
-    assert last.realized_pnl == 200.0      # (12-8)*50
+    assert last.realized_pnl == 200.0  # (12-8)*50
     assert last.quantity == 50
-    assert last.cost == 400.0              # 800 - 8*50
-    assert last.unrealized_pnl == 100.0    # 50×10 - 400
+    assert last.cost == 400.0  # 800 - 8*50
+    assert last.unrealized_pnl == 100.0  # 50×10 - 400
     assert last.total_pnl == 300.0
-    assert last.return_pct == 37.5         # 300 / 800
+    assert last.return_pct == 37.5  # 300 / 800
 
 
 async def test_equity_curve_non_trading_day_rolls_forward(db_session: AsyncSession) -> None:
     """非交易日成交：顺延到其后的首个交易日生效，不会丢失。"""
     pos = await _add_position(db_session, qty=100, avg_cost=8.0)
     # 2026-01-03 是周六；价格序列只有 01-01、01-02、01-04（跳过周末由 FakeMarket 决定）
-    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
-                     at=datetime(2026, 1, 3, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=100,
+        price=8.0,
+        at=datetime(2026, 1, 3, tzinfo=timezone.utc),
+    )
 
     out = await _service(db_session).equity_curve(days=90)
     last = out.points[-1]
@@ -192,10 +210,22 @@ async def test_performance_winning_trade(db_session: AsyncSession) -> None:
     """盈利平仓：胜率 100%，盈亏比无亏损记录时为 None。"""
     # 持仓记录反映「买 100 卖 50」后的真实状态：剩 50 份、成本 8.0
     pos = await _add_position(db_session, qty=50, avg_cost=8.0)
-    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
-                     at=datetime(2026, 1, 5, tzinfo=timezone.utc))
-    await _add_trade(db_session, pos.id, side="sell", qty=50, price=12.0,
-                     at=datetime(2026, 1, 20, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=100,
+        price=8.0,
+        at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+    )
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="sell",
+        qty=50,
+        price=12.0,
+        at=datetime(2026, 1, 20, tzinfo=timezone.utc),
+    )
 
     out = await _service(db_session).performance()
     assert out.realized_pnl == 200.0
@@ -206,7 +236,7 @@ async def test_performance_winning_trade(db_session: AsyncSession) -> None:
     assert out.profit_factor is None
     assert out.best_trade_pnl == 200.0
     assert out.buy_count == 1 and out.sell_count == 1
-    assert out.unrealized_pnl == 100.0     # 剩余 50 份 @10.0，成本 400
+    assert out.unrealized_pnl == 100.0  # 剩余 50 份 @10.0，成本 400
     assert out.total_pnl == 300.0
     assert out.total_return_pct == 37.5
 
@@ -215,15 +245,36 @@ async def test_performance_losing_trade_and_profit_factor(db_session: AsyncSessi
     """一胜一负：胜率 50%，盈亏比 = 总盈利 / |总亏损|。"""
     # 两笔卖出已清空持仓 → 持仓记录为 closed 且数量归零
     pos = await _add_position(
-        db_session, qty=0, avg_cost=8.0, status="closed",
+        db_session,
+        qty=0,
+        avg_cost=8.0,
+        status="closed",
         closed_at=datetime(2026, 1, 15, tzinfo=timezone.utc),
     )
-    await _add_trade(db_session, pos.id, side="buy", qty=200, price=8.0,
-                     at=datetime(2026, 1, 5, tzinfo=timezone.utc))
-    await _add_trade(db_session, pos.id, side="sell", qty=100, price=12.0,
-                     at=datetime(2026, 1, 10, tzinfo=timezone.utc))   # +400
-    await _add_trade(db_session, pos.id, side="sell", qty=100, price=6.0,
-                     at=datetime(2026, 1, 15, tzinfo=timezone.utc))   # -200
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=200,
+        price=8.0,
+        at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+    )
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="sell",
+        qty=100,
+        price=12.0,
+        at=datetime(2026, 1, 10, tzinfo=timezone.utc),
+    )  # +400
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="sell",
+        qty=100,
+        price=6.0,
+        at=datetime(2026, 1, 15, tzinfo=timezone.utc),
+    )  # -200
 
     out = await _service(db_session).performance()
     assert out.closed_trades == 2
@@ -249,8 +300,14 @@ async def test_equity_curve_trade_after_last_price_date_kept(
 ) -> None:
     """成交日晚于价格序列末日：归入最后一个可得交易日，不得丢弃。"""
     pos = await _add_position(db_session, qty=100, avg_cost=8.0)
-    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
-                     at=datetime(2026, 5, 10, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=100,
+        price=8.0,
+        at=datetime(2026, 5, 10, tzinfo=timezone.utc),
+    )
 
     out = await _service(db_session).equity_curve(days=90)
     last = out.points[-1]
@@ -264,11 +321,23 @@ async def test_performance_trade_after_last_price_date_not_zero(
 ) -> None:
     """成交日晚于价格序列末日：已实现盈亏与平仓笔数仍须统计（口径自洽）。"""
     pos = await _add_position(db_session, qty=50, avg_cost=8.0)
-    await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0,
-                     at=datetime(2026, 1, 5, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="buy",
+        qty=100,
+        price=8.0,
+        at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+    )
     # 2026-05-10 晚于价格序列末日 2026-04-30
-    await _add_trade(db_session, pos.id, side="sell", qty=50, price=12.0,
-                     at=datetime(2026, 5, 10, tzinfo=timezone.utc))
+    await _add_trade(
+        db_session,
+        pos.id,
+        side="sell",
+        qty=50,
+        price=12.0,
+        at=datetime(2026, 5, 10, tzinfo=timezone.utc),
+    )
 
     out = await _service(db_session).performance()
     assert out.realized_pnl == 200.0, "卖出已实现盈亏不得因行情滞后而归零"
@@ -287,8 +356,12 @@ async def test_performance_holding_days_and_soft_deleted(db_session: AsyncSessio
     opened = datetime(2026, 1, 1, tzinfo=timezone.utc)
     closed = datetime(2026, 1, 11, tzinfo=timezone.utc)
     pos = await _add_position(
-        db_session, qty=100, avg_cost=8.0, status="closed",
-        opened_at=opened, closed_at=closed,
+        db_session,
+        qty=100,
+        avg_cost=8.0,
+        status="closed",
+        opened_at=opened,
+        closed_at=closed,
     )
     await _add_trade(db_session, pos.id, side="buy", qty=100, price=8.0, at=opened)
     await _add_trade(db_session, pos.id, side="sell", qty=100, price=9.0, at=closed)
@@ -339,4 +412,3 @@ async def test_equity_curve_and_performance_returns_agree(
     assert curve.summary.latest_return_pct == perf.total_return_pct
     assert curve.summary.total_pnl == perf.total_pnl
     assert curve.summary.total_invested == perf.total_invested
-

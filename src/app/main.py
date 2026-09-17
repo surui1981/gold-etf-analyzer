@@ -1,7 +1,6 @@
 """FastAPI 应用入口：装配路由、中间件与生命周期。"""
 
 import asyncio
-import logging
 import sqlite3
 import subprocess
 import sys
@@ -16,12 +15,14 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.config import get_settings
+from app.middleware.trace import TraceIdMiddleware
 from app.models.base import Base
 from app.repositories.db import engine
 from app.utils.db_migrate import ensure_sqlite_columns, ensure_sqlite_optimizations
+from app.utils.logger import get_logger
 
 settings = get_settings()
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)  # V0.67.0：使用项目 logger（自动附加 trace_id）
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/app/../.. = 项目根
 STATIC_DIR = PROJECT_ROOT / "static"
 
@@ -255,11 +256,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(
     title="黄金价格投资辅助工具",
-    version="0.66.0",
+    version="0.67.0",
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
 )
+
+# V0.67.0：trace_id 注入中间件必须在 CORS 之前注册（LIFO：最后加入的最近路径）。
+# 即使 CORS 预检失败 / OPTIONS 拦截，响应头里也带 X-Request-ID，便于客户端定位。
+app.add_middleware(TraceIdMiddleware)
 
 # CORS：开发期前端（如本地静态页）可直接跨域调用
 app.add_middleware(

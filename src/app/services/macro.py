@@ -26,24 +26,49 @@ logger = get_logger(__name__)
 # 宏观因子规则：权重合计 1.0；友好度 100 分位（最利好黄金）与 0 分位（最利空）
 MACRO_FACTOR_RULES: list[dict] = [
     {
-        "key": "dxy", "name": "美元指数", "unit": "点位", "weight": 0.25,
-        "positive": False, "best": 95.0, "worst": 105.0,  # 美元强 → 黄金弱
+        "key": "dxy",
+        "name": "美元指数",
+        "unit": "点位",
+        "weight": 0.25,
+        "positive": False,
+        "best": 95.0,
+        "worst": 105.0,  # 美元强 → 黄金弱
     },
     {
-        "key": "us10y", "name": "美债10Y收益率", "unit": "%", "weight": 0.20,
-        "positive": False, "best": 3.5, "worst": 4.5,
+        "key": "us10y",
+        "name": "美债10Y收益率",
+        "unit": "%",
+        "weight": 0.20,
+        "positive": False,
+        "best": 3.5,
+        "worst": 4.5,
     },
     {
-        "key": "us30y", "name": "美债30Y收益率", "unit": "%", "weight": 0.15,
-        "positive": False, "best": 4.0, "worst": 5.0,
+        "key": "us30y",
+        "name": "美债30Y收益率",
+        "unit": "%",
+        "weight": 0.15,
+        "positive": False,
+        "best": 4.0,
+        "worst": 5.0,
     },
     {
-        "key": "vix", "name": "VIX恐慌指数", "unit": "点位", "weight": 0.15,
-        "positive": True, "best": 25.0, "worst": 12.0,  # 恐慌上升 → 避险利好黄金
+        "key": "vix",
+        "name": "VIX恐慌指数",
+        "unit": "点位",
+        "weight": 0.15,
+        "positive": True,
+        "best": 25.0,
+        "worst": 12.0,  # 恐慌上升 → 避险利好黄金
     },
     {
-        "key": "cb_gold", "name": "国际央行购金量", "unit": "吨/年", "weight": 0.25,
-        "positive": True, "best": 1200.0, "worst": 500.0,  # 央行持续购金 → 结构性利多
+        "key": "cb_gold",
+        "name": "国际央行购金量",
+        "unit": "吨/年",
+        "weight": 0.25,
+        "positive": True,
+        "best": 1200.0,
+        "worst": 500.0,  # 央行持续购金 → 结构性利多
     },
 ]
 
@@ -115,11 +140,7 @@ class MacroFactorService:
 
     async def _evaluate_uncached(self) -> MacroIndexOut:
         values: dict[str, tuple[float, str, str]] = await self._collect()
-        weights = (
-            await self._settings.macro_weights()
-            if self._settings is not None
-            else {}
-        )
+        weights = await self._settings.macro_weights() if self._settings is not None else {}
 
         total = 0.0
         factors: list[MacroFactorOut] = []
@@ -130,8 +151,10 @@ class MacroFactorService:
             contribution = round(score * weight, 2)
             total += contribution
             direction = (
-                DirectionSignal.BULLISH if score >= 60
-                else DirectionSignal.BEARISH if score <= 40
+                DirectionSignal.BULLISH
+                if score >= 60
+                else DirectionSignal.BEARISH
+                if score <= 40
                 else DirectionSignal.NEUTRAL
             )
             factors.append(
@@ -152,8 +175,10 @@ class MacroFactorService:
 
         total = round(total, 1)
         direction = (
-            DirectionSignal.BULLISH if total >= 55
-            else DirectionSignal.BEARISH if total <= 45
+            DirectionSignal.BULLISH
+            if total >= 55
+            else DirectionSignal.BEARISH
+            if total <= 45
             else DirectionSignal.NEUTRAL
         )
         logger.info("Macro index: %.1f (%s), %d factors", total, direction.value, len(factors))
@@ -183,7 +208,8 @@ class MacroFactorService:
                     )
                     logger.debug(
                         "cb_gold from central_bank_purchases: t12m=%.1f (%s)",
-                        summary.t12m_total, summary.t12m_window,
+                        summary.t12m_total,
+                        summary.t12m_window,
                     )
             except Exception as exc:
                 logger.warning("central_bank summary failed (%s), use static ref", exc)

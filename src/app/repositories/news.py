@@ -19,11 +19,7 @@ class NewsScoreRepository:
 
     async def list_by_date(self, score_date: date) -> list[NewsScore]:
         """当日已打分的全部槽位，按 slot 升序（第 1 次 → 第 3 次）。"""
-        stmt = (
-            select(NewsScore)
-            .where(NewsScore.score_date == score_date)
-            .order_by(NewsScore.slot)
-        )
+        stmt = select(NewsScore).where(NewsScore.score_date == score_date).order_by(NewsScore.slot)
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_between(self, start: date, end: date) -> list[NewsScore]:
@@ -42,9 +38,7 @@ class NewsScoreRepository:
 
     async def get_by_slot(self, score_date: date, slot: int) -> NewsScore | None:
         """取指定日期 + 槽位的记录。"""
-        stmt = select(NewsScore).where(
-            NewsScore.score_date == score_date, NewsScore.slot == slot
-        )
+        stmt = select(NewsScore).where(NewsScore.score_date == score_date, NewsScore.slot == slot)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def get_by_date(self, score_date: date) -> NewsScore | None:

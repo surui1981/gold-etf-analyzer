@@ -87,9 +87,7 @@ class PositionRepository:
         await self._session.refresh(record)
         return record
 
-    async def list_open(
-        self, user_id: int = 1, account_id: int | None = None
-    ) -> list[Position]:
+    async def list_open(self, user_id: int = 1, account_id: int | None = None) -> list[Position]:
         """当前未平仓且未删除的持仓（按开仓时间升序）。
 
         Args:
@@ -111,17 +109,13 @@ class PositionRepository:
         stmt = select(Position).where(Position.id == position_id)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_all(
-        self, user_id: int = 1, account_id: int | None = None
-    ) -> list[Position]:
+    async def list_all(self, user_id: int = 1, account_id: int | None = None) -> list[Position]:
         """所有未软删除的持仓（**含已平仓**），按开仓时间升序。
 
         收益曲线与获利分析需要已平仓持仓来核算已实现盈亏，故与
         :meth:`list_open` 区分（后者仅返回持仓中的）。
         """
-        stmt = select(Position).where(
-            Position.user_id == user_id, Position.deleted_at.is_(None)
-        )
+        stmt = select(Position).where(Position.user_id == user_id, Position.deleted_at.is_(None))
         if account_id is not None:
             stmt = stmt.where(Position.account_id == account_id)
         stmt = stmt.order_by(Position.opened_at, Position.id)

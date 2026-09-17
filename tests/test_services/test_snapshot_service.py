@@ -32,7 +32,9 @@ class FakeMacro:
     """假宏观：固定中性分。"""
 
     async def evaluate(self) -> MacroIndexOut:
-        return MacroIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary="测试")
+        return MacroIndexOut(
+            score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary="测试"
+        )
 
 
 def _mk_klines() -> list[GoldKline]:

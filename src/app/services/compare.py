@@ -99,12 +99,18 @@ class GoldCompareService:
         ]
 
         etf_series = _series_metrics(
-            DEFAULT_GOLD_ETF, DEFAULT_GOLD_ETF_NAME,
-            etf_closes, [k.high for k in etf_k], [k.low for k in etf_k],
+            DEFAULT_GOLD_ETF,
+            DEFAULT_GOLD_ETF_NAME,
+            etf_closes,
+            [k.high for k in etf_k],
+            [k.low for k in etf_k],
         )
         gram_series = _series_metrics(
-            DEFAULT_GOLD_GRAM, DEFAULT_GOLD_GRAM_NAME,
-            gram_closes, [k.high for k in gram_k], [k.low for k in gram_k],
+            DEFAULT_GOLD_GRAM,
+            DEFAULT_GOLD_GRAM_NAME,
+            gram_closes,
+            [k.high for k in gram_k],
+            [k.low for k in gram_k],
         )
 
         lead_gap = round(abs(etf_series.change_pct - gram_series.change_pct), 2)
@@ -117,7 +123,10 @@ class GoldCompareService:
 
         logger.info(
             "Compare: %s days, etf %+.2f%% vs gram %+.2f%%, leader=%s",
-            len(common_dates), etf_series.change_pct, gram_series.change_pct, leader,
+            len(common_dates),
+            etf_series.change_pct,
+            gram_series.change_pct,
+            leader,
         )
         return GoldCompareOut(
             days=len(common_dates),
@@ -126,7 +135,9 @@ class GoldCompareService:
             points=points,
             leader=leader,
             lead_gap=lead_gap,
-            summary=self._summarize(leader, etf_series.change_pct, gram_series.change_pct, lead_gap),
+            summary=self._summarize(
+                leader, etf_series.change_pct, gram_series.change_pct, lead_gap
+            ),
         )
 
     @staticmethod

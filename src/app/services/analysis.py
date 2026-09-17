@@ -37,9 +37,7 @@ class AnalysisService:
             SQLAlchemyError: 记录持久化失败
         """
         result = self._scoring.evaluate(request.factors)
-        factors_detail = json.dumps(
-            [f.model_dump() for f in result.factors], ensure_ascii=False
-        )
+        factors_detail = json.dumps([f.model_dump() for f in result.factors], ensure_ascii=False)
         record = await self._repo.create(
             dxy=request.factors.dxy,
             us10y_yield=request.factors.us10y_yield,
@@ -53,7 +51,9 @@ class AnalysisService:
         )
         logger.info(
             "Opportunity evaluated: id=%s score=%s window=%s",
-            record.id, result.score, result.window.value,
+            record.id,
+            result.score,
+            result.window.value,
         )
         return result.model_copy(update={"record_id": record.id})
 

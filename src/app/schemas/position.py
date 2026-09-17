@@ -113,7 +113,9 @@ class DecisionOut(BaseModel):
     signal_summary: str = Field(..., description="参数面信号摘要")
     trend_index: TrendIndexOut = Field(..., description="当前趋势评估指数")
     position: PositionSummary = Field(..., description="当前持仓摘要")
-    suggested_position: float = Field(..., ge=0, le=100, description="建议黄金仓位比例 0-100%（由评估指数映射）")
+    suggested_position: float = Field(
+        ..., ge=0, le=100, description="建议黄金仓位比例 0-100%（由评估指数映射）"
+    )
     position_level: str = Field(..., description="仓位等级：重仓/中高仓位/中性仓位/轻仓/观望空仓")
     reasons: list[str] = Field(..., description="决策理由明细（纯文本，向后兼容）")
     reason_items: list[ReasonItem] = Field(

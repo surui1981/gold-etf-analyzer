@@ -68,7 +68,10 @@ def get_served(
         if age > max_age_seconds:
             logger.debug(
                 "Served cache TTL expired: target=%s interval=%s age=%.1fs > %ds",
-                target, interval, age, max_age_seconds,
+                target,
+                interval,
+                age,
+                max_age_seconds,
             )
             return None
     return entry[0]
@@ -91,7 +94,10 @@ def set_served(
         _CACHE[_key(target, interval, on_date)] = (result, datetime.now(timezone.utc))
     logger.info(
         "Served cache set: target=%s interval=%s date=%s index=%.1f",
-        target, interval, on_date, result.index.score,
+        target,
+        interval,
+        on_date,
+        result.index.score,
     )
 
 
@@ -112,7 +118,8 @@ def invalidate(target: str | None = None, interval: str | None = None) -> int:
             _CACHE.clear()
         else:
             keys = [
-                k for k in _CACHE
+                k
+                for k in _CACHE
                 if k[0] == target and (interval is None or k[1] == (interval or "D").upper()[:1])
             ]
             for k in keys:

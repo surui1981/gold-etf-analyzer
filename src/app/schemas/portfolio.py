@@ -60,7 +60,8 @@ class PerformanceOut(BaseModel):
     gross_profit: float = Field(0, description="盈利平仓合计（元）")
     gross_loss: float = Field(0, description="亏损平仓合计（元，负值）")
     profit_factor: float | None = Field(
-        None, description="盈亏比 = 总盈利 / |总亏损|；无亏损记录时为 null",
+        None,
+        description="盈亏比 = 总盈利 / |总亏损|；无亏损记录时为 null",
     )
     avg_holding_days: float = Field(0, description="平均持仓天数")
     summary: str = Field("", description="面向客户的中文总结")

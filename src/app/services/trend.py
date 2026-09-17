@@ -342,7 +342,9 @@ class TrendService:
 
         # V0.64.0：W/M 模式 indicators 旁路（指标对日 K 敏感）
         if interval == "D":
-            indicators, tech_index = self._build_index(closes, highs, ma20, ma40, tech_weights, unit=unit)
+            indicators, tech_index = self._build_index(
+                closes, highs, ma20, ma40, tech_weights, unit=unit
+            )
         else:
             indicators = []
             tech_index = TrendIndexOut(
@@ -367,9 +369,7 @@ class TrendService:
 
         # 综合趋势指数 = 技术×tech_w + 宏观×macro_w + 消息面×news_w
         combined = round(
-            tech_index.score * tech_w
-            + macro_index.score * macro_w
-            + news_score * news_w,
+            tech_index.score * tech_w + macro_index.score * macro_w + news_score * news_w,
             1,
         )
         level, level_dir = self._to_level(combined)
@@ -396,8 +396,17 @@ class TrendService:
         )
         logger.info(
             "Trend analyzed: interval=%s %s bars, %s (%+.2f%%), index=%.1f (tech=%.1f×%.0f%%, macro=%.1f×%.0f%%, news=%.1f×%.0f%%)",
-            interval, len(klines), direction.value, change_pct,
-            combined, tech_index.score, tech_w * 100, macro_index.score, macro_w * 100, news_score, news_w * 100,
+            interval,
+            len(klines),
+            direction.value,
+            change_pct,
+            combined,
+            tech_index.score,
+            tech_w * 100,
+            macro_index.score,
+            macro_w * 100,
+            news_score,
+            news_w * 100,
         )
         status = getattr(self._repo, "source_status", None)
         sources: dict[str, str] = status() if callable(status) else {}
@@ -626,7 +635,9 @@ class TrendService:
         return TrendIndexLevel.STRONG_DOWN, DirectionSignal.BEARISH
 
     @staticmethod
-    def _index_summary(score: float, level: TrendIndexLevel, end_price: float, unit: str = "元") -> str:
+    def _index_summary(
+        score: float, level: TrendIndexLevel, end_price: float, unit: str = "元"
+    ) -> str:
         """生成追踪指数摘要。"""
         labels = {
             TrendIndexLevel.STRONG_UP: "强势上升",

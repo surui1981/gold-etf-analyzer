@@ -36,10 +36,6 @@ class AnalysisRepository:
         Returns:
             最近的 AnalysisRecord 列表
         """
-        stmt = (
-            select(AnalysisRecord)
-            .order_by(desc(AnalysisRecord.created_at))
-            .limit(limit)
-        )
+        stmt = select(AnalysisRecord).order_by(desc(AnalysisRecord.created_at)).limit(limit)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())

@@ -18,7 +18,9 @@ from app.repositories.market_data import GoldKline
 from app.services.trend import aggregate_klines
 
 
-def _mk(date_: date, open_: float, close: float, high: float, low: float, volume: float = 100.0) -> GoldKline:
+def _mk(
+    date_: date, open_: float, close: float, high: float, low: float, volume: float = 100.0
+) -> GoldKline:
     """构造单根测试 K 线（参数顺序贴近表意，便于阅读）。"""
     return GoldKline(
         date=date_,
@@ -123,7 +125,9 @@ def test_v064_aggregate_sums_volume() -> None:
     base = date(2026, 6, 1)  # 周一
     for i in range(7):
         v = float(100 + i)
-        src.append(_mk(base + timedelta(days=i), open_=v, close=v, high=v, low=v, volume=50.0 * (i + 1)))
+        src.append(
+            _mk(base + timedelta(days=i), open_=v, close=v, high=v, low=v, volume=50.0 * (i + 1))
+        )
     out = aggregate_klines(src, "W")
     assert len(out) == 1
     # 50 + 100 + 150 + 200 + 250 + 300 + 350 = 1400

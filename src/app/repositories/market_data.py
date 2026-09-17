@@ -136,7 +136,7 @@ def _parse_h15_csv(text: str) -> USTYield | None:
         idx_30y = header.index(_H15_COL_30Y)
 
         # 从末尾反向找首个双非空行
-        for row in reversed(rows[_H15_HEADER_SKIP + 1:]):
+        for row in reversed(rows[_H15_HEADER_SKIP + 1 :]):
             if len(row) <= max(idx_date, idx_10y, idx_30y):
                 continue
             v10, v30, d = row[idx_10y].strip(), row[idx_30y].strip(), row[idx_date].strip()
@@ -205,9 +205,7 @@ class MarketDataRepository:
         )
 
         self._settings = settings or get_settings()
-        self._cache_ttl = (
-            cache_ttl if cache_ttl is not None else self._settings.quote_cache_ttl
-        )
+        self._cache_ttl = cache_ttl if cache_ttl is not None else self._settings.quote_cache_ttl
         self._xau_chain = (
             xau_fallback_chain
             if xau_fallback_chain is not None
@@ -268,8 +266,7 @@ class MarketDataRepository:
                 out[key] = "mock"
                 continue
             fetched = self._fetched_at.get(key)
-            if (fetched is not None
-                    and (now - fetched).total_seconds() > self._cache_ttl):
+            if fetched is not None and (now - fetched).total_seconds() > self._cache_ttl:
                 out[key] = "stale"
             else:
                 out[key] = raw
@@ -331,7 +328,9 @@ class MarketDataRepository:
                     symbol=symbol,
                     price_usd=round(last.close, 3),
                     change_pct=round(change_pct, 2),
-                    updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -383,7 +382,9 @@ class MarketDataRepository:
                     price_usd=round(last.close, 3),
                     change_pct=round(change_pct, 2),
                     updated_at=datetime.combine(
-                        last.date, datetime.min.time(), tzinfo=timezone.utc,
+                        last.date,
+                        datetime.min.time(),
+                        tzinfo=timezone.utc,
                     ),
                 )
                 _cache_set(cache_key, quote)
@@ -409,7 +410,8 @@ class MarketDataRepository:
 
             def _get() -> dict:
                 req = urllib.request.Request(
-                    url, headers={"User-Agent": "Mozilla/5.0"},
+                    url,
+                    headers={"User-Agent": "Mozilla/5.0"},
                 )
                 with urllib.request.urlopen(req, timeout=15) as r:
                     return json.loads(r.read().decode("utf-8", "ignore"))
@@ -589,7 +591,9 @@ class MarketDataRepository:
                     symbol=symbol,
                     price_usd=round(last.close, 2),
                     change_pct=round(change_pct, 2),
-                    updated_at=datetime.combine(last.date, datetime.min.time(), tzinfo=timezone.utc),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -656,4 +660,3 @@ class MarketDataRepository:
         from app.repositories.market_providers import _mock_history
 
         return _mock_history(base=5.42, days=days)
-

@@ -17,20 +17,38 @@ class FakeMarket:
         return [
             GoldKline(
                 date=today - timedelta(days=119 - i),
-                open=10.0, close=10.0, high=10.0, low=10.0, volume=0.0,
+                open=10.0,
+                close=10.0,
+                high=10.0,
+                low=10.0,
+                volume=0.0,
             )
             for i in range(120)
         ]
 
     async def get_gold_etf_quote(self, symbol: str = "518880"):
-        return type("Q", (), {
-            "symbol": symbol, "price_usd": 10.0, "change_pct": 0.0, "updated_at": date.today(),
-        })()
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": symbol,
+                "price_usd": 10.0,
+                "change_pct": 0.0,
+                "updated_at": date.today(),
+            },
+        )()
 
     async def get_gold_quote(self, symbol: str = "XAU"):
-        return type("Q", (), {
-            "symbol": symbol, "price_usd": 4349.7, "change_pct": 0.0, "updated_at": date.today(),
-        })()
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": symbol,
+                "price_usd": 4349.7,
+                "change_pct": 0.0,
+                "updated_at": date.today(),
+            },
+        )()
 
 
 def _override() -> None:

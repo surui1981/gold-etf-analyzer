@@ -26,8 +26,19 @@ class SnapshotRepository:
             self._session.add(snapshot)
         else:
             for field in (
-                "close", "change_pct", "high", "low", "ma20", "ma40", "direction",
-                "tech_index", "macro_index", "news_index", "trend_index", "index_level", "macro_detail",
+                "close",
+                "change_pct",
+                "high",
+                "low",
+                "ma20",
+                "ma40",
+                "direction",
+                "tech_index",
+                "macro_index",
+                "news_index",
+                "trend_index",
+                "index_level",
+                "macro_detail",
             ):
                 setattr(existing, field, getattr(snapshot, field))
         await self._session.commit()
@@ -35,9 +46,5 @@ class SnapshotRepository:
 
     async def list_recent(self, days: int = 30) -> list[DailySnapshot]:
         """最近 N 天快照（按日期倒序）。"""
-        stmt = (
-            select(DailySnapshot)
-            .order_by(DailySnapshot.snapshot_date.desc())
-            .limit(days)
-        )
+        stmt = select(DailySnapshot).order_by(DailySnapshot.snapshot_date.desc()).limit(days)
         return list((await self._session.execute(stmt)).scalars().all())

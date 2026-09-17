@@ -41,9 +41,7 @@ class NewsScore(Base):
     """
 
     __tablename__ = "news_scores"
-    __table_args__ = (
-        UniqueConstraint("score_date", "slot", name="uq_news_scores_date_slot"),
-    )
+    __table_args__ = (UniqueConstraint("score_date", "slot", name="uq_news_scores_date_slot"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     score_date: Mapped[date] = mapped_column(
@@ -56,10 +54,10 @@ class NewsScore(Base):
     direction: Mapped[str] = mapped_column(
         String(12), default="neutral", comment="bullish/bearish/neutral"
     )
-    notes: Mapped[str] = mapped_column(Text, default="", comment="客户研判备注（参考投行观点/链接）")
-    basis: Mapped[str] = mapped_column(
-        Text, default="", comment="研判依据标签（JSON 数组字符串）"
+    notes: Mapped[str] = mapped_column(
+        Text, default="", comment="客户研判备注（参考投行观点/链接）"
     )
+    basis: Mapped[str] = mapped_column(Text, default="", comment="研判依据标签（JSON 数组字符串）")
     review_note: Mapped[str] = mapped_column(
         Text, default="", comment="事后复盘批注（结果出来后的反思）"
     )

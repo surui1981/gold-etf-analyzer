@@ -14,10 +14,7 @@ class TrendWeightConfig(BaseModel):
 
     @model_validator(mode="after")
     def _sum_to_one(self) -> "TrendWeightConfig":
-        total = (
-            self.structure + self.momentum + self.support
-            + self.momentum_rsi + self.drawdown
-        )
+        total = self.structure + self.momentum + self.support + self.momentum_rsi + self.drawdown
         if abs(total - 1.0) > 0.001:
             raise ValueError(f"技术面权重之和须为 1，当前 {total:.3f}")
         return self

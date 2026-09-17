@@ -88,7 +88,9 @@ def test_build_data_freshness_degraded_states() -> None:
 def test_build_data_freshness_age_minutes() -> None:
     """采集时间差按分钟计算，供页面显示「N 分钟前采集」。"""
     fetched = datetime(2026, 9, 2, 19, 25, tzinfo=_CN)
-    out = build_data_freshness("ny", status="live", data_date=date(2026, 9, 2), fetched_at=fetched, now=_NOW)
+    out = build_data_freshness(
+        "ny", status="live", data_date=date(2026, 9, 2), fetched_at=fetched, now=_NOW
+    )
     assert out.age_minutes == 35.0
 
 
@@ -161,7 +163,9 @@ async def test_repo_marks_mock_when_provider_fails() -> None:
         async def get_history(self, symbol: str, days: int = 60) -> list[GoldKline]:
             raise RuntimeError("network down")
 
-        async def get_gram_history(self, symbol: str = "Au99.99", days: int = 60) -> list[GoldKline]:
+        async def get_gram_history(
+            self, symbol: str = "Au99.99", days: int = 60
+        ) -> list[GoldKline]:
             raise RuntimeError("network down")
 
         async def get_us_gold_history(self, symbol: str = "GC", days: int = 60) -> list[GoldKline]:

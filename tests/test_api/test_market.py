@@ -16,14 +16,20 @@ class FakeMacro:
     """假宏观服务：固定中性分，避免 API 测试依赖网络。"""
 
     async def evaluate(self) -> MacroIndexOut:
-        return MacroIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary="测试宏观")
+        return MacroIndexOut(
+            score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary="测试宏观"
+        )
 
 
 class FakeMarketRepo:
     """内存假行情仓储：避免测试依赖网络。"""
 
     async def get_gold_quote(self, symbol: str = "XAU"):
-        return type("Q", (), {"symbol": symbol, "price_usd": 5.5, "change_pct": 1.2, "updated_at": date.today()})()
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 5.5, "change_pct": 1.2, "updated_at": date.today()},
+        )()
 
     async def get_gold_history(self, days: int = 60) -> list[GoldKline]:
         base = date(2026, 6, 1)
@@ -76,7 +82,9 @@ def _override_market_repo():
     from app.main import app
 
     app.dependency_overrides[get_market_data_repository] = lambda: FakeMarketRepo()
-    app.dependency_overrides[get_trend_service] = lambda: TrendService(FakeMarketRepo(), macro=FakeMacro())
+    app.dependency_overrides[get_trend_service] = lambda: TrendService(
+        FakeMarketRepo(), macro=FakeMacro()
+    )
     yield
     app.dependency_overrides.clear()
 
@@ -116,7 +124,15 @@ async def test_gold_trend(client: AsyncClient) -> None:
     # 数据时效（UX 6.1）：时效等级 + 交易时段 + 数据截止日
     fresh = body["freshness"]
     assert fresh["market"] == "ny"
-    assert fresh["freshness"] in {"realtime", "delayed", "t1", "lagged", "cached", "mock", "unknown"}
+    assert fresh["freshness"] in {
+        "realtime",
+        "delayed",
+        "t1",
+        "lagged",
+        "cached",
+        "mock",
+        "unknown",
+    }
     assert fresh["freshness_label"]
     assert fresh["data_date"]
     assert fresh["session"]["state"] in {"open", "pre", "break", "closed"}

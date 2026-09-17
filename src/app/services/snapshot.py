@@ -65,8 +65,13 @@ class DailySnapshotService:
         await self._repo.upsert(snapshot)
         logger.info(
             "Snapshot captured: %s, close=%.3f, trend=%.1f (%s), tech=%.1f, macro=%.1f, news=%.1f",
-            snapshot.snapshot_date, snapshot.close,
-            snapshot.trend_index, snapshot.index_level, snapshot.tech_index, snapshot.macro_index, snapshot.news_index,
+            snapshot.snapshot_date,
+            snapshot.close,
+            snapshot.trend_index,
+            snapshot.index_level,
+            snapshot.tech_index,
+            snapshot.macro_index,
+            snapshot.news_index,
         )
         return SnapshotOut.model_validate(snapshot)
 

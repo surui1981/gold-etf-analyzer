@@ -10,16 +10,28 @@ from app.models.central_bank import CentralBankPurchase
 async def _seed(db: AsyncSession) -> None:
     rows = [
         CentralBankPurchase(
-            country_iso="CHN", country_name="中国", quarter="2026Q2",
-            tonnes_net=33.0, source="IMF IRFCL", data_date=date(2026, 6, 30),
+            country_iso="CHN",
+            country_name="中国",
+            quarter="2026Q2",
+            tonnes_net=33.0,
+            source="IMF IRFCL",
+            data_date=date(2026, 6, 30),
         ),
         CentralBankPurchase(
-            country_iso="POL", country_name="波兰", quarter="2026Q2",
-            tonnes_net=51.0, source="IMF IRFCL", data_date=date(2026, 6, 30),
+            country_iso="POL",
+            country_name="波兰",
+            quarter="2026Q2",
+            tonnes_net=51.0,
+            source="IMF IRFCL",
+            data_date=date(2026, 6, 30),
         ),
         CentralBankPurchase(
-            country_iso="CHN", country_name="中国", quarter="2025Q4",
-            tonnes_net=25.0, source="IMF IRFCL", data_date=date(2025, 12, 31),
+            country_iso="CHN",
+            country_name="中国",
+            quarter="2025Q4",
+            tonnes_net=25.0,
+            source="IMF IRFCL",
+            data_date=date(2025, 12, 31),
         ),
     ]
     for r in rows:

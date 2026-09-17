@@ -15,11 +15,19 @@ class FakeMarket:
 
     async def get_gold_quote(self, symbol: str = "XAU"):
         """纽约金价（美元/盎司）——仅供决策与提醒，不参与 ETF 持仓估值。"""
-        return type("Q", (), {"symbol": symbol, "price_usd": 4349.7, "change_pct": 0.5, "updated_at": date.today()})()
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 4349.7, "change_pct": 0.5, "updated_at": date.today()},
+        )()
 
     async def get_gold_etf_quote(self, symbol: str = "518880"):
         """518880 ETF 价（元/份）——持仓估值唯一价格源。"""
-        return type("Q", (), {"symbol": symbol, "price_usd": 10.0, "change_pct": 0.5, "updated_at": date.today()})()
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 10.0, "change_pct": 0.5, "updated_at": date.today()},
+        )()
 
 
 def _service(session: AsyncSession) -> PositionService:

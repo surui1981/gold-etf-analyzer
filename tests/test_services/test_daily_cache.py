@@ -32,20 +32,34 @@ def _sample_result(index_score: float = 60.0):
         days=1,
         points=[GoldTrendPoint(date=today, close=2400.0, ma5=None, ma20=None, ma40=None)],
         metrics=GoldTrendMetrics(
-            start_date=today, end_date=today, trading_days=1,
-            start_price=2400.0, end_price=2400.0, change_pct=0.0,
-            high=2400.0, low=2400.0, ma20=None, ma40=None,
-            change_pct_1d=0.0, change_pct_5d=0.0,
-            direction=TrendDirection.SIDEWAYS, unit="美元/盎司", summary="测试",
+            start_date=today,
+            end_date=today,
+            trading_days=1,
+            start_price=2400.0,
+            end_price=2400.0,
+            change_pct=0.0,
+            high=2400.0,
+            low=2400.0,
+            ma20=None,
+            ma40=None,
+            change_pct_1d=0.0,
+            change_pct_5d=0.0,
+            direction=TrendDirection.SIDEWAYS,
+            unit="美元/盎司",
+            summary="测试",
         ),
         indicators=[],
         index=TrendIndexOut(
-            score=index_score, level=TrendIndexLevel.SIDEWAYS,
-            direction=DirectionSignal.NEUTRAL, summary="",
+            score=index_score,
+            level=TrendIndexLevel.SIDEWAYS,
+            direction=DirectionSignal.NEUTRAL,
+            summary="",
         ),
         macro=MacroIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, factors=[], summary=""),
         news=NewsIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, note="", scored=False),
-        data_sources={}, degraded=False, freshness=None,
+        data_sources={},
+        degraded=False,
+        freshness=None,
         served_at=datetime.now(),
     )
 
@@ -146,13 +160,26 @@ async def test_capture_and_warm_success(monkeypatch) -> None:
             from datetime import date
 
             from app.schemas.snapshot import SnapshotOut
+
             return SnapshotOut(
-                snapshot_date=date.today(), symbol="GC", name="纽约金",
-                close=2400.0, change_pct=0.5, high=2410.0, low=2390.0,
-                ma20=2395.0, ma40=2380.0, direction="sideways",
-                tech_index=60.0, macro_index=50.0, news_index=50.0,
-                trend_index=55.0, index_level="sideways", macro_detail="{}",
-                created_at=datetime.now(), updated_at=datetime.now(),
+                snapshot_date=date.today(),
+                symbol="GC",
+                name="纽约金",
+                close=2400.0,
+                change_pct=0.5,
+                high=2410.0,
+                low=2390.0,
+                ma20=2395.0,
+                ma40=2380.0,
+                direction="sideways",
+                tech_index=60.0,
+                macro_index=50.0,
+                news_index=50.0,
+                trend_index=55.0,
+                index_level="sideways",
+                macro_detail="{}",
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
             )
 
     call_count = {"trend": 0}
@@ -213,13 +240,26 @@ async def test_daily_capture_loop_one_iteration(monkeypatch) -> None:
             from datetime import date
 
             from app.schemas.snapshot import SnapshotOut
+
             return SnapshotOut(
-                snapshot_date=date.today(), symbol="GC", name="纽约金",
-                close=2400.0, change_pct=0.5, high=2410.0, low=2390.0,
-                ma20=2395.0, ma40=2380.0, direction="sideways",
-                tech_index=60.0, macro_index=50.0, news_index=50.0,
-                trend_index=55.0, index_level="sideways", macro_detail="{}",
-                created_at=datetime.now(), updated_at=datetime.now(),
+                snapshot_date=date.today(),
+                symbol="GC",
+                name="纽约金",
+                close=2400.0,
+                change_pct=0.5,
+                high=2410.0,
+                low=2390.0,
+                ma20=2395.0,
+                ma40=2380.0,
+                direction="sideways",
+                tech_index=60.0,
+                macro_index=50.0,
+                news_index=50.0,
+                trend_index=55.0,
+                index_level="sideways",
+                macro_detail="{}",
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
             )
 
     class FakeTrend:
@@ -238,6 +278,7 @@ async def test_daily_capture_loop_one_iteration(monkeypatch) -> None:
             raise asyncio.CancelledError
 
     import asyncio
+
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     with pytest.raises(asyncio.CancelledError):

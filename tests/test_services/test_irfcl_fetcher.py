@@ -131,23 +131,26 @@ def test_find_country_chart_by_keyword() -> None:
 # ── ISO 映射 ───────────────────────────────────────────────
 
 
-@pytest.mark.parametrize("wgc_name,expected_iso", [
-    ("Poland", "POL"),
-    ("Uzbekistan", "UZB"),
-    ("Uzbekistan, Republic of", "UZB"),
-    ("China", "CHN"),
-    ("China, People's Republic of", "CHN"),
-    ("Kazakhstan", "KAZ"),
-    ("Czech Rep.", "CZE"),
-    ("Czech Republic", "CZE"),
-    ("Russia", "RUS"),
-    ("Russian Federation", "RUS"),
-    ("Turkey", "TUR"),
-    ("Türkiye, Republic of", "TUR"),
-    ("Germany", "DEU"),
-    ("Azerbaijan (SOFAZ)", "AZE"),
-    ("Egypt, Arab Republic of", "EGY"),
-])
+@pytest.mark.parametrize(
+    "wgc_name,expected_iso",
+    [
+        ("Poland", "POL"),
+        ("Uzbekistan", "UZB"),
+        ("Uzbekistan, Republic of", "UZB"),
+        ("China", "CHN"),
+        ("China, People's Republic of", "CHN"),
+        ("Kazakhstan", "KAZ"),
+        ("Czech Rep.", "CZE"),
+        ("Czech Republic", "CZE"),
+        ("Russia", "RUS"),
+        ("Russian Federation", "RUS"),
+        ("Turkey", "TUR"),
+        ("Türkiye, Republic of", "TUR"),
+        ("Germany", "DEU"),
+        ("Azerbaijan (SOFAZ)", "AZE"),
+        ("Egypt, Arab Republic of", "EGY"),
+    ],
+)
 def test_iso_for_country_known(wgc_name: str, expected_iso: str) -> None:
     assert _iso_for_country(wgc_name) == expected_iso
 
@@ -212,8 +215,13 @@ def test_global_quarterly_aggregate_with_mock(monkeypatch) -> None:
     "xAxis":{"categories":[2014,2015,2016,2017,2018]}
     """
     # 同时 mock _fetch_report_charts 和 _fetch_chart_js
-    monkeypatch.setattr(cb_data, "_fetch_report_charts",
-                        lambda year, quarter: [{"title": "Chart 8: Quarterly central bank net purchases, tonnes", "lib": "/test/lib"}])
+    monkeypatch.setattr(
+        cb_data,
+        "_fetch_report_charts",
+        lambda year, quarter: [
+            {"title": "Chart 8: Quarterly central bank net purchases, tonnes", "lib": "/test/lib"}
+        ],
+    )
     monkeypatch.setattr(cb_data, "_fetch_chart_js", lambda lib: sample_js)
 
     rows = cb_data.fetch_global_quarterly_aggregate()
@@ -241,15 +249,39 @@ def test_h1_2026_by_country_with_mock(monkeypatch) -> None:
     ],
     "xAxis":{"categories":["Poland","China","Turkey","Russia","Germany"]}
     """
-    monkeypatch.setattr(cb_data, "_fetch_report_charts",
-                        lambda year, quarter: [{"title": "Chart 9: Reported data puts Poland in pole position y-t-d", "lib": "/test/c9"}])
+    monkeypatch.setattr(
+        cb_data,
+        "_fetch_report_charts",
+        lambda year, quarter: [
+            {
+                "title": "Chart 9: Reported data puts Poland in pole position y-t-d",
+                "lib": "/test/c9",
+            }
+        ],
+    )
     monkeypatch.setattr(cb_data, "_fetch_chart_js", lambda lib: sample_js)
-    monkeypatch.setattr(cb_data, "fetch_global_quarterly_aggregate", lambda: [
-        QuarterlyPurchase(country_iso="WGC_AGGR", country_name="全球合计",
-                          quarter="2026Q1", tonnes_net=120.0, source="mock", data_date=date(2026,3,31)),
-        QuarterlyPurchase(country_iso="WGC_AGGR", country_name="全球合计",
-                          quarter="2026Q2", tonnes_net=180.0, source="mock", data_date=date(2026,6,30)),
-    ])
+    monkeypatch.setattr(
+        cb_data,
+        "fetch_global_quarterly_aggregate",
+        lambda: [
+            QuarterlyPurchase(
+                country_iso="WGC_AGGR",
+                country_name="全球合计",
+                quarter="2026Q1",
+                tonnes_net=120.0,
+                source="mock",
+                data_date=date(2026, 3, 31),
+            ),
+            QuarterlyPurchase(
+                country_iso="WGC_AGGR",
+                country_name="全球合计",
+                quarter="2026Q2",
+                tonnes_net=180.0,
+                source="mock",
+                data_date=date(2026, 6, 30),
+            ),
+        ],
+    )
 
     rows = cb_data.fetch_h1_2026_by_country()
     # Poland: H1=82.2 → 拆分比例 120/(120+180)=0.4, 180/300=0.6
@@ -275,8 +307,7 @@ def test_h1_2026_by_country_with_mock(monkeypatch) -> None:
 
 def test_country_names_coverage() -> None:
     """确保主要购金国 ISO 都有中文名映射（前端展示用）。"""
-    expected = ["CHN", "POL", "TUR", "IND", "RUS", "KAZ", "CZE",
-                "UZB", "IRN", "WGC_AGGR"]
+    expected = ["CHN", "POL", "TUR", "IND", "RUS", "KAZ", "CZE", "UZB", "IRN", "WGC_AGGR"]
     for iso in expected:
         assert iso in COUNTRY_NAMES, f"missing {iso}"
         assert COUNTRY_NAMES[iso] != iso, f"{iso} not mapped to Chinese"

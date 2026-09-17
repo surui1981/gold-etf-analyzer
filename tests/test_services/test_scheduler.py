@@ -104,31 +104,46 @@ def test_next_run_exactly_at_trigger() -> None:
     assert result == expected_utc
 
 
-@pytest.mark.parametrize("last_day,expected_day,month_in", [
-    (28, 28, 2),  # 平年 2 月（2023）
-    (29, 29, 2),  # 闰年 2 月（2024）
-    (30, 30, 4),  # 30 天月（4 月）
-    (31, 31, 1),  # 31 天月（1 月）
-])
+@pytest.mark.parametrize(
+    "last_day,expected_day,month_in",
+    [
+        (28, 28, 2),  # 平年 2 月（2023）
+        (29, 29, 2),  # 闰年 2 月（2024）
+        (30, 30, 4),  # 30 天月（4 月）
+        (31, 31, 1),  # 31 天月（1 月）
+    ],
+)
 def test_next_run_month_end_dynamic(last_day: int, expected_day: int, month_in: int) -> None:
     """月末动态计算：2/4 月等不到 31 日。"""
     # BJT 2023-02-16 08:00 → after 02/15 07:30, before 02/28 07:30 (平年) → expect 02/28
-    fixed_utc = datetime(2023, 2, 16, 0, 0, tzinfo=timezone.utc) if last_day == 28 else \
-                datetime(2024, 2, 16, 0, 0, tzinfo=timezone.utc) if last_day == 29 else \
-                datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc) if last_day == 30 else \
-                datetime(2026, 1, 16, 0, 0, tzinfo=timezone.utc)
+    fixed_utc = (
+        datetime(2023, 2, 16, 0, 0, tzinfo=timezone.utc)
+        if last_day == 28
+        else datetime(2024, 2, 16, 0, 0, tzinfo=timezone.utc)
+        if last_day == 29
+        else datetime(2026, 4, 16, 0, 0, tzinfo=timezone.utc)
+        if last_day == 30
+        else datetime(2026, 1, 16, 0, 0, tzinfo=timezone.utc)
+    )
     # 触发时刻 07:30 BJT = 前一天 23:30 UTC
-    expected_utc = datetime(fixed_utc.year, month_in, expected_day, tzinfo=BJT).astimezone(timezone.utc)
-    expected_utc = expected_utc.replace(day=expected_day, hour=23, minute=30, second=0, microsecond=0)
+    expected_utc = datetime(fixed_utc.year, month_in, expected_day, tzinfo=BJT).astimezone(
+        timezone.utc
+    )
+    expected_utc = expected_utc.replace(
+        day=expected_day, hour=23, minute=30, second=0, microsecond=0
+    )
 
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(sch, "datetime", _FrozenDatetime(fixed_utc))
         result = next_central_bank_run_utc()
     # 比较：应指向当月 last_day 的 07:30 BJT
     expected_bjt = fixed_utc.astimezone(BJT).replace(
-        month=month_in, day=expected_day,
-        hour=CB_TRIGGER_HOUR_BJT, minute=CB_TRIGGER_MINUTE_BJT,
-        second=0, microsecond=0,
+        month=month_in,
+        day=expected_day,
+        hour=CB_TRIGGER_HOUR_BJT,
+        minute=CB_TRIGGER_MINUTE_BJT,
+        second=0,
+        microsecond=0,
     )
     assert result == expected_bjt.astimezone(timezone.utc)
 
@@ -174,6 +189,7 @@ def test_cb_auto_refresh_enabled_by_env_truthy(monkeypatch, val: str) -> None:
 
 async def test_refresh_central_bank_handles_exception(monkeypatch) -> None:
     """run_import 抛异常时，_refresh_central_bank 不抛，仅日志告警，返回 0。"""
+
     async def fake_run_import(include_manual: bool = True) -> int:
         raise RuntimeError("网络挂了")
 
@@ -189,6 +205,7 @@ async def test_refresh_central_bank_handles_exception(monkeypatch) -> None:
 
 async def test_refresh_central_bank_returns_count(monkeypatch) -> None:
     """run_import 成功时返回 upserted 行数。"""
+
     async def fake_run_import(include_manual: bool = True) -> int:
         return 148
 
@@ -208,8 +225,10 @@ async def test_monthly_loop_disabled_returns_immediately(monkeypatch, caplog) ->
     monkeypatch.setenv("CENTRAL_BANK_AUTO_REFRESH", "0")
     # patch asyncio.sleep to detect 调用
     sleep_called = []
+
     async def fake_sleep(secs):
         sleep_called.append(secs)
+
     monkeypatch.setattr(sch.asyncio, "sleep", fake_sleep)
 
     await sch.monthly_central_bank_loop()
@@ -329,7 +348,9 @@ async def test_v060_intraday_warm_once_writes_served_cache(monkeypatch: pytest.M
                     factors=[],
                     summary="macro summary",
                 ),
-                news=NewsIndexOut(score=70.0, direction=DirectionSignal.BULLISH, note="", scored=True),
+                news=NewsIndexOut(
+                    score=70.0, direction=DirectionSignal.BULLISH, note="", scored=True
+                ),
                 data_sources={},
                 degraded=False,
                 freshness=None,
