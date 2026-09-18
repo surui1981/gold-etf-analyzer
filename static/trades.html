@@ -270,8 +270,8 @@
         state.total = d.total; state.pageSize = d.page_size;
         renderSummary(d.summary);
         renderTable(d.items);
-        $("pageInfo").textContent = "第 " + d.page + " / " + d.page_count + " 页 · 共 " + d.total + " 笔";
-        $("listInfo").textContent = "（筛选结果 " + d.total + " 笔）";
+        $("pageInfo").textContent = "第 " + (d.page ?? 1) + " / " + (d.page_count ?? 1) + " 页 · 共 " + (d.total ?? 0) + " 笔";
+        $("listInfo").textContent = "（筛选结果 " + (d.total ?? 0) + " 笔）";
         $("btnPrev").disabled = d.page <= 1;
         $("btnNext").disabled = d.page >= d.page_count;
         renderAccHint();
@@ -286,9 +286,9 @@
 
   function renderSummary(s) {
     var pnlCls = signCls(s.realized_pnl);
-    var netCls = s.net_amount > 0 ? "" : "";
+    var netCls = (s.net_amount ?? 0) > 0 ? "" : "";
     var cards = [
-      { label: "成交笔数", value: s.count + " 笔", sub: "买入 " + s.buy_count + " / 卖出 " + s.sell_count },
+      { label: "成交笔数", value: (s.count ?? 0) + " 笔", sub: "买入 " + (s.buy_count ?? 0) + " / 卖出 " + (s.sell_count ?? 0) },
       { label: "买入金额", value: "¥" + fmtMoney(s.buy_amount), sub: "不含手续费" },
       { label: "卖出金额", value: "¥" + fmtMoney(s.sell_amount), sub: "不含手续费" },
       { label: "净流出", value: "¥" + fmtMoney(s.net_amount), sub: "买入 − 卖出", cls: netCls },

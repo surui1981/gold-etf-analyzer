@@ -238,7 +238,7 @@ function renderAll() {
   // 顶部状态
   const status = document.getElementById("statusTag");
   if (d.scored) {
-    status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots}/${d.max_slots} 次 · 有效 ${d.score}</span>`;
+    status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots ?? 0}/${d.max_slots ?? 3} 次 · 有效 ${Number(d.score ?? 0).toFixed(1)}</span>`;
   } else {
     status.innerHTML = '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
   }
@@ -249,24 +249,24 @@ function renderAll() {
   if (!d.scored) {
     alert.style.background = "#fff4e5"; alert.style.color = "#b26a00"; alert.style.border = "1px solid #ffd8a8";
     alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。今日还有 <b>3</b> 次打分机会，建议查阅上方投行展望后完成第 1 次打分。";
-  } else if (d.remaining_slots > 0) {
+  } else if ((d.remaining_slots ?? 0) > 0) {
     alert.style.background = "#e7f5ff"; alert.style.color = "#1971c2"; alert.style.border = "1px solid #a5d8ff";
-    alert.innerHTML = `今日已打分 <b>${d.used_slots}</b> 次，还有 <b>${d.remaining_slots}</b> 次机会。随着盘中信息更新，可继续打分——<b>越晚的一次权重越高</b>，对当日指数影响越大。`;
+    alert.innerHTML = `今日已打分 <b>${d.used_slots ?? 0}</b> 次，还有 <b>${d.remaining_slots ?? 0}</b> 次机会。随着盘中信息更新，可继续打分——<b>越晚的一次权重越高</b>，对当日指数影响越大。`;
   } else {
     alert.style.background = "#e6f4ea"; alert.style.color = "#2f9e44"; alert.style.border = "1px solid #b7e4c7";
     alert.innerHTML = "今日 <b>3 次打分机会已全部用完</b>，已按 1:2:3 加权汇入综合评估指数与购买决策。如需修正，点击对应槽位的「修改」。";
   }
 
   // 有效分值面板
-  document.getElementById("effScore").textContent = Number(d.score).toFixed(1);
+  document.getElementById("effScore").textContent = Number(d.score ?? 0).toFixed(1);
   document.getElementById("effScore").style.color = d.scored ? dirColor(d.direction) : "var(--muted)";
   document.getElementById("effDir").innerHTML =
-    `<span class="dir-tag" style="background:${dirColor(d.direction)}">${dirTxt(d.direction)}</span>`;
+    `<span class="dir-tag" style="background:${dirColor(d.direction)}">${dirTxt(d.direction) || "中性展望"}</span>`;
   document.getElementById("effFormula").textContent = d.formula
-    ? "加权口径：" + d.formula + " = " + Number(d.score).toFixed(1)
+    ? "加权口径：" + d.formula + " = " + Number(d.score ?? 0).toFixed(1)
     : (d.scored ? "仅 1 次打分，直接采用该次分值" : "尚未打分，按中性 50 参与评估");
   document.getElementById("effProgress").innerHTML =
-    [1, 2, 3].map(n => `<span class="${n <= d.used_slots ? "on" : ""}"></span>`).join("");
+    [1, 2, 3].map(n => `<span class="${n <= (d.used_slots ?? 0) ? "on" : ""}"></span>`).join("");
 
   // 槽位卡片
   const bySlot = {};
@@ -282,9 +282,9 @@ function renderAll() {
       </div>`;
     }
     return `<div class="slot-card filled${editing}">
-      <div class="hd"><span class="nm">第 ${s.slot} 次</span><span class="wt">权重 ${s.weight}</span></div>
-      <div class="sc" style="color:${dirColor(s.direction)}">${Number(s.score).toFixed(1)}</div>
-      <div><span class="dir-tag" style="background:${dirColor(s.direction)};font-size:11px">${dirTxt(s.direction)}</span></div>
+      <div class="hd"><span class="nm">第 ${s.slot ?? "?"} 次</span><span class="wt">权重 ${s.weight ?? "—"}</span></div>
+      <div class="sc" style="color:${dirColor(s.direction)}">${Number(s.score ?? 0).toFixed(1)}</div>
+      <div><span class="dir-tag" style="background:${dirColor(s.direction)};font-size:11px">${dirTxt(s.direction) || "中性展望"}</span></div>
       <div class="tm">提交于 ${fmtTime(s.scored_at)}</div>
       ${s.notes ? `<div class="nt">${esc(s.notes)}</div>` : ""}
       <div class="ops">
@@ -307,7 +307,7 @@ function renderAll() {
   const btn = document.getElementById("btnReuse");
   if (d.last_score !== null && d.last_score !== undefined) {
     btn.style.display = "inline-block";
-    btn.textContent = `沿用上次（${d.last_date}：${Math.round(d.last_score)}）`;
+    btn.textContent = `沿用上次（${d.last_date ?? "—"}：${Math.round(d.last_score)}）`;
   } else {
     btn.style.display = "none";
   }
@@ -440,7 +440,7 @@ async function save() {
     if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);
     state = await r.json();
     msg.className = "msg ok";
-    msg.textContent = `✅ 第 ${editSlot} 次打分已保存，当日有效分值已更新为 ${Number(state.score).toFixed(1)}（已汇入综合指数与决策）。`;
+    msg.textContent = `✅ 第 ${editSlot} 次打分已保存，当日有效分值已更新为 ${Number(state.score ?? 0).toFixed(1)}（已汇入综合指数与决策）。`;
     forceReload = true;
     editSlot = state.next_slot || editSlot;
     renderAll();
@@ -460,7 +460,7 @@ async function removeSlot(slot) {
     if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);
     state = await r.json();
     msg.className = "msg ok";
-    msg.textContent = `🗑️ 已撤销第 ${slot} 次打分，当日有效分值更新为 ${Number(state.score).toFixed(1)}。`;
+    msg.textContent = `🗑️ 已撤销第 ${slot} 次打分，当日有效分值更新为 ${Number(state.score ?? 0).toFixed(1)}。`;
     forceReload = true;
     editSlot = state.next_slot || 1;
     renderAll();
@@ -482,11 +482,11 @@ async function loadHistory() {
       return;
     }
     tb.innerHTML = d.items.map(it => `<tr>
-      <td>${it.score_date}</td>
-      <td>第 ${it.slot} 次</td>
-      <td>${it.weight}</td>
-      <td class="num" style="color:${dirColor(it.direction)}">${Number(it.score).toFixed(1)}</td>
-      <td><span class="dir-tag" style="background:${dirColor(it.direction)};font-size:11px">${dirTxt(it.direction)}</span></td>
+      <td>${it.score_date ?? "—"}</td>
+      <td>第 ${it.slot ?? "?"} 次</td>
+      <td>${it.weight ?? "—"}</td>
+      <td class="num" style="color:${dirColor(it.direction)}">${Number(it.score ?? 0).toFixed(1)}</td>
+      <td><span class="dir-tag" style="background:${dirColor(it.direction)};font-size:11px">${dirTxt(it.direction) || "中性展望"}</span></td>
       <td>${fmtTime(it.scored_at)}</td>
       <td>${(it.basis && it.basis.length) ? it.basis.map(t => `<span class="tag">${esc(t)}</span>`).join(" ") : "—"}${it.backfilled ? ' <span class="tag" style="background:#fff4e5;color:#b26a00">补录</span>' : ""}</td>
       <td style="color:#4b5563">${esc(it.notes) || "—"}</td>

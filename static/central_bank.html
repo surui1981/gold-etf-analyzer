@@ -248,17 +248,18 @@
 
   // ============ 渲染 ============
   function renderKPI(summary) {
-    const t12m = summary.t12m_total;
+    const t12m = summary.t12m_total ?? 0;
     document.getElementById("kpiT12m").textContent = fmt.num(t12m) + " t";
     document.getElementById("kpiT12m").className = "value " + (t12m >= 0 ? "up" : "down");
-    document.getElementById("kpiT12mWindow").textContent = "窗口：" + summary.t12m_window;
+    document.getElementById("kpiT12mWindow").textContent = "窗口：" + (summary.t12m_window || "—");
 
-    document.getElementById("kpiCurrent").textContent = fmt.num(summary.current_quarter_total) + " t";
-    document.getElementById("kpiCurrent").className = "value " + (summary.current_quarter_total >= 0 ? "up" : "down");
-    document.getElementById("kpiCurrentLabel").textContent = "截至 " + summary.current_quarter;
+    const cur = summary.current_quarter_total ?? 0;
+    document.getElementById("kpiCurrent").textContent = fmt.num(cur) + " t";
+    document.getElementById("kpiCurrent").className = "value " + (cur >= 0 ? "up" : "down");
+    document.getElementById("kpiCurrentLabel").textContent = "截至 " + (summary.current_quarter || "—");
 
-    document.getElementById("kpiCountries").textContent = summary.country_count;
-    document.getElementById("kpiLatest").textContent = summary.latest_data_quarter;
+    document.getElementById("kpiCountries").textContent = summary.country_count ?? "—";
+    document.getElementById("kpiLatest").textContent = summary.latest_data_quarter || "—";
     if (summary.last_refresh) {
       const d = new Date(summary.last_refresh);
       const pad = (n) => String(n).padStart(2, "0");

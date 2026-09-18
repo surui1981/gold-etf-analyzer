@@ -153,15 +153,18 @@ let state = null;
 function rowHtml(id, label, value) {
   return `<div class="w-row">
     <span class="nm">${label}</span>
-    <input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round(value * 100)}" oninput="update()">
-    <span class="pct" id="${id}-pct">${Math.round(value * 100)}%</span>
+    <input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round((value ?? 0) * 100)}" oninput="update()">
+    <span class="pct" id="${id}-pct">${Math.round((value ?? 0) * 100)}%</span>
   </div>`;
 }
 
 function render() {
-  document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l]) => rowHtml("t_" + k, l, state.trend[k])).join("");
-  document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l]) => rowHtml("m_" + k, l, state.macro[k])).join("");
-  document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l]) => rowHtml("c_" + k, l, state.combine[k])).join("");
+  const trend = state.trend || {};
+  const macro = state.macro || {};
+  const combine = state.combine || {};
+  document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l]) => rowHtml("t_" + k, l, trend[k])).join("");
+  document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l]) => rowHtml("m_" + k, l, macro[k])).join("");
+  document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l]) => rowHtml("c_" + k, l, combine[k])).join("");
   update();
 }
 
@@ -215,29 +218,31 @@ function renderPreview() {
 
   const w = combineValues();
   const sum = w.tech + w.macro + w.news;
-  const preview = baseComponents.tech * w.tech + baseComponents.macro * w.macro + baseComponents.news * w.news;
-  const lv = levelOf(preview);
-  const baseLv = baseIndex !== null ? levelOf(baseIndex) : null;
-  const delta = baseIndex !== null ? preview - baseIndex : 0;
+  const preview = (baseComponents.tech ?? 0) * w.tech + (baseComponents.macro ?? 0) * w.macro + (baseComponents.news ?? 0) * w.news;
+  const safePreview = Number.isFinite(preview) ? preview : 0;
+  const lv = levelOf(safePreview);
+  const safeBaseIndex = baseIndex != null && Number.isFinite(baseIndex) ? baseIndex : null;
+  const baseLv = safeBaseIndex !== null ? levelOf(safeBaseIndex) : null;
+  const delta = safeBaseIndex !== null ? safePreview - safeBaseIndex : 0;
   const valid = Math.abs(sum - 1) < 1e-6;
 
   box.innerHTML = `
     <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap">
       <div>
         <div style="font-size:12px;color:var(--muted)">调整后综合指数</div>
-        <div style="font-size:30px;font-weight:700;color:${lv.color}">${preview.toFixed(1)}</div>
+        <div style="font-size:30px;font-weight:700;color:${lv.color}">${safePreview.toFixed(1)}</div>
         <div style="font-size:12px;color:${lv.color}">${lv.label}</div>
       </div>
       <div style="font-size:13px;color:var(--muted);line-height:1.8">
-        当前生效：<b>${baseIndex !== null ? baseIndex.toFixed(1) : "-"}</b>
+        当前生效：<b>${safeBaseIndex !== null ? safeBaseIndex.toFixed(1) : "-"}</b>
         ${baseLv ? `（${baseLv.label}）` : ""}
         ${delta !== 0 ? `<br>变化：<b style="color:${delta > 0 ? "#c92a2a" : "#2f9e44"}">${delta > 0 ? "+" : ""}${delta.toFixed(1)}</b>` : ""}
       </div>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-top:8px">
-      = 技术面 ${baseComponents.tech.toFixed(1)}×${(w.tech * 100).toFixed(0)}%
-      + 宏观参考 ${baseComponents.macro.toFixed(1)}×${(w.macro * 100).toFixed(0)}%
-      + 消息面 ${baseComponents.news.toFixed(1)}×${(w.news * 100).toFixed(0)}%
+      = 技术面 ${(baseComponents.tech ?? 0).toFixed(1)}×${(w.tech * 100).toFixed(0)}%
+      + 宏观参考 ${(baseComponents.macro ?? 0).toFixed(1)}×${(w.macro * 100).toFixed(0)}%
+      + 消息面 ${(baseComponents.news ?? 0).toFixed(1)}×${(w.news * 100).toFixed(0)}%
       ${valid ? "" : '<br><b style="color:#c92a2a">合成合计须为 100% 才可保存（当前 ' + (sum * 100).toFixed(0) + '%）</b>'}
     </div>`;
 }

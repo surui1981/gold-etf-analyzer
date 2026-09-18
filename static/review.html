@@ -228,15 +228,15 @@ async function loadMeta() {
 /* ── 统计 ── */
 async function loadStats() {
   stats = await getJSON(`${API}/stats?days=${cfg.days}&target=${cfg.target}&horizon=${cfg.horizon}`);
-  const s = stats;
-  document.getElementById("statScope").textContent = `（近 ${s.days} 天 · T+${s.horizon} 判定 · 样本 ${s.evaluated} 天）`;
+  const s = stats || {};
+  document.getElementById("statScope").textContent = `（近 ${s.days ?? cfg.days} 天 · T+${s.horizon ?? cfg.horizon} 判定 · 样本 ${s.evaluated ?? 0} 天）`;
 
   const kpi = [
-    { k: "方向命中率", v: pct(s.hit_rate), c: s.hit_rate == null ? "var(--muted)" : (s.hit_rate >= 50 ? "var(--up)" : "var(--down)"), s: `${s.hits} / ${s.evaluated} 天` },
-    { k: "有效样本", v: s.evaluated, c: "", s: s.pending ? `另有 ${s.pending} 天待验证` : "无待验证" },
+    { k: "方向命中率", v: pct(s.hit_rate), c: s.hit_rate == null ? "var(--muted)" : (s.hit_rate >= 50 ? "var(--up)" : "var(--down)"), s: `${s.hits ?? 0} / ${s.evaluated ?? 0} 天` },
+    { k: "有效样本", v: s.evaluated ?? 0, c: "", s: s.pending ? `另有 ${s.pending} 天待验证` : "无待验证" },
     { k: "平均研判分值", v: s.avg_score == null ? "—" : Number(s.avg_score).toFixed(1), c: "", s: "当日加权有效分" },
-    { k: "平均后续涨跌", v: signed(s.avg_change), c: chgColor(s.avg_change || 0), s: `T+${s.horizon} 窗口` },
-    { k: "补录排除", v: s.backfilled_excluded, c: "", s: "避免前视偏差" },
+    { k: "平均后续涨跌", v: signed(s.avg_change), c: chgColor(s.avg_change || 0), s: `T+${s.horizon ?? cfg.horizon} 窗口` },
+    { k: "补录排除", v: s.backfilled_excluded ?? 0, c: "", s: "避免前视偏差" },
   ];
   document.getElementById("kpis").innerHTML = kpi.map(x => `
     <div class="kpi"><div class="k">${x.k}</div>
@@ -249,19 +249,19 @@ async function loadStats() {
   } else if (s.sample_warning) {
     bn.innerHTML = `<div class="banner warn">⚠️ 样本仅 <b>${s.evaluated}</b> 天，统计波动较大，<b>仅作趋势参考</b>。建议持续积累到 20 天以上再据此调整打分习惯。</div>`;
   } else {
-    bn.innerHTML = `<div class="banner ok">样本 <b>${s.evaluated}</b> 天，已具备基本参考价值。（${esc(s.note)}）</div>`;
+    bn.innerHTML = `<div class="banner ok">样本 <b>${s.evaluated}</b> 天，已具备基本参考价值。（${esc(s.note || "")}）</div>`;
   }
 
-  document.getElementById("dirBars").innerHTML = s.by_direction.map(x => barRow(
-    esc(x.label), x.hit_rate, dirColor(x.direction), `${x.hits}/${x.samples} 次`
+  document.getElementById("dirBars").innerHTML = (s.by_direction || []).map(x => barRow(
+    esc(x.label), x.hit_rate, dirColor(x.direction), `${x.hits ?? 0}/${x.samples ?? 0} 次`
   )).join("") || '<div class="desc">暂无数据</div>';
 
-  document.getElementById("hzBars").innerHTML = s.by_horizon.map(x => barRow(
-    `T+${x.horizon} 交易日`, x.hit_rate, "#1971c2", `${x.hits}/${x.samples} 次`
+  document.getElementById("hzBars").innerHTML = (s.by_horizon || []).map(x => barRow(
+    `T+${x.horizon ?? "?"} 交易日`, x.hit_rate, "#1971c2", `${x.hits ?? 0}/${x.samples ?? 0} 次`
   )).join("");
 
-  document.getElementById("calBars").innerHTML = s.calibration.map(b => barRow(
-    `${b.key} 分`, b.up_rate, "#c9a227", `${b.samples} 天 · 上涨 ${pct(b.up_rate)}`
+  document.getElementById("calBars").innerHTML = (s.calibration || []).map(b => barRow(
+    `${b.key ?? "—"} 分`, b.up_rate, "#c9a227", `${b.samples ?? 0} 天 · 上涨 ${pct(b.up_rate)}`
   )).join("");
   document.getElementById("calInsight").innerHTML = calibrationInsight(s);
 }
@@ -320,7 +320,7 @@ async function loadJournal() {
   journal = await getJSON(`${API}/journal?days=${cfg.days}&target=${cfg.target}&horizon=${cfg.horizon}`);
   const box = document.getElementById("journal");
   document.getElementById("journalDesc").innerHTML =
-    `近 ${journal.days} 天共 <b>${journal.total}</b> 天有研判，其中 <b>${journal.pending}</b> 天待验证（T+${journal.horizon} 尚未到期）。`;
+    `近 ${journal.days ?? cfg.days} 天共 <b>${journal.total ?? 0}</b> 天有研判，其中 <b>${journal.pending ?? 0}</b> 天待验证（T+${journal.horizon ?? cfg.horizon} 尚未到期）。`;
 
   if (!journal.items.length) {
     box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news">消息面评估</a> 页完成打分；若想补录历史研判，可在该页填写并指定日期。</div>`;
@@ -340,9 +340,9 @@ function renderDay(d) {
 
   const slots = (d.slots || []).map(s => `
     <div class="slot-line">
-      <span class="n">第 ${s.slot} 次</span>
-      <span class="v" style="color:${dirColor(s.direction)}">${Number(s.score).toFixed(0)}</span>
-      <span style="color:${dirColor(s.direction)}">${dirTxt(s.direction)}</span>
+      <span class="n">第 ${s.slot ?? "?"} 次</span>
+      <span class="v" style="color:${dirColor(s.direction)}">${s.score == null ? "—" : Number(s.score).toFixed(0)}</span>
+      <span style="color:${dirColor(s.direction)}">${dirTxt(s.direction) || "中性"}</span>
       ${s.backfilled ? '<span class="tag" style="background:#fff4e5;color:#b26a00">补录</span>' : ""}
       ${(s.basis || []).map(t => `<span class="tag">${esc(t)}</span>`).join("")}
       ${s.notes ? `<span style="color:#6b7280">· ${esc(s.notes)}</span>` : ""}
@@ -353,20 +353,22 @@ function renderDay(d) {
     const txt = o.status === "pending"
       ? `<span style="color:var(--muted)">${esc(o.label)}</span>`
       : `<b style="color:${chgColor(o.change_pct)}">${signed(o.change_pct)}</b>`;
-    return `<div class="row"><span>T+${o.horizon} 交易日 ${mark}</span><span>${esc(o.date || "—")} ${txt}</span></div>`;
+    return `<div class="row"><span>T+${o.horizon ?? "?"} 交易日 ${mark}</span><span>${esc(o.date || "—")} ${txt}</span></div>`;
   }).join("");
+
+  const safeScore = d.effective_score == null ? "—" : Number(d.effective_score).toFixed(1);
 
   return `<div class="day ${cls}">
     <div class="day-hd">
-      <span class="d">${d.score_date}</span>
+      <span class="d">${d.score_date ?? "—"}</span>
       <span class="w">${esc(d.weekday)}</span>
       ${d.backfilled ? '<span class="tag" style="background:#fff4e5;color:#b26a00">含补录 · 不计入统计</span>' : ""}
       ${badge}
-      <span class="sc" style="color:${dirColor(d.direction)}">${Number(d.effective_score).toFixed(1)}</span>
+      <span class="sc" style="color:${dirColor(d.direction)}">${safeScore}</span>
     </div>
     <div class="day-body">
       <div class="day-left">
-        ${d.formula ? `<div class="lbl">加权口径</div><div class="txt" style="font-family:ui-monospace,Consolas,monospace">${esc(d.formula)} = ${Number(d.effective_score).toFixed(1)}</div>` : ""}
+        ${d.formula ? `<div class="lbl">加权口径</div><div class="txt" style="font-family:ui-monospace,Consolas,monospace">${esc(d.formula)} = ${safeScore}</div>` : ""}
         <div class="lbl">分次明细</div>
         <div class="slots">${slots || '<div class="desc">—</div>'}</div>
         ${d.basis && d.basis.length ? `<div class="lbl">当日研判依据</div><div class="txt"><div class="chips">${d.basis.map(t => `<span class="tag">${esc(t)}</span>`).join("")}</div></div>` : ""}

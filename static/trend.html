@@ -347,7 +347,7 @@ async function loadChecklist() {
       {
         done: true,
         title: "① 查看综合趋势指数",
-        value: `${t.index.score.toFixed(1)} / 100（${levelTxt}）`,
+        value: `${t.index?.score?.toFixed(1) ?? "—"} / 100（${levelTxt}）`,
         btn: null,
       },
       {
@@ -361,14 +361,14 @@ async function loadChecklist() {
       {
         done: false,
         title: "③ 查看决策与建议仓位",
-        value: `${dec.action_label} · 建议黄金仓位 ${dec.suggested_position}%（${dec.position_level}）`,
+        value: `${dec.action_label || "—"} · 建议黄金仓位 ${dec.suggested_position ?? 0}%（${dec.position_level || "—"}）`,
         btn: { label: "去查看", href: "/portfolio", warn: false },
       },
       {
         done: list.length > 0,
         title: "④ 记录 / 管理交易",
         value: list.length > 0
-          ? `当前 ${list.length} 笔持仓${dec.position && dec.position.pnl_pct !== undefined ? `（浮盈 ${dec.position.pnl_pct >= 0 ? "+" : ""}${dec.position.pnl_pct.toFixed(2)}%）` : ""}`
+          ? `当前 ${list.length} 笔持仓${dec.position && dec.position.pnl_pct != null ? `（浮盈 ${dec.position.pnl_pct >= 0 ? "+" : ""}${dec.position.pnl_pct.toFixed(2)}%）` : ""}`
           : "当前空仓 · 可按建议仓位建仓",
         btn: { label: list.length > 0 ? "去管理" : "去开仓", href: "/portfolio", warn: false },
       },
@@ -530,16 +530,16 @@ function render(d) {
   document.getElementById("badge").outerHTML =
     `<span class="badge" style="background:${isUp ? "var(--up)" : "var(--down)"};vertical-align:middle">${m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡"}</span>`;
   document.getElementById("subtitle").textContent =
-    `${d.name}（${d.symbol}） · 投资指引基准 · ${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · ${unit}`;
+    `${d.name ?? "—"}（${d.symbol ?? "—"}） · 投资指引基准 · ${m.start_date ?? "—"} ~ ${m.end_date ?? "—"} · ${m.trading_days ?? "—"} 个交易日 · ${unit}`;
 
   // 指标卡（计价单位随指引标的切换：美元/盎司 / 元 / 元/克）
   const cards = [
-    { label: "最新价", value: m.end_price.toFixed(3), extra: unit },
-    { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + m.change_pct_1d.toFixed(2) + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
-    { label: "5日涨跌", value: (m.change_pct_5d >= 0 ? "+" : "") + m.change_pct_5d.toFixed(2) + "%", cls: m.change_pct_5d >= 0 ? "up" : "down", extra: "近 5 个交易日" },
-    { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + m.change_pct.toFixed(2) + "%", cls: isUp ? "up" : "down" },
-    { label: "区间最高", value: m.high.toFixed(3), extra: unit },
-    { label: "区间最低", value: m.low.toFixed(3), extra: unit },
+    { label: "最新价", value: m.end_price?.toFixed(3) ?? "—", extra: unit },
+    { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + (m.change_pct_1d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
+    { label: "5日涨跌", value: (m.change_pct_5d >= 0 ? "+" : "") + (m.change_pct_5d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_5d >= 0 ? "up" : "down", extra: "近 5 个交易日" },
+    { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + (m.change_pct?.toFixed(2) ?? "—") + "%", cls: isUp ? "up" : "down" },
+    { label: "区间最高", value: m.high?.toFixed(3) ?? "—", extra: unit },
+    { label: "区间最低", value: m.low?.toFixed(3) ?? "—", extra: unit },
     { label: "MA20", value: m.ma20 ? m.ma20.toFixed(3) : "—" },
     { label: "MA40", value: m.ma40 ? m.ma40.toFixed(3) : "—" },
   ];
@@ -551,14 +551,14 @@ function render(d) {
   // 追踪指数
   const idx = d.index;
   const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "#868e96";
-  document.getElementById("idxNum").textContent = idx.score.toFixed(1);
+  document.getElementById("idxNum").textContent = idx.score != null ? idx.score.toFixed(1) : "—";
   document.getElementById("idxNum").style.color = idxColor;
-  const lvlTxt = { strong_up: "🚀 强势上升", up: "↗ 上升", sideways: "→ 震荡整理", down: "↘ 下降", strong_down: "📉 弱势下降" }[idx.level] || idx.level;
+  const lvlTxt = { strong_up: "🚀 强势上升", up: "↗ 上升", sideways: "→ 震荡整理", down: "↘ 下降", strong_down: "📉 弱势下降" }[idx.level] || idx.level || "—";
   const badge = document.getElementById("idxBadge");
   badge.style.display = "inline-block";
   badge.style.background = idxColor;
   badge.textContent = lvlTxt;
-  document.getElementById("idxSummary").textContent = idx.summary;
+  document.getElementById("idxSummary").textContent = idx.summary || "—";
   // 「快照于」提示：每日评估一次，展示生成时刻便于客户判断时效
   const servedAt = d.served_at ? new Date(d.served_at) : null;
   const snapEl = document.getElementById("snapTime");
@@ -569,48 +569,48 @@ function render(d) {
   }
   document.getElementById("idxMethod").innerHTML =
     "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
-    d.indicators.map(i => `${i.name}×${(i.weight * 100).toFixed(0)}%`).join("+") +
+    (d.indicators || []).map(i => `${i.name ?? "—"}×${((i.weight ?? 0) * 100).toFixed(0)}%`).join("+") +
     "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
 
   // 宏观参考因子明细
   document.getElementById("macroInfo").textContent =
-    `宏观参考指数 ${d.macro.score.toFixed(1)}/100 · ${d.macro.direction === "bullish" ? "利多黄金" : d.macro.direction === "bearish" ? "利空黄金" : "中性"}`;
-  document.getElementById("macroFactors").innerHTML = d.macro.factors.map(f => {
+    `宏观参考指数 ${d.macro?.score?.toFixed(1) ?? "—"}/100 · ${d.macro?.direction === "bullish" ? "利多黄金" : d.macro?.direction === "bearish" ? "利空黄金" : "中性"}`;
+  document.getElementById("macroFactors").innerHTML = (d.macro?.factors || []).map(f => {
     const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "#868e96";
     const srcBadge = f.source ? `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${f.source.includes("H.15") ? "#e7f5ff" : "#f1f3f5"};color:${f.source.includes("H.15") ? "#1971c2" : "#868e96"};font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
     return `<div class="macro-row">
-      <span class="nm">${f.name}${srcBadge}</span>
-      <span class="val" style="color:${c}">${f.value} ${f.unit}</span>
-      <span class="bar"><i style="width:${f.score}%;background:${c}"></i></span>
-      <span class="dt">${f.data_date}</span>
+      <span class="nm">${f.name ?? "—"}${srcBadge}</span>
+      <span class="val" style="color:${c}">${f.value ?? "—"} ${f.unit ?? ""}</span>
+      <span class="bar"><i style="width:${(f.score ?? 0)}%;background:${c}"></i></span>
+      <span class="dt">${f.data_date ?? "—"}</span>
     </div>`;
   }).join("");
 
   // 消息面评估
-  const news = d.news;
+  const news = d.news || {};
   const nc = news.direction === "bullish" ? "var(--up)" : news.direction === "bearish" ? "var(--down)" : "#868e96";
   document.getElementById("newsInfo").textContent =
-    `消息面指数 ${news.score.toFixed(1)}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
+    `消息面指数 ${news.score?.toFixed(1) ?? "—"}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
   document.getElementById("newsFactor").innerHTML = `
     <div class="macro-row">
       <span class="nm"><a href="/news" style="color:var(--accent);text-decoration:none">投行展望打分</a></span>
-      <span class="val" style="color:${nc}">${news.score.toFixed(0)}</span>
-      <span class="bar"><i style="width:${news.score}%;background:${nc}"></i></span>
-      <span class="dt">${news.direction}</span>
+      <span class="val" style="color:${nc}">${news.score?.toFixed(0) ?? "—"}</span>
+      <span class="bar"><i style="width:${news.score ?? 0}%;background:${nc}"></i></span>
+      <span class="dt">${news.direction ?? "—"}</span>
     </div>
     ${news.note ? `<div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">💬 ${news.note}</div>` : ""}`;
 
   // 趋势参数维度
-  document.getElementById("indicators").innerHTML = d.indicators.map(ind => {
+  document.getElementById("indicators").innerHTML = (d.indicators || []).map(ind => {
     const c = ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "#868e96";
     return `<div class="ind-row">
       <div class="ind-head">
-        <span class="nm">${ind.name}</span>
-        <span class="vl">${ind.value}</span>
-        <span class="sc" style="color:${c}">${ind.score.toFixed(0)}<span style="font-weight:400;color:var(--muted);font-size:11px"> / 贡献${ind.contribution.toFixed(1)}</span></span>
+        <span class="nm">${ind.name ?? "—"}</span>
+        <span class="vl">${ind.value ?? "—"}</span>
+        <span class="sc" style="color:${c}">${ind.score?.toFixed(0) ?? "—"}<span style="font-weight:400;color:var(--muted);font-size:11px"> / 贡献${ind.contribution?.toFixed(1) ?? "—"}</span></span>
       </div>
-      <div class="bar"><i style="width:${ind.score}%;background:${c}"></i></div>
-      <div class="ind-sub">权重 ${(ind.weight * 100).toFixed(0)}% · ${ind.detail}</div>
+      <div class="bar"><i style="width:${ind.score ?? 0}%;background:${c}"></i></div>
+      <div class="ind-sub">权重 ${((ind.weight ?? 0) * 100).toFixed(0)}% · ${ind.detail ?? "—"}</div>
     </div>`;
   }).join("");
 
@@ -647,7 +647,7 @@ function render(d) {
   renderFreshness(d);
 
   // 摘要
-  document.getElementById("summary").innerHTML = m.summary;
+  document.getElementById("summary").innerHTML = m.summary || "暂无摘要";
 }
 
 // ETF vs 克价对照
@@ -658,19 +658,19 @@ async function loadCompare() {
     const e = c.etf, g = c.gram;
     const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
     document.getElementById("cmpCards").innerHTML = [
-      { label: e.name, value: (e.change_pct >= 0 ? "+" : "") + e.change_pct.toFixed(2) + "%", extra: e.start_price + " → " + e.end_price, cls: e.change_pct >= 0 ? "up" : "down" },
-      { label: g.name + "（元/克）", value: (g.change_pct >= 0 ? "+" : "") + g.change_pct.toFixed(2) + "%", extra: g.start_price + " → " + g.end_price, cls: g.change_pct >= 0 ? "up" : "down" },
-      { label: "区间领先", value: leaderTxt, extra: "涨跌幅差 " + c.lead_gap.toFixed(2) + " 个百分点" },
+      { label: e.name, value: fmtPct2(e.change_pct), extra: e.start_price + " → " + e.end_price, cls: e.change_pct >= 0 ? "up" : "down" },
+      { label: g.name + "（元/克）", value: fmtPct2(g.change_pct), extra: g.start_price + " → " + g.end_price, cls: g.change_pct >= 0 ? "up" : "down" },
+      { label: "区间领先", value: leaderTxt, extra: "涨跌幅差 " + (c.lead_gap?.toFixed(2) ?? "—") + " 个百分点" },
     ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra}</div></div>`).join("");
 
     // 数据对照表：ETF vs 上海金 完整指标
-    const fmtPct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    const fmtPct2 = v => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     const dirTxt = d => d === "up" ? '<span class="up">↗ 上升</span>' : d === "down" ? '<span class="down">↘ 下降</span>' : "→ 震荡";
     const cells = [
-      ["最新价", e.end_price.toFixed(3) + " 元", g.end_price.toFixed(2) + " 元/克", e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
-      ["区间涨跌", fmtPct(e.change_pct), fmtPct(g.change_pct), e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
-      ["区间最高", e.high.toFixed(3), g.high.toFixed(2), "", ""],
-      ["区间最低", e.low.toFixed(3), g.low.toFixed(2), "", ""],
+      ["最新价", (e.end_price?.toFixed(3) ?? "—") + " 元", (g.end_price?.toFixed(2) ?? "—") + " 元/克", e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
+      ["区间涨跌", fmtPct2(e.change_pct), fmtPct2(g.change_pct), e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
+      ["区间最高", e.high?.toFixed(3) ?? "—", g.high?.toFixed(2) ?? "—", "", ""],
+      ["区间最低", e.low?.toFixed(3) ?? "—", g.low?.toFixed(2) ?? "—", "", ""],
       ["MA20", e.ma20 ? e.ma20.toFixed(3) : "—", g.ma20 ? g.ma20.toFixed(2) : "—", "", ""],
       ["MA40", e.ma40 ? e.ma40.toFixed(3) : "—", g.ma40 ? g.ma40.toFixed(2) : "—", "", ""],
       ["区间方向", dirTxt(e.direction), dirTxt(g.direction), "", ""],
@@ -698,7 +698,7 @@ async function loadCompare() {
         scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
       },
     });
-    document.getElementById("cmpSummary").textContent = c.summary;
+    document.getElementById("cmpSummary").textContent = c.summary || "—";
   } catch (e) {
     document.getElementById("cmpSub").textContent = "对照加载失败：" + e.message;
   }
@@ -709,19 +709,19 @@ async function loadSge() {
   try {
     const n = await fetchJSON(API_BASE + "/api/v1/market/gold/trend?target=gram&days=60");
     const m = n.metrics;
-    const isUp = m.change_pct >= 0;
+    const isUp = (m.change_pct ?? 0) >= 0;
     const cls = v => v >= 0 ? "up" : "down";
-    const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+    const pct = v => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     const d1 = m.change_pct_1d ?? 0;
     const d5 = m.change_pct_5d ?? 0;
-    document.getElementById("sgeSub").textContent = `${m.start_date} ~ ${m.end_date} · ${m.trading_days} 个交易日 · 元/克`;
+    document.getElementById("sgeSub").textContent = `${m.start_date ?? "—"} ~ ${m.end_date ?? "—"} · ${m.trading_days ?? "—"} 个交易日 · 元/克`;
     document.getElementById("sgeCards").innerHTML = [
-      { label: "最新价", value: m.end_price.toFixed(2), extra: "元/克" },
+      { label: "最新价", value: m.end_price?.toFixed(2) ?? "—", extra: "元/克" },
       { label: "昨日涨跌", value: pct(d1), cls: cls(d1), extra: "最近 1 个交易日" },
       { label: "5日涨跌", value: pct(d5), cls: cls(d5), extra: "近 5 个交易日" },
       { label: "区间涨跌", value: pct(m.change_pct), cls: isUp ? "up" : "down", extra: "60 天累计" },
-      { label: "区间最高", value: m.high.toFixed(2), extra: "元/克" },
-      { label: "区间最低", value: m.low.toFixed(2), extra: "元/克" },
+      { label: "区间最高", value: m.high?.toFixed(2) ?? "—", extra: "元/克" },
+      { label: "区间最低", value: m.low?.toFixed(2) ?? "—", extra: "元/克" },
     ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("");
     new Chart(document.getElementById("sgeChart"), {
       type: "line",
@@ -750,7 +750,7 @@ async function loadSge() {
       b.title = `${n.name} · ${n.freshness.session.state_label} · 数据截止 ${n.freshness.data_date || "—"}`;
       sgeArea.appendChild(b);
     }
-    document.getElementById("sgeSummary").textContent = m.summary;
+    document.getElementById("sgeSummary").textContent = m.summary || "—";
   } catch (e) {
     document.getElementById("sgeSub").textContent = "上海金数据加载失败：" + e.message;
   }
@@ -803,7 +803,7 @@ async function loadSnapshots(days = 30) {
     const minDate = list.find(x => x.trend_index === min)?.snapshot_date || "";
 
     document.getElementById("snapLatest").innerHTML =
-      `${latest.trend_index.toFixed(1)} <small style="font-size:11px;color:var(--muted)">${latest.index_level}</small>`;
+      `${latest.trend_index?.toFixed(1) ?? "—"} <small style="font-size:11px;color:var(--muted)">${latest.index_level ?? "—"}</small>`;
     document.getElementById("snapMax").innerHTML =
       `${max.toFixed(1)} <small style="font-size:11px;color:var(--muted)">${maxDate}</small>`;
     document.getElementById("snapMin").innerHTML =
@@ -845,7 +845,7 @@ async function loadSnapshots(days = 30) {
     });
 
     sumEl.textContent =
-      `最近 ${latest.snapshot_date} · 综合 ${latest.trend_index.toFixed(1)}（${latest.index_level}）· 收盘 ${latest.close}`;
+      `最近 ${latest.snapshot_date ?? "—"} · 综合 ${latest.trend_index?.toFixed(1) ?? "—"}（${latest.index_level ?? "—"}）· 收盘 ${latest.close?.toFixed(3) ?? "—"}`;
   } catch (e) {
     subEl.textContent = "快照加载失败：" + e.message;
   }
