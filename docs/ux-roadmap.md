@@ -87,7 +87,7 @@
 - **自身可观测性**：共振信号卡点击渗透率（`resonance_card_click`）；克数交易占比（`grams_trade_open`）；克/份切换（`equity_curve_switch_unit`）
 - **人天**：4
 
-### V0.71.0 · 多品种 UI + 回测可视化
+### V0.71.0 · 多品种 UI + 回测可视化 ✅ 已落地（V0.71.0）
 
 - **目标**：贵金属全景；参数可信度闭环。
 - **关键能力**：
@@ -98,6 +98,13 @@
 - **验证**：白银页 K 线 / 决策 / 评估 三模块齐；回测页可配置 ≥ 3 维度参数并即时计算
 - **自身可观测性**：白银用户占比；回测使用深度（每次会话参数调整次数）
 - **人天**：5
+- **落地交付**（2026-09-20）：
+  - `static/silver.html`（530 行，深蓝色系，复用 trend.html FOUC / chart.js / chart-a11y / theme / responsive / help 6 处头部注入）：hero（白银 ETF 562800 + COMEX SI 双市场 + 与黄金联动提示） + 实时评估摘要（趋势指数 + 宏观因子 + 消息面） + 共振信号卡（V0.70.0 复用 silver 数据驱动） + 趋势参数维度 + 白银 ETF vs 纽约白银 对照（归一化双轴图 + 表格 + leader/gap） + 白银趋势主图（D/W/M 多时间框架切换） + 双市场报价卡 + 60 秒自动刷新 + 手动刷新
+  - `static/backtest.html`（~480 行，金黄色系）：参数区（基准标的 5 选 1 + 回看窗口 + 权重候选 chips + 阈值带 chips + 立即回测按钮）+ 回测结果（5 张 summary 卡 + Sharpe 柱状图 + 最大回撤折线图 + 5 桶校准曲线 + 命中详情表前 30 行） + 5 分钟节流缓存角标（cachedBadge 同步 X-Backtest-Cached header） + 500ms debounce 自动重算 + 控件变更埋点 + 启动时 GET /config 应用用户保存的默认配置
+  - `static/backtest-chart.js`（210 行）：IIFE + `window.PM_Backtest` + 自注入 CSS（缓存角标 / 表格 / summary 样式）+ 3 张 Chart.js + destroyCharts 显式释放内存 + ChartA11y.wrapChart 包裹
+  - 9 页 nav 注入：trend / portfolio / trades / weights / news / review / central-bank / silver / backtest（每页 2 个新链接）
+  - help 升级：VERSION V0.58.0 → V0.71.0（major 升级触发重看 tour）+ silver.html 4 步 tour + backtest.html 3 步 tour + GLOSSARY 加 562800/SI/Sharpe/最大回撤/校准曲线/回测 6 个术语 + renderGuideTab 加 V0.71.0 新增章节
+  - 埋点同步：前后端 ALLOWED_EVENT_TYPES 加 silver_page_view / silver_nav_click / backtest_run / backtest_param_change 4 项
 
 ### V0.72.0 · 推送渠道 + PWA 安装
 

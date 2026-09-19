@@ -52,6 +52,8 @@
 | **多时间框架（周/月线）** | 趋势页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 | ✅ V0.64.0 |
 | **共振信号卡（P2 #7）** | 趋势页顶部三色共振信号卡（宏观×技术×消息面）—— `services/resonance.py` 4 类信号（共振上行/下行/背离/中性）+ confidence 0-100；3 个端点：`GET /api/v1/resonance/signal` 当日信号 / `GET /api/v1/resonance/history?days=N` 历史回放 / `GET /api/v1/resonance/strength-up?days=90&horizon=1` STRONG_UP 命中率（样本 <20 时 `sample_warning=true`） | ✅ V0.70.0 |
 | **克数持仓 UX（P2 #8）** | `positions.grams_held NUMERIC(12,3) NULL` + `utils/grams.py` shares_from_grams；开/加/减仓均支持 `grams` 字段（与 `quantity` XOR，`model_validator(mode="after")` 校验）；前端持仓表新增「克数」列、收益曲线右上角「单位：份/克」切换（`localStorage.pm_grams_mode` 记忆）、`static/portfolio.html` 三处外科插入；新端点 `GET /api/v1/market/gold/gram-quote` 上海金 Au99.99 元/克报价；埋点新增 `grams_trade_open` / `equity_curve_switch_unit` | ✅ V0.70.0 |
+| **白银追踪（P3-a P2 #11）** | `SilverHistoryProvider` Protocol + `MockSilverHistoryProvider`（base ETF 2.45 元/份 / NY 31.5 USD/OZ）+ `MarketProviderBundle.silver_history` + `PROVIDER_REGISTRY` 新增 `silver_mock`/`silver_akshare`；`TrendService._TARGET_UNITS` / `_FRESHNESS_KEYS` / `_load_klines` 扩展 `silver_etf/silver_ny`（**复用 5 维算法零修改**）；`DecisionService.target_label()` helper + endpoint pattern 扩 `silver_etf/silver_ny`；新端点 `GET /api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}`（**silver 不新增 router，复用 market.router**）；`static/silver.html` 白银色系（深蓝 #1d4ed8）页面；9 页 nav 注入；新埋点 `silver_page_view` / `silver_nav_click` | ✅ V0.71.0 |
+| **参数回测（P3-a P2 #10）** | `services/backtest.py` 3 维权重网格（tech×macro×news，≤125 组合）× 4 节点阈值带扫描笛卡尔积；`compute_sharpe(mean/std × √252)` / `compute_max_drawdown`（peak-tracking）/ `_direction_from_score(BULLISH/BEARISH/NEUTRAL)` + 复用 `judge_hit`；`daily_snapshots` + `gold_price_daily` 构造 T+1 涨跌幅；5 桶校准分箱（0-20/20-40/40-60/60-80/80-100）；`services/backtest_throttle.py` sha256(canonical_json)[:16] 模块级 5 分钟缓存 + `X-Backtest-Cached` header；`schemas/backtest.py` `WeightGrid` / `ThresholdBand` / `BacktestRequestIn` / `BacktestResultOut` / `BacktestCoverageOut` / `BacktestConfigIn/Out`；新端点 `POST /api/v1/backtest/run` + `GET /api/v1/backtest/coverage` + `GET/PUT /api/v1/backtest/config`（复用 settings 表 key=`backtest_config`，60s 缓存，不新建表）；`static/backtest.html`（参数 chips + 5 张 summary 卡 + 3 张 Chart.js + 命中详情表）+ `static/backtest-chart.js`（IIFE + `window.PM_Backtest` + 自注入 CSS + 500ms debounce）；新埋点 `backtest_run` / `backtest_param_change`；help.js 升级 V0.58.0 → V0.71.0 + silver 4 步 / backtest 3 步 tour | ✅ V0.71.0 |
 | 健康检查 | `GET /api/v1/health` | ✅ |
 
 ---
@@ -111,7 +113,7 @@ src/app/
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
 static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html
                          #   + account.js（账本切换器）/ freshness.js / help.js / responsive.css
-tests/                   # pytest（510 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓）
+tests/                   # pytest（557 用例，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测）
 ```
 
 ### 3.3 数据流
@@ -143,7 +145,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 510 用例（离线回归 466 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓
+python -m pytest -v          # 557 用例（离线回归 510+ passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / **白银（20 新增）/ 回测（27 新增）**
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```
@@ -177,6 +179,15 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | GET | `/api/v1/market/gold/compare` | ETF vs 黄金克价对照（归一化） | `days`(20-250) |
 | GET | `/api/v1/market/gold/etf-quote` | **黄金ETF报价（元/份，估值与交易专用口径）** | - |
 | GET | `/api/v1/market/gold/gram-quote` | **上海金 Au99.99 克价（元/克，P2 #8 V0.70.0）** | - |
+| GET | `/api/v1/market/silver/quote` | **纽约白银 SI 报价（美元/盎司，P3-a P2 #11 V0.71.0）** | - |
+| GET | `/api/v1/market/silver/etf-quote` | **白银 ETF 562800 报价（元/份，P3-a P2 #11 V0.71.0）** | - |
+| GET | `/api/v1/market/silver/trend` | **白银 ETF 趋势追踪 + 评估指数（P3-a P2 #11 V0.71.0）** | `days`(20-750)、`interval`(D/W/M) |
+| GET | `/api/v1/market/silver/ny-trend` | **纽约白银趋势曲线（美元/盎司，P3-a P2 #11 V0.71.0）** | `days`(20-750)、`interval`(D/W/M) |
+| GET | `/api/v1/market/silver/compare` | **白银 ETF vs 纽约白银 对照（归一化，P3-a P2 #11 V0.71.0）** | `days`(20-250) |
+| POST | `/api/v1/backtest/run` | **参数回测（权重网格 × 阈值带 → Sharpe/最大回撤/命中率，5 分钟节流，P3-a P2 #10 V0.71.0）** | body: `BacktestRequestIn`（days/target/weight_grid/threshold_bands）；header: `X-Backtest-Cached: true\|false` |
+| GET | `/api/v1/backtest/coverage` | **回测数据覆盖期报告（start/end/available_days/sample_warning，P3-a P2 #10 V0.71.0）** | `target`(ny/etf/gram/silver_ny/silver_etf)、`days`(20-365) |
+| GET | `/api/v1/backtest/config` | **回测预设配置读取（settings 表 key=backtest_config，60s 缓存，P3-a P2 #10 V0.71.0）** | - |
+| PUT | `/api/v1/backtest/config` | **回测预设配置保存（P3-a P2 #10 V0.71.0）** | body: `BacktestConfigIn` |
 | POST | `/api/v1/positions` | 开仓买入 | body: `{symbol, quantity, price, fee}`；query: `account_id`（缺省=默认账本） |
 | GET | `/api/v1/positions` | 持仓列表（实时盈亏） | `include_closed`、`account_id`（缺省=全部账本） |
 | GET | `/api/v1/positions/export` | 持仓 + 流水 CSV 导出 | `account_id` |
@@ -321,16 +332,16 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 
 ## 9. 测试
 
-**510 个用例**（`pytest --collect-only -q`，**39 个测试模块**）覆盖：
+**557 个用例**（`pytest --collect-only -q`，**41 个测试模块**）覆盖：
 
 - **服务层**：宏观评分引擎（权重归一/多空映射/逐因子方向，含 cb_gold 注入中央银行服务）、趋势服务（均线/方向/指数合成/数据不足异常）、消息面（**V0.65.0 每日 3 槽位：自动分配 / 1:2:3 加权 / 用尽拦截 / 覆盖修正 / 撤销重归一**）、快照、决策、设置、央行购金（T12M / Top / 范围筛选）、业绩分析（交易流水回放 / 收益曲线 / 平仓统计 / 空仓与除零边界）、**研判复盘（V0.66.0：命中判定口径 / 交易日对齐 / 待验证 / 补录排除 / 校准分箱 / 标签胜率）**、**共振信号（V0.70.0 P2 #7：4 类信号 / 默认中性 / score_date / 历史回放 / STRONG_UP 命中率 / 样本警告 / 空窗口）**、**克数持仓（V0.70.0 P2 #8：克数→份数换算 / grams_held 落库 / 加减仓 / XOR 校验 / 0 元阻止转换 / 合计含克数）**
-- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**/**Au99.99 克价**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**/**克数交易 422/400**）、业绩（收益曲线区间校验 / 获利分析）、快照、**消息面（3 槽位 + 撤销 + 历史 + 422/400/404 边界）**、央行购金（3 个 endpoint）、**复盘（meta / journal / stats / hint / horizons / backfill + 边界）**、**共振（V0.70.0：signal / strength-up 422 / history 空窗口）**、健康检查
+- **API 层**：机会分析（评分/历史/参数校验 422）、行情（报价/趋势 `target` 三市场/维度校验/健康度/时效/**ETF 报价口径**/**Au99.99 克价**/**白银 5 端点 V0.71.0**）、决策、持仓（开仓/加减仓/清仓/软删除/撤销/导出/**流水查询**/**克数交易 422/400**）、业绩（收益曲线区间校验 / 获利分析）、快照、**消息面（3 槽位 + 撤销 + 历史 + 422/400/404 边界）**、央行购金（3 个 endpoint）、**复盘（meta / journal / stats / hint / horizons / backfill + 边界）**、**共振（V0.70.0：signal / strength-up 422 / history 空窗口）**、**回测（V0.71.0：run / coverage / config + 5 分钟节流）**、健康检查
 - **数据层**：WGC fetcher（`_parse_chart_series` / `_iso_for_country` / `_find_country_chart` / `load_manual_overrides` / 端到端 mock 32 项）、市场时段判定、SQLite 启动幂等补列、**K 线聚合（日 K identity / ISO 周界 / 年月跨年 / 单点桶 / volume 求和 / 空输入兜底）**
 - **调度层**：央行购金月度调度时间计算（月末动态 28/29/30/31 天 / 年切换 / 环境变量开关 13 项 / 循环节流）
-- 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.70.0 实测 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件 44 用例）**466 passed / 0 failed**
-- **全量回归（含联网 fetcher）**：**509 passed / 1 skipped / 0 failed**（510 collected）
+- 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.71.0 实测 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件 44 用例）**513 passed / 0 failed**
+- **全量回归（含联网 fetcher）**：**556 passed / 1 skipped / 0 failed**（557 collected）
 - **例外（既有问题，非本版本引入）**：`tests/test_services/{test_irfcl_fetcher,test_h15_fetcher}.py` 共 44 用例，实测 **43 passed / 1 skipped**——跳过项 `test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（位于 `.gitignore` 内，新克隆不携带）；已加 `skipif` 守卫（文件缺失即跳过，不再误报 failed）
-- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **7 个静态页面**的内联 JS + **4 个共享脚本**（`account.js` / `freshness.js` / `help.js` / **新增 `resonance-card.js`**）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
+- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **9 个静态页面**（V0.71.0 新增 `silver.html` / `backtest.html`）的内联 JS + **10 个共享脚本**（`account.js` / `freshness.js` / `help.js` / `resonance-card.js` / **V0.71.0 新增 `backtest-chart.js`** + `nav-drawer.js` / `command-palette.js` / `telemetry.js` / `chart-a11y.js` / `theme.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题
 
 ---
 

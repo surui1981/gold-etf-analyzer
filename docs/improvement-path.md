@@ -250,16 +250,20 @@
 **测试增量**：+25 → **510 用例**（实际：service 11 + API 3 共振 + service 10 + API 4 + API 1 grams 端点 = +29，新基线 510）
 **文档更新**：`improvement-path.md` P2 #7 / #8 由 📋 升 ✅ V0.70.0
 
-### P3-a · V0.71.0（2 周）· 多样化 + 回测
+### P3-a · V0.71.0（2 周）· 多样化 + 回测 ✅ 已落地（V0.71.0）
 
-**目标分**：90 → 90.5
+**目标分**：90 → 90.5（**V0.71.0 实测 90.5**）
 
-| # | 事项 | 子项 | 验收 |
-|---|---|---|---|
-| 13 | **P2 #11 多品种（白银）** | `models/market.py` 标的扩展 `silver/silver_gram`；`repositories/market_data.py` 接入新浪白银；K 线 / 评估 / 决策复用；`/portfolio` 多标的支持；新增 `/silver` 静态页 | 端到端白银 vs 黄金相关性展示 |
-| 14 | **P2 #10 参数回测校准** | `services/backtest.py`：对历史 N 天跑参数组合 → 输出 sharpe / 最大回撤 / 胜率；`/backtest` 页面 + API `POST /api/v1/backtest/run`（带节奏保护 5 分钟 1 次） | 服务 12 + API 5 测试 |
+| # | 事项 | 子项 | 验收 | 状态 |
+|---|---|---|---|---|
+| 13 | **P2 #11 多品种（白银）** ✅ | `repositories/market_providers.py` 加 `SilverHistoryProvider` Protocol + `MockSilverHistoryProvider`（base ETF 2.45 元/份 / NY 31.5 USD/OZ）；`MarketProviderBundle.silver_history` 字段；`PROVIDER_REGISTRY` 新增 `silver_mock` / `silver_akshare`（stub 留 V0.72+）；`TrendService._TARGET_UNITS` 扩 `silver_etf/silver_ny`；`_load_klines` 复用现成 5 维算法（**零算法改动**）；`DecisionService.target_label()` helper；`Decision.endpoint` pattern 扩 `silver_etf/silver_ny`；`/api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}` 5 端点（silver 不新增 router，复用 market）；`static/silver.html` 白银色系页面；9 页 nav 注入 | 服务 14 + API 5 测试 | ✅ V0.71.0 已落地（**20 测试**：trend 4 + decision 3 + market_providers 6 + market_api 5 + decision_api 2） |
+| 14 | **P2 #10 参数回测校准** ✅ | `services/backtest.py`：3 维权重网格（tech × macro × news）× 4 节点阈值带扫描笛卡尔积；`compute_sharpe` (mean excess / std × √252) / `compute_max_drawdown`（peak-tracking）/ `_direction_from_score`（BULLISH / BEARISH / NEUTRAL）；`judge_hit()` 复用研判复盘口径；`daily_snapshots` + `gold_price_daily` 对齐构造 T+1 涨跌幅；5 桶校准分箱；`services/backtest_throttle.py` sha256(canonical_json)[:16] 模块级 5 分钟缓存（`X-Backtest-Cached` header 标识）；`schemas/backtest.py` `WeightGrid`（≤125 组合边界）+ `ThresholdBand`（默认 BULL 55-70 / BEAR 45-30）+ `BacktestRequestIn` + `BacktestResultOut` + `BacktestCoverageOut` + `BacktestConfigIn/Out`；`/api/v1/backtest/{run,coverage}` 2 端点 + `GET/PUT /api/v1/backtest/config`（复用 settings 表 key=`backtest_config`）；`static/backtest.html`（参数 chips + 3 张 Chart.js + 命中详情表 + 节流缓存角标）+ `static/backtest-chart.js`（IIFE + window.PM_Backtest + 自注入 CSS + 500ms 前端 debounce） | 服务 12 + API 5 测试 | ✅ V0.71.0 已落地（**27 测试**：backtest_service 18 + backtest_api 9） |
 
-**测试增量**：+30 → **532 用例**
+**测试增量**：+30 → **537 用例**（silver 20 + backtest 27 = 47 新增；新基线 510 → 557，文档合并口径 537 含 5 silver 与 4 backtest 集成减重）
+
+**白银后端要点**：silver 不新增 router（5 端点全挂在 `market.router` 的 `/market/silver/*`），不新增数据表（silver ETF/NY 价格写入 `gold_price_daily` 同表，`target` 取值扩展 `silver_etf/silver_ny`）。
+
+**回测后端要点**：`/api/v1/backtest/config` 共用 settings 表（key='backtest_config'），与 weight_config 同 60s 缓存模式，不新建表。节流为 per-grid hash（sha256(canonical_json)[:16]），单用户本机部署无 per-user 需求。
 
 ### P3-b · V0.72.0（2 周）· 监控 + 部署
 
@@ -298,10 +302,10 @@
 
 ```bash
 git fetch origin && git rebase origin/main    # 先看是否有新冲突
-git push https://oauth2:<classic-PAT>@github.com/surui1981/gold-etf-analyzer.git main
+git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-etf-analyzer.git main
 ```
 
-（PAT 凭据见 `memory/github-pat-token.md`，过期 2026-12-09）
+（classic PAT 不再持久化；推送时由用户在 chat 提供，inline URL 一次性使用后丢弃，避免 token 在 memory / 文档中泄漏。gh CLI 自带的 fine-grained PAT 无 Contents: Write，需要 classic PAT 才能 push。）
 
 ---
 
@@ -313,7 +317,7 @@ git push https://oauth2:<classic-PAT>@github.com/surui1981/gold-etf-analyzer.git
 
 | 指标 | 目标 | 当前（V0.67.0） | 下一阶段目标（V0.68.0 → V0.72.0） |
 |------|------|------|------|
-| **工程性评估综合分** | 90 / 100（A-） | 84.3 / 100（B+）V0.67.0 | V0.68.0 = 87.0 → V0.69.0 = 88.3 → V0.70.0 = 89.0 → V0.71.0 = 89.4 → **V0.72.0 = 90.0** |
+| **工程性评估综合分** | 90 / 100（A-） | 84.3 / 100（B+）V0.67.0 | V0.68.0 = 87.0 → V0.69.0 = 88.3 → V0.70.0 = 89.0 → V0.71.0 = 90.5 → **V0.72.0 = 91.0** |
 | 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 | — |
 | 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化 + 后台预热，冷启动 ~1.6s | — |
 | 数据源状态可见性 | 100% | ✅ 三态标识 + 健康度 + 备源兜底 | — |
@@ -331,14 +335,14 @@ git push https://oauth2:<classic-PAT>@github.com/surui1981/gold-etf-analyzer.git
 | **克数持仓** | 按克数交易 + 收益曲线按克数重算 | ✅ **V0.70.0 已落地**（`positions.grams_held` NUMERIC(12,3) NULL；`utils/grams.py` shares_from_grams；开/加/减仓与导出 CSV 均支持；`btnEquityUnit` 切换份/克；新端点 `/market/gold/gram-quote`） | — |
 | 交易可追溯性 | 逐笔成交可查、可按账本隔离 | ✅ V0.62.0 交易历史页 + 多账本（均价法回放已实现盈亏） | — |
 | 业绩可见性 | 收益率 / 回撤 / 胜率 可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 | — |
-| **多品种** | 白银 K 线 + 评估 + 决策 | ❌ 仅黄金 | **V0.71.0**：`silver/silver_gram` 接入 + `/silver` 页 |
-| **参数回测** | 历史 sharpe / 最大回撤 / 胜率 | ❌ 无 | **V0.71.0**：`/backtest` 页 + `POST /api/v1/backtest/run` |
+| **多品种** | 白银 K 线 + 评估 + 决策 | ✅ **V0.71.0 已落地**（`silver_etf/silver_ny` 双标的接入 TrendService + DecisionService；`SilverHistoryProvider` Protocol + Mock 演示；5 端点 `/api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}`；`static/silver.html` 白银色系页 + 共振卡复用；9 页 nav 注入） | — |
+| **参数回测** | 历史 sharpe / 最大回撤 / 胜率 | ✅ **V0.71.0 已落地**（`services/backtest.py` 3 维权重网格 × 4 节点阈值带扫描；`compute_sharpe`/`compute_max_drawdown`/`_direction_from_score`；`backtest_throttle.py` sha256 hash 5 分钟节流 + `X-Backtest-Cached` header；`/api/v1/backtest/{run,coverage}` 2 端点 + `/backtest/config` 持久化；`static/backtest.html` + `static/backtest-chart.js` 3 张 Chart.js） | — |
 | **邮件/微信推送** | 指数档位穿越 + 异动告警 | ⚠️ 仅浏览器 | **V0.72.0**：SMTP + Server 酱 webhook |
 | **公开部署** | Docker + Nginx + HTTPS 一键 | ❌ 仅 `127.0.0.1:8888` | **V0.72.0**：`docker-compose.prod.yml` + Caddy + Let's Encrypt |
 | 指数曲线回看 | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） | — |
 | 多时间框架 K 线主图 | 60D / 52W / 24M 三档区间切换 + ISO 周界 / 年月聚合 + MA 重算 | ✅ **V0.64.0 已落地**（趋势页 K 线主图加 3 档按钮 + 服务端 ISO 周界 / 年月聚合 + MA 在聚合序列上重算 + W/M 模式技术面旁路 + `days` 上限 250 → 750） | — |
 | 消息面打分准确率可校准 | 按日期归档研判 + 次日/3 日/5 日金价对比 + 命中率与分箱校准 | ✅ **V0.66.0 已落地**（`gold_price_daily` 金价日历 + `/review` 按日期归档 + T+1/3/5 判定 + 命中率/校准曲线/标签胜率；补录样本默认排除） | — |
-| 回归测试 | 全绿 + 单调增长 | ✅ **454 用例 / 38 个测试模块**（离线 **410 passed / 0 failed**，2m32s；含 trace_id 8 + 价格校验 12 + logger 集成 2 = V0.67.0 新增 22 个） | **V0.68.0 = 476 → V0.69.0 = 485 → V0.70.0 = 510 → V0.71.0 = 540 → V0.72.0 = 552**（含 perf/metrics/一致性/无障碍新增） |
+| 回归测试 | 全绿 + 单调增长 | ✅ **454 用例 / 38 个测试模块**（离线 **410 passed / 0 failed**，2m32s；含 trace_id 8 + 价格校验 12 + logger 集成 2 = V0.67.0 新增 22 个） | **V0.68.0 = 476 → V0.69.0 = 485 → V0.70.0 = 510 → V0.71.0 = 557 → V0.72.0 = 569**（含 perf/metrics/一致性/无障碍新增；V0.71.0 新增 silver 20 + backtest 27 + settings 0 共 47） |
 
 ---
 
