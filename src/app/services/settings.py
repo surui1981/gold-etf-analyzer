@@ -4,6 +4,7 @@ import json
 import time
 
 from app.repositories.settings import SettingRepository
+from app.schemas.backtest import BacktestConfigIn, BacktestConfigOut
 from app.schemas.settings import (
     WeightConfig,
 )
@@ -13,15 +14,22 @@ logger = get_logger(__name__)
 
 WEIGHTS_KEY = "weight_config"
 
+# V0.71.0：回测预设配置 key（与 weight_config 共用 settings 表，key 区分）
+BACKTEST_CONFIG_KEY = "backtest_config"
+
 # 配置内存缓存（P2-3）：权重属于低频变更数据，读库缓存 60s，保存时立即失效
 WEIGHTS_CACHE_TTL = 60  # 秒
 _WEIGHTS_CACHE: dict = {"ts": 0.0, "config": None}
 
+# V0.71.0：回测配置缓存（与 weights 同 TTL）
+_BACKTEST_CACHE: dict = {"ts": 0.0, "config": None}
+
 
 def clear_weights_cache() -> None:
     """使配置缓存失效（保存配置 / 测试隔离时调用）。"""
-    global _WEIGHTS_CACHE
+    global _WEIGHTS_CACHE, _BACKTEST_CACHE
     _WEIGHTS_CACHE = {"ts": 0.0, "config": None}
+    _BACKTEST_CACHE = {"ts": 0.0, "config": None}
 
 
 class WeightService:
@@ -126,3 +134,43 @@ def _migrate_legacy(raw: str) -> WeightConfig | None:
         return WeightConfig.model_validate(data)
     except Exception:
         return None
+
+
+# ───────────────────── V0.71.0：回测预设配置 ─────────────────────
+
+
+async def get_backtest_config(repo: SettingRepository):
+    """读取回测配置（60s 缓存，未配置返回默认 BacktestConfigIn）。"""
+    global _BACKTEST_CACHE
+    now = time.time()
+    if _BACKTEST_CACHE["config"] is not None and now - _BACKTEST_CACHE["ts"] < WEIGHTS_CACHE_TTL:
+        return _BACKTEST_CACHE["config"]
+    raw = await repo.get(BACKTEST_CONFIG_KEY)
+    if raw:
+        try:
+            cfg = BacktestConfigOut.model_validate_json(raw)
+        except Exception as exc:
+            logger.warning("backtest_config 解析失败 (%s), 回退默认", exc)
+            cfg = BacktestConfigOut()
+    else:
+        cfg = BacktestConfigOut()
+    _BACKTEST_CACHE = {"ts": now, "config": cfg}
+    return cfg
+
+
+async def save_backtest_config(repo: SettingRepository, config: BacktestConfigIn):
+    """保存回测配置到 settings 表（key='backtest_config'），保存后失效缓存。"""
+    from datetime import datetime
+
+    saved = BacktestConfigOut(
+        days=config.days,
+        target=config.target,
+        weight_grid=config.weight_grid,
+        threshold_bands=config.threshold_bands,
+        updated_at=datetime.now(),
+    )
+    await repo.set(BACKTEST_CONFIG_KEY, saved.model_dump_json())
+    global _BACKTEST_CACHE
+    _BACKTEST_CACHE = {"ts": time.time(), "config": saved}
+    logger.info("Backtest config saved: %s", saved.model_dump_json())
+    return saved

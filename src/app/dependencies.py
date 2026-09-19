@@ -20,6 +20,7 @@ from app.repositories.snapshot import SnapshotRepository
 from app.repositories.telemetry import TelemetryRepository
 from app.services.account import AccountService
 from app.services.analysis import AnalysisService
+from app.services.backtest import BacktestService
 from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
@@ -182,6 +183,22 @@ def get_resonance_service(
 ) -> ResonanceService:
     """共振信号服务依赖（趋势服务 + 消息面仓储，用于历史回放与命中统计）。"""
     return ResonanceService(trend=trend, news=news)
+
+
+# V0.71.0 —— 回测服务
+
+
+def get_backtest_service(
+    session: AsyncSession = Depends(get_db_session),
+    gold: GoldPriceRepository = Depends(get_gold_price_repository),
+    weights: WeightService = Depends(get_weight_service),
+) -> BacktestService:
+    """回测编排服务依赖（DB 会话 + 价格仓储 + 权重配置）。
+
+    复用 daily_snapshots（参数面 + 评估值的历史「金标准」）做参数扫描；
+    节流由 :mod:`app.services.backtest_throttle` 模块级维护。
+    """
+    return BacktestService(session=session, gold=gold, weights=weights)
 
 
 async def get_position_repository(

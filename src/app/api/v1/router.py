@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     account,
     analysis,
+    backtest,
     central_bank,
     decision,
     health,
@@ -36,3 +37,4 @@ api_router.include_router(resonance.router)  # V0.70.0 P2 #7
 api_router.include_router(central_bank.router)
 api_router.include_router(portfolio.router)
 api_router.include_router(telemetry.router)
+api_router.include_router(backtest.router)  # V0.71.0 P3-a
