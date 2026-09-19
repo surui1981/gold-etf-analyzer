@@ -217,6 +217,11 @@
     <div class="cards" id="cards"></div>
   </section>
 
+  <!-- V0.70.0 P2 #7 共振信号卡：宏观 / 技术 / 消息面 三维同台 -->
+  <section class="panel" id="resonanceCard" role="status" aria-live="polite" aria-label="共振信号">
+    <div class="rc-loading">🔄 共振信号加载中…</div>
+  </section>
+
   <!-- 今日操作清单 -->
   <div class="panel" style="margin-bottom:16px">
     <div style="font-size:15px;font-weight:600;margin-bottom:2px">📋 今日操作清单 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="clSum">加载中…</span></div>
@@ -934,5 +939,7 @@ function startTrendPolling() {
   <script src="/static/telemetry.js" defer></script>
   <script src="/static/nav-drawer.js" defer></script>
   <script src="/static/command-palette.js" defer></script>
+  <!-- V0.70.0 P2 #7 共振信号卡 -->
+  <script src="/static/resonance-card.js" defer></script>
 </body>
 </html>
