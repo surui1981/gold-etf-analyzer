@@ -230,10 +230,13 @@
 const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
 const API = API_BASE + "/api/v1/news-score";
 
-let state = null;      // 当日打分状态（NewsScoreOut）
-let editSlot = 1;      // 正在编辑的槽位
-let loadedSlot = null; // 已回填到编辑器的槽位（避免打断拖动）
+let state = null;        // 当日打分状态（NewsScoreOut）
+let editSlot = 1;        // 正在编辑的槽位
+let loadedSlot = null;   // 已回填到编辑器的槽位（避免打断拖动）
 let forceReload = false;
+let basisOptions = [];   // V0.66.0：研判依据标签（loadBasisOptions 异步加载）
+let selectedBasis = new Set(); // V0.66.0：当前选中的标签集合
+let hintTimer = null;    // V0.66.0：分值→校准提示的 debounce 句柄
 
 function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
 function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
