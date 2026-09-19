@@ -31,6 +31,13 @@ class FakeMarketRepo:
             {"symbol": symbol, "price_usd": 5.5, "change_pct": 1.2, "updated_at": date.today()},
         )()
 
+    async def get_gold_gram_quote(self, symbol: str = "Au99.99"):  # V0.70.0 P2 #8
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 990.5, "change_pct": 0.35, "updated_at": date.today()},
+        )()
+
     async def get_gold_history(self, days: int = 60) -> list[GoldKline]:
         base = date(2026, 6, 1)
         return [
@@ -94,6 +101,16 @@ async def test_gold_quote(client: AsyncClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["price_usd"] > 0
+    assert "updated_at" in body
+
+
+async def test_gold_gram_quote(client: AsyncClient) -> None:
+    """V0.70.0 P2 #8：Au99.99 克价（元/克）。"""
+    resp = await client.get("/api/v1/market/gold/gram-quote")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "Au99.99"
+    assert body["price_usd"] == pytest.approx(990.5, abs=0.01)
     assert "updated_at" in body
 
 

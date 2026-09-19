@@ -98,6 +98,28 @@ async def gold_etf_quote(
 
 
 @router.get(
+    "/gold/gram-quote",
+    response_model=GoldQuoteOut,
+    summary="上海金 Au99.99 克价（元/克，V0.70.0 P2 #8）",
+)
+async def gold_gram_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> GoldQuoteOut:
+    """上海黄金交易所 Au99.99 实时克价（人民币元/克）——「按克」开/加/减仓的折算基准。
+
+    V0.70.0（P2 #8）新增：与 ``get_gold_gram_quote`` 同源，供前端 ``sharesFromGrams``
+    实时折算使用；后端 ``PositionService.open`` 也调用相同仓储确保一致性。
+    """
+    quote = await repo.get_gold_gram_quote()
+    return GoldQuoteOut(
+        symbol=quote.symbol,
+        price_usd=quote.price_usd,
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
     "/gold/trend",
     response_model=GoldTrendOut,
     summary="黄金趋势追踪（投资指引基准，支持多时间框架）",

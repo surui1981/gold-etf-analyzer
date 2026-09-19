@@ -214,7 +214,9 @@
     <form id="openForm">
       <div class="field"><label for="price">成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required aria-label="成交价（元）" oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
       <div class="field"><label for="amount">买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" aria-label="买入金额（元）" oninput="qtyFromAmount()"></div>
-      <div class="field"><label for="qty">数量（份）</label><input id="qty" type="number" min="100" step="100" required aria-label="数量（份）" oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
+      <div class="field"><label for="qty">数量（份）</label><input id="qty" type="number" min="100" step="100" aria-label="数量（份）" oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
+      <!-- V0.70.0 P2 #8 克数开仓：与 qty 二选一，按当前克价折算份数 -->
+      <div class="field"><label for="grams">克数（g · 实物金 / 积存金）</label><input id="grams" type="number" min="0.001" step="0.001" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="qtyFromGrams()"><div class="hint" id="gramsHint">留空则按「数量」份数开仓</div></div>
       <div class="field"><label>可用资金（元，选填 · 用于快捷比例）</label><input id="capital" type="number" min="0" step="1" placeholder="如 100000"></div>
       <div class="quick-row">
         <span class="ql">快捷：</span>
@@ -252,7 +254,9 @@
       </div>
       <div class="field"><label>成交价（元/份）</label><input id="tPrice" type="number" min="0.001" step="0.001" required oninput="tQtyFromAmount()"><div class="hint" id="tPriceHint"></div></div>
       <div class="field"><label>金额（元）</label><input id="tAmount" type="number" min="0" step="1" placeholder="自动换算份数" oninput="tQtyFromAmount()"></div>
-      <div class="field"><label>数量（份）</label><input id="tQty" type="number" min="1" step="1" required oninput="tAmountFromQty()"><div class="hint" id="tQtyHint"></div></div>
+      <div class="field"><label>数量（份）</label><input id="tQty" type="number" min="1" step="1" oninput="tAmountFromQty()"><div class="hint" id="tQtyHint"></div></div>
+      <!-- V0.70.0 P2 #8 克数加/减仓：与 tQty 二选一 -->
+      <div class="field"><label>克数（g · V0.70.0）</label><input id="tGrams" type="number" min="0.001" step="0.001" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="tQtyFromGrams()"><div class="hint" id="tGramsHint">留空则按「数量」份数加减仓</div></div>
       <div class="field"><label>手续费（元）</label><input id="tFee" type="number" min="0" step="0.01" value="0" oninput="tUpdatePreview()"></div>
       <div class="quick-row" style="flex-basis:100%">
         <span class="ql">快捷比例：</span>
@@ -272,6 +276,8 @@
   <div class="card">
     <h2>收益曲线分析
       <button class="btn-export" id="btnEquityRange" type="button" onclick="toggleEquityRange()">区间：90 天</button>
+      <!-- V0.70.0 P2 #8 收益曲线单位切换 share↔gram -->
+      <button class="btn-export" id="btnEquityUnit" type="button" onclick="toggleEquityUnit()" style="margin-left:6px">单位：份</button>
     </h2>
     <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
     <div class="hint" id="equityHint">加载中…</div>
@@ -332,6 +338,7 @@ const API = {
   positions: API_BASE + "/api/v1/positions",
   quote: API_BASE + "/api/v1/market/gold",              // 纽约金 XAU/USD（美元/盎司）→ 简报/提醒
   etfQuote: API_BASE + "/api/v1/market/gold/etf-quote", // 518880 ETF（元/份）→ 估值/预填/清仓
+  gramQuote: API_BASE + "/api/v1/market/gold/gram-quote", // Au99.99 克价（元/克，V0.70.0 P2 #8）→ 按克开仓折算
   equity: API_BASE + "/api/v1/portfolio/equity-curve",  // 收益曲线（V0.61.0）
   performance: API_BASE + "/api/v1/portfolio/performance", // 获利分析（V0.61.0）
 };
@@ -558,6 +565,62 @@ function applyRatio(r) {
   qtyFromAmount();
 }
 
+// V0.70.0 P2 #8 · 克数 ↔ 份数 客户端折算（与后端 shares_from_grams 同公式）
+// 100 份一手向下取整；ETF=0 / gram_px=0 时返回 0（让后端抛 400）
+function sharesFromGrams(grams, etfPx, gramPx) {
+  if (!(grams > 0) || !(etfPx > 0) || !(gramPx > 0)) return 0;
+  const lots = Math.floor(grams * gramPx / etfPx / 100);
+  return lots > 0 ? lots * 100 : 0;
+}
+
+async function fetchGramPrice() {
+  try {
+    const r = await json(API.gramQuote || (API.market + "/gold/gram-quote"));
+    return r && r.price != null ? r.price : null;
+  } catch (e) { return null; }
+}
+
+async function qtyFromGrams() {
+  // 客户端仅做预览：实时克价取自 /api/v1/market/gold/gram-quote
+  const g = parseFloat(document.getElementById("grams").value);
+  const ep = etfPrice(lastQuote);
+  const hint = document.getElementById("gramsHint");
+  if (!(g > 0)) { hint.textContent = "留空则按「数量」份数开仓"; document.getElementById("qty").value = ""; return; }
+  const gp = await fetchGramPrice();
+  if (!(ep > 0) || !(gp > 0)) {
+    hint.textContent = "缺少 ETF 价或克价（数据源未就绪），暂无法折算";
+    return;
+  }
+  const shares = sharesFromGrams(g, ep, gp);
+  if (shares <= 0) {
+    hint.textContent = `${g} g 折算后不足一手；至少 ${Math.ceil(ep * 100 / gp)} g`;
+    document.getElementById("qty").value = "";
+  } else {
+    document.getElementById("qty").value = shares;
+    hint.textContent = `${g} g × ${gp} 元/g ÷ ${ep} 元/份 ≈ ${shares} 份（向下取整到 100 份一手）`;
+  }
+}
+
+async function tQtyFromGrams() {
+  const g = parseFloat(document.getElementById("tGrams").value);
+  const ep = etfPrice(lastQuote);
+  const hint = document.getElementById("tGramsHint");
+  if (!(g > 0)) { hint.textContent = "留空则按「数量」份数加减仓"; document.getElementById("tQty").value = ""; return; }
+  const gp = await fetchGramPrice();
+  if (!(ep > 0) || !(gp > 0)) {
+    hint.textContent = "缺少 ETF 价或克价，暂无法折算";
+    return;
+  }
+  const shares = sharesFromGrams(g, ep, gp);
+  if (shares <= 0) {
+    hint.textContent = `${g} g 折算后不足一手；至少 ${Math.ceil(ep * 100 / gp)} g`;
+    document.getElementById("tQty").value = "";
+  } else {
+    document.getElementById("tQty").value = shares;
+    hint.textContent = `${g} g ≈ ${shares} 份（向下取整）`;
+  }
+}
+
 function applySuggest() {
   if (suggestRatio === null) return;
   applyRatio(suggestRatio / 100);
@@ -651,6 +714,7 @@ async function loadPositions() {
       return `<tr${alert ? ' style="outline:1px solid #ffd8a8;outline-offset:-1px"' : ""}>
         <td>${p.name ?? "—"}<br><span style="font-size:11px;color:var(--muted)">${p.symbol ?? "—"}</span></td>
         <td>${p.quantity ?? 0}</td>
+        <td>${(p.grams_held != null ? (p.grams_held).toFixed(2) + " g" : "—")}</td>
         <td>${(p.avg_cost ?? 0).toFixed(3)}</td>
         <td>${(p.market_price ?? 0).toFixed(3)}</td>
         <td>${(p.market_value ?? 0).toFixed(2)}</td>
@@ -665,7 +729,7 @@ async function loadPositions() {
       </tr>`;
     }).join("");
     area.innerHTML = `<table>
-      <tr><th>品种</th><th>数量</th><th>成本</th><th>现价</th><th>市值</th><th>浮盈亏</th><th>收益率</th><th>操作</th></tr>${rows}</table>`;
+      <tr><th>品种</th><th>数量</th><th>克数</th><th>成本</th><th>现价</th><th>市值</th><th>浮盈亏</th><th>收益率</th><th>操作</th></tr>${rows}</table>`;
   } catch (e) {
     document.getElementById("posArea").innerHTML = `<div class="err">持仓加载失败：${e.message}</div>`;
   }
@@ -673,24 +737,35 @@ async function loadPositions() {
 
 document.getElementById("openForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
+  // V0.70.0 P2 #8：quantity 与 grams 二选一
+  const qtyVal = parseFloat(document.getElementById("qty").value);
+  const gramsVal = parseFloat(document.getElementById("grams").value);
+  const hasQty = isFinite(qtyVal) && qtyVal > 0;
+  const hasGrams = isFinite(gramsVal) && gramsVal > 0;
+  if (hasQty === hasGrams) {
+    document.getElementById("openErr").textContent = "数量（份）与克数（g）必须二选一";
+    return;
+  }
   const body = {
-    quantity: parseFloat(document.getElementById("qty").value),
     price: parseFloat(document.getElementById("price").value),
     fee: parseFloat(document.getElementById("fee").value) || 0,
   };
+  if (hasGrams) body.grams = gramsVal; else body.quantity = qtyVal;
   const err = validateTrade(body);
   if (err) { document.getElementById("openErr").textContent = err; return; }
   document.getElementById("openErr").textContent = "";
-  const est = body.quantity * body.price + body.fee;
-  const ok = await confirmDialog(
-    "确认开仓买入",
-    `品种：<b>518880 黄金ETF</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>手续费：<b>${body.fee}</b> 元<br>预估金额：<b>${fmtMoney(est)}</b>`,
-    false
-  );
+  const est = (body.quantity ?? body.grams) * (body.quantity ? body.price : 1) + body.fee;
+  const summary = body.grams
+    ? `品种：<b>518880 黄金ETF</b><br>克数：<b>${body.grams}</b> g<br>成交价：<b>${body.price}</b> 元/份<br>手续费：<b>${body.fee}</b> 元<br>预估金额：<b>${fmtMoney(est)}</b>（按克价折算份数）`
+    : `品种：<b>518880 黄金ETF</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>手续费：<b>${body.fee}</b> 元<br>预估金额：<b>${fmtMoney(est)}</b>`;
+  const ok = await confirmDialog("确认开仓买入", summary, false);
   if (!ok) return;
   try {
     await json(API.positions, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     document.getElementById("qty").value = "";
+    document.getElementById("grams").value = "";
+    // V0.70.0 P2 #8 埋点：克数开仓
+    if (body.grams && window.TL) TL.track('grams_trade_open', { side: 'open', grams: body.grams });
     loadPositions(); loadDecision();
   } catch (e) { document.getElementById("openErr").textContent = "开仓失败：" + e.message; }
 });
@@ -716,6 +791,7 @@ function openTradePanel(id, side) {
   document.getElementById("tPriceHint").textContent = `ETF 最新价 ${px} 元/份（已预填，可修改）`;
   document.getElementById("tAmount").value = "";
   document.getElementById("tQty").value = "";
+  document.getElementById("tGrams").value = "";  // V0.70.0 P2 #8 重置克数
   document.getElementById("tFee").value = "0";
   document.getElementById("tErr").textContent = "";
   tUpdatePreview();
@@ -724,6 +800,7 @@ function openTradePanel(id, side) {
 
 function closeTradePanel() {
   document.getElementById("tradeCard").style.display = "none";
+  document.getElementById("tGrams").value = "";  // V0.70.0 P2 #8 重置克数
   tradeCtx = null;
 }
 
@@ -815,21 +892,33 @@ function tUpdatePreview() {
 document.getElementById("tradeForm").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   if (!tradeCtx) return;
+  // V0.70.0 P2 #8：quantity 与 grams 二选一
+  const qtyVal = parseFloat(document.getElementById("tQty").value);
+  const gramsVal = parseFloat(document.getElementById("tGrams").value);
+  const hasQty = isFinite(qtyVal) && qtyVal > 0;
+  const hasGrams = isFinite(gramsVal) && gramsVal > 0;
+  if (hasQty === hasGrams) {
+    document.getElementById("tErr").textContent = "数量（份）与克数（g）必须二选一";
+    return;
+  }
   const body = {
     side: tradeCtx.side,
-    quantity: parseFloat(document.getElementById("tQty").value),
     price: parseFloat(document.getElementById("tPrice").value),
     fee: parseFloat(document.getElementById("tFee").value) || 0,
   };
+  if (hasGrams) body.grams = gramsVal; else body.quantity = qtyVal;
   const err = validateTrade(body);
   if (err) { document.getElementById("tErr").textContent = err; return; }
-  if (tradeCtx.side === "sell" && body.quantity > tradeCtx.position.quantity) {
+  if (tradeCtx.side === "sell" && !hasGrams && body.quantity > tradeCtx.position.quantity) {
     document.getElementById("tErr").textContent = `减仓数量超过当前持仓（${tradeCtx.position.quantity ?? 0} 份）`;
     return;
   }
   document.getElementById("tErr").textContent = "";
   const label = tradeCtx.side === "buy" ? "加仓" : "减仓";
-  const est = body.quantity * body.price + body.fee;
+  const est = (body.quantity ?? body.grams) * (body.quantity ? body.price : 1) + body.fee;
+  const summary = body.grams
+    ? `${label}：<b>${body.grams}</b> g（按克价折算份数）<br>成交价：<b>${body.price}</b> 元/份<br>预估金额：<b>${fmtMoney(est)}</b>`
+    : `${label}：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>预估金额：<b>${fmtMoney(est)}</b>`;
   const ok = await confirmDialog(
     "确认" + label,
     `品种：<b>518880 黄金ETF</b><br>方向：<b>${label}</b><br>数量：<b>${body.quantity}</b> 份<br>成交价：<b>${body.price}</b> 元/份<br>预估金额：<b>${fmtMoney(est)}</b>`,
@@ -839,6 +928,8 @@ document.getElementById("tradeForm").addEventListener("submit", async (ev) => {
   const id = tradeCtx.id;
   try {
     await json(API.positions + "/" + id + "/trades", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    // V0.70.0 P2 #8 埋点：克数加/减仓
+    if (body.grams && window.TL) TL.track('grams_trade_open', { side: body.side, position_id: id, grams: body.grams });
     closeTradePanel();
     loadPositions(); loadDecision(); loadEquity(); loadPerformance();
   } catch (e) { document.getElementById("tErr").textContent = "操作失败：" + e.message; }
@@ -1077,6 +1168,8 @@ document.getElementById("btnCreateAcc").addEventListener("click", createAccount)
 // ==================== V0.61.0：收益曲线分析 ====================
 let equityDays = 90;
 let equityChart = null;
+// V0.70.0 P2 #8 收益曲线单位模式：share（默认）/ gram
+let equityUnit = (typeof localStorage !== "undefined" && localStorage.getItem("pm_grams_mode") === "1") ? "gram" : "share";
 const EQUITY_RANGES = [30, 90, 180, 365];
 
 function fmtSigned(n) {
@@ -1125,13 +1218,25 @@ function drawEquityChart(d) {
   const ctx = document.getElementById("equityChart");
   if (!window.Chart) { document.getElementById("equityHint").textContent = "图表库未加载（离线状态）"; return; }
   if (equityChart) equityChart.destroy();
+  // V0.70.0 P2 #8 gram 模式：第二数据集改为「持仓克数 g」常数数组
+  const totalGrams = positionsCache.reduce((s, p) => s + (p.grams_held || 0), 0);
+  const secondDS = equityUnit === "gram"
+    ? {
+        label: "持仓克数 g",
+        data: d.points.map(() => Math.round(totalGrams * 1000) / 1000),
+        borderColor: "#806014", backgroundColor: "rgba(128,96,20,.08)", yAxisID: "y1",
+        tension: 0, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 4],
+      }
+    : { label: "持仓市值 ¥", data: d.points.map(p => p.market_value), borderColor: "#c9a227", backgroundColor: "rgba(201,162,39,.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 4] };
+  const btn = document.getElementById("btnEquityUnit");
+  if (btn) btn.textContent = "单位：" + (equityUnit === "gram" ? "克" : "份");
   equityChart = new Chart(ctx, {
     type: "line",
     data: {
       labels: d.points.map(p => p.date),
       datasets: [
         { label: "累计收益率 %", data: d.points.map(p => p.return_pct), borderColor: "#c92a2a", backgroundColor: "rgba(201,42,42,.08)", yAxisID: "y", tension: .25, pointRadius: 0, borderWidth: 2 },
-        { label: "持仓市值 ¥", data: d.points.map(p => p.market_value), borderColor: "#c9a227", backgroundColor: "rgba(201,162,39,.08)", yAxisID: "y1", tension: .25, pointRadius: 0, borderWidth: 1.5, borderDash: [5, 4] },
+        secondDS,
       ],
     },
     options: {
@@ -1141,11 +1246,22 @@ function drawEquityChart(d) {
       scales: {
         x: { ticks: { color: "#868e96", maxTicksLimit: 10, font: { size: 11 } }, grid: { color: "rgba(0,0,0,.05)" } },
         y: { position: "left", ticks: { color: "#c92a2a", font: { size: 11 }, callback: v => v + "%" }, grid: { color: "rgba(0,0,0,.05)" } },
-        y1: { position: "right", ticks: { color: "#c9a227", font: { size: 11 } }, grid: { drawOnChartArea: false } },
+        y1: { position: "right", ticks: { color: equityUnit === "gram" ? "#806014" : "#c9a227", font: { size: 11 }, callback: v => equityUnit === "gram" ? v + " g" : "¥" + v }, grid: { drawOnChartArea: false } },
       },
     },
   });
-  ChartA11y.wrapChart(document.getElementById("equityChart"), { label: "持仓收益曲线（累计收益率 % + 持仓市值 ¥）", summaryId: "perfSummary" });
+  ChartA11y.wrapChart(document.getElementById("equityChart"), { label: "持仓收益曲线（累计收益率 % + " + (equityUnit === "gram" ? "持仓克数 g" : "持仓市值 ¥") + "）", summaryId: "perfSummary" });
+}
+
+// V0.70.0 P2 #8 收益曲线单位切换
+function toggleEquityUnit() {
+  const prev = equityUnit;
+  equityUnit = equityUnit === "gram" ? "share" : "gram";
+  if (typeof localStorage !== "undefined") localStorage.setItem("pm_grams_mode", equityUnit === "gram" ? "1" : "0");
+  // 埋点：单位切换
+  if (window.TL) TL.track("equity_curve_switch_unit", { from: prev, to: equityUnit });
+  // 重绘
+  if (typeof loadEquity === "function") loadEquity();
 }
 
 // ==================== V0.61.0：获利分析总结评估 ====================
