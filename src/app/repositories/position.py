@@ -49,8 +49,13 @@ class PositionRepository:
         avg_cost: float,
         user_id: int = 1,
         account_id: int = 1,
+        grams_held: float | None = None,
     ) -> Position:
-        """开仓：创建持仓并提交。"""
+        """开仓：创建持仓并提交。
+
+        V0.70.0（P2 #8）起 ``grams_held`` 可选——「按克」开仓时由服务层折算份数后
+        同时写入；「按份」开仓时为 None。
+        """
         position = Position(
             symbol=symbol,
             name=name,
@@ -59,6 +64,7 @@ class PositionRepository:
             status="open",
             user_id=user_id,
             account_id=account_id,
+            grams_held=grams_held,
         )
         self._session.add(position)
         await self._session.commit()

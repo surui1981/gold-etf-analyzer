@@ -2,30 +2,51 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.schemas.market import TrendIndexOut
 
 
 class PositionCreate(BaseModel):
-    """开仓请求。"""
+    """开仓请求。
+
+    V0.70.0（P2 #8）起支持按「克」开仓（实物金 / 积存金业务）：
+    ``grams`` 与 ``quantity`` **二选一**（互斥）——按克时由服务端按当前克价折算
+    份数后落库。
+    """
 
     symbol: str = Field("518880", description="品种代码，默认 518880 华安黄金ETF")
-    quantity: float = Field(..., gt=0, le=1e9, description="买入数量（份），需大于 0")
+    quantity: float | None = Field(None, gt=0, le=1e9, description="买入数量（份），需大于 0；与 grams 二选一")
+    grams: float | None = Field(None, gt=0, le=1e6, description="买入克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）")
     price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
     fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
 
-    @field_validator("quantity", "price", "fee")
+    @field_validator("quantity", "price", "fee", "grams")
     @classmethod
-    def _round(cls, value: float) -> float:
+    def _round(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
         return round(value, 4)
+
+    @model_validator(mode="after")
+    def _xor_grams(self) -> "PositionCreate":
+        # 二选一互斥（两个都填 / 都不填 均报错）
+        has_q = self.quantity is not None
+        has_g = self.grams is not None
+        if has_q == has_g:  # 都是 True 或都是 False
+            raise ValueError("quantity 与 grams 必须二选一（不可同时填写，也不可同时省略）")
+        return self
 
 
 class TradeRequest(BaseModel):
-    """加仓/减仓请求。"""
+    """加仓/减仓请求。
+
+    V0.70.0（P2 #8）起支持按「克」加减仓：``grams`` 与 ``quantity`` **二选一**。
+    """
 
     side: str = Field(..., description="buy 加仓 / sell 减仓")
-    quantity: float = Field(..., gt=0, le=1e9, description="数量（份），需大于 0")
+    quantity: float | None = Field(None, gt=0, le=1e9, description="数量（份），需大于 0；与 grams 二选一")
+    grams: float | None = Field(None, gt=0, le=1e6, description="克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）")
     price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
     fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
 
@@ -36,10 +57,20 @@ class TradeRequest(BaseModel):
             raise ValueError("side 必须为 buy 或 sell")
         return value
 
-    @field_validator("quantity", "price", "fee")
+    @field_validator("quantity", "price", "fee", "grams")
     @classmethod
-    def _round(cls, value: float) -> float:
+    def _round(cls, value: float | None) -> float | None:
+        if value is None:
+            return value
         return round(value, 4)
+
+    @model_validator(mode="after")
+    def _xor_grams(self) -> "TradeRequest":
+        has_q = self.quantity is not None
+        has_g = self.grams is not None
+        if has_q == has_g:
+            raise ValueError("quantity 与 grams 必须二选一（不可同时填写，也不可同时省略）")
+        return self
 
 
 class PositionOut(BaseModel):
@@ -53,6 +84,7 @@ class PositionOut(BaseModel):
     name: str
     quantity: float
     avg_cost: float
+    grams_held: float | None = Field(None, description="当前持仓克数（g，可空；V0.70.0 P2 #8）")
     status: str
     opened_at: datetime
     # 实时估值（由服务层补充）
@@ -95,6 +127,10 @@ class PositionSummary(BaseModel):
     pnl_pct: float = 0
     pnl: float = 0
     position_ratio: float = Field(0, description="仓位占用比例 0-1（估算）")
+    grams_held: float | None = Field(
+        None,
+        description="汇总克数（g）；仅当全部持仓都按克开仓时有值（V0.70.0 P2 #8）",
+    )
 
 
 class ReasonItem(BaseModel):

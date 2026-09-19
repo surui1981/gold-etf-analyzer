@@ -27,6 +27,14 @@ class FakeMarket:
             {"symbol": symbol, "price_usd": 10.0, "change_pct": 0.5, "updated_at": date.today()},
         )()
 
+    async def get_gold_gram_quote(self, symbol: str = "Au99.99"):
+        """Au99.99 元/克——「按克开仓」折算用（V0.70.0 P2 #8）。"""
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 990.5, "change_pct": 0.35, "updated_at": date.today()},
+        )()
+
     async def get_gold_history(self, days: int = 60):
         from datetime import timedelta
 
@@ -141,3 +149,62 @@ async def test_decision_etf(client: AsyncClient) -> None:
     assert body["confidence"] in {"high", "medium", "low"}
     assert body["trend_index"]["score"] > 0
     assert len(body["reasons"]) >= 2
+
+
+# =========================================================================
+# V0.70.0 P2 #8 · 克数持仓 API 测试
+# =========================================================================
+
+
+async def test_open_position_with_grams_body(client: AsyncClient) -> None:
+    """按克开仓（grams 入参）：1000 g → 99000 份（990 手 × 100）。"""
+    resp = await client.post(
+        "/api/v1/positions",
+        json={"symbol": "518880", "grams": 1000.0, "price": 10.0},
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["quantity"] == 99000
+    assert body["grams_held"] == pytest.approx(1000.0, abs=0.001)
+
+
+async def test_add_trade_with_grams_body(client: AsyncClient) -> None:
+    """按克加仓：原 1000 g + 500 g → grams_held ≈ 1500。"""
+    resp = await client.post(
+        "/api/v1/positions",
+        json={"symbol": "518880", "grams": 1000.0, "price": 10.0},
+    )
+    pid = resp.json()["id"]
+
+    resp = await client.post(
+        f"/api/v1/positions/{pid}/trades",
+        json={"side": "buy", "grams": 500.0, "price": 10.5},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["grams_held"] == pytest.approx(1500.0, abs=0.001)
+
+
+async def test_open_position_rejects_both_quantity_and_grams(client: AsyncClient) -> None:
+    """quantity 与 grams 同时传 → 422（Pydantic 校验）。"""
+    resp = await client.post(
+        "/api/v1/positions",
+        json={"symbol": "518880", "quantity": 100, "grams": 100.0, "price": 10.0},
+    )
+    assert resp.status_code == 422
+
+
+async def test_add_trade_sell_more_grams_than_held(client: AsyncClient) -> None:
+    """卖出克数 > 当前持有 → 400。"""
+    resp = await client.post(
+        "/api/v1/positions",
+        json={"symbol": "518880", "grams": 1000.0, "price": 10.0},
+    )
+    pid = resp.json()["id"]
+
+    resp = await client.post(
+        f"/api/v1/positions/{pid}/trades",
+        json={"side": "sell", "grams": 2000.0, "price": 10.0},
+    )
+    assert resp.status_code == 400
+    assert "克数" in resp.json()["detail"]

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -13,6 +13,9 @@ class Position(Base):
 
     V0.62.0 起支持**单用户多账本**：``account_id`` 指向 ``accounts`` 表，
     默认账本为 id=1 的「默认账户」（迁移把既有持仓全部归入该账本）。
+
+    V0.70.0（P2 #8）起支持**克数持仓**（实物金 / 积存金）：``grams_held`` 记录
+    实际持仓克数（可空——历史「按份」持仓未回填）。
     """
 
     __tablename__ = "positions"
@@ -31,6 +34,11 @@ class Position(Base):
 
     quantity: Mapped[float] = mapped_column(Float, comment="当前持仓数量（份）")
     avg_cost: Mapped[float] = mapped_column(Float, comment="摊薄成本（元/份）")
+    grams_held: Mapped[float | None] = mapped_column(
+        Numeric(precision=12, scale=3),
+        nullable=True,
+        comment="当前持仓克数（g）；可空——历史「按份」持仓未回填（V0.70.0 P2 #8）",
+    )
 
     status: Mapped[str] = mapped_column(String(16), default="open", comment="open/closed")
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
