@@ -65,6 +65,12 @@ DEFAULT_GOLD_GRAM_NAME = "上海金Au99.99"
 DEFAULT_NY_GOLD = "GC"
 DEFAULT_NY_GOLD_NAME = "纽约金COMEX"
 
+# V0.71.0：白银双市场（ETF 562800 易方达白银 ETF + NY SI COMEX 白银期货主力）
+DEFAULT_SILVER_ETF = "562800"
+DEFAULT_SILVER_ETF_NAME = "白银ETF易方达"
+DEFAULT_SILVER_NY = "SI"
+DEFAULT_SILVER_NY_NAME = "纽约白银COMEX"
+
 
 def _parse_date(value: object) -> date:
     """将 AKShare 返回的日期字段（Timestamp/date/str）统一为 date。"""
@@ -88,6 +94,28 @@ class GoldQuote:
 @dataclass(frozen=True)
 class GoldKline:
     """单日 K 线（数据源无关）。"""
+
+    date: date
+    open: float
+    close: float
+    high: float
+    low: float
+    volume: float
+
+
+@dataclass(frozen=True)
+class SilverQuote:
+    """白银报价（数据源无关；与 GoldQuote 同结构）。"""
+
+    symbol: str
+    price_usd: float
+    change_pct: float
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class SilverKline:
+    """白银单日 K 线（数据源无关；与 GoldKline 同结构）。"""
 
     date: date
     open: float
@@ -219,6 +247,7 @@ class MarketDataRepository:
             # 旧签名：把单个 provider 包成 bundle（live/treasury 仍走默认 akshare 实现）
             from app.repositories.market_providers import (
                 AkshareLiveQuoteProvider,
+                AkshareSilverHistoryProvider,
                 AkshareTreasuryYieldProvider,
                 MarketProviderBundle,
             )
@@ -227,6 +256,7 @@ class MarketDataRepository:
                 history=provider,
                 live=AkshareLiveQuoteProvider(self._settings),
                 treasury=AkshareTreasuryYieldProvider(self._settings),
+                silver_history=AkshareSilverHistoryProvider(),  # V0.71.0：旧路径占位
             )
         else:
             # 新签名：按 settings.market_provider 自动解析
@@ -660,3 +690,164 @@ class MarketDataRepository:
         from app.repositories.market_providers import _mock_history
 
         return _mock_history(base=5.42, days=days)
+
+    # ───────────────────── V0.71.0：白银 5 个方法 ─────────────────────
+
+    async def get_silver_etf_quote(self, symbol: str = DEFAULT_SILVER_ETF) -> SilverQuote:
+        """白银 ETF（562800）最新价（人民币元/份）。"""
+        cache_key = ("quote_silver_etf", symbol)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            klines = await self.get_silver_etf_history(days=3)
+            if klines:
+                last = klines[-1]
+                prev = klines[-2] if len(klines) >= 2 else last
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                self._mark("silver_etf", True)
+                quote = SilverQuote(
+                    symbol=symbol,
+                    price_usd=round(last.close, 3),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
+        except Exception as exc:
+            logger.warning("silver ETF 报价取数失败: %s", exc)
+
+        self._mark("silver_etf", False)
+        return SilverQuote(
+            symbol=symbol,
+            price_usd=2.45,
+            change_pct=0.0,
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    async def get_silver_etf_history(
+        self,
+        symbol: str = DEFAULT_SILVER_ETF,
+        days: int = 60,
+    ) -> list[SilverKline]:
+        """白银 ETF（562800）历史日 K；失败时返回确定性 Mock 序列。"""
+        cache_key = ("silver_etf", symbol, days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            klines = await self._bundle.silver_history.get_silver_history(symbol=symbol, days=days)
+            if klines:
+                silver_klines = [
+                    SilverKline(
+                        date=k.date,
+                        open=k.open,
+                        close=k.close,
+                        high=k.high,
+                        low=k.low,
+                        volume=k.volume,
+                    )
+                    for k in klines
+                ]
+                _cache_set(cache_key, silver_klines)
+                self._mark("silver_etf", True, last_date=silver_klines[-1].date)
+                return silver_klines
+            raise RuntimeError("empty silver ETF history")
+        except Exception as exc:
+            logger.warning("silver ETF history failed (%s), fallback to mock", exc)
+            self._mark("silver_etf", False)
+            return self._mock_silver_etf_history(days=days)
+
+    async def get_silver_ny_quote(self, symbol: str = DEFAULT_SILVER_NY) -> SilverQuote:
+        """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。"""
+        cache_key = ("quote_silver_ny", symbol)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            klines = await self.get_silver_ny_history(days=3)
+            if klines:
+                last = klines[-1]
+                prev = klines[-2] if len(klines) >= 2 else last
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                self._mark("silver_ny", True)
+                quote = SilverQuote(
+                    symbol=symbol,
+                    price_usd=round(last.close, 3),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
+        except Exception as exc:
+            logger.warning("silver NY 报价取数失败: %s", exc)
+
+        self._mark("silver_ny", False)
+        return SilverQuote(
+            symbol=symbol,
+            price_usd=31.5,
+            change_pct=0.0,
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    async def get_silver_ny_history(
+        self,
+        symbol: str = DEFAULT_SILVER_NY,
+        days: int = 60,
+    ) -> list[SilverKline]:
+        """纽约白银（COMEX SI）历史日 K；失败时返回确定性 Mock 序列。"""
+        cache_key = ("silver_ny", symbol, days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            klines = await self._bundle.silver_history.get_silver_history(symbol=symbol, days=days)
+            if klines:
+                silver_klines = [
+                    SilverKline(
+                        date=k.date,
+                        open=k.open,
+                        close=k.close,
+                        high=k.high,
+                        low=k.low,
+                        volume=k.volume,
+                    )
+                    for k in klines
+                ]
+                _cache_set(cache_key, silver_klines)
+                self._mark("silver_ny", True, last_date=silver_klines[-1].date)
+                return silver_klines
+            raise RuntimeError("empty silver NY history")
+        except Exception as exc:
+            logger.warning("silver NY history failed (%s), fallback to mock", exc)
+            self._mark("silver_ny", False)
+            return self._mock_silver_ny_history(days=days)
+
+    async def get_silver_gram_quote(self) -> SilverQuote | None:
+        """白银克价占位接口（V0.71.0 暂不实现，SGE 无白银 Au99.99 标准产品）。
+
+        Returns:
+            None — 示意接口已上线，数据源留 V0.72+。
+        """
+        # V0.71.0 设计决策：白银克价无公开权威日 K 数据源，留 V0.72+；
+        # 此处返回 None，前端展示「白银克价暂未上线，敬请期待」。
+        self._mark("silver_gram", False)
+        return None
+
+    @staticmethod
+    def _mock_silver_etf_history(days: int) -> list[SilverKline]:
+        """确定性 Mock 白银 ETF 序列（约 2.45 元/份）。"""
+        from app.repositories.market_providers import _mock_silver_etf_history
+
+        return _mock_silver_etf_history(days=days)
+
+    @staticmethod
+    def _mock_silver_ny_history(days: int) -> list[SilverKline]:
+        """确定性 Mock 纽约白银序列（约 31.5 美元/盎司）。"""
+        from app.repositories.market_providers import _mock_silver_ny_history
+
+        return _mock_silver_ny_history(days=days)

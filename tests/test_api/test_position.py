@@ -89,6 +89,61 @@ class FakeMarket:
             for i in range(days)
         ]
 
+    # V0.71.0：白银 5 方法 stub（决策 API 测试 silver target 时复用）
+    async def get_silver_etf_quote(self, symbol: str = "562800"):
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 2.45, "change_pct": 1.2, "updated_at": date.today()},
+        )()
+
+    async def get_silver_ny_quote(self, symbol: str = "SI"):
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 31.5, "change_pct": 0.8, "updated_at": date.today()},
+        )()
+
+    async def get_silver_etf_history(self, days: int = 60):
+        from datetime import timedelta
+
+        from app.repositories.market_data import GoldKline
+
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=2.4,
+                close=round(2.4 + i * 0.01, 3),
+                high=2.5,
+                low=2.3,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
+    async def get_silver_ny_history(self, days: int = 60):
+        from datetime import timedelta
+
+        from app.repositories.market_data import GoldKline
+
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=31.0,
+                close=round(31.0 + i * 0.05, 3),
+                high=32.0,
+                low=30.0,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
+    async def get_silver_gram_quote(self):
+        """V0.71.0 白银克价占位：返回 None。"""
+        return None
+
 
 @pytest.fixture(autouse=True)
 def _override_market_repo():
@@ -208,3 +263,24 @@ async def test_add_trade_sell_more_grams_than_held(client: AsyncClient) -> None:
     )
     assert resp.status_code == 400
     assert "克数" in resp.json()["detail"]
+
+
+# ───────────────────── V0.71.0：白银决策 pattern 扩展 ─────────────────────
+
+
+async def test_decision_etf_accepts_silver_target(client: AsyncClient) -> None:
+    """GET /decision/etf?target=silver_etf 通过 pattern 校验，返回白银决策（V0.71.0）。"""
+    resp = await client.get("/api/v1/decision/etf?target=silver_etf")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["action"] in {"BUY", "ADD", "HOLD", "REDUCE", "SELL", "WAIT"}
+    # 文案切换：建议{target_label('silver_etf')}仓位 = 建议白银ETF仓位
+    last_reason = body["reason_items"][-1]["text"]
+    assert "白银ETF仓位" in last_reason
+    assert "黄金仓位" not in last_reason
+
+
+async def test_decision_etf_rejects_unknown_target(client: AsyncClient) -> None:
+    """GET /decision/etf?target=bitcoin 触发 422（pattern 严格性保护）。"""
+    resp = await client.get("/api/v1/decision/etf?target=bitcoin")
+    assert resp.status_code == 422

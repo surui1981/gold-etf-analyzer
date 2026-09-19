@@ -34,9 +34,16 @@ from app.repositories.market_providers import (
 # ─────────────── 工厂解析 ───────────────
 
 
-def test_registry_has_four_providers() -> None:
-    """工厂注册表固定包含 4 种 provider。"""
-    assert set(PROVIDER_REGISTRY.keys()) == {"akshare", "mock", "eastmoney_only", "sina_only"}
+def test_registry_has_six_providers() -> None:
+    """工厂注册表固定包含 6 种 provider（V0.71.0 增加 silver_mock / silver_akshare）。"""
+    assert set(PROVIDER_REGISTRY.keys()) == {
+        "akshare",
+        "mock",
+        "eastmoney_only",
+        "sina_only",
+        "silver_mock",
+        "silver_akshare",
+    }
 
 
 def test_build_provider_bundle_default() -> None:
@@ -439,3 +446,82 @@ async def test_v060_source_status_keeps_mock_label() -> None:
     assert repo.source_status()["etf"] == "mock"
     repo._fetched_at["etf"] = datetime.now(timezone.utc) - timedelta(seconds=10000)
     assert repo.source_status()["etf"] == "mock", "mock must not be promoted to stale"
+
+
+# ─────────────── V0.71.0：白银 Provider 测试 ───────────────
+
+
+async def test_mock_silver_history_etf_returns_deterministic() -> None:
+    """MockSilverHistoryProvider(symbol="562800") 返回 60 根 ETF K 线（约 2.45 元/份 起步）。"""
+    from app.repositories.market_providers import MockSilverHistoryProvider
+
+    provider = MockSilverHistoryProvider()
+    klines = await provider.get_silver_history(symbol="562800", days=60)
+    assert 40 <= len(klines) <= 60, f"工作日过滤后应返回 ~40-60 根，实际 {len(klines)}"
+    assert all(k.close > 0 for k in klines)
+    # 起点价位在 2.4 元附近（base * (1+0) = 2.45）
+    assert 2.0 <= klines[0].close <= 3.0
+
+
+async def test_mock_silver_history_ny_returns_dollar_prices() -> None:
+    """MockSilverHistoryProvider(symbol='SI') 返回 60 根 NY K 线（约 31.5 美元/盎司 起步）。"""
+    from app.repositories.market_providers import MockSilverHistoryProvider
+
+    provider = MockSilverHistoryProvider()
+    klines = await provider.get_silver_history(symbol="SI", days=60)
+    assert 40 <= len(klines) <= 60
+    assert all(k.close > 0 for k in klines)
+    # NY 价位 ~31.5 美元
+    assert 28.0 <= klines[0].close <= 36.0
+
+
+async def test_silver_akshare_provider_raises_not_implemented() -> None:
+    """AkshareSilverHistoryProvider 是 V0.71.0 占位 stub：立即抛 NotImplementedError。"""
+    from app.repositories.market_providers import AkshareSilverHistoryProvider
+
+    provider = AkshareSilverHistoryProvider()
+    with pytest.raises(NotImplementedError) as exc_info:
+        await provider.get_silver_history(symbol="562800", days=60)
+    assert "V0.72+" in str(exc_info.value)
+
+
+def test_build_provider_bundle_silver_mock_resolves() -> None:
+    """MARKET_PROVIDER=silver_mock → silver_history 为 MockSilverHistoryProvider。"""
+    from app.repositories.market_providers import MockSilverHistoryProvider
+
+    settings = Settings(market_provider="silver_mock")
+    bundle = build_provider_bundle(settings)
+    assert isinstance(bundle.silver_history, MockSilverHistoryProvider)
+
+
+def test_build_provider_bundle_silver_akshare_resolves() -> None:
+    """MARKET_PROVIDER=silver_akshare → silver_history 为 AkshareSilverHistoryProvider。"""
+    from app.repositories.market_providers import AkshareSilverHistoryProvider
+
+    settings = Settings(market_provider="silver_akshare")
+    bundle = build_provider_bundle(settings)
+    assert isinstance(bundle.silver_history, AkshareSilverHistoryProvider)
+
+
+def test_silver_history_provider_present_in_all_bundles() -> None:
+    """所有 6 种 provider 的 bundle 都包含 silver_history（V0.71.0 必填字段）。"""
+    from app.repositories.market_providers import (
+        AkshareSilverHistoryProvider,
+        MockSilverHistoryProvider,
+    )
+
+    expected_silver: dict[str, type] = {
+        "akshare": AkshareSilverHistoryProvider,
+        "eastmoney_only": AkshareSilverHistoryProvider,
+        "sina_only": AkshareSilverHistoryProvider,
+        "mock": MockSilverHistoryProvider,
+        "silver_mock": MockSilverHistoryProvider,
+        "silver_akshare": AkshareSilverHistoryProvider,
+    }
+    for name, expected_cls in expected_silver.items():
+        settings = Settings(market_provider=name)
+        bundle = build_provider_bundle(settings)
+        assert bundle.silver_history is not None, f"{name} 应有 silver_history"
+        assert isinstance(bundle.silver_history, expected_cls), (
+            f"{name} 应使用 {expected_cls.__name__}，实际 {type(bundle.silver_history).__name__}"
+        )

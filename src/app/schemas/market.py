@@ -274,3 +274,99 @@ class GoldCompareOut(BaseModel):
     leader: str = Field(..., description="区间表现领先者 etf/gram/tie")
     lead_gap: float = Field(..., description="涨跌幅差（百分点）")
     summary: str
+
+
+# ───────────────────── V0.71.0：白银 Schemas ─────────────────────
+
+
+class SilverQuoteOut(BaseModel):
+    """白银现货报价输出（纽约白银 COMEX SI，美元/盎司）。"""
+
+    symbol: str
+    price_usd: float = Field(..., gt=0, description="最新价，美元/盎司")
+    change_pct: float = Field(..., description="涨跌幅 %")
+    updated_at: datetime
+
+
+class SilverEtfQuoteOut(BaseModel):
+    """白银 ETF 场内报价输出（562800 易方达白银 ETF，人民币元/份）。"""
+
+    symbol: str
+    price: float = Field(..., gt=0, description="最新价，元/份")
+    currency: str = Field("CNY", description="计价币种")
+    unit: str = Field("元/份", description="计价单位")
+    change_pct: float = Field(..., description="涨跌幅 %")
+    updated_at: datetime
+
+
+class SilverTrendPoint(BaseModel):
+    """白银趋势序列点：收盘价 + 移动均线。"""
+
+    date: date
+    close: float
+    ma5: float | None = Field(None, description="5 日均线")
+    ma20: float | None = Field(None, description="20 日均线")
+    ma40: float | None = Field(None, description="40 日均线")
+
+
+class SilverTrendMetrics(BaseModel):
+    """白银 2 个月趋势指标摘要（结构同 GoldTrendMetrics）。"""
+
+    start_date: date
+    end_date: date
+    trading_days: int = Field(..., description="交易日数量")
+    start_price: float
+    end_price: float
+    change_pct: float = Field(..., description="区间涨跌幅 %")
+    high: float
+    low: float
+    ma20: float | None = Field(None, description="最新 20 日均线")
+    ma40: float | None = Field(None, description="最新 40 日均线")
+    change_pct_1d: float = Field(0.0)
+    change_pct_5d: float = Field(0.0)
+    direction: TrendDirection
+    unit: str = Field("元", description="计价单位：元（ETF）/ 美元/盎司（NY）")
+    summary: str
+
+
+class SilverTrendOut(BaseModel):
+    """白银趋势追踪输出：与 GoldTrendOut 结构对称（V0.71.0）。
+
+    接口复用 ``TrendService.analyze(target="silver_etf"|"silver_ny")``，
+    data_sources 多一对 ``silver_etf`` / ``silver_ny`` 状态字段。
+    """
+
+    symbol: str
+    name: str
+    days: int
+    points: list[SilverTrendPoint]
+    metrics: SilverTrendMetrics
+    indicators: list[TrendIndicatorOut]
+    index: TrendIndexOut
+    macro: MacroIndexOut
+    news: NewsIndexOut
+    data_sources: dict[str, str] = Field(default_factory=dict)
+    degraded: bool = False
+    freshness: DataFreshnessOut | None = None
+    interval: KlineInterval = "D"
+    served_at: datetime = Field(default_factory=lambda: datetime.now())
+
+
+class SilverComparePoint(BaseModel):
+    """白银对照点：ETF 与 NY 均归一化（区间起点 = 100）。"""
+
+    date: date
+    silver_etf: float = Field(..., description="白银 ETF 归一化值")
+    silver_ny: float = Field(..., description="纽约白银归一化值")
+
+
+class SilverCompareOut(BaseModel):
+    """白银 ETF vs 纽约白银对照输出（V0.71.0 新增）。"""
+
+    days: int = Field(..., description="对齐后的交易日数")
+    silver_etf: GoldCompareSeries = Field(..., description="白银 ETF 序列")
+    silver_ny: GoldCompareSeries = Field(..., description="纽约白银序列")
+    points: list[SilverComparePoint] = Field(..., description="归一化对照序列")
+    leader: str = Field(..., description="区间表现领先者 silver_etf/silver_ny/tie")
+    lead_gap: float = Field(..., description="涨跌幅差（百分点）")
+    summary: str

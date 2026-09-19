@@ -83,13 +83,28 @@ class TreasuryYieldProvider(Protocol):
     async def get_treasury_yields(self) -> USTYield | None: ...
 
 
+class SilverHistoryProvider(Protocol):
+    """白银历史 K 线数据源接口（V0.71.0 新增）。
+
+    数据模型复用 GoldKline（OHLC + volume），调用方在仓储层包装为 SilverKline 输出。
+    symbol 默认 ``DEFAULT_SILVER_ETF = "562800"``；传 ``"SI"`` 走纽约白银路径。
+    """
+
+    async def get_silver_history(
+        self,
+        symbol: str = "562800",
+        days: int = 60,
+    ) -> list[GoldKline]: ...
+
+
 @dataclass(frozen=True)
 class MarketProviderBundle:
-    """Provider 三件套打包，便于按名一次性注入。"""
+    """Provider 四件套打包（V0.71.0 起含白银数据源），便于按名一次性注入。"""
 
     history: GoldHistoryProvider
     live: GoldLiveQuoteProvider
     treasury: TreasuryYieldProvider
+    silver_history: SilverHistoryProvider | None = None  # V0.71.0 新增
 
 
 # ───────────────────── AKShare 子进程隔离模板 ─────────────────────
@@ -647,6 +662,97 @@ class MockTreasuryYieldProvider:
         )
 
 
+# ───────────────────── V0.71.0：白银 Provider ─────────────────────
+
+
+def _mock_silver_etf_history(days: int) -> list[GoldKline]:
+    """确定性 Mock 白银 ETF 序列（约 2.45 元/份）。"""
+    base = 2.45
+    today = date.today()
+    points: list[GoldKline] = []
+    for i in range(days, 0, -1):
+        day = today - timedelta(days=i)
+        if day.weekday() >= 5:
+            continue
+        progress = (days - i) / days
+        wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)
+        close = round(base * (1 + 0.07 * progress - 0.025 * (progress**2)) * (1 + wave), 3)
+        points.append(
+            GoldKline(
+                date=day,
+                open=round(close * 0.995, 3),
+                close=close,
+                high=round(close * 1.01, 3),
+                low=round(close * 0.99, 3),
+                volume=0.0,
+            )
+        )
+    return points
+
+
+def _mock_silver_ny_history(days: int) -> list[GoldKline]:
+    """确定性 Mock 纽约白银序列（约 31.5 美元/盎司）。"""
+    base = 31.5
+    today = date.today()
+    points: list[GoldKline] = []
+    for i in range(days, 0, -1):
+        day = today - timedelta(days=i)
+        if day.weekday() >= 5:
+            continue
+        progress = (days - i) / days
+        wave = 0.06 * (1 - abs(progress - 0.7) / 0.7)
+        close = round(base * (1 + 0.05 * progress - 0.02 * (progress**2)) * (1 + wave), 3)
+        points.append(
+            GoldKline(
+                date=day,
+                open=round(close * 0.995, 3),
+                close=close,
+                high=round(close * 1.01, 3),
+                low=round(close * 0.99, 3),
+                volume=0.0,
+            )
+        )
+    return points
+
+
+class MockSilverHistoryProvider:
+    """纯内存白银历史 Provider：返回确定性 Mock 序列（V0.71.0 silver_mock 模式默认）。
+
+    区分 ETF（562800，约 2.45 元/份）与 NY SI（约 31.5 美元/盎司）：
+    symbol 以 ``"SI"`` / ``"silver_ny"`` 视作 NY 路径，其余 ETF 路径。
+    """
+
+    async def get_silver_history(
+        self,
+        symbol: str = "562800",
+        days: int = 60,
+    ) -> list[GoldKline]:
+        if str(symbol).upper() in ("SI", "SILVER_NY", "GC_NY"):
+            return _mock_silver_ny_history(days=days)
+        return _mock_silver_etf_history(days=days)
+
+
+class AkshareSilverHistoryProvider:
+    """AKShare 白银数据源（V0.71.0 占位）。
+
+    实际接入计划（V0.72+）：
+    - ETF（562800）：与 518880 完全同路径，``fund_etf_hist_em(symbol="562800", ...)``；
+    - NY SI：``futures_foreign_hist(symbol="SI")``，与 GC 同路径。
+
+    V0.71.0 仅保留 stub：``MARKET_PROVIDER=silver_akshare`` 调用时立即抛
+    ``NotImplementedError``，引导用户用 ``silver_mock``。
+    """
+
+    async def get_silver_history(
+        self,
+        symbol: str = "562800",
+        days: int = 60,
+    ) -> list[GoldKline]:
+        raise NotImplementedError(
+            "silver_akshare 留 V0.72+ 接入；当前请用 MARKET_PROVIDER=silver_mock"
+        )
+
+
 # ───────────────────── 工厂 ─────────────────────
 
 
@@ -656,6 +762,7 @@ def _bundle_history(history: GoldHistoryProvider) -> MarketProviderBundle:
         history=history,
         live=AkshareLiveQuoteProvider(),
         treasury=AkshareTreasuryYieldProvider(),
+        silver_history=MockSilverHistoryProvider(),  # V0.71.0：默认 silver_mock 兜底
     )
 
 
@@ -664,21 +771,38 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         history=AkshareGoldHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=AkshareSilverHistoryProvider(),  # V0.71.0：gold 模式下白银 stub 占位
     ),
     "mock": lambda s: MarketProviderBundle(
         history=MockGoldHistoryProvider(),
         live=MockLiveQuoteProvider(),
         treasury=MockTreasuryYieldProvider(),
+        silver_history=MockSilverHistoryProvider(),  # V0.71.0：mock 模式白银 mock
     ),
     "eastmoney_only": lambda s: MarketProviderBundle(
         history=EastmoneyOnlyHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=AkshareSilverHistoryProvider(),
     ),
     "sina_only": lambda s: MarketProviderBundle(
         history=SinaOnlyHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=AkshareSilverHistoryProvider(),
+    ),
+    # V0.71.0：白银专用 provider 名（不影响 gold 行为，仅 silver_history 走对应实现）
+    "silver_mock": lambda s: MarketProviderBundle(
+        history=AkshareGoldHistoryProvider(s),
+        live=AkshareLiveQuoteProvider(s),
+        treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=MockSilverHistoryProvider(),
+    ),
+    "silver_akshare": lambda s: MarketProviderBundle(
+        history=AkshareGoldHistoryProvider(s),
+        live=AkshareLiveQuoteProvider(s),
+        treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=AkshareSilverHistoryProvider(),
     ),
 }
 

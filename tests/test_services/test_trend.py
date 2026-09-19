@@ -230,3 +230,100 @@ async def test_v064_analyze_interval_invalid_falls_back_to_d() -> None:
     result = await service.analyze(days=60, interval="X")  # type: ignore[arg-type]
     assert result.interval == "D"
     assert len(result.indicators) == 5  # 与日 K 一致
+
+
+# ───────────────────── V0.71.0：白银 target 适配 ─────────────────────
+
+
+def test_target_units_contains_silver() -> None:
+    """_TARGET_UNITS 包含 silver_etf 与 silver_ny 两个白银 target。"""
+    from app.services.trend import _TARGET_UNITS
+
+    assert "silver_etf" in _TARGET_UNITS
+    assert "silver_ny" in _TARGET_UNITS
+    assert _TARGET_UNITS["silver_etf"] == "元"
+    assert _TARGET_UNITS["silver_ny"] == "美元/盎司"
+
+
+def test_freshness_keys_maps_silver_to_ny_and_etf() -> None:
+    """_FRESHNESS_KEYS：silver_ny → ny 时段，silver_etf → etf 时段（V0.71.0）。"""
+    from app.services.trend import _FRESHNESS_KEYS
+
+    assert _FRESHNESS_KEYS["silver_ny"] == "ny"
+    assert _FRESHNESS_KEYS["silver_etf"] == "etf"
+
+
+async def test_load_klines_silver_etf_dispatches_to_repo() -> None:
+    """TrendService._load_klines(target='silver_etf') 调用 repo.get_silver_etf_history。"""
+
+    class SilverEtfRepo:
+        def __init__(self) -> None:
+            self.called = False
+            self.days = None
+
+        async def get_silver_etf_history(self, days: int = 60):
+            self.called = True
+            self.days = days
+            from datetime import date, timedelta
+
+            from app.repositories.market_data import GoldKline
+
+            return [
+                GoldKline(
+                    date=date(2026, 6, 1) + timedelta(days=i),
+                    open=2.45,
+                    close=2.45 + i * 0.01,
+                    high=2.5,
+                    low=2.4,
+                    volume=0.0,
+                )
+                for i in range(50)
+            ]
+
+        async def get_gold_history(self, days: int = 60):
+            raise AssertionError("应走 silver 分支")
+
+    repo = SilverEtfRepo()
+    svc = TrendService(repo, macro=FakeMacro())
+    _klines, symbol, name = await svc._load_klines(days=30, target="silver_etf")
+    assert repo.called, "应调用 get_silver_etf_history"
+    assert repo.days == 30
+    assert symbol == "562800"
+    assert name == "白银ETF易方达"
+    assert len(_klines) == 50
+
+
+async def test_load_klines_silver_ny_dispatches_to_repo() -> None:
+    """TrendService._load_klines(target='silver_ny') 调用 repo.get_silver_ny_history。"""
+
+    class SilverNyRepo:
+        def __init__(self) -> None:
+            self.called = False
+
+        async def get_silver_ny_history(self, days: int = 60):
+            self.called = True
+            from datetime import date, timedelta
+
+            from app.repositories.market_data import GoldKline
+
+            return [
+                GoldKline(
+                    date=date(2026, 6, 1) + timedelta(days=i),
+                    open=31.5,
+                    close=31.5 + i * 0.05,
+                    high=32.0,
+                    low=31.0,
+                    volume=0.0,
+                )
+                for i in range(50)
+            ]
+
+        async def get_gold_history(self, days: int = 60):
+            raise AssertionError("应走 silver_ny 分支")
+
+    repo = SilverNyRepo()
+    svc = TrendService(repo, macro=FakeMacro())
+    _klines, symbol, name = await svc._load_klines(days=30, target="silver_ny")
+    assert repo.called
+    assert symbol == "SI"
+    assert name == "纽约白银COMEX"

@@ -31,6 +31,10 @@ from app.repositories.market_data import (
     DEFAULT_GOLD_GRAM_NAME,
     DEFAULT_NY_GOLD,
     DEFAULT_NY_GOLD_NAME,
+    DEFAULT_SILVER_ETF,
+    DEFAULT_SILVER_ETF_NAME,
+    DEFAULT_SILVER_NY,
+    DEFAULT_SILVER_NY_NAME,
     GoldKline,
     MarketDataRepository,
 )
@@ -65,7 +69,13 @@ TREND_WEIGHTS: dict[str, float] = {
 }
 
 # 各标的计价单位（用于摘要）
-_TARGET_UNITS = {"etf": "元", "gram": "元/克", "ny": "美元/盎司"}
+_TARGET_UNITS = {
+    "etf": "元",
+    "gram": "元/克",
+    "ny": "美元/盎司",
+    "silver_etf": "元",  # V0.71.0：白银 ETF 562800（易方达白银 ETF，元/份）
+    "silver_ny": "美元/盎司",  # V0.71.0：纽约白银 COMEX SI（美元/盎司）
+}
 
 # 投资指引基准：默认以纽约金（COMEX GC）交易数据为准，
 # 因其连续交易、夜盘覆盖国内休市时段，对国内金价具备领先指示意义。
@@ -74,7 +84,13 @@ GUIDE_TARGET = "ny"
 GUIDE_TARGETS = ("ny", "etf", "gram")
 
 # 指引标的 → 时效/时段判定的市场 key（上海金在仓储层记为 sge）
-_FRESHNESS_KEYS = {"ny": "ny", "gram": "sge", "etf": "etf"}
+_FRESHNESS_KEYS = {
+    "ny": "ny",
+    "gram": "sge",
+    "etf": "etf",
+    "silver_ny": "ny",  # V0.71.0：白银 SI 复用 ny 时段判定
+    "silver_etf": "etf",  # V0.71.0：白银 ETF 复用 etf 时段判定
+}
 
 
 def moving_average(values: list[float], window: int) -> list[float | None]:
@@ -464,6 +480,13 @@ class TrendService:
         if target == "gram":
             klines = await self._repo.get_gold_gram_history(days=days)
             return klines, DEFAULT_GOLD_GRAM, DEFAULT_GOLD_GRAM_NAME
+        # V0.71.0：白银双市场（ETF 562800 / NY SI）通过 target 字段分派
+        if target == "silver_ny":
+            klines = await self._repo.get_silver_ny_history(days=days)
+            return klines, DEFAULT_SILVER_NY, DEFAULT_SILVER_NY_NAME
+        if target == "silver_etf":
+            klines = await self._repo.get_silver_etf_history(days=days)
+            return klines, DEFAULT_SILVER_ETF, DEFAULT_SILVER_ETF_NAME
         klines = await self._repo.get_gold_history(days=days)
         return klines, DEFAULT_GOLD_ETF, DEFAULT_GOLD_ETF_NAME
 

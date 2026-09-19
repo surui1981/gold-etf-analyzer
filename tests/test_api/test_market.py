@@ -82,6 +82,54 @@ class FakeMarketRepo:
             for i in range(days)
         ]
 
+    # V0.71.0：白银 5 方法（最小 fake 实现，给 silver 端点测试复用）
+
+    async def get_silver_etf_quote(self, symbol: str = "562800"):
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 2.45, "change_pct": 1.2, "updated_at": date.today()},
+        )()
+
+    async def get_silver_ny_quote(self, symbol: str = "SI"):
+        return type(
+            "Q",
+            (),
+            {"symbol": symbol, "price_usd": 31.5, "change_pct": 0.8, "updated_at": date.today()},
+        )()
+
+    async def get_silver_etf_history(self, days: int = 60) -> list[GoldKline]:
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=2.4,
+                close=round(2.4 + i * 0.01, 3),
+                high=2.5,
+                low=2.3,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
+    async def get_silver_ny_history(self, days: int = 60) -> list[GoldKline]:
+        base = date(2026, 6, 1)
+        return [
+            GoldKline(
+                date=base + timedelta(days=i),
+                open=31.0,
+                close=round(31.0 + i * 0.05, 3),
+                high=32.0,
+                low=30.0,
+                volume=0.0,
+            )
+            for i in range(days)
+        ]
+
+    async def get_silver_gram_quote(self):
+        """V0.71.0 白银克价占位：返回 None（接口已上线，数据源留 V0.72+）。"""
+        return None
+
 
 @pytest.fixture(autouse=True)
 def _override_market_repo():
@@ -255,3 +303,68 @@ async def test_v064_gold_trend_days_upper_limit_750(client: AsyncClient) -> None
     assert resp.status_code == 200  # 750 在新上限内
     resp_over = await client.get("/api/v1/market/gold/trend?days=900")
     assert resp_over.status_code == 422  # 超出新上限 750
+
+
+# ───────────────────── V0.71.0：白银端点测试 ─────────────────────
+
+
+async def test_silver_quote_returns_200(client: AsyncClient) -> None:
+    """GET /market/silver/quote：纽约白银 SI（美元/盎司）。"""
+    resp = await client.get("/api/v1/market/silver/quote")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "SI"
+    assert body["price_usd"] == pytest.approx(31.5, abs=0.01)
+    assert "updated_at" in body
+
+
+async def test_silver_etf_quote_returns_200(client: AsyncClient) -> None:
+    """GET /market/silver/etf-quote：白银 ETF 562800（元/份）。"""
+    resp = await client.get("/api/v1/market/silver/etf-quote")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "562800"
+    assert body["price"] == pytest.approx(2.45, abs=0.01)
+    assert body["currency"] == "CNY"
+    assert body["unit"] == "元/份"
+
+
+async def test_silver_trend_returns_silver_trend_out(client: AsyncClient) -> None:
+    """GET /market/silver/trend：白银 ETF 趋势追踪（SilverTrendOut）。"""
+    resp = await client.get("/api/v1/market/silver/trend?days=60")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "562800"
+    assert "白银ETF" in body["name"]
+    assert len(body["points"]) == 60
+    assert body["metrics"]["unit"] == "元"
+    # 综合指数字段存在
+    assert 0 <= body["index"]["score"] <= 100
+    assert body["index"]["level"] in {"strong_up", "up", "sideways", "down", "strong_down"}
+
+
+async def test_silver_ny_trend_returns_silver_trend_out(client: AsyncClient) -> None:
+    """GET /market/silver/ny-trend：纽约白银趋势（SilverTrendOut）。"""
+    resp = await client.get("/api/v1/market/silver/ny-trend?days=60")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "SI"
+    assert "纽约白银" in body["name"]
+    assert body["metrics"]["unit"] == "美元/盎司"
+
+
+async def test_silver_compare_returns_silver_compare_out(client: AsyncClient) -> None:
+    """GET /market/silver/compare：白银 ETF vs 纽约白银对照（SilverCompareOut）。"""
+    resp = await client.get("/api/v1/market/silver/compare?days=60")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["days"] >= 2
+    assert body["silver_etf"]["symbol"] == "562800"
+    assert body["silver_ny"]["symbol"] == "SI"
+    assert body["leader"] in {"silver_etf", "silver_ny", "tie"}
+    assert "领先" in body["summary"] or "持平" in body["summary"]
+    assert len(body["points"]) >= 2
+    # 每个点 silver_etf / silver_ny 都是归一化值
+    for p in body["points"]:
+        assert p["silver_etf"] > 0
+        assert p["silver_ny"] > 0

@@ -28,6 +28,23 @@ _LEVEL_LABELS = {
     "strong_down": "弱势下降",
 }
 
+# V0.71.0：target → 品种中文名（用于资产文案切换，黄金/白银共享仓位建议口径）
+_TARGET_LABELS = {
+    "ny": "纽约黄金",
+    "etf": "黄金ETF",
+    "gram": "上海金克价",
+    "silver_ny": "纽约白银",
+    "silver_etf": "白银ETF",
+}
+
+
+def target_label(target: str) -> str:
+    """target → 品种中文名（V0.71.0 黄金/白银共享接口文案切换）。
+
+    未知 target 回退「黄金ETF」以保持 V0.70.0 行为兼容。
+    """
+    return _TARGET_LABELS.get(target or "", "黄金ETF")
+
 
 class DecisionService:
     """决策引擎：综合趋势指数与持仓状态输出购买建议。
@@ -47,15 +64,17 @@ class DecisionService:
     async def evaluate(
         self, days: int = 60, target: str = GUIDE_TARGET, account_id: int | None = None
     ) -> DecisionOut:
-        """生成黄金购买决策。
+        """生成购买决策（V0.71.0 起支持黄金/白银双资产类共享接口）。
 
         Args:
             days: 趋势指数覆盖的交易日数量
-            target: 指引标的类型，ny（纽约金，默认）/ etf / gram
+            target: 指引标的类型，ny（纽约金，默认）/ etf / gram /
+                silver_etf（V0.71.0 白银 ETF）/ silver_ny（V0.71.0 纽约白银）
             account_id: 账本过滤；None=全部账本（持仓摘要按合并口径）
 
         Returns:
-            决策输出（行动 + 置信度 + 理由明细）
+            决策输出（行动 + 置信度 + 理由明细）。白银场景下，
+            文案「建议黄金仓位」自动切换为「建议白银仓位」。
 
         Raises:
             ValueError: 趋势数据不足
@@ -66,9 +85,9 @@ class DecisionService:
         action, confidence = self._decide(trend.index.score, pos.pnl_pct, pos.has_position)
         suggested_position, position_level = self._suggest_position(trend.index.score)
         reason_items = self._build_reason_items(
-            action, trend, pos, suggested_position, position_level
+            action, trend, pos, suggested_position, position_level, target=target
         )
-        summary = self._summarize(action, confidence, trend, pos)
+        summary = self._summarize(action, confidence, trend, pos, target=target)
 
         logger.info(
             "Decision: %s (conf=%s) idx=%.1f pos_ratio=%.0f%% has_pos=%s pnl=%.1f%%",
@@ -145,14 +164,18 @@ class DecisionService:
         pos: object,
         suggested_position: float,
         position_level: str,
+        target: str = GUIDE_TARGET,
     ) -> list[ReasonItem]:
         """生成面向客户的结构化决策理由（含利多/利空方向标记）。
 
-        方向约定（红=利多/看多黄金 bullish，绿=利空/看空黄金 bearish，灰=中性）：
+        方向约定（红=利多/看多 bullish，绿=利空/看空 bearish，灰=中性）：
         - 参数面：跟随趋势指数方向；
         - 交易面：持仓浮盈→利多，浮亏→利空，无持仓→中性；
         - 决策依据：建仓/加仓→利多，止盈/减仓→利空，持有/观望→中性；
         - 仓位建议：指数偏高（≥55）→利多，偏低（≤40）→利空，其余中性。
+
+        V0.71.0：仓位建议文案由「建议黄金仓位」切换为「建议{target_label(target)}仓位」，
+        黄金/白银共享同一决策逻辑，仅品种名按 target 字段动态渲染。
         """
         idx = trend.index.score
         level = _LEVEL_LABELS[trend.index.level.value]
@@ -204,10 +227,11 @@ class DecisionService:
         }[action]
         items.append(ReasonItem(text=f"决策依据：{rule_hint}", direction=action_dir))
 
+        asset_label = target_label(target)  # V0.71.0：黄金/白银共享口径，仅文案切换
         items.append(
             ReasonItem(
                 text=(
-                    f"仓位建议：评估指数 {idx:.1f}/100 → 建议黄金仓位 {suggested_position:.0f}%（{position_level}）"
+                    f"仓位建议：评估指数 {idx:.1f}/100 → 建议{asset_label}仓位 {suggested_position:.0f}%（{position_level}）"
                 ),
                 direction=idx_dir,
             )
@@ -220,8 +244,13 @@ class DecisionService:
         confidence: str,
         trend: object,
         pos: object,
+        target: str = GUIDE_TARGET,
     ) -> str:
-        """决策总结句。"""
+        """决策总结句。
+
+        V0.71.0：target 参数传入后，summary 文案中的品种名随之切换（黄金/白银）；
+        V0.70.0 及更早版本不传 target，自动走默认 GUIDE_TARGET="ny" 渲染「黄金」。
+        """
         conf_txt = {"high": "高置信", "medium": "中置信", "low": "低置信"}[confidence]
         return (
             f"建议【{_ACTION_LABELS[action]}】({conf_txt})："

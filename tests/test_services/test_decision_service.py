@@ -124,3 +124,69 @@ async def test_decision_includes_position_rec() -> None:
     assert out.suggested_position == 60.0
     assert out.position_level == "中高仓位"
     assert any("仓位建议" in r for r in out.reasons)
+
+
+# ───────────────────── V0.71.0：白银 target / target_label ─────────────────────
+
+
+def test_target_label_returns_silver_labels() -> None:
+    """target_label：白银 target 返回对应中文名，黄金 target 保持原样。"""
+    from app.services.decision import target_label
+
+    assert target_label("silver_etf") == "白银ETF"
+    assert target_label("silver_ny") == "纽约白银"
+    assert target_label("etf") == "黄金ETF"
+    assert target_label("ny") == "纽约黄金"
+    assert target_label("gram") == "上海金克价"
+
+
+def test_target_label_unknown_returns_default() -> None:
+    """target_label：未知 target 回退「黄金ETF」（与 V0.70.0 默认兼容）。"""
+    from app.services.decision import target_label
+
+    assert target_label("") == "黄金ETF"
+    assert target_label("unknown") == "黄金ETF"
+    assert target_label(None) == "黄金ETF"
+
+
+def test_decision_evaluate_accepts_silver_etf_target() -> None:
+    """DecisionService.evaluate(target='silver_etf') 文案中「建议仓位」切换为「白银ETF仓位」。
+
+    不依赖网络与真实持仓——构造最小 stub 返回固定 score。
+    """
+    import asyncio
+
+    from app.schemas.common import DirectionSignal
+    from app.schemas.market import (
+        TrendIndexLevel,
+        TrendIndexOut,
+    )
+    from app.schemas.position import PositionSummary
+    from app.services.decision import DecisionService
+
+    class StubTrendService:
+        async def analyze(self, days: int = 60, target: str = "ny", interval: str = "D"):
+            return type(
+                "T",
+                (),
+                {
+                    "index": TrendIndexOut(
+                        score=72.0,
+                        level=TrendIndexLevel.UP,
+                        direction=DirectionSignal.BULLISH,
+                        summary="测试白银指数",
+                        components={"tech": 70, "macro": 60, "news": 80},
+                    )
+                },
+            )()
+
+    class StubPositionService:
+        async def summary(self, account_id=None):
+            return PositionSummary(has_position=False)
+
+    svc = DecisionService(StubTrendService(), StubPositionService())
+    out = asyncio.run(svc.evaluate(days=30, target="silver_etf"))
+    # 最后一条理由应当是「建议白银ETF仓位」（不是「建议黄金仓位」）
+    last_reason = out.reason_items[-1].text
+    assert "白银ETF仓位" in last_reason, f"期望白银ETF仓位，实际: {last_reason}"
+    assert "黄金仓位" not in last_reason

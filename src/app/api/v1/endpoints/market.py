@@ -12,13 +12,21 @@ from app.repositories.market_data import MarketDataRepository
 from app.schemas.market import (
     FreshnessOut,
     GoldCompareOut,
+    GoldCompareSeries,
     GoldEtfQuoteOut,
     GoldQuoteOut,
     GoldTrendOut,
+    SilverCompareOut,
+    SilverComparePoint,
+    SilverEtfQuoteOut,
+    SilverQuoteOut,
+    SilverTrendMetrics,
+    SilverTrendOut,
+    SilverTrendPoint,
 )
 from app.services.compare import GoldCompareService
 from app.services.freshness import FreshnessService
-from app.services.trend import TrendService
+from app.services.trend import TrendService, moving_average
 
 router = APIRouter(prefix="/market", tags=["market"])
 
@@ -186,3 +194,236 @@ async def gold_compare(
     按公共交易日对齐，各自归一化（起点=100），输出涨跌幅与领先判定。
     """
     return await service.compare(days=days)
+
+
+# ───────────────────── V0.71.0：白银 5 端点 ─────────────────────
+
+
+@router.get("/silver/quote", response_model=SilverQuoteOut, summary="纽约白银 SI 报价")
+async def silver_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverQuoteOut:
+    """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。
+
+    与 ``/market/silver/etf-quote``（562800 元/份）口径严格区分。
+    """
+    quote = await repo.get_silver_ny_quote()
+    return SilverQuoteOut(
+        symbol=quote.symbol,
+        price_usd=quote.price_usd,
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
+    "/silver/etf-quote",
+    response_model=SilverEtfQuoteOut,
+    summary="白银ETF（562800）报价（元/份）",
+)
+async def silver_etf_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverEtfQuoteOut:
+    """562800 易方达白银 ETF 最新成交价（人民币元/份）。"""
+    quote = await repo.get_silver_etf_quote()
+    return SilverEtfQuoteOut(
+        symbol=quote.symbol,
+        price=quote.price_usd,
+        currency="CNY",
+        unit="元/份",
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
+    "/silver/trend",
+    response_model=SilverTrendOut,
+    summary="白银 ETF 趋势追踪（V0.71.0）",
+)
+async def silver_trend(
+    days: int = Query(
+        60,
+        ge=20,
+        le=750,
+        description="追踪的交易日数量（默认 60；上限 750 支持多时间框架）",
+    ),
+    interval: str = Query(
+        "D",
+        pattern="^[DWM]$",
+        description="V0.64.0：K 线聚合粒度 D / W / M",
+    ),
+    service: TrendService = Depends(get_trend_service),
+) -> SilverTrendOut:
+    """白银 ETF（562800）连续 N 天价格曲线 + 趋势评估指数（复用 TrendService.analyze）。
+
+    与黄金趋势同一指标算法，仅数据源切换为白银 ETF。
+    """
+    result = await service.analyze(days=days, target="silver_etf", interval=interval)
+    return _gold_to_silver(result)
+
+
+@router.get(
+    "/silver/ny-trend",
+    response_model=SilverTrendOut,
+    summary="纽约白银 SI 趋势追踪（V0.71.0）",
+)
+async def silver_ny_trend(
+    days: int = Query(
+        60,
+        ge=20,
+        le=750,
+        description="追踪的交易日数量（默认60天；上限 750 支持多时间框架）",
+    ),
+    interval: str = Query(
+        "D",
+        pattern="^[DWM]$",
+        description="V0.64.0：K 线聚合粒度 D / W / M",
+    ),
+    service: TrendService = Depends(get_trend_service),
+) -> SilverTrendOut:
+    """纽约白银（COMEX SI，美元/盎司）连续 N 天价格曲线与趋势。"""
+    result = await service.analyze(days=days, target="silver_ny", interval=interval)
+    return _gold_to_silver(result)
+
+
+@router.get(
+    "/silver/compare",
+    response_model=SilverCompareOut,
+    summary="白银 ETF vs 纽约白银 对照（V0.71.0）",
+)
+async def silver_compare(
+    days: int = Query(60, ge=20, le=750, description="对照的交易日数量"),
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverCompareOut:
+    """白银 ETF（562800，元/份）与纽约白银（COMEX SI，美元/盎司）区间表现对照。
+
+    由于计价单位不同（CNY 元/份 vs USD 美元/盎司），归一化仅展示**相对涨跌走势**，
+    不直接做绝对价位对照；领先判定基于各自归一化序列的相对涨幅。
+    """
+    etf_klines = await repo.get_silver_etf_history(days=days)
+    ny_klines = await repo.get_silver_ny_history(days=days)
+    etf_map = {k.date: k for k in etf_klines}
+    ny_map = {k.date: k for k in ny_klines}
+    common_dates = sorted(etf_map.keys() & ny_map.keys())
+    if len(common_dates) < 2:
+        raise ValueError("白银 ETF 与 NY 公共交易日不足，无法对照")
+
+    etf_closes = [etf_map[d].close for d in common_dates]
+    ny_closes = [ny_map[d].close for d in common_dates]
+    e0, n0 = etf_closes[0], ny_closes[0]
+    points = [
+        SilverComparePoint(
+            date=d,
+            silver_etf=round(e / e0 * 100, 2),
+            silver_ny=round(n / n0 * 100, 2),
+        )
+        for d, e, n in zip(common_dates, etf_closes, ny_closes, strict=True)
+    ]
+
+    etf_series = _silver_series_metrics(
+        "562800", "白银ETF易方达", etf_closes,
+        [etf_map[d].high for d in common_dates],
+        [etf_map[d].low for d in common_dates],
+    )
+    ny_series = _silver_series_metrics(
+        "SI", "纽约白银COMEX", ny_closes,
+        [ny_map[d].high for d in common_dates],
+        [ny_map[d].low for d in common_dates],
+    )
+
+    lead_gap = round(abs(etf_series.change_pct - ny_series.change_pct), 2)
+    if etf_series.change_pct > ny_series.change_pct:
+        leader = "silver_etf"
+    elif ny_series.change_pct > etf_series.change_pct:
+        leader = "silver_ny"
+    else:
+        leader = "tie"
+
+    return SilverCompareOut(
+        days=len(common_dates),
+        silver_etf=etf_series,
+        silver_ny=ny_series,
+        points=points,
+        leader=leader,
+        lead_gap=lead_gap,
+        summary=(
+            f"近2个月白银对照：ETF {etf_series.change_pct:+.2f}% vs 纽约白银 {ny_series.change_pct:+.2f}%，"
+            f"涨跌幅差 {lead_gap:.2f} 个百分点；"
+            f"{'白银ETF 领先' if leader == 'silver_etf' else '纽约白银领先' if leader == 'silver_ny' else '两者持平'}。"
+            "（注：ETF 与 NY 计价单位不同，归一化仅展示相对涨跌走势，不直接做绝对价位对照。）"
+        ),
+    )
+
+
+def _gold_to_silver(gold: GoldTrendOut) -> SilverTrendOut:
+    """将 GoldTrendOut 转换为 SilverTrendOut（结构对称字段映射，V0.71.0）。"""
+    return SilverTrendOut(
+        symbol=gold.symbol,
+        name=gold.name,
+        days=gold.days,
+        points=[
+            SilverTrendPoint(date=p.date, close=p.close, ma5=p.ma5, ma20=p.ma20, ma40=p.ma40)
+            for p in gold.points
+        ],
+        metrics=SilverTrendMetrics(
+            start_date=gold.metrics.start_date,
+            end_date=gold.metrics.end_date,
+            trading_days=gold.metrics.trading_days,
+            start_price=gold.metrics.start_price,
+            end_price=gold.metrics.end_price,
+            change_pct=gold.metrics.change_pct,
+            high=gold.metrics.high,
+            low=gold.metrics.low,
+            ma20=gold.metrics.ma20,
+            ma40=gold.metrics.ma40,
+            change_pct_1d=gold.metrics.change_pct_1d,
+            change_pct_5d=gold.metrics.change_pct_5d,
+            direction=gold.metrics.direction,
+            unit=gold.metrics.unit,
+            summary=gold.metrics.summary,
+        ),
+        indicators=gold.indicators,
+        index=gold.index,
+        macro=gold.macro,
+        news=gold.news,
+        data_sources=gold.data_sources,
+        degraded=gold.degraded,
+        freshness=gold.freshness,
+        interval=gold.interval,
+        served_at=gold.served_at,
+    )
+
+
+def _silver_series_metrics(
+    symbol: str,
+    name: str,
+    closes: list[float],
+    highs: list[float],
+    lows: list[float],
+) -> GoldCompareSeries:
+    """由价格序列计算白银对照序列指标（复用 GoldCompareSeries 结构）。"""
+    from app.schemas.market import TrendDirection
+
+    start_price, end_price = closes[0], closes[-1]
+    change_pct = (end_price - start_price) / start_price * 100 if start_price else 0.0
+    ma20 = moving_average(closes, 20)[-1]
+    ma40 = moving_average(closes, 40)[-1]
+    if change_pct >= 0 and ma20 is not None and end_price > ma20:
+        direction = TrendDirection.UP
+    elif change_pct < 0 and ma20 is not None and end_price < ma20:
+        direction = TrendDirection.DOWN
+    else:
+        direction = TrendDirection.SIDEWAYS
+    return GoldCompareSeries(
+        symbol=symbol,
+        name=name,
+        start_price=round(start_price, 3),
+        end_price=round(end_price, 3),
+        change_pct=round(change_pct, 2),
+        high=round(max(highs), 3),
+        low=round(min(lows), 3),
+        ma20=ma20,
+        ma40=ma40,
+        direction=direction,
+    )

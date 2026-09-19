@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.news import NewsScore
 from app.services.resonance import ResonanceService, compute_resonance
 
-
 # =========================================================================
 # 纯函数 compute_resonance —— 4 类信号判定
 # =========================================================================
@@ -85,7 +84,7 @@ class FakeMarket:
         self.base_close = base_close
         self.daily_delta = daily_delta
 
-    async def get_gold_history(self, days: int = 60):  # noqa: D401
+    async def get_gold_history(self, days: int = 60):
         from datetime import timedelta
 
         from app.repositories.market_data import GoldKline
