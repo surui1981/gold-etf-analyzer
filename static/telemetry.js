@@ -32,7 +32,10 @@
     page_view: 1, action_click: 1, range_change: 1, error_caught: 1,
     palette_open: 1, palette_query: 1, palette_select: 1,
     nav_drawer_open: 1, nav_drawer_select: 1,
-    theme_change: 1
+    theme_change: 1,
+    resonance_card_click: 1,
+    grams_trade_open: 1,
+    equity_curve_switch_unit: 1
   };
 
   var queue = [];

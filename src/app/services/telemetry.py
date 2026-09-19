@@ -39,6 +39,12 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "nav_drawer_select",
         # 主题切换（V0.69.0 预埋）
         "theme_change",
+        # 共振卡片点击（V0.70.0 P2 #7）
+        "resonance_card_click",
+        # 克数交易开/加/减仓（V0.70.0 P2 #8）
+        "grams_trade_open",
+        # 收益曲线单位切换 share↔gram（V0.70.0 P2 #8）
+        "equity_curve_switch_unit",
     }
 )
 

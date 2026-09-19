@@ -27,6 +27,7 @@ from app.services.freshness import FreshnessService
 from app.services.news import NewsScoreService
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
+from app.services.resonance import ResonanceService
 from app.services.review import ReviewService
 from app.services.scoring import OpportunityScoringService
 from app.services.settings import WeightService
@@ -170,6 +171,17 @@ def get_review_service(
 ) -> ReviewService:
     """研判复盘服务依赖（价格日历 + 打分明细 + 趋势服务用于回填）。"""
     return ReviewService(gold=gold, news=news, trend=trend)
+
+
+# V0.70.0 P2 #7 —— 共振信号服务
+
+
+def get_resonance_service(
+    trend: TrendService = Depends(get_trend_service),
+    news: NewsScoreRepository = Depends(get_news_repository),
+) -> ResonanceService:
+    """共振信号服务依赖（趋势服务 + 消息面仓储，用于历史回放与命中统计）。"""
+    return ResonanceService(trend=trend, news=news)
 
 
 async def get_position_repository(

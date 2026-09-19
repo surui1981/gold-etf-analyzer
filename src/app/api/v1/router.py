@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     news,
     portfolio,
     position,
+    resonance,
     review,
     settings,
     snapshot,
@@ -31,6 +32,7 @@ api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)
 api_router.include_router(news.router)
 api_router.include_router(review.router)
+api_router.include_router(resonance.router)  # V0.70.0 P2 #7
 api_router.include_router(central_bank.router)
 api_router.include_router(portfolio.router)
 api_router.include_router(telemetry.router)
