@@ -257,9 +257,9 @@
 }
 .pmh-tip-skip:hover { border-color: #9aa0a6; }
 .pmh-tip-next {
-  background: var(--accent, #c9a227);
-  border-color: var(--accent, #c9a227);
-  color: #1f2329;
+  background: var(--accent, #806014);
+  border-color: var(--accent, #806014);
+  color: #fff;
   font-weight: 600;
 }
 .pmh-tip-next:hover { box-shadow: 0 2px 8px rgba(201, 162, 39, 0.4); }

@@ -101,7 +101,7 @@
     panel.setAttribute('aria-label', '全局命令面板');
     panel.innerHTML =
       '<input class="pm-cmd-input" placeholder="搜索页面、动作、时间区间…" aria-label="搜索命令">' +
-      '<div class="pm-cmd-list" role="listbox"></div>' +
+      '<div class="pm-cmd-list" role="listbox" aria-label="搜索结果"></div>' +
       '<div class="pm-cmd-foot">' +
       '  <span><kbd>↑↓</kbd> 选择</span>' +
       '  <span><kbd>Enter</kbd> 执行</span>' +

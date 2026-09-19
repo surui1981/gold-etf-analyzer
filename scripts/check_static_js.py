@@ -65,6 +65,7 @@ GLOBALS = {
     "Blob", "URL", "Intl", "Notification", "getComputedStyle",
     "requestAnimationFrame", "addEventListener", "FileReader",
     "CustomEvent", "Event", "AbortController", "queueMicrotask",
+    "matchMedia", "dispatchEvent",
 }
 
 # 写在 JS 字符串里的 CSS 函数（如 Chart.js 配色 "rgba(...)"、"var(--up)"），

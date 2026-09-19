@@ -4,18 +4,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>黄金趋势追踪（纽约金指引）</title>
+<!-- V0.69.0 FOUC 防护：必须在 <head> 第一行、theme.css 之前（250 字节；同步执行） -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<!-- V0.69.0：Chart.js a11y 封装必须在所有 new Chart() 调用之前同步加载 -->
+<script src="/static/chart-a11y.js"></script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
 <style>
-  :root {
-    --up: #e03131;      /* 涨 → 红（中国习惯） */
-    --down: #2f9e44;    /* 跌 → 绿 */
-    --bg: #f7f8fa;
-    --card: #ffffff;
-    --border: #e6e8eb;
-    --text: #1f2329;
-    --muted: #8a919f;
-    --accent: #c9a227;
-  }
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -95,7 +99,7 @@
   .db-ok { background:#e8f7ee; color:#1a7f37; border-color:#b7e4c7; }
   .db-warn { background:#fff1e6; color:#b35309; border-color:#ffd8a8; }
   .db-bad { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }
-  .db-dim { background:#f1f3f5; color:#868e96; border-color:#dee2e6; }
+  .db-dim { background:#e9ecef; color:var(--muted); border-color:#ced4da; }
   .loading { text-align: center; color: var(--muted); padding: 60px 0; }
   .error { color: var(--up); text-align: center; padding: 40px 0; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
@@ -108,20 +112,20 @@
   .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
   /* 数据源状态条（降级可感知） */
   .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
-  .source-ok { background: #e6f4ea; color: #2f9e44; border: 1px solid #b7e4c7; }
+  .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
   .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
   .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
   /* 今日操作清单 */
   .cl-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed #eceef1; }
   .cl-item:last-child { border-bottom: none; }
   .cl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-  .cl-dot.done { background: #2f9e44; }
+  .cl-dot.done { background: var(--down); }
   .cl-dot.todo { background: #f59f00; }
   .cl-main { flex: 1; }
   .cl-title { font-size: 13.5px; font-weight: 600; }
   .cl-value { font-size: 12px; color: var(--muted); margin-top: 1px; }
   .cl-btn { font-size: 12px; padding: 4px 13px; border-radius: 999px; background: #1f2329; color: #fff; text-decoration: none; white-space: nowrap; }
-  .cl-btn.warn { background: #f59f00; }
+  .cl-btn.warn { background: #946300; }  /* WCAG: white text 6.25:1 */
 /* V0.63.0：评估指数曲线区间切换按钮 */
 .range-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s; }
 .range-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -131,6 +135,9 @@
 <link rel="stylesheet" href="/static/help.css">
 </head>
 <body>
+<!-- V0.69.0 skip-link（WCAG 2.4.1） -->
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
 <div class="wrap">
   <!-- 顶部导航（统一，置顶） -->
   <nav class="topnav">
@@ -274,6 +281,7 @@
 
   <footer>gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
 </div>
+</main>
 
 <script>
 // API 基础地址：同源（8888 直开）用相对路径；跨源（如预览通道 3455）用绝对地址，
@@ -381,7 +389,7 @@ async function loadChecklist() {
           <div class="cl-title">${i.title}</div>
           <div class="cl-value">${i.value}</div>
         </div>
-        ${i.btn ? `<a class="cl-btn ${i.btn.warn ? "warn" : ""}" href="${i.btn.href}">${i.btn.label}</a>` : '<span style="font-size:12px;color:#2f9e44">已完成</span>'}
+        ${i.btn ? `<a class="cl-btn ${i.btn.warn ? "warn" : ""}" href="${i.btn.href}">${i.btn.label}</a>` : '<span style="font-size:12px;color:var(--down)">已完成</span>'}
       </div>`).join("");
 
     const todo = items.filter(i => !i.done).length;
@@ -550,7 +558,7 @@ function render(d) {
 
   // 追踪指数
   const idx = d.index;
-  const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "#868e96";
+  const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "var(--muted)";
   document.getElementById("idxNum").textContent = idx.score != null ? idx.score.toFixed(1) : "—";
   document.getElementById("idxNum").style.color = idxColor;
   const lvlTxt = { strong_up: "🚀 强势上升", up: "↗ 上升", sideways: "→ 震荡整理", down: "↘ 下降", strong_down: "📉 弱势下降" }[idx.level] || idx.level || "—";
@@ -576,8 +584,8 @@ function render(d) {
   document.getElementById("macroInfo").textContent =
     `宏观参考指数 ${d.macro?.score?.toFixed(1) ?? "—"}/100 · ${d.macro?.direction === "bullish" ? "利多黄金" : d.macro?.direction === "bearish" ? "利空黄金" : "中性"}`;
   document.getElementById("macroFactors").innerHTML = (d.macro?.factors || []).map(f => {
-    const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "#868e96";
-    const srcBadge = f.source ? `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${f.source.includes("H.15") ? "#e7f5ff" : "#f1f3f5"};color:${f.source.includes("H.15") ? "#1971c2" : "#868e96"};font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
+    const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "var(--muted)";
+    const srcBadge = f.source ? `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${f.source.includes("H.15") ? "#e7f5ff" : "#e9ecef"};color:${f.source.includes("H.15") ? "#1971c2" : "var(--muted)"};font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
     return `<div class="macro-row">
       <span class="nm">${f.name ?? "—"}${srcBadge}</span>
       <span class="val" style="color:${c}">${f.value ?? "—"} ${f.unit ?? ""}</span>
@@ -588,7 +596,7 @@ function render(d) {
 
   // 消息面评估
   const news = d.news || {};
-  const nc = news.direction === "bullish" ? "var(--up)" : news.direction === "bearish" ? "var(--down)" : "#868e96";
+  const nc = news.direction === "bullish" ? "var(--up)" : news.direction === "bearish" ? "var(--down)" : "var(--muted)";
   document.getElementById("newsInfo").textContent =
     `消息面指数 ${news.score?.toFixed(1) ?? "—"}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
   document.getElementById("newsFactor").innerHTML = `
@@ -602,7 +610,7 @@ function render(d) {
 
   // 趋势参数维度
   document.getElementById("indicators").innerHTML = (d.indicators || []).map(ind => {
-    const c = ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "#868e96";
+    const c = ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "var(--muted)";
     return `<div class="ind-row">
       <div class="ind-head">
         <span class="nm">${ind.name ?? "—"}</span>
@@ -642,6 +650,7 @@ function render(d) {
       },
     },
   });
+  ChartA11y.wrapChart(document.getElementById("trendChart"), { label: "近 60 天纽约金趋势指数（实际收盘 + MA5/MA20/MA40）", summaryId: "summary" });
 
   // 数据时效角标（图表渲染后叠加，随图持续可见）
   renderFreshness(d);
@@ -657,14 +666,13 @@ async function loadCompare() {
     document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 起点归一化=100`;
     const e = c.etf, g = c.gram;
     const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
+    // 数据对照表：ETF vs 上海金 完整指标
+    const fmtPct2 = v => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     document.getElementById("cmpCards").innerHTML = [
       { label: e.name, value: fmtPct2(e.change_pct), extra: e.start_price + " → " + e.end_price, cls: e.change_pct >= 0 ? "up" : "down" },
       { label: g.name + "（元/克）", value: fmtPct2(g.change_pct), extra: g.start_price + " → " + g.end_price, cls: g.change_pct >= 0 ? "up" : "down" },
       { label: "区间领先", value: leaderTxt, extra: "涨跌幅差 " + (c.lead_gap?.toFixed(2) ?? "—") + " 个百分点" },
     ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra}</div></div>`).join("");
-
-    // 数据对照表：ETF vs 上海金 完整指标
-    const fmtPct2 = v => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
     const dirTxt = d => d === "up" ? '<span class="up">↗ 上升</span>' : d === "down" ? '<span class="down">↘ 下降</span>' : "→ 震荡";
     const cells = [
       ["最新价", (e.end_price?.toFixed(3) ?? "—") + " 元", (g.end_price?.toFixed(2) ?? "—") + " 元/克", e.change_pct >= 0 ? "up" : "down", g.change_pct >= 0 ? "up" : "down"],
@@ -698,6 +706,7 @@ async function loadCompare() {
         scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
       },
     });
+    ChartA11y.wrapChart(document.getElementById("compareChart"), { label: "ETF / 现货对照曲线（近 60 天）", summaryId: "cmpSummary" });
     document.getElementById("cmpSummary").textContent = c.summary || "—";
   } catch (e) {
     document.getElementById("cmpSub").textContent = "对照加载失败：" + e.message;
@@ -750,6 +759,7 @@ async function loadSge() {
       b.title = `${n.name} · ${n.freshness.session.state_label} · 数据截止 ${n.freshness.data_date || "—"}`;
       sgeArea.appendChild(b);
     }
+    ChartA11y.wrapChart(document.getElementById("sgeChart"), { label: "上海金走势（近 60 天）", summaryId: "sgeSummary" });
     document.getElementById("sgeSummary").textContent = m.summary || "—";
   } catch (e) {
     document.getElementById("sgeSub").textContent = "上海金数据加载失败：" + e.message;
@@ -843,6 +853,7 @@ async function loadSnapshots(days = 30) {
         },
       },
     });
+    ChartA11y.wrapChart(document.getElementById("snapChart"), { label: "每日评估快照（综合指数 / 收盘）", summaryId: "snapSummary" });
 
     sumEl.textContent =
       `最近 ${latest.snapshot_date ?? "—"} · 综合 ${latest.trend_index?.toFixed(1) ?? "—"}（${latest.index_level ?? "—"}）· 收盘 ${latest.close?.toFixed(3) ?? "—"}`;

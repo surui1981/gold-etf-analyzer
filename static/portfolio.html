@@ -4,13 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>黄金ETF 个人交易跟踪与购买决策</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
 <style>
-  :root {
-    --up: #e03131;      /* 盈利/上涨 → 红（中国习惯） */
-    --down: #2f9e44;    /* 亏损/下跌 → 绿 */
-    --bg: #f7f8fa; --card: #ffffff; --border: #e6e8eb;
-    --text: #1f2329; --muted: #8a919f; --accent: #c9a227;
-  }
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
   .wrap { max-width: 960px; margin: 0 auto; }
@@ -39,7 +45,7 @@
   .factor-tag { flex: 0 0 auto; font-size: 11px; font-weight: 700; color: #fff; padding: 2px 8px; border-radius: 999px; margin-top: 1px; }
   .factor-row.bullish .factor-tag { background: var(--up); }
   .factor-row.bearish .factor-tag { background: var(--down); }
-  .factor-row.neutral .factor-tag { background: #868e96; }
+  .factor-row.neutral .factor-tag { background: var(--muted); }
   .factor-text { font-size: 13px; color: #374151; line-height: 1.5; }
   /* 指数构成堆叠条（技术/宏观/消息） */
   .composition { margin-top: 12px; padding: 12px 14px; background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; }
@@ -146,8 +152,13 @@
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<!-- V0.69.0：Chart.js a11y 封装必须在所有 new Chart() 调用之前同步加载 -->
+<script src="/static/chart-a11y.js"></script>
 </head>
 <body>
+<!-- V0.69.0 skip-link -->
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
 <div class="wrap">
   <!-- 顶部导航（统一，置顶） -->
   <nav class="topnav">
@@ -201,9 +212,9 @@
     <h2>开仓买入（518880 黄金ETF华安）</h2>
     <div class="acc-hint" id="openAccHint">开仓将记入账本：<b>加载中…</b></div>
     <form id="openForm">
-      <div class="field"><label>成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
-      <div class="field"><label>买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" oninput="qtyFromAmount()"></div>
-      <div class="field"><label>数量（份）</label><input id="qty" type="number" min="100" step="100" required oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
+      <div class="field"><label for="price">成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required aria-label="成交价（元）" oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
+      <div class="field"><label for="amount">买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" aria-label="买入金额（元）" oninput="qtyFromAmount()"></div>
+      <div class="field"><label for="qty">数量（份）</label><input id="qty" type="number" min="100" step="100" required aria-label="数量（份）" oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
       <div class="field"><label>可用资金（元，选填 · 用于快捷比例）</label><input id="capital" type="number" min="0" step="1" placeholder="如 100000"></div>
       <div class="quick-row">
         <span class="ql">快捷：</span>
@@ -213,7 +224,7 @@
         <button type="button" class="chip" onclick="applyRatio(1)">全仓</button>
         <button type="button" class="chip" id="chipSuggest" style="display:none" onclick="applySuggest()">按建议仓位</button>
       </div>
-      <div class="field"><label>手续费（元）</label><input id="fee" type="number" min="0" step="0.01" value="0"></div>
+      <div class="field"><label for="fee">手续费（元）</label><input id="fee" type="number" min="0" step="0.01" value="0" aria-label="手续费（元）"></div>
       <button type="submit">买入开仓</button>
     </form>
     <div class="err" id="openErr"></div>
@@ -312,6 +323,7 @@
   <!-- 主动提醒条 -->
   <div class="alert-bar" id="alertBar"></div>
 </div>
+</main>
 
 <script>
 const API_BASE = "";  // 同源：静态页与 API 由同一 uvicorn 提供（8888/8891 均适用）
@@ -326,8 +338,8 @@ const API = {
 
 const ACTION_STYLE = {
   BUY: { txt: "买入", color: "var(--up)" }, ADD: { txt: "加仓", color: "var(--up)" },
-  HOLD: { txt: "持有", color: "#c9a227" }, REDUCE: { txt: "减仓", color: "var(--down)" },
-  SELL: { txt: "卖出", color: "var(--down)" }, WAIT: { txt: "观望", color: "#868e96" },
+  HOLD: { txt: "持有", color: "#997417" }, REDUCE: { txt: "减仓", color: "var(--down)" },
+  SELL: { txt: "卖出", color: "var(--down)" }, WAIT: { txt: "观望", color: "#5b6470" },
 };
 
 // ── 账本上下文（P1 #6 单用户多账本）──
@@ -574,7 +586,7 @@ function buildComposition(idx) {
     <div class="comp-title">指数构成（技术 30% · 宏观 40% · 消息 30%）</div>
     ${order.map(([name, sc]) => {
       const s = sc || 0;
-      const color = s >= 55 ? "var(--up)" : s <= 45 ? "var(--down)" : "#868e96";
+      const color = s >= 55 ? "var(--up)" : s <= 45 ? "var(--down)" : "var(--muted)";
       return `<div class="comp-row">
         <span class="comp-name">${name}</span>
         <span class="comp-track"><span class="comp-fill" style="width:${s}%;background:${color}"></span></span>
@@ -603,7 +615,7 @@ async function loadDecision() {
       <div class="decision-summary">${d.summary || "暂无总结"}</div>
       <div class="position-rec" style="margin-top:10px;padding:10px 14px;background:#fffaf0;border:1px solid #f0e2b6;border-radius:8px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span style="font-weight:600">建议黄金仓位</span>
-        <b style="font-size:22px;color:#c9a227">${d.suggested_position ?? 0}%</b>
+        <b style="font-size:22px;color:var(--accent)">${d.suggested_position ?? 0}%</b>
         <span class="badge" style="background:#1f2329;color:#f5d97a;font-size:12px">${d.position_level || "—"}</span>
         <span style="color:var(--muted);font-size:12px">评估指数 ${d.trend_index?.score?.toFixed(1) ?? "—"}/100 映射</span>
       </div>
@@ -634,7 +646,7 @@ async function loadPositions() {
       // 阈值提醒：单笔盈亏超过 ±10% 时行高亮 + 标记
       const alert = Math.abs(p.pnl_pct) >= 10;
       const flag = alert
-        ? `<br><span style="font-size:11px;padding:1px 6px;border-radius:4px;background:${p.pnl_pct > 0 ? "#ffe9e9" : "#e6f4ea"};color:${p.pnl_pct > 0 ? "#c92a2a" : "#2f9e44"}">${p.pnl_pct > 0 ? "止盈关注" : "止损关注"}</span>`
+        ? `<br><span style="font-size:11px;padding:1px 6px;border-radius:4px;background:${p.pnl_pct > 0 ? "#ffe9e9" : "#e6f4ea"};color:${p.pnl_pct > 0 ? "var(--up)" : "var(--down)"}">${p.pnl_pct > 0 ? "止盈关注" : "止损关注"}</span>`
         : "";
       return `<tr${alert ? ' style="outline:1px solid #ffd8a8;outline-offset:-1px"' : ""}>
         <td>${p.name ?? "—"}<br><span style="font-size:11px;color:var(--muted)">${p.symbol ?? "—"}</span></td>
@@ -1133,6 +1145,7 @@ function drawEquityChart(d) {
       },
     },
   });
+  ChartA11y.wrapChart(document.getElementById("equityChart"), { label: "持仓收益曲线（累计收益率 % + 持仓市值 ¥）", summaryId: "perfSummary" });
 }
 
 // ==================== V0.61.0：获利分析总结评估 ====================

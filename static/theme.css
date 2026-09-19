@@ -1,0 +1,345 @@
+/* =========================================================================
+ * theme.css — V0.69.0 主题与无障碍共享样式
+ *
+ * 4 主题：light (默认) / dark / auto (随系统) / hc (WCAG AAA 高对比)
+ * - 设计约束：topnav / warn-banner 保持 always-dark（与 help.css 设计意图一致）
+ * - 设计约束：freshness.js 5 类角标 + 1 类错误全部加暗色覆盖（防降级静默）
+ * - 设计约束：:focus-visible 而非 :focus（鼠标点击不显示丑环）
+ *
+ * 加载顺序：inline <script> (head 第一子元素) → theme.css → page-specific <style>
+ * ========================================================================= */
+
+/* ── 默认 (light) ─────────────────────────────── */
+:root {
+  --up: #c92a2a;
+  --down: #1f7a35;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --border: #e6e8eb;
+  --text: #1f2329;
+  /* WCAG AA: --muted on #ffffff → 6.84:1 (≥4.5). 在 dark/hc 模式独立覆盖 */
+  --muted: #5b6470;
+  --accent: #806014;  /* WCAG: 白字 ~5.83:1 on white text also ≥4.5 */
+
+  /* a11y focus */
+  --focus-ring: #1971c2;
+  --skip-bg: #1f2329;
+  --skip-fg: #f7f8fa;
+
+  /* freshness 角标（与 freshness.js 注入的硬编码颜色对齐，便于主题切换） */
+  --chip-ok-bg: #e8f7ee; --chip-ok-fg: #1a7f37; --chip-ok-bd: #b7e4c7;
+  --chip-delay-bg: #fff8e6; --chip-delay-fg: #9a6700; --chip-delay-bd: #ffe0a3;
+  --chip-warn-bg: #fff1e6; --chip-warn-fg: #b35309; --chip-warn-bd: #ffd8a8;
+  --chip-bad-bg: #ffe9e9; --chip-bad-fg: #c92a2a; --chip-bad-bd: #ffc9c9;
+  --chip-dim-bg: #f1f3f5; --chip-dim-fg: #868e96; --chip-dim-bd: #dee2e6;
+}
+
+/* ── dark（基础暗色）─────────────────────────── */
+[data-theme="dark"] {
+  --bg: #0f1216;
+  --card: #1a1f26;
+  --border: #2a3138;
+  --text: #e6e9ee;
+  --muted: #9aa3ad;
+  --accent: #f0c14b;
+  --focus-ring: #66b2ff;
+
+  /* 暗色 freshness 角标（语义保留：绿=好、琥珀=警告、红=降级） */
+  --chip-ok-bg: #0e2a1a; --chip-ok-fg: #7ee0a1; --chip-ok-bd: #1f4d33;
+  --chip-delay-bg: #2a210e; --chip-delay-fg: #f5d97a; --chip-delay-bd: #5b4514;
+  --chip-warn-bg: #2a1a0e; --chip-warn-fg: #ffb773; --chip-warn-bd: #5b3014;
+  --chip-bad-bg: #2a0e0e; --chip-bad-fg: #ff8a8a; --chip-bad-bd: #5b1414;
+  --chip-dim-bg: #1a1f26; --chip-dim-fg: #9aa3ad; --chip-dim-bd: #2a3138;
+}
+
+/* ── high-contrast (WCAG AAA 7:1) ────────────── */
+[data-theme="hc"] {
+  --bg: #000000;
+  --card: #000000;
+  --border: #ffffff;
+  --text: #ffffff;
+  --muted: #ffff00;
+  --accent: #ffff00;
+  --up: #ff5555;
+  --down: #55ff55;
+  --focus-ring: #ffff00;
+  --skip-bg: #ffff00;
+  --skip-fg: #000000;
+
+  /* hc 模式直接用最亮对比色覆盖 freshness 角标 */
+  --chip-ok-bg: #000000; --chip-ok-fg: #55ff55; --chip-ok-bd: #55ff55;
+  --chip-delay-bg: #000000; --chip-delay-fg: #ffff00; --chip-delay-bd: #ffff00;
+  --chip-warn-bg: #000000; --chip-warn-fg: #ffaa00; --chip-warn-bd: #ffaa00;
+  --chip-bad-bg: #000000; --chip-bad-fg: #ff5555; --chip-bad-bd: #ff5555;
+  --chip-dim-bg: #000000; --chip-dim-fg: #ffffff; --chip-dim-bd: #ffffff;
+}
+
+/* =========================================================================
+ * freshness 角标深色覆盖（防降级静默；V0.69.0 不变量）
+ * ========================================================================= */
+[data-theme="dark"] .fresh-bar .fsh-ok,
+[data-theme="hc"]   .fresh-bar .fsh-ok { background: var(--chip-ok-bg); color: var(--chip-ok-fg); border-color: var(--chip-ok-bd); }
+[data-theme="dark"] .fresh-bar .fsh-delay,
+[data-theme="hc"]   .fresh-bar .fsh-delay { background: var(--chip-delay-bg); color: var(--chip-delay-fg); border-color: var(--chip-delay-bd); }
+[data-theme="dark"] .fresh-bar .fsh-warn,
+[data-theme="hc"]   .fresh-bar .fsh-warn { background: var(--chip-warn-bg); color: var(--chip-warn-fg); border-color: var(--chip-warn-bd); }
+[data-theme="dark"] .fresh-bar .fsh-bad,
+[data-theme="hc"]   .fresh-bar .fsh-bad { background: var(--chip-bad-bg); color: var(--chip-bad-fg); border-color: var(--chip-bad-bd); }
+[data-theme="dark"] .fresh-bar .fsh-dim,
+[data-theme="hc"]   .fresh-bar .fsh-dim { background: var(--chip-dim-bg); color: var(--chip-dim-fg); border-color: var(--chip-dim-bd); }
+[data-theme="dark"] .fresh-bar.fsh-error,
+[data-theme="hc"]   .fresh-bar.fsh-error { background: var(--chip-bad-bg); color: var(--chip-bad-fg); border-color: var(--chip-bad-bd); }
+[data-theme="dark"] .fresh-bar .fsh-meta,
+[data-theme="hc"]   .fresh-bar .fsh-meta { color: var(--muted); }
+[data-theme="dark"] .fresh-bar .fsh-title,
+[data-theme="hc"]   .fresh-bar .fsh-title { color: var(--text); }
+
+/* =========================================================================
+ * trend.html 内联 .data-badge 角标覆盖（V0.68.0 chart-area 角标）
+ * ========================================================================= */
+[data-theme="dark"] .db-ok, [data-theme="hc"] .db-ok { background: var(--chip-ok-bg); color: var(--chip-ok-fg); border-color: var(--chip-ok-bd); }
+[data-theme="dark"] .db-warn, [data-theme="hc"] .db-warn { background: var(--chip-warn-bg); color: var(--chip-warn-fg); border-color: var(--chip-warn-bd); }
+[data-theme="dark"] .db-bad, [data-theme="hc"] .db-bad { background: var(--chip-bad-bg); color: var(--chip-bad-fg); border-color: var(--chip-bad-bd); }
+[data-theme="dark"] .db-dim, [data-theme="hc"] .db-dim { background: var(--chip-dim-bg); color: var(--chip-dim-fg); border-color: var(--chip-dim-bd); }
+
+/* =========================================================================
+ * topnav 决策：保留 always-dark（设计意图；与 help.css 一致）
+ * hc 模式下加 2px 白边维持 AAA 对比
+ * ========================================================================= */
+.topnav { background: #1f2329; color: #e6e9ee; }
+[data-theme="hc"] .topnav { background: #000000; border-bottom: 2px solid #ffffff; }
+[data-theme="hc"] .topnav .brand { color: #ffff00; }
+[data-theme="hc"] .topnav a { color: #ffffff; }
+[data-theme="hc"] .topnav a:hover { background: rgba(255,255,255,0.2); color: #ffff00; }
+[data-theme="hc"] .topnav a.active { background: #ffff00; color: #000000; }
+
+/* warn-banner 同样 always-dark（保持品牌一致性） */
+[data-theme="hc"] .warn-banner { background: #000000; border-left: 4px solid #ffff00; }
+[data-theme="hc"] .warn-banner .w-title { color: #ffff00; }
+[data-theme="hc"] .warn-banner li { color: #ffffff; }
+[data-theme="hc"] .warn-banner li b { color: #ffff00; }
+
+[data-theme] .topnav a.active { color: #ffffff; }  /* WCAG: accent bg + 白字 ~6.5:1 */
+[data-theme="hc"] .topnav a.active { color: #000000; background: #ffff00; }
+
+/* =========================================================================
+ * skip-to-content link（WCAG 2.4.1）
+ * ========================================================================= */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100000;
+  background: var(--skip-bg);
+  color: var(--skip-fg);
+  padding: 10px 16px;
+  font-weight: 700;
+  border-radius: 0 0 6px 0;
+  text-decoration: none;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 0;
+}
+main:focus { outline: none; }  /* main 接受 tabindex=-1 时不显示焦点环 */
+
+/* =========================================================================
+ * 全局 focus-visible（WCAG 2.4.7）
+ * ========================================================================= */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 3px;
+}
+/* 全局 body / 容器默认背景 / 文字色随主题 */
+body { background: var(--bg); color: var(--text); }
+
+/* =========================================================================
+ * 屏幕阅读器专属（视觉隐藏但可读；WCAG 1.3.1 + caption 配合）
+ * ========================================================================= */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+/* =========================================================================
+ * prefers-reduced-motion (WCAG 2.3.3)
+ * ========================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* =========================================================================
+ * 主题切换器浮动按钮（贴近 #pmHelpBtn）
+ * ========================================================================= */
+#pmThemeBtn {
+  position: fixed;
+  right: 72px;
+  bottom: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  font-size: 18px;
+  cursor: pointer;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+#pmThemeBtn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+#pmThemeBtn:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+#pmThemeBtn[aria-expanded="true"] {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+#pmThemeMenu {
+  position: fixed;
+  right: 72px;
+  bottom: 72px;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  padding: 6px;
+  display: none;
+  z-index: 9999;
+  min-width: 140px;
+}
+#pmThemeMenu.open { display: block; }
+#pmThemeMenu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 13px;
+}
+#pmThemeMenu button:hover { background: var(--border); }
+#pmThemeMenu button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+#pmThemeMenu button[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 700;
+}
+#pmThemeMenu .pm-mode-icon {
+  width: 20px;
+  display: inline-block;
+  text-align: center;
+  font-size: 14px;
+}
+
+/* 高对比模式切换器 */
+[data-theme="hc"] #pmThemeBtn {
+  background: #000000;
+  color: #ffff00;
+  border: 2px solid #ffff00;
+}
+[data-theme="hc"] #pmThemeMenu {
+  background: #000000;
+  border: 2px solid #ffff00;
+}
+[data-theme="hc"] #pmThemeMenu button {
+  color: #ffffff;
+}
+[data-theme="hc"] #pmThemeMenu button[aria-checked="true"] {
+  background: #ffff00;
+  color: #000000;
+}
+
+/* =========================================================================
+ * 暗色下账户选择器 / 顶部账号下拉（account.js 注入，无自定义样式兜底）
+ * ========================================================================= */
+[data-theme="dark"] select,
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="email"],
+[data-theme="dark"] textarea {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+[data-theme="hc"] select,
+[data-theme="hc"] input[type="text"],
+[data-theme="hc"] input[type="number"],
+[data-theme="hc"] input[type="date"],
+[data-theme="hc"] input[type="email"],
+[data-theme="hc"] textarea {
+  background: #000000;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+}
+
+/* =========================================================================
+ * 暗色下卡片 / 表格 / 通用容器（让页面背景自然过渡）
+ * ========================================================================= */
+[data-theme="dark"] body { background: var(--bg); color: var(--text); }
+[data-theme="dark"] .card,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .headline,
+[data-theme="dark"] .hero {
+  background: var(--card);
+  color: var(--text);
+  border-color: var(--border);
+}
+[data-theme="dark"] table,
+[data-theme="dark"] th,
+[data-theme="dark"] td { border-color: var(--border); }
+[data-theme="dark"] .muted,
+[data-theme="dark"] .desc,
+[data-theme="dark"] .sub,
+[data-theme="dark"] [style*="color: var(--muted)"] { color: var(--muted) !important; }
+
+/* hc 下所有边框加粗到 2px 维持对比 */
+[data-theme="hc"] .card,
+[data-theme="hc"] .panel,
+[data-theme="hc"] .headline,
+[data-theme="hc"] .hero,
+[data-theme="hc"] button,
+[data-theme="hc"] input,
+[data-theme="hc"] select,
+[data-theme="hc"] textarea { border-width: 2px !important; }

@@ -34,7 +34,8 @@
     ".fsh-delay { background:#fff8e6; color:#9a6700; border-color:#ffe0a3; }",
     ".fsh-warn { background:#fff1e6; color:#b35309; border-color:#ffd8a8; }",
     ".fsh-bad { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }",
-    ".fsh-dim { background:#f1f3f5; color:#868e96; border-color:#dee2e6; }",
+    /* V0.69.0 WCAG AA: dim 角标 fg 与 muted 对齐，bg 同时提亮以保证 4.5:1 */
+    ".fsh-dim { background:#e9ecef; color:var(--muted,#5b6470); border-color:#ced4da; }",
     ".fsh-alert { font-weight:700; }",
     ".fresh-bar.fsh-error { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }"
   ].join("\n");

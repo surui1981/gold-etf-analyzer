@@ -4,8 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>消息面评估 · 黄金价格投资辅助工具</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
 <style>
-  :root { --up:#e03131; --down:#2f9e44; --bg:#f7f8fa; --card:#fff; --border:#e6e8eb; --text:#1f2329; --muted:#8a919f; --accent:#c9a227; }
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:24px; }
   .wrap { max-width:900px; margin:0 auto; }
@@ -86,6 +97,9 @@
 <link rel="stylesheet" href="/static/help.css">
 </head>
 <body>
+<!-- V0.69.0 skip-link -->
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
 <div class="wrap">
   <!-- 顶部导航（统一，置顶） -->
   <nav class="topnav">
@@ -161,7 +175,7 @@
     <div class="desc">拖拽或点击快捷档位给出您对黄金<b>后续走势的看多强度</b>；备注可记录所参考的投行观点。</div>
     <div class="score-row">
       <span style="font-size:13px;color:var(--muted)">看空 0</span>
-      <input type="range" id="score" min="0" max="100" step="1" value="50" oninput="updateScore()">
+      <input type="range" id="score" min="0" max="100" step="1" value="50" aria-label="客户评估打分（0 看空 - 100 看多）" oninput="updateScore()">
       <span style="font-size:13px;color:var(--muted)">100 看多</span>
       <div class="score-val" id="scoreVal">50</div>
     </div>
@@ -208,6 +222,7 @@
 
   <footer>gold-etf-analyzer · 消息面权重 30% · 每日 3 次打分 · 打分仅供参考，不构成投资建议</footer>
 </div>
+</main>
 
 <script>
 const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
@@ -220,7 +235,7 @@ let forceReload = false;
 
 function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
 function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
-function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#868e96"; }
+function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#5b6470"; }
 function fmtTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -247,13 +262,13 @@ function renderAll() {
   const alert = document.getElementById("scoreAlert");
   alert.style.display = "block";
   if (!d.scored) {
-    alert.style.background = "#fff4e5"; alert.style.color = "#b26a00"; alert.style.border = "1px solid #ffd8a8";
+    alert.style.background = "#fff4e5"; alert.style.color = "#8a5300"; alert.style.border = "1px solid #ffd8a8";
     alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。今日还有 <b>3</b> 次打分机会，建议查阅上方投行展望后完成第 1 次打分。";
   } else if ((d.remaining_slots ?? 0) > 0) {
     alert.style.background = "#e7f5ff"; alert.style.color = "#1971c2"; alert.style.border = "1px solid #a5d8ff";
     alert.innerHTML = `今日已打分 <b>${d.used_slots ?? 0}</b> 次，还有 <b>${d.remaining_slots ?? 0}</b> 次机会。随着盘中信息更新，可继续打分——<b>越晚的一次权重越高</b>，对当日指数影响越大。`;
   } else {
-    alert.style.background = "#e6f4ea"; alert.style.color = "#2f9e44"; alert.style.border = "1px solid #b7e4c7";
+    alert.style.background = "#e6f4ea"; alert.style.color = "#1f7a35"; alert.style.border = "1px solid #b7e4c7";
     alert.innerHTML = "今日 <b>3 次打分机会已全部用完</b>，已按 1:2:3 加权汇入综合评估指数与购买决策。如需修正，点击对应槽位的「修改」。";
   }
 
@@ -488,7 +503,7 @@ async function loadHistory() {
       <td class="num" style="color:${dirColor(it.direction)}">${Number(it.score ?? 0).toFixed(1)}</td>
       <td><span class="dir-tag" style="background:${dirColor(it.direction)};font-size:11px">${dirTxt(it.direction) || "中性展望"}</span></td>
       <td>${fmtTime(it.scored_at)}</td>
-      <td>${(it.basis && it.basis.length) ? it.basis.map(t => `<span class="tag">${esc(t)}</span>`).join(" ") : "—"}${it.backfilled ? ' <span class="tag" style="background:#fff4e5;color:#b26a00">补录</span>' : ""}</td>
+      <td>${(it.basis && it.basis.length) ? it.basis.map(t => `<span class="tag">${esc(t)}</span>`).join(" ") : "—"}${it.backfilled ? ' <span class="tag" style="background:#fff4e5;color:#8a5300">补录</span>' : ""}</td>
       <td style="color:#4b5563">${esc(it.notes) || "—"}</td>
     </tr>`).join("");
   } catch (e) {

@@ -4,8 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>研判复盘 · 黄金价格投资辅助工具</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
 <style>
-  :root { --up:#e03131; --down:#2f9e44; --bg:#f7f8fa; --card:#fff; --border:#e6e8eb; --text:#1f2329; --muted:#8a919f; --accent:#c9a227; }
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:24px; }
   .wrap { max-width:1080px; margin:0 auto; }
@@ -32,9 +43,9 @@
   .kpi .v { font-size:24px; font-weight:800; margin-top:4px; line-height:1.15; }
   .kpi .s { font-size:11px; color:var(--muted); margin-top:3px; }
   .banner { border-radius:8px; padding:9px 14px; font-size:12.5px; line-height:1.7; margin-top:10px; }
-  .banner.warn { background:#fff4e5; color:#b26a00; border:1px solid #ffd8a8; }
+  .banner.warn { background:#fff4e5; color:#8a5300; border:1px solid #ffd8a8; }
   .banner.info { background:#e7f5ff; color:#1971c2; border:1px solid #a5d8ff; }
-  .banner.ok { background:#e6f4ea; color:#2f9e44; border:1px solid #b7e4c7; }
+  .banner.ok { background:#e6f4ea; color:#1f7a35; border:1px solid #b7e4c7; }
   .bars { margin-top:8px; }
   .bar-row { display:grid; grid-template-columns:96px 1fr 128px; gap:10px; align-items:center; padding:5px 0; font-size:12.5px; }
   .bar-track { height:14px; border-radius:999px; background:#eef0f3; overflow:hidden; position:relative; }
@@ -80,6 +91,9 @@
 <link rel="stylesheet" href="/static/responsive.css">
 </head>
 <body>
+<!-- V0.69.0 skip-link -->
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
 <div class="wrap">
   <nav class="topnav">
     <div class="brand">🏅 黄金价格投资辅助工具</div>
@@ -189,6 +203,7 @@
 
   <footer>gold-etf-analyzer · 研判复盘 · 统计仅为个人打分习惯的自我校正，不构成投资建议</footer>
 </div>
+</main>
 
 <script>
 const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
@@ -201,8 +216,8 @@ let cfg = { target: "ny", horizon: 1, days: 90 };
 
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 function dirTxt(d) { return { bullish: "看多", bearish: "看空", neutral: "看平" }[d] || d; }
-function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "#868e96"; }
-function chgColor(v) { return v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "#868e96"; }
+function dirColor(d) { return d === "bullish" ? "var(--up)" : d === "bearish" ? "var(--down)" : "var(--muted)"; }
+function chgColor(v) { return v > 0 ? "var(--up)" : v < 0 ? "var(--down)" : "var(--muted)"; }
 function pct(v) { return v == null ? "—" : Number(v).toFixed(1) + "%"; }
 function signed(v) { return v == null ? "—" : (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%"; }
 
@@ -304,7 +319,7 @@ function renderTags() {
     const ref = t.samples >= 5
       ? (t.hit_rate >= 60 ? "较可靠" : t.hit_rate >= 40 ? "中性" : "需警惕")
       : "样本少";
-    const rc = t.samples >= 5 ? (t.hit_rate >= 60 ? "var(--up)" : t.hit_rate >= 40 ? "#868e96" : "var(--down)") : "var(--muted)";
+    const rc = t.samples >= 5 ? (t.hit_rate >= 60 ? "var(--up)" : t.hit_rate >= 40 ? "var(--muted)" : "var(--down)") : "var(--muted)";
     return `<tr>
       <td><span class="tag">${esc(t.tag)}</span></td>
       <td class="num">${t.samples}</td>
@@ -336,7 +351,7 @@ function renderDay(d) {
     ? `<span class="dir-tag" style="background:var(--up)">✅ 命中</span>`
     : primary.status === "miss"
       ? `<span class="dir-tag" style="background:var(--down)">❌ 偏离</span>`
-      : `<span class="dir-tag" style="background:#adb5bd">⏳ 待验证</span>`;
+      : `<span class="dir-tag" style="background:var(--muted)">⏳ 待验证</span>`;
 
   const slots = (d.slots || []).map(s => `
     <div class="slot-line">
