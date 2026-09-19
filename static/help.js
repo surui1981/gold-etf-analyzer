@@ -17,7 +17,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "V0.58.0";
+  const VERSION = "V0.71.0";
   const LS = {
     tourPrefix: "pm_help_tour_",
     seenVer: "pm_help_seen_version",
@@ -38,6 +38,8 @@
     "/static/central_bank.html": "/central-bank",
     "/trades": "/trades",
     "/static/trades.html": "/trades",
+    "/static/silver.html": "/static/silver.html",
+    "/static/backtest.html": "/static/backtest.html",
   };
   function pageKey() {
     const p = window.location.pathname;
@@ -58,6 +60,10 @@
       "T12M": "Trailing 12 Months，滚动 12 个月合计",
       "同比 / 环比": "同比 = 与去年同期比；环比 = 与上一期比",
       "回撤": "价格从区间高点回落幅度，越大说明调整越深",
+      "Sharpe": "夏普比率：mean(日收益−无风险) / std(日收益) × √252；衡量风险调整后收益，越高越好",
+      "最大回撤": "区间内净值自最高点的最大跌幅百分比，越低越好",
+      "校准曲线": "把综合分 0-100 分 5 桶（0-20/20-40/40-60/60-80/80-100），看每桶的实际胜率是否接近理论概率",
+      "回测": "在历史 daily_snapshots 上重算不同参数组合的 Sharpe / 最大回撤 / 命中率（事前重算）",
     },
     "宏观因子类": {
       "DXY (美元指数)": "美元对一篮子货币的综合强弱，与黄金负相关",
@@ -71,6 +77,8 @@
       "SGE": "Shanghai Gold Exchange 上海黄金交易所",
       "518880": "华安黄金 ETF，场内份额基金，跟踪 Au99.99",
       "ETF": "Exchange-Traded Fund 交易所交易基金",
+      "562800": "易方达白银 ETF，场内份额基金，跟踪白银现货",
+      "SI": "COMEX 白银期货主力合约（美元/盎司）",
     },
     "交易动作类": {
       "开仓": "首次买入建仓",
@@ -138,6 +146,14 @@
       { selector: "table.trades th:nth-child(9)", term: "成交后份额" },
       { selector: ".filters", term: "净流出" },
     ],
+    "/static/silver.html": [
+      { selector: "#cards .card:nth-child(1) .label, .cards .card .label", term: "562800" },
+      { selector: "#cards .card:nth-child(2) .label, .cards .card .label", term: "SI" },
+    ],
+    "/static/backtest.html": [
+      { selector: "#paramsPanel .panel-title, #paramsPanel h3", term: "Sharpe" },
+      { selector: "#cachedBadge", term: "Sharpe" },
+    ],
   };
 
   // 用于 fallback 显示的术语默认定义（如果 GLOSSARY 没收录）
@@ -177,6 +193,18 @@
       { selector: "#kpiArea", text: "汇总覆盖全部匹配结果：笔数 / 买卖金额 / 净流出 / 手续费 / 已实现盈亏", pos: "top" },
       { selector: "table.trades", text: "每笔卖出附「已实现盈亏」与「成交后份额」（均价法逐笔回放）", pos: "top" },
     ],
+    "/static/silver.html": [
+      { selector: ".topnav", text: "V0.71.0 新增「白银追踪」与「参数回测」两个页面", pos: "bottom" },
+      { selector: ".freshness, .freshness-bar, .data-badge, .source-bar", text: "白银数据时效：白银 ETF 562800 + COMEX SI 期货（silver_mock 演示数据可降级）", pos: "top" },
+      { selector: "#resonanceCard", text: "共振信号卡复用：白银版与黄金版口径一致，便于跨品种对照", pos: "top" },
+      { selector: "#chartArea", text: "白银趋势主图（60D / 52W / 24M 三档区间切换）", pos: "top" },
+    ],
+    "/static/backtest.html": [
+      { selector: ".topnav", text: "顶栏 9 个页面 · 「参数回测」是 V0.71.0 新增的复盘工具", pos: "bottom" },
+      { selector: "#paramsPanel", text: "参数区：基准标的（5 选 1）+ 回看窗口 + 权重网格（≤125 组合）+ 阈值带", pos: "top" },
+      { selector: "#resultsPanel", text: "回测结果：Sharpe + 最大回撤 双轴图 + 命中详情表 + 5 桶校准曲线", pos: "top" },
+      { selector: "#cachedBadge", text: "5 分钟节流：相同参数 5 分钟内直接返回缓存（X-Backtest-Cached header）", pos: "left" },
+    ],
   };
 
   /* ── localStorage helpers ─────────────────────────────────────────── */
@@ -201,6 +229,11 @@
         <li><b>看决策</b> → <a href="/portfolio">持仓与决策页</a>：今日动作 + 仓位推荐 + 红绿理由</li>
         <li><b>记交易</b> → 持仓决策页底部：开仓/加仓/减仓/清仓（含二次确认）</li>
         <li><b>看央行</b> → <a href="/central-bank">央行购金页</a>：T12M / Top 10 / 季度明细</li>
+      </ol>
+      <h3>V0.71.0 新增（白银 + 回测）</h3>
+      <ol class="pmh-guide">
+        <li><b>白银追踪</b> → <a href="/static/silver.html">白银页</a>：白银 ETF 562800 + COMEX SI 双市场 + 趋势评估指数</li>
+        <li><b>参数回测</b> → <a href="/static/backtest.html">回测页</a>：在历史 daily_snapshots 上扫权重网格 + 阈值带，输出 Sharpe / 最大回撤 / 校准曲线（5 分钟节流）</li>
       </ol>
       <p class="pmh-tip">💡 综合指数 &gt; 75 强势上升 / &gt; 55 上升 / &gt; 45 震荡 / &gt; 25 下降 / 其他弱势下降</p>
     `;

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>参数回测（Sharpe + 最大回撤 + 校准）</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/chart-a11y.js"></script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 25px; letter-spacing: .5px; }
+  .hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; position: relative; }
+  .panel-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+  .panel-title .sub { font-weight: 400; font-size: 12px; color: var(--muted); }
+  .params-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 14px; align-items: center; }
+  .params-row label { font-size: 12.5px; color: var(--muted); margin-right: 6px; }
+  .params-row select, .params-row input { padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 13px; }
+  .grid-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .grid-box { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .grid-box .nm { font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+  .grid-box .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .grid-box .chip { padding: 3px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 11.5px; cursor: pointer; user-select: none; transition: background .15s; background: var(--card); }
+  .grid-box .chip.on { background: var(--accent); color: #1f2329; border-color: var(--accent); font-weight: 600; }
+  .run-btn { background: var(--accent); color: #1f2329; border: none; padding: 8px 18px; border-radius: 8px; font-weight: 700; font-size: 14px; cursor: pointer; transition: transform .15s; }
+  .run-btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .run-btn:disabled { opacity: 0.6; cursor: wait; }
+  .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
+  .summary b { color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  canvas { max-height: 360px; }
+  .error { color: var(--up); text-align: center; padding: 40px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
+  .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
+  .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
+  .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
+  .loading { text-align: center; color: var(--muted); padding: 30px 0; }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+<link rel="stylesheet" href="/static/help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
+<div class="wrap">
+  <nav class="topnav">
+    <div class="brand">⚙️ 参数回测</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/trades">交易历史</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/review">研判复盘</a>
+      <a href="/central-bank">央行购金统计</a>
+      <a href="/static/silver.html">白银追踪</a>
+      <a href="/static/backtest.html" class="active">参数回测</a>
+    </div>
+  </nav>
+
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>回测是事后统计，不是预测工具</b>——历史 Sharpe 不代表未来收益，请结合宏观环境独立判断。</li>
+      <li><b>样本不足时结论不可靠</b>——daily_snapshots 覆盖期有限（V0.52.0 起），少于 20 天请忽略。</li>
+      <li><b>网格扫描有「过拟合」风险</b>——Sharpe 最高的组合 ≠ 未来最优，建议关注 top 5 共有特征。</li>
+      <li><b>5 分钟节流是体验优化，不是限制</b>——同 params 5 分钟内直接复用上次结果（X-Backtest-Cached 头）。</li>
+      <li><b>数据来源</b>——历史 daily_snapshots（tech/macro/news 三面指数 + 金价 T+1），仅供研究参考，不构成投资建议。</li>
+    </ol>
+  </div>
+
+  <header class="hero">
+    <div>
+      <h1>参数回测工具</h1>
+      <div class="en">Backtest Workbench</div>
+      <div class="tagline">权重网格 × 阈值带扫描 · Sharpe / 最大回撤 / 命中率 / 校准曲线</div>
+      <p class="intro">在 <code>daily_snapshots</code>（V0.52.0 起的每日评估历史）上重算不同参数组合的<b>事前收益</b>：把「技术 / 宏观 / 消息」三面权重按网格展开 + 4 节点阈值带扫描，输出 Sharpe（年化）×√252、最大回撤、命中率、5 桶校准曲线，让你在真正下单前先看参数准不准。</p>
+      <div class="notice">⚙️ 默认参数：tech=[0.3, 0.4, 0.5] / macro=[0.4] / news=[0.3]，阈值带 [55-70 / 45-30]，最大 27 组合</div>
+    </div>
+  </header>
+
+  <div id="btWarn"></div>
+
+  <!-- 参数区 -->
+  <section class="panel" id="paramsPanel">
+    <div class="panel-title">
+      <span>⚙️ 参数区 <span class="sub">配置后点「立即回测」（500ms 防抖 + 后端 5 分钟节流）</span></span>
+    </div>
+
+    <div class="params-row">
+      <label>基准标的：</label>
+      <select id="targetSel">
+        <option value="etf">黄金 ETF（518880）</option>
+        <option value="ny">纽约金（COMEX GC）</option>
+        <option value="gram">上海金克价（Au99.99）</option>
+        <option value="silver_etf">白银 ETF（562800）</option>
+        <option value="silver_ny">纽约白银（COMEX SI）</option>
+      </select>
+
+      <label>回看窗口：</label>
+      <select id="daysSel">
+        <option value="60">60 日</option>
+        <option value="90" selected>90 日</option>
+        <option value="180">180 日</option>
+        <option value="365">365 日</option>
+      </select>
+
+      <button class="run-btn" id="runBtn" type="button">▶ 立即回测</button>
+      <span class="bt-debounce" id="debounceHint">参数变更后 500ms 内自动重算</span>
+    </div>
+
+    <div class="grid-row">
+      <div class="grid-box">
+        <div class="nm">技术面权重候选（tech）</div>
+        <div class="chips" id="chipsTech" data-name="tech"></div>
+      </div>
+      <div class="grid-box">
+        <div class="nm">宏观面权重候选（macro）</div>
+        <div class="chips" id="chipsMacro" data-name="macro"></div>
+      </div>
+      <div class="grid-box">
+        <div class="nm">消息面权重候选（news）</div>
+        <div class="chips" id="chipsNews" data-name="news"></div>
+      </div>
+    </div>
+
+    <div class="grid-row">
+      <div class="grid-box">
+        <div class="nm">看多阈值 BULLISH ≥</div>
+        <div class="chips" id="chipsBull" data-name="bullish"></div>
+      </div>
+      <div class="grid-box">
+        <div class="nm">看空阈值 BEARISH ≤</div>
+        <div class="chips" id="chipsBear" data-name="bearish"></div>
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--muted);margin-top:6px">
+      💡 网格组合数 = tech × macro × news × bullish × bearish（≤ 125，超出会拒绝）；同组合 5 分钟内复用缓存
+    </div>
+  </section>
+
+  <!-- 回测结果 -->
+  <section class="panel" id="resultsPanel" style="position:relative">
+    <div class="panel-title">
+      <span>📊 回测结果 <span class="sub" id="resultSub">尚未运行</span></span>
+    </div>
+    <div id="cachedBadge">⏱ 已用 5 分钟内缓存</div>
+
+    <div id="btSummary" class="bt-summary"></div>
+
+    <div style="font-size:13px;font-weight:600;margin:8px 0 6px">🎯 Sharpe（年化）— 125 个组合分布</div>
+    <canvas id="sharpeChart"></canvas>
+
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">📉 最大回撤 % — 越低越好</div>
+    <canvas id="drawdownChart"></canvas>
+
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">🎓 校准曲线 — 实际命中率 vs 理论概率（5 桶）</div>
+    <canvas id="calibrationChart"></canvas>
+
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">📋 命中详情表 <span style="font-weight:400;font-size:11px;color:var(--muted)">（按 Sharpe 降序，前 30 行）</span></div>
+    <div style="max-height:400px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+      <table id="btTable"><tr><td style="padding:24px;text-align:center;color:var(--muted)">点「立即回测」开始计算</td></tr></table>
+    </div>
+
+    <div class="summary" id="resultSummary"></div>
+  </section>
+
+  <footer>gold-etf-analyzer · 参数回测 · Sharpe 仅供研究参考，不构成投资建议</footer>
+</div>
+</main>
+
+<script>
+const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+
+async function fetchJSON(url, opts, timeoutMs = 40000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal, ...opts });
+    return await resp.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ─────────── 权重 / 阈值候选（点击 toggle） ─────────── */
+const CANDIDATES = {
+  tech: [0.20, 0.30, 0.40, 0.50, 0.60],
+  macro: [0.20, 0.30, 0.40, 0.50, 0.60],
+  news: [0.10, 0.20, 0.30, 0.40, 0.50],
+  bullish: [55, 60, 65, 70],
+  bearish: [45, 40, 35, 30],
+};
+const DEFAULT_ON = {
+  tech: new Set([0.30, 0.40, 0.50]),
+  macro: new Set([0.40]),
+  news: new Set([0.30]),
+  bullish: new Set([55, 60, 65, 70]),
+  bearish: new Set([45, 40, 35, 30]),
+};
+
+function renderChips() {
+  Object.keys(CANDIDATES).forEach((key) => {
+    const container = document.getElementById("chips" + key[0].toUpperCase() + key.slice(1));
+    if (!container) return;
+    container.innerHTML = CANDIDATES[key].map((v) => {
+      const on = DEFAULT_ON[key].has(v) ? "on" : "";
+      return `<span class="chip ${on}" data-value="${v}">${v}</span>`;
+    }).join("");
+    container.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      const v = parseFloat(chip.dataset.value);
+      if (DEFAULT_ON[key].has(v)) DEFAULT_ON[key].delete(v);
+      else DEFAULT_ON[key].add(v);
+      chip.classList.toggle("on");
+      window.PM_Backtest.debouncedRun(runBacktest, 500);
+    });
+  });
+}
+
+function getSelectedParams() {
+  return {
+    days: parseInt(document.getElementById("daysSel").value, 10),
+    target: document.getElementById("targetSel").value,
+    weight_grid: {
+      tech: Array.from(DEFAULT_ON.tech).sort(),
+      macro: Array.from(DEFAULT_ON.macro).sort(),
+      news: Array.from(DEFAULT_ON.news).sort(),
+    },
+    threshold_bands: {
+      bullish: Array.from(DEFAULT_ON.bullish).sort((a, b) => b - a),
+      bearish: Array.from(DEFAULT_ON.bearish).sort((a, b) => b - a),
+    },
+  };
+}
+
+/* ─────────── run backtest ─────────── */
+async function runBacktest() {
+  const params = getSelectedParams();
+  document.getElementById("resultSub").textContent = "计算中…";
+
+  // 网格校验（前端 pre-check）
+  const n = params.weight_grid.tech.length * params.weight_grid.macro.length * params.weight_grid.news.length;
+  if (n === 0 || n > 125) {
+    document.getElementById("btWarn").innerHTML = '<div class="source-bar source-bad">❌ 网格组合数 ' + n + ' 越界（1 ≤ n ≤ 125），请调整候选</div>';
+    document.getElementById("resultSub").textContent = "参数错误";
+    return;
+  }
+
+  try {
+    const resp = await fetch(API_BASE + "/api/v1/backtest/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    const cached = resp.headers.get("x-backtest-cached");
+    const body = await resp.json();
+
+    if (!resp.ok) {
+      document.getElementById("btWarn").innerHTML = '<div class="source-bar source-bad">❌ 回测失败：HTTP ' + resp.status + '（' + (body.detail || "") + '）</div>';
+      document.getElementById("resultSub").textContent = "失败";
+      return;
+    }
+
+    // X-Backtest-Cached header 同步到 badge
+    body.cached = cached === "true" || body.cached === true;
+
+    document.getElementById("btWarn").innerHTML = "";
+    document.getElementById("resultSub").textContent = "完成 · " + body.rows.length + " 行 · " + (body.coverage.available_days || 0) + " 天样本";
+    document.getElementById("resultSummary").innerHTML = "覆盖期 " + (body.coverage.start_date || "-") + " ~ " + (body.coverage.end_date || "-") + " · " + (body.cached ? "命中 5 分钟缓存" : "新计算");
+    window.PM_Backtest.render(body);
+
+    try { window.TL && window.TL.track("backtest_run", { rows: body.rows.length, cached: body.cached, target: params.target }); } catch (_) {}
+  } catch (e) {
+    document.getElementById("btWarn").innerHTML = '<div class="source-bar source-bad">❌ 回测失败：' + (e.message || "网络错误") + '</div>';
+    document.getElementById("resultSub").textContent = "失败";
+  }
+}
+
+/* ─────────── init ─────────── */
+renderChips();
+
+window.PM_Backtest.mount({ onRun: runBacktest });
+
+// 启动时自动加载默认配置 + 首次回测
+(async function init() {
+  try {
+    const cfg = await fetchJSON(API_BASE + "/api/v1/backtest/config");
+    if (cfg) {
+      // 应用 target / days
+      const tgt = document.getElementById("targetSel");
+      if (tgt && [].some.call(tgt.options, (o) => o.value === cfg.target)) tgt.value = cfg.target;
+      const ds = document.getElementById("daysSel");
+      if (ds && [].some.call(ds.options, (o) => o.value === String(cfg.days))) ds.value = String(cfg.days);
+    }
+  } catch (e) {
+    // 默认配置失败不阻塞
+  }
+  await runBacktest();
+})();
+
+// 控件变化自动 run（500ms 节流）
+document.getElementById("daysSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
+document.getElementById("targetSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
+</script>
+<script src="/static/backtest-chart.js" defer></script>
+</body>
+</html>

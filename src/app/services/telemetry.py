@@ -45,6 +45,11 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "grams_trade_open",
         # 收益曲线单位切换 share↔gram（V0.70.0 P2 #8）
         "equity_curve_switch_unit",
+        # V0.71.0 P3-a：白银 / 回测 页面事件
+        "silver_page_view",
+        "silver_nav_click",
+        "backtest_run",
+        "backtest_param_change",
     }
 )
 

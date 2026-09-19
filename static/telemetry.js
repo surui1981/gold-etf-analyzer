@@ -35,7 +35,12 @@
     theme_change: 1,
     resonance_card_click: 1,
     grams_trade_open: 1,
-    equity_curve_switch_unit: 1
+    equity_curve_switch_unit: 1,
+    // V0.71.0 P3-a：白银 / 回测 页面事件
+    silver_page_view: 1,
+    silver_nav_click: 1,
+    backtest_run: 1,
+    backtest_param_change: 1
   };
 
   var queue = [];
