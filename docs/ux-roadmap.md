@@ -67,17 +67,24 @@
 - **自身可观测性**：主题切换率（`theme_change` 事件分布）、dark 用户回访率
 - **人天**：4
 
-### V0.70.0 · 共振卡片 + 克数持仓 UX
+### V0.70.0 · 共振卡片 + 克数持仓 UX ✅ 已落地（V0.70.0）
 
 - **目标**：把"判断准不准"做成日常可视化；实物金闭环。
 - **关键能力**：
-  1. 趋势页顶部"宏观×技术×消息面"三色共振信号卡（4 类信号：共振上行 / 共振下行 / 背离 / 中性）
-  2. `/portfolio` 克数持仓并列展示（实物 / 积存金按克）
-  3. 双口径收益曲线（按份 / 按克），切换不丢上下文
-- **复用模式**：§六 6.4 `validateTrade` / `confirmDialog`（克数交易二次确认）；`static/trend.html:224-226` range-btn + `chart.destroy()` 模式
-- **依赖**：§三·五 V0.70.0 已规划 `services/resonance.py` + `positions.grams_held` 后端；本文档专注前端
-- **验证**：共振卡片信号与回盘历史命中率 ≥ 70%；克数交易平均操作 ≤ 30 秒
-- **自身可观测性**：共振信号卡点击渗透率；克数交易占比
+  1. 趋势页顶部"宏观×技术×消息面"三色共振信号卡（4 类信号：共振上行 / 共振下行 / 背离 / 中性）— `static/resonance-card.js` + 趋势页头部 `<section id="resonanceCard">`，点击弹窗显示 components 表 + STRONG_UP 命中率
+  2. `/portfolio` 克数持仓并列展示（实物 / 积存金按克）— `positions.grams_held` 字段 + 持仓表 `<th>克数</th>` + 开/加/减仓均支持 `grams` 字段（与 `quantity` XOR 校验）
+  3. 双口径收益曲线（按份 / 按克），切换不丢上下文 — `<button id="btnEquityUnit">单位：份</button>` + `drawEquityChart()` 在克数模式下右侧 Y 轴显示「g」
+- **复用模式**：§六 6.4 `validateTrade` / `confirmDialog`（克数交易二次确认）；`static/trend.html:224-226` range-btn + `chart.destroy()` 模式；`static/portfolio.html` 既有 `confirmDialog` 复用
+- **依赖**：§三·五 V0.70.0 后端 `services/resonance.py` + `positions.grams_held` 已合并
+- **后端新增**（V0.70.0 P2 #7/#8）：
+  - `GET /api/v1/resonance/signal` — 当日 4 类信号 + confidence 0-100
+  - `GET /api/v1/resonance/history?days=N` — 历史回放（默认 30）
+  - `GET /api/v1/resonance/strength-up?days=90&horizon=1` — STRONG_UP 命中率统计（样本 < 20 时 `sample_warning=true`）
+  - `GET /api/v1/market/gold/gram-quote` — Au99.99 元/克实时报价
+- **端点数**：40 → 43（+3）
+- **测试增量**：+25 → 510 用例（共振 service 11 + API 3 + position service 10 + API 4 = +28；端到端含 `gold_gram_quote` 共振 API 共 +25）
+- **验证**：共振卡片信号与回盘历史命中率 ≥ 70%（MVP 弹窗用 alert 显示；待 V0.71+ 接 sparkline）；克数交易平均操作 ≤ 30 秒（XOR 校验 + `gramsFromQty` 实时预览）
+- **自身可观测性**：共振信号卡点击渗透率（`resonance_card_click`）；克数交易占比（`grams_trade_open`）；克/份切换（`equity_curve_switch_unit`）
 - **人天**：4
 
 ### V0.71.0 · 多品种 UI + 回测可视化

@@ -56,6 +56,8 @@ docker compose up --build
 | **多时间框架（周/月线）** | 趋势追踪页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 |
 | **消息面每日 3 次打分** | `/news` 页面：每日 3 次打分机会（按序号第 1/2/3 次，各自记录实际提交时刻），当日有效分值按「越晚权重越高」**1:2:3 加权**合成（`Σ(i×scoreᵢ)/Σi`）；三次用尽后留空提交返回 400 提示指定槽位（**不再静默覆盖**）；每次打分可单独修改或撤销；研判依据 12 个预置标签多选 + 自由备注 |
 | **研判复盘与准确率校准** | `/review` 页面：按日期归档每日研判（分值 / 方向 / 依据标签 / 备注）并与金价对齐，给出 **T+1 / T+3 / T+5** 三个交易日的涨跌与命中判定；统计面板含总命中率、按方向分组、按窗口分组、**分值分箱校准曲线**、**依据标签胜率**；支持历史补录（标记 `backfilled`，统计默认排除以防前视偏差）；打分页实时提示该分值区间的历史胜率 |
+| **共振信号卡** | 趋势页顶部三色共振信号卡（宏观 × 技术 × 消息面）—— 后端 `services/resonance.py` 输出 4 类信号（共振上行 STRONG_UP / 共振下行 STRONG_DOWN / 背离 DIVERGENT / 中性 NEUTRAL）+ confidence 0-100；3 个端点 `GET /api/v1/resonance/{signal,history,strength-up}`；点击卡片弹窗显示 components 表 + STRONG_UP 命中率（样本 <20 时 `sample_warning=true`） |
+| **克数持仓 UX** | `positions.grams_held NUMERIC(12,3) NULL`（迁移 `8b7b4d0ce5fb`）；`utils/grams.py` shares_from_grams 纯函数（`floor(grams × gram_px / etf_px / 100) × 100` 100 份一手）；`PositionCreate` / `TradeRequest` 支持 `grams` 字段（与 `quantity` XOR，`model_validator(mode="after")` 校验）；新端点 `GET /api/v1/market/gold/gram-quote` 上海金 Au99.99 元/克；持仓表新增「克数」列 + 收益曲线右上角「单位：份/克」切换（`localStorage.pm_grams_mode` 记忆）+ 埋点 `grams_trade_open` / `equity_curve_switch_unit` |
 
 ## API 一览
 
@@ -157,7 +159,7 @@ gold-etf-analyzer/
 │                            #   + account.js（账本切换器）/ freshness.js / help.js / responsive.css
 ├── data/
 │   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（432 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本 / 指数曲线 / 多时间框架 / 消息面槽位 / 研判复盘）
+├── tests/                   # pytest（510 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本 / 指数曲线 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓）
 ├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
 ├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
 ├── Dockerfile / docker-compose.yml
@@ -167,7 +169,7 @@ gold-etf-analyzer/
 ## 测试与代码质量
 
 ```bash
-python -m pytest -v          # 454 用例（离线回归 410 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线 + 多时间框架 + 消息面槽位 + 研判复盘 + trace_id + 价格校验
+python -m pytest -v          # 510 用例（离线回归 466 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线 + 多时间框架 + 消息面槽位 + 研判复盘 + trace_id + 价格校验 + 共振信号 + 克数持仓
 python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
 ruff check src tests
 ruff format src tests
@@ -180,6 +182,8 @@ ruff format src tests
 - [ ] 宏观×技术共振深化：决策引擎纳入宏观机会评分（消息面权重生效）
 - [ ] 克数持仓跟踪：实物金/积存金按克持仓，与 ETF 并列盈亏
 - [x] **导航折叠 + 全局搜索 + 客户端埋点底座（V0.68.0）**：移动端 ≤768px 自动折叠顶栏为汉堡抽屉（自注入，不改 HTML）；桌面 ⌘K / Ctrl+K 唤起全局命令面板（13 个命令：7 页导航 + 刷新 + 时间区间 1D/5D/1M + 主题切换预埋 + 帮助重看）；新增 `telemetry_events` 表（append-only，白名单 10 类事件：page_view / action_click / range_change / error_caught / palette_open / palette_query / palette_select / nav_drawer_open / nav_drawer_select / theme_change）+ `POST /api/v1/telemetry/ingest`（白名单 + page `/` 开头 + payload ≤50 字段）+ `GET /api/v1/telemetry/stats?days=N`（按类型 24h/7d 聚合）；前端 `telemetry.js` 用 sendBeacon 批量上报（4s/20 条 flush + visibilitychange 兜底 + 全局 error 兜底）；7 页统一注入；新增 14 个测试（服务 9 + API 5），基线 454 → 468
+- [x] **主题切换 + 无障碍扩面（V0.69.0）**：4 主题（light / dark / auto / high-contrast）统一 CSS 变量 + `prefers-color-scheme` 监听 + `localStorage.pm_theme` 持久化；Chart.js canvas 加 `role="img"` + `aria-label` + 数据表 fallback；全站 axe-core 0 critical + skip-to-content 链接 + 键盘 Tab 序修复；主题切换埋点 `theme_change`
+- [x] **共振信号卡 + 克数持仓 UX（V0.70.0，P2-b + UX 路线 V0.70.0）**：① **后端共振**（P2 #7）—— 新增 `services/resonance.py`（4 类信号 STRONG_UP/STRONG_DOWN/WEAK_UP/DIVERGENT/NEUTRAL + confidence 0-100）+ 3 端点 `GET /api/v1/resonance/{signal,history,strength-up}`（horizon 1-30）；② **后端克数**（P2 #8）—— 迁移 `8b7b4d0ce5fb` 新增 `positions.grams_held NUMERIC(12,3) NULL`、`utils/grams.py` shares_from_grams 纯函数、`PositionCreate/TradeRequest` 加 `grams` 字段与 `model_validator(mode="after")` XOR 校验、新端点 `GET /api/v1/market/gold/gram-quote`（Au99.99 元/克）；③ **前端共振卡** —— `static/resonance-card.js` IIFE + 趋势页头部 `<section id="resonanceCard">` + 弹窗显示 components + STRONG_UP 命中率；④ **前端克数 UX** —— `static/portfolio.html` 7 处外科插入（持仓表克数列 / 开仓 + 加减仓 XOR 输入 / `<button id="btnEquityUnit">单位：份</button>` 切换 / 克数模式第二数据集为 Σgrams_held）；⑤ **埋点同步** 3 类（`resonance_card_click` / `grams_trade_open` / `equity_curve_switch_unit`，前后端白名单同步）；⑥ 新增 25 个测试（共振 service 11 + 共振 API 3 + position service 10 + position API 4 + market API 1），基线 485 → 510；端点 40 → 43
 - [x] **CI/CD + trace_id + 价格校验（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix，uv 缓存，concurrency 取消旧 PR，`fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地
 - [x] **研判复盘与准确率校准（V0.66.0）**：新增 `gold_price_daily` 金价日历（客观价格，独立于快照表，可回填）+ `news_scores.basis/review_note/backfilled`；`/review` 页面按日期归档研判并与金价对齐，给出 **T+1 / T+3 / T+5** 三窗口涨跌与命中判定（看多须涨、看空须跌、看平 ±0.3%）；统计面板含总命中率 / 方向分组 / 窗口分组 / **分值分箱校准曲线** / **依据标签胜率**；补录标记 `backfilled` 且统计默认排除（避免前视偏差）；打分页实时显示该分值区间历史胜率；新增 6 个 review 接口 + `/review` 路由（路由 32 → 40 条），新增 24 个测试（服务 16 + API 8）
 - [x] **框架基础补齐（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR + `fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地

@@ -137,6 +137,7 @@
 | 26 | V0.64.0 多时间框架落地：服务端 ISO 周界 / 年月聚合 + MA 重算 + 技术面旁路 + 三档区间按钮；测试数 383 → 397（+14：服务 4 + API 4 + 工具 6）；P2 #9 由 ⚠️ 未做 升 ✅ V0.64.0；UX 6.7 进一步落地（周/月线部分） | ✅ 2026-09-16 同步 README / application-guide / improvement-path / feature-alignment 四文档（**原编号误标为「18」，本次修正为 26**） |
 | 27 | **V0.65.0 / V0.66.0 落地后文档整体滞后**：README 与三份 docs 版本号仍停在 V0.64.0，功能清单 / API 表 / 版本历史 / 路线图 / 测试数（397）全部未同步；`improvement-path.md` 缺 V0.65.0 / V0.66.0 路线行，`application-guide.md` 缺两版版本历史 | ✅ 2026-09-16 四文档同步至 V0.66.0：README 功能清单 +2 行、API 表 +7 行、架构树更新；application-guide 功能清单 +2 行、API 表 +9 行、版本历史 +2 行、数据源 +1 行、测试数 397 → 432；improvement-path 新增 §6.11 + 两版路线行 + 验收度量更新；feature-alignment 对账表 +2 行 |
 | 28 | **上游版本号曾不一致**（V0.63.0 遗留）：`pyproject.toml` 与 `src/app/main.py` 曾停 0.62.1 / 0.63.0，`/openapi.json` 与文档声明不符 | ✅ V0.65.0 已一并修正，现两处均为 **0.66.0**，线上 `/openapi.json` 实测返回 `0.66.0` |
+| 29 | **V0.68.0 / V0.69.0 落地后 docs 部分滞后**：UX 路线 V0.70.0 仍写「计划」但 P2 #7 / #8 后端 + UX 已落地；`improvement-path.md` P2-b V0.70.0 行仍是 📋 待做；测试数仍 485 而非 510；`application-guide.md` §6 缺 `positions.grams_held`、§9 缺 3 个端点（resonance × 3、gram-quote），端点总数 40 而非 43 | ✅ 2026-09-19 V0.70.0 同步：improvement-path P2 #7 / #8 翻牌 ✅ + 测试 485 → 510；ux-roadmap V0.70.0 段落改「✅ 已落地」+ 增 3 端点 + 端点数 40→43；application-guide §6 增 grams_held 列、§9 API 表 +4 行（resonance signal/history/strength-up + market gram-quote）+ §11 版本历史 +1 行；README 版本号 → 0.70.0 + 测试数 510 + 功能清单 +2 行 |
 
 ---
 
