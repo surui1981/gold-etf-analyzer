@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>白银趋势追踪（白银 ETF + 纽约白银）</title>
+<!-- V0.69.0 FOUC 防护：必须在 <head> 第一行、theme.css 之前（同步执行） -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<!-- V0.69.0：Chart.js a11y 封装必须在所有 new Chart() 调用之前同步加载 -->
+<script src="/static/chart-a11y.js"></script>
+<link rel="stylesheet" href="/static/theme.css">
+<script src="/static/theme.js" defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
+  .card .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .card .value { font-size: 20px; font-weight: 600; }
+  .card .extra { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: #fff; }
+  .up { color: var(--up); }
+  .down { color: var(--down); }
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
+  .summary b { color: var(--text); }
+  .index-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  .headline { background: linear-gradient(135deg, #f0f6ff 0%, #ffffff 70%, #f7f8fa 100%); border: 1px solid #b6d6f0; border-radius: 12px; padding: 16px 18px 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  .headline-title { font-size: 15px; font-weight: 700; color: #1d4ed8; letter-spacing: .5px; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .headline .index-panel { background: transparent; border: none; padding: 0; margin-bottom: 12px; }
+  .headline .cards { margin-top: 4px; }
+  .index-score { text-align: center; min-width: 120px; }
+  .index-score .num { font-size: 44px; font-weight: 700; line-height: 1; }
+  .index-score .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .hero { background: linear-gradient(135deg, #f0f6ff 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #b6d6f0; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 25px; letter-spacing: .5px; }
+  .hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  .hero .tagline { color: #1d4ed8; font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 760px; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .refresh-btn { background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    padding: 3px 10px; font-size: 16px; cursor: pointer; margin-left: 8px;
+    transition: transform 0.4s, background 0.2s; vertical-align: middle; }
+  .refresh-btn:hover { background: var(--card); }
+  .refresh-btn.refreshing { transform: rotate(360deg); }
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid #1d4ed8; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #93c5fd; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
+  .index-info { flex: 1; min-width: 240px; }
+  .index-info .badge { font-size: 14px; padding: 4px 14px; }
+  .index-info .txt { font-size: 14px; color: #374151; line-height: 1.7; margin-top: 8px; }
+  .method { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.6; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .method b { color: #4b5563; }
+  .macro-box { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; }
+  .macro-title { font-size: 12.5px; font-weight: 600; color: #4b5563; margin-bottom: 6px; }
+  .macro-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; font-size: 12px; }
+  .macro-row .nm { width: 110px; color: var(--muted); flex-shrink: 0; }
+  .macro-row .val { width: 110px; font-weight: 600; flex-shrink: 0; text-align: right; }
+  .macro-row .bar { flex: 1; height: 7px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
+  .macro-row .bar > i { display: block; height: 100%; border-radius: 999px; }
+  .macro-row .dt { width: 66px; font-size: 10.5px; color: var(--muted); text-align: right; flex-shrink: 0; }
+  .ind-row { margin-bottom: 14px; }
+  .ind-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; }
+  .ind-head .nm { font-weight: 600; }
+  .ind-head .vl { color: var(--muted); }
+  .ind-head .sc { font-weight: 700; }
+  .ind-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  canvas { max-height: 420px; }
+  #chartArea { position: relative; }
+  .data-badge { position:absolute; top:6px; right:10px; z-index:2; font-size:11px; font-weight:700;
+    padding:3px 10px; border-radius:20px; border:1px solid; }
+  .db-ok { background:#e8f7ee; color:#1a7f37; border-color:#b7e4c7; }
+  .db-warn { background:#fff1e6; color:#b35309; border-color:#ffd8a8; }
+  .db-bad { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }
+  .db-dim { background:#e9ecef; color:var(--muted); border-color:#ced4da; }
+  .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+  .error { color: var(--up); text-align: center; padding: 40px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #93c5fd; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: #1d4ed8; color: #fff; font-weight: 600; }
+  .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
+  .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
+  .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
+  .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
+  .range-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s; }
+  .range-btn.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
+  .range-btn:hover:not(.active) { background: rgba(29, 78, 216, 0.08); }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+<link rel="stylesheet" href="/static/help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
+<div class="wrap">
+  <nav class="topnav">
+    <div class="brand">🪙 白银价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/trades">交易历史</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/review">研判复盘</a>
+      <a href="/central-bank">央行购金统计</a>
+      <a href="/static/silver.html" class="active">白银追踪</a>
+      <a href="/static/backtest.html">参数回测</a>
+    </div>
+  </nav>
+
+  <div id="freshnessBar"></div>
+  <div id="sourceBar" class="source-bar" style="display:none"></div>
+  <div id="healthInfo" style="font-size:11.5px;color:var(--muted);margin:-6px 0 14px"></div>
+  <div id="loadBar" class="source-bar source-warn">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
+
+  <div class="warn-banner">
+    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li><b>白银数据来源</b>——白银 ETF 562800（易方达白银 ETF）+ COMEX SI 期货（纽约白银），仅供研究参考，不构成投资建议。</li>
+    </ol>
+  </div>
+
+  <header class="hero">
+    <div>
+      <h1>白银价格投资辅助工具 <span id="badge"></span>
+        <button id="refreshBtn" class="refresh-btn" title="手动刷新行情（每 60 秒自动刷新）">🔄</button>
+      </h1>
+      <div class="en">Silver Price Investment Assistant</div>
+      <div class="tagline">白银 ETF + 纽约白银双市场 · 趋势评估指数 · 与黄金相关性与决策</div>
+      <p class="intro">汇聚<b>纽约白银（COMEX SI）、白银ETF（562800 易方达白银 ETF）</b>两大市场价格数据，量化评估白银投资窗口——以趋势评估指数量化多空、以参数维度辅助 ETF 购买决策，为个人白银投资者提供数据参考。白银波动率高于黄金，请同步关注金价联动。</p>
+      <div class="sub" id="subtitle" style="margin-top:8px">加载中…</div>
+      <div style="margin-top:6px"><span id="freshBadge"></span></div>
+      <div class="notice">数据来自 AKShare（白银 ETF 562800 + COMEX SI 期货）· 仅供研究参考，不构成投资建议</div>
+    </div>
+  </header>
+
+  <div id="alertBar"></div>
+
+  <!-- 白银实时评估摘要 -->
+  <section class="headline" aria-label="白银实时评估摘要">
+    <div class="headline-title">📊 白银实时评估摘要 · 趋势指数 × 双市场报价</div>
+    <div class="index-panel">
+      <div class="index-score">
+        <div class="num" id="idxNum">--</div>
+        <div class="lbl">白银趋势评估指数 (0-100)</div>
+      </div>
+      <div class="index-info">
+        <span class="badge" id="idxBadge" style="display:none"></span>
+        <div class="txt" id="idxSummary"></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px" id="snapTime"></div>
+        <div class="method" id="idxMethod"></div>
+        <div class="macro-box">
+          <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
+          <div id="macroFactors"></div>
+          <div class="macro-title" style="margin-top:8px">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
+          <div id="newsFactor"></div>
+        </div>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <!-- 共振信号卡（V0.70.0 复用，silver 数据由 silver 端点驱动） -->
+  <section class="panel" id="resonanceCard" role="status" aria-live="polite" aria-label="共振信号">
+    <div class="rc-loading">🔄 共振信号加载中…</div>
+  </section>
+
+  <!-- 趋势参数维度 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px">白银趋势参数维度 <span style="font-weight:400;font-size:12px;color:var(--muted)">加权合成 · 红=利多 绿=利空</span></div>
+    <div id="indicators"></div>
+  </div>
+
+  <!-- 白银 ETF vs 纽约白银 对照 -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px">白银 ETF vs 纽约白银 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
+    <div class="cards" id="cmpCards" style="margin-bottom:12px"></div>
+    <table id="cmpTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"></table>
+    <canvas id="compareChart" style="max-height:260px"></canvas>
+    <div class="summary" id="cmpSummary"></div>
+  </div>
+
+  <!-- 白银趋势主图 -->
+  <div class="panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:600">📈 白银趋势主图 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="trendSub">加载中…</span></div>
+      <div id="klineRangeBtns" style="display:flex;gap:6px" title="V0.71.0 多时间框架">
+        <button class="range-btn active" data-days="60" data-interval="D" type="button">60D</button>
+        <button class="range-btn" data-days="365" data-interval="W" type="button">52W</button>
+        <button class="range-btn" data-days="730" data-interval="M" type="button">24M</button>
+      </div>
+    </div>
+    <div id="chartArea"><div class="loading">正在加载白银行情数据…</div></div>
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <footer>gold-etf-analyzer · 白银版 · 仅供研究参考，不构成投资建议</footer>
+</div>
+</main>
+
+<script>
+const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+
+async function fetchJSON(url, timeoutMs = 40000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { signal: ctrl.signal });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    return await resp.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+let trendChart = null;
+let currentKlineInterval = "D";
+
+const INTERVAL_SUB = {
+  D: "日 K · 60 个交易日",
+  W: "周 K · 聚合至 ISO 周界（52 周 ≈ 1 交易年）",
+  M: "月 K · 聚合至年月界（24 月 ≈ 2 交易年）",
+};
+
+async function loadTrend(days = 60, interval = "D") {
+  currentKlineInterval = interval;
+  document.getElementById("trendSub").textContent = INTERVAL_SUB[interval] || INTERVAL_SUB.D;
+  try {
+    const data = await fetchJSON(API_BASE + `/api/v1/market/silver/trend?days=${days}&interval=${interval}`);
+    lastTrend = data;
+    renderSourceBar(data);
+    renderMain(data);
+    loadAlerts();
+  } catch (e) {
+    document.getElementById("chartArea").innerHTML =
+      '<div class="error">白银数据加载失败：' + e.message +
+      '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
+  }
+}
+
+async function init() {
+  await loadTrend(60, "D");
+  await loadCards();
+  await loadCompare();
+}
+
+async function loadCards() {
+  try {
+    const [etf, ny] = await Promise.all([
+      fetchJSON(API_BASE + "/api/v1/market/silver/etf-quote"),
+      fetchJSON(API_BASE + "/api/v1/market/silver/quote"),
+    ]);
+    const items = [
+      { label: "白银 ETF 562800", value: etf.price.toFixed(3) + " 元/份", extra: (etf.change_pct >= 0 ? "+" : "") + etf.change_pct.toFixed(2) + "%", color: etf.change_pct >= 0 ? "up" : "down" },
+      { label: "纽约白银 SI", value: ny.price_usd.toFixed(2) + " 美元/盎司", extra: (ny.change_pct >= 0 ? "+" : "") + ny.change_pct.toFixed(2) + "%", color: ny.change_pct >= 0 ? "up" : "down" },
+      { label: "数据源", value: (etf.unit || "场内"), extra: "ETF+NY 同步" },
+      { label: "评估指数", value: (lastTrend?.index?.score?.toFixed(1) ?? "--") + " / 100", extra: lastTrend?.index?.level ?? "--" },
+    ];
+    document.getElementById("cards").innerHTML = items.map(i => `
+      <div class="card">
+        <div class="label">${i.label}</div>
+        <div class="value ${i.color || ""}">${i.value}</div>
+        <div class="extra">${i.extra}</div>
+      </div>`).join("");
+  } catch (e) {
+    document.getElementById("cards").innerHTML = '<div class="card"><div class="label">报价</div><div class="value">加载失败</div><div class="extra">' + e.message + "</div></div>";
+  }
+}
+
+async function loadCompare() {
+  try {
+    const data = await fetchJSON(API_BASE + "/api/v1/market/silver/compare?days=60");
+    document.getElementById("cmpSub").textContent = `近 ${data.days} 日 · 领先 ${data.lead_gap?.toFixed(2) ?? "--"} 百分点`;
+    const cards = [
+      { label: "白银 ETF", value: data.silver_etf?.change_pct?.toFixed(2) + "%", color: (data.silver_etf?.change_pct ?? 0) >= 0 ? "up" : "down" },
+      { label: "纽约白银", value: data.silver_ny?.change_pct?.toFixed(2) + "%", color: (data.silver_ny?.change_pct ?? 0) >= 0 ? "up" : "down" },
+      { label: "领先者", value: data.leader === "tie" ? "持平" : (data.leader === "silver_etf" ? "白银 ETF" : "纽约白银") },
+      { label: "差距", value: (data.lead_gap >= 0 ? "+" : "") + data.lead_gap?.toFixed(2) + " pp" },
+    ];
+    document.getElementById("cmpCards").innerHTML = cards.map(c => `
+      <div class="card"><div class="label">${c.label}</div><div class="value ${c.color || ""}">${c.value}</div></div>`).join("");
+    document.getElementById("cmpTable").innerHTML = `
+      <tr style="background:var(--card)"><th style="padding:8px;text-align:left">指标</th><th style="padding:8px;text-align:right">白银 ETF</th><th style="padding:8px;text-align:right">纽约白银</th></tr>
+      <tr><td style="padding:6px">起始价</td><td style="padding:6px;text-align:right">${data.silver_etf?.start_price?.toFixed(3)}</td><td style="padding:6px;text-align:right">${data.silver_ny?.start_price?.toFixed(2)}</td></tr>
+      <tr><td style="padding:6px">最新价</td><td style="padding:6px;text-align:right">${data.silver_etf?.end_price?.toFixed(3)}</td><td style="padding:6px;text-align:right">${data.silver_ny?.end_price?.toFixed(2)}</td></tr>
+      <tr><td style="padding:6px">区间最高</td><td style="padding:6px;text-align:right">${data.silver_etf?.high?.toFixed(3)}</td><td style="padding:6px;text-align:right">${data.silver_ny?.high?.toFixed(2)}</td></tr>
+      <tr><td style="padding:6px">区间最低</td><td style="padding:6px;text-align:right">${data.silver_etf?.low?.toFixed(3)}</td><td style="padding:6px;text-align:right">${data.silver_ny?.low?.toFixed(2)}</td></tr>
+    `;
+    renderCompareChart(data);
+    document.getElementById("cmpSummary").textContent = data.summary || "";
+  } catch (e) {
+    document.getElementById("cmpCards").innerHTML = '<div class="card"><div class="label">对照</div><div class="value">加载失败</div><div class="extra">' + e.message + "</div></div>";
+  }
+}
+
+function renderCompareChart(data) {
+  const canvas = document.getElementById("compareChart");
+  if (!canvas || !data.points) return;
+  const labels = data.points.map(p => p.date);
+  const ctx = canvas.getContext("2d");
+  if (window.silverCmpChart) window.silverCmpChart.destroy();
+  window.silverCmpChart = ChartA11y.wrapChart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: "白银 ETF（归一化）", data: data.points.map(p => p.silver_etf), borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", tension: 0.25 },
+        { label: "纽约白银（归一化）", data: data.points.map(p => p.silver_ny), borderColor: "#0e7490", backgroundColor: "rgba(14,116,144,0.1)", tension: 0.25 },
+      ],
+    },
+    options: { responsive: true, plugins: { legend: { position: "top" } }, scales: { y: { beginAtZero: false } } },
+  });
+}
+
+let lastTrend = null;
+
+function renderSourceBar(data) {
+  const bar = document.getElementById("sourceBar");
+  const ds = data.data_sources || {};
+  const live = Object.values(ds).filter(v => v === "live").length;
+  const mock = Object.values(ds).filter(v => v === "mock").length;
+  if (mock === 0) {
+    bar.className = "source-bar source-ok";
+    bar.textContent = `✅ 全部数据源实时（${live} 个源：白银 ETF 562800 + COMEX SI 期货 + 黄金宏观因子）`;
+  } else if (live > 0) {
+    bar.className = "source-bar source-warn";
+    bar.textContent = `⚠️ 部分数据源降级为演示数据（${mock} mock / ${live} live）：${Object.entries(ds).filter(([,v]) => v === "mock").map(([k]) => k).join(" / ")}`;
+  } else {
+    bar.className = "source-bar source-bad";
+    bar.textContent = `❌ 全部数据源降级为演示数据，请检查网络`;
+  }
+  bar.style.display = "block";
+}
+
+function loadAlerts() {
+  const el = document.getElementById("alertBar");
+  if (!lastTrend) return;
+  const lvl = lastTrend.index?.level || "";
+  const score = lastTrend.index?.score ?? 0;
+  let html = "";
+  if (lvl === "strong_up") html = `<div class="source-bar source-ok">⚡ 白银指数 ${score.toFixed(1)} 强势上升 · 关注参数共振</div>`;
+  else if (lvl === "strong_down") html = `<div class="source-bar source-bad">⚡ 白银指数 ${score.toFixed(1)} 弱势下降 · 警惕下行风险</div>`;
+  el.innerHTML = html;
+}
+
+function renderMain(data) {
+  const lvl = (data.index?.level || "—");
+  const numEl = document.getElementById("idxNum");
+  numEl.textContent = data.index?.score?.toFixed(1) ?? "--";
+  numEl.className = "num " + (data.index?.score >= 60 ? "up" : data.index?.score <= 40 ? "down" : "");
+
+  const badge = document.getElementById("idxBadge");
+  const lvlMap = { strong_up: "强势上升", up: "上升", sideways: "震荡整理", down: "下降", strong_down: "弱势下降" };
+  const colorMap = { strong_up: "#1a7f37", up: "#1a7f37", sideways: "#946300", down: "#c92a2a", strong_down: "#c92a2a" };
+  if (lvl && lvlMap[lvl]) {
+    badge.textContent = lvlMap[lvl];
+    badge.style.background = colorMap[lvl] || "#888";
+    badge.style.display = "inline-block";
+  } else {
+    badge.style.display = "none";
+  }
+
+  document.getElementById("idxSummary").innerHTML = data.index?.summary || "";
+  document.getElementById("snapTime").textContent = "快照于 " + (data.served_at || "").slice(0, 16).replace("T", " ");
+  document.getElementById("idxMethod").innerHTML = data.index?.method || "";
+
+  const macro = data.macro || {};
+  document.getElementById("macroInfo").textContent = macro.score != null ? `综合 ${macro.score?.toFixed(1)} / 100` : "";
+  const macroFactorsEl = document.getElementById("macroFactors");
+  macroFactorsEl.innerHTML = (macro.factors || []).map(f => `
+    <div class="macro-row">
+      <span class="nm">${f.name}</span>
+      <span class="val">${f.value?.toFixed ? f.value.toFixed(2) : f.value} ${f.unit || ""}</span>
+      <span class="bar"><i style="width:${Math.max(0, Math.min(100, f.score || 0))}%; background:${(f.score || 0) >= 55 ? "var(--up)" : (f.score || 0) <= 45 ? "var(--down)" : "#946300"}"></i></span>
+      <span class="dt">${f.score?.toFixed(0) ?? "--"}</span>
+    </div>
+  `).join("");
+
+  const news = data.news || {};
+  document.getElementById("newsInfo").textContent = news.score != null ? `综合 ${news.score?.toFixed(1)} / 100` : "";
+  document.getElementById("newsFactor").innerHTML = news.summary || (news.scored ? `已打分 ${news.score}` : "未打分 · 按 50 中性");
+
+  document.getElementById("indicators").innerHTML = (data.indicators || []).map(i => `
+    <div class="ind-row">
+      <div class="ind-head">
+        <span class="nm">${i.name}</span>
+        <span class="vl">${i.value ?? "—"}</span>
+        <span class="sc" style="color:${(i.score || 0) >= 55 ? "var(--up)" : (i.score || 0) <= 45 ? "var(--down)" : "#946300"}">${i.score?.toFixed(0) ?? "--"}</span>
+      </div>
+      <div class="ind-sub">${i.desc || ""}</div>
+      <div class="bar"><i style="width:${Math.max(0, Math.min(100, i.score || 0))}%; background:${(i.score || 0) >= 55 ? "var(--up)" : (i.score || 0) <= 45 ? "var(--down)" : "#946300"}"></i></div>
+    </div>
+  `).join("");
+
+  document.getElementById("subtitle").textContent = `区间 ${data.metrics?.start_date} ~ ${data.metrics?.end_date}（${data.metrics?.trading_days ?? "—"} 个交易日）`;
+
+  document.getElementById("loadBar").style.display = "none";
+
+  // 主图
+  const labels = data.points.map(p => p.date);
+  const closes = data.points.map(p => p.close);
+  const ma5 = data.points.map(p => p.ma5);
+  const ma20 = data.points.map(p => p.ma20);
+  const ma40 = data.points.map(p => p.ma40);
+
+  const area = document.getElementById("chartArea");
+  area.innerHTML = '<canvas id="trendCanvas"></canvas>';
+  const canvas = document.getElementById("trendCanvas");
+
+  const badge2 = document.createElement("div");
+  badge2.className = "data-badge db-" + (data.freshness?.level === "live" ? "ok" : data.freshness?.level === "stale" ? "warn" : "dim");
+  badge2.textContent = data.freshness?.label || data.freshness?.level || "live";
+  area.appendChild(badge2);
+
+  if (trendChart) trendChart.destroy();
+  trendChart = ChartA11y.wrapChart(canvas, {
+    type: "line",
+    data: {
+      labels,
+      datasets: [
+        { label: data.name || "白银", data: closes, borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", tension: 0.2, fill: false, pointRadius: 0 },
+        { label: "MA5", data: ma5, borderColor: "#f59f00", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
+        { label: "MA20", data: ma20, borderColor: "#946300", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
+        { label: "MA40", data: ma40, borderColor: "#c92a2a", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { position: "top" } },
+      scales: { y: { beginAtZero: false } },
+    },
+  });
+
+  document.getElementById("summary").innerHTML = data.metrics?.summary || "";
+}
+
+// 区间切换
+document.getElementById("klineRangeBtns").addEventListener("click", (e) => {
+  const btn = e.target.closest(".range-btn");
+  if (!btn) return;
+  document.querySelectorAll("#klineRangeBtns .range-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadTrend(parseInt(btn.dataset.days, 10), btn.dataset.interval);
+});
+
+// 共振卡挂载（V0.70.0）
+const resonanceScript = document.createElement("script");
+resonanceScript.src = "/static/resonance-card.js";
+resonanceScript.onload = () => window.PM_Resonance && window.PM_Resonance.mount("resonanceCard");
+document.head.appendChild(resonanceScript);
+
+// 时效条挂载
+const fs = document.createElement("script");
+fs.src = "/static/freshness.js";
+fs.onload = () => window.PM_Freshness && window.PM_Freshness.mount("freshnessBar");
+document.head.appendChild(fs);
+
+// 手动刷新
+document.getElementById("refreshBtn").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  btn.classList.add("refreshing");
+  await init();
+  setTimeout(() => btn.classList.remove("refreshing"), 600);
+});
+
+// 自动 60 秒刷新
+setInterval(init, 60000);
+
+init();
+</script>
+</body>
+</html>
