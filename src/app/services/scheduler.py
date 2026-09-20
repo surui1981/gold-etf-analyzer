@@ -177,6 +177,7 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
     两条路径（快照成功 / 失败）都尝试预热 served cache，保证页面首屏命中。
     """
     snap_ok = False
+    out = None
     try:
         out = await snapshot_svc.capture_today()
         logger.info(
@@ -200,6 +201,44 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
         )
     except Exception as exc:
         logger.error("Served cache warmup failed: %s", exc)
+
+    # V0.72.0 P3-b：告警分发钩子（仅快照成功时评估）
+    if snap_ok and out is not None:
+        try:
+            from app.database import async_session_factory
+            from app.dependencies import get_alert_dispatcher
+            from app.repositories.settings import SettingRepository
+            from app.schemas.market import TrendIndexLevel
+            from app.services.alert import _SnapshotInput
+
+            dispatcher = get_alert_dispatcher()
+            async with async_session_factory() as session:
+                repo = SettingRepository(session)
+                prev_snapshot = await snapshot_svc.get_previous(out.snapshot_date)
+                prev_input = None
+                if prev_snapshot is not None:
+                    prev_level = TrendIndexLevel(prev_snapshot.index_level)
+                    prev_input = _SnapshotInput(
+                        snapshot_date=prev_snapshot.snapshot_date,
+                        trend_score=prev_snapshot.trend_index,
+                        change_1d_pct=prev_snapshot.change_pct or 0.0,
+                        trend_level=prev_level,
+                    )
+                curr_input = _SnapshotInput(
+                    snapshot_date=out.snapshot_date,
+                    trend_score=out.trend_index,
+                    change_1d_pct=out.change_pct or 0.0,
+                    trend_level=out.index_level,
+                )
+                triggered = await dispatcher.evaluate_and_dispatch(
+                    prev=prev_input,
+                    curr=curr_input,
+                    repo=repo,
+                )
+                if triggered:
+                    logger.info("Alert dispatched: %s", triggered)
+        except Exception as exc:
+            logger.warning("alert dispatch failed: %s", exc)
 
 
 async def intraday_warm_once(trend_svc: TrendService) -> None:

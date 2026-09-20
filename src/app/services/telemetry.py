@@ -50,6 +50,11 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "silver_nav_click",
         "backtest_run",
         "backtest_param_change",
+        # V0.72.0 P3-b：告警规则 + 推送渠道
+        "alert_rule_save",
+        "alert_email_sent",
+        "alert_wechat_sent",
+        "alert_browser_click",
     }
 )
 

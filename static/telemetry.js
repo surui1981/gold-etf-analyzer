@@ -40,7 +40,12 @@
     silver_page_view: 1,
     silver_nav_click: 1,
     backtest_run: 1,
-    backtest_param_change: 1
+    backtest_param_change: 1,
+    // V0.72.0 P3-b：告警规则 + 推送渠道
+    alert_rule_save: 1,
+    alert_email_sent: 1,
+    alert_wechat_sent: 1,
+    alert_browser_click: 1
   };
 
   var queue = [];

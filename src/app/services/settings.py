@@ -4,6 +4,7 @@ import json
 import time
 
 from app.repositories.settings import SettingRepository
+from app.schemas.alert import AlertRuleIn, AlertRuleOut
 from app.schemas.backtest import BacktestConfigIn, BacktestConfigOut
 from app.schemas.settings import (
     WeightConfig,
@@ -27,9 +28,10 @@ _BACKTEST_CACHE: dict = {"ts": 0.0, "config": None}
 
 def clear_weights_cache() -> None:
     """使配置缓存失效（保存配置 / 测试隔离时调用）。"""
-    global _WEIGHTS_CACHE, _BACKTEST_CACHE
+    global _WEIGHTS_CACHE, _BACKTEST_CACHE, _ALERT_RULES_CACHE
     _WEIGHTS_CACHE = {"ts": 0.0, "config": None}
     _BACKTEST_CACHE = {"ts": 0.0, "config": None}
+    _ALERT_RULES_CACHE = {"ts": 0.0, "config": None}
 
 
 class WeightService:
@@ -173,4 +175,55 @@ async def save_backtest_config(repo: SettingRepository, config: BacktestConfigIn
     global _BACKTEST_CACHE
     _BACKTEST_CACHE = {"ts": time.time(), "config": saved}
     logger.info("Backtest config saved: %s", saved.model_dump_json())
+    return saved
+
+
+# ───────────────────── V0.72.0：告警规则（推送渠道 + 档位穿越 + 波动阈值） ─────────────────────
+
+ALERT_RULES_KEY = "alert_rules"
+# 60s 缓存（与 weights / backtest 一致）
+_ALERT_RULES_CACHE: dict = {"ts": 0.0, "config": None}
+
+
+def clear_alert_rules_cache() -> None:
+    """测试隔离：失效告警规则缓存。"""
+    global _ALERT_RULES_CACHE
+    _ALERT_RULES_CACHE = {"ts": 0.0, "config": None}
+
+
+async def get_alert_rules(repo: SettingRepository) -> AlertRuleOut:
+    """读取告警规则（60s 缓存，未配置返回默认 AlertRuleOut）。"""
+    global _ALERT_RULES_CACHE
+    now = time.time()
+    if _ALERT_RULES_CACHE["config"] is not None and now - _ALERT_RULES_CACHE["ts"] < WEIGHTS_CACHE_TTL:
+        return _ALERT_RULES_CACHE["config"]
+    raw = await repo.get(ALERT_RULES_KEY)
+    if raw:
+        try:
+            cfg = AlertRuleOut.model_validate_json(raw)
+        except Exception as exc:
+            logger.warning("alert_rules 解析失败 (%s), 回退默认", exc)
+            cfg = AlertRuleOut()
+    else:
+        cfg = AlertRuleOut()
+    _ALERT_RULES_CACHE = {"ts": now, "config": cfg}
+    return cfg
+
+
+async def save_alert_rules(repo: SettingRepository, rules: AlertRuleIn) -> AlertRuleOut:
+    """保存告警规则到 settings 表（key='alert_rules'），保存后失效缓存。"""
+    from datetime import datetime
+
+    saved = AlertRuleOut(
+        level_crossing_enabled=rules.level_crossing_enabled,
+        volatility_enabled=rules.volatility_enabled,
+        volatility_pct=rules.volatility_pct,
+        quiet_hours=rules.quiet_hours,
+        channels=rules.channels,
+        updated_at=datetime.now(),
+    )
+    await repo.set(ALERT_RULES_KEY, saved.model_dump_json())
+    global _ALERT_RULES_CACHE
+    _ALERT_RULES_CACHE = {"ts": time.time(), "config": saved}
+    logger.info("Alert rules saved: %s", saved.model_dump_json())
     return saved

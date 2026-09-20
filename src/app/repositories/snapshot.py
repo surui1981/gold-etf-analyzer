@@ -48,3 +48,13 @@ class SnapshotRepository:
         """最近 N 天快照（按日期倒序）。"""
         stmt = select(DailySnapshot).order_by(DailySnapshot.snapshot_date.desc()).limit(days)
         return list((await self._session.execute(stmt)).scalars().all())
+
+    async def get_latest_before(self, before: date) -> DailySnapshot | None:
+        """V0.72.0 P3-b：取 ``before`` 之前最近一个交易日的快照（告警档位穿越检测）。"""
+        stmt = (
+            select(DailySnapshot)
+            .where(DailySnapshot.snapshot_date < before)
+            .order_by(DailySnapshot.snapshot_date.desc())
+            .limit(1)
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()

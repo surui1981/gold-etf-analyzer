@@ -88,3 +88,8 @@ class DailySnapshotService:
             total=len(snapshots),
             snapshots=[SnapshotOut.model_validate(s) for s in snapshots],
         )
+
+    async def get_previous(self, before: date) -> SnapshotOut | None:
+        """V0.72.0：取 ``before`` 之前最近一个交易日的快照（用于告警档位穿越检测）。"""
+        prev = await self._repo.get_latest_before(before)
+        return SnapshotOut.model_validate(prev) if prev else None

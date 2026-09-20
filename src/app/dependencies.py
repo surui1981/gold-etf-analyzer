@@ -19,6 +19,7 @@ from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.repositories.telemetry import TelemetryRepository
 from app.services.account import AccountService
+from app.services.alert import AlertDispatcher  # V0.72.0 P3-b
 from app.services.analysis import AnalysisService
 from app.services.backtest import BacktestService
 from app.services.central_bank import CentralBankService
@@ -108,6 +109,17 @@ def get_weight_service(
 ) -> WeightService:
     """权重配置服务依赖。"""
     return WeightService(repo)
+
+
+def get_alert_dispatcher() -> AlertDispatcher:
+    """V0.72.0：告警分发器依赖（单例 in-process，去重状态跨请求保留）。
+
+    设计要点：dispatcher 内部维护 ``_sent_today`` 去重表与 ``_quiet_queue`` 静默队列，
+    因此不能在每个请求创建新实例（否则日内 4 次 warm 都会重复触发）。
+    """
+    if not hasattr(get_alert_dispatcher, "_instance"):
+        get_alert_dispatcher._instance = AlertDispatcher()  # type: ignore[attr-defined]
+    return get_alert_dispatcher._instance  # type: ignore[attr-defined]
 
 
 async def get_news_repository(
