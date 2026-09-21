@@ -19,6 +19,17 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="黄金ETF">
 <script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
 <link rel="stylesheet" href="/static/help.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }

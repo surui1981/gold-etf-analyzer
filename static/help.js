@@ -17,7 +17,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "V0.72.0";
+  const VERSION = "V0.73.0";
   const LS = {
     tourPrefix: "pm_help_tour_",
     seenVer: "pm_help_seen_version",
@@ -117,6 +117,14 @@
       "Server酱": "微信推送聚合服务（https://sct.ftqq.com/）；申请 SendKey 后通过 webhook 推送文本到微信",
       "Web Push": "浏览器后台推送协议：用户在页面订阅后，服务器可通过 Service Worker 推送通知，即使浏览器关闭也能收到（iOS 16.4+ 需添加到主屏）",
       "VAPID": "Voluntary Application Server Identification：Web Push 签名协议，服务器用私钥签名让浏览器识别来源",
+    },
+    "V0.73.0 国际化（i18n）": {
+      "i18n / 国际化": "Internationalization 的缩写（i + 18 个字母 + n）；本系统支持简中 / 繁中 / English 三语，顶栏切换，localStorage 记忆",
+      "locale / 语言地区": "BCP 47 语言标签（zh-CN / zh-TW / en-US）；决定 Intl.NumberFormat / Intl.DateTimeFormat 的输出格式",
+      "字典 key": "层级字符串如 'nav.trend' / 'portfolio.btn_open'；通过 I18n.t('key') 查找；缺 key 时 fallback 到 zh-CN",
+      "data-i18n 属性": "HTML 标记：i18n.js 在 DOMContentLoaded 时遍历所有 [data-i18n] 节点并替换 textContent",
+      "FOUC guard": "Flash Of Unstyled Content 防护；i18n 用 inline head script 在 paint 前读 LS 设 lang 属性，避免语言闪烁",
+      "Intl API": "ECMAScript 国际化标准 API（Intl.NumberFormat / Intl.DateTimeFormat）；原生支持 200+ locale，零依赖",
     },
   };
 
@@ -255,6 +263,12 @@
         <li><b>通知中心</b> → <a href="/static/settings.html">设置页</a>：告警规则 + 4 推送渠道 + SMTP / Server 酱测试 + Web Push 订阅 + 推送统计抽屉</li>
         <li><b>PWA 桌面安装</b> → Chrome / Edge 地址栏右侧「安装」按钮；iOS 16.4+ 通过分享 → 添加到主屏</li>
         <li><b>公开部署</b> → 多阶段 Dockerfile + docker-compose.prod + Nginx + Let's Encrypt（详见 <a href="/static/settings.html">settings</a> 与 docs/deployment.md）</li>
+      </ol>
+      <h3>V0.73.0 新增（i18n + 英文版）</h3>
+      <ol class="pmh-guide">
+        <li><b>顶栏语言切换器</b> → 顶栏最右侧下拉（简中 / 繁中 / English）；切换瞬间生效；localStorage 记忆</li>
+        <li><b>英文版</b> → 切换后所有 data-i18n 节点同步更新；货币/日期/百分比走 <code>Intl.*</code> locale 自动适配</li>
+        <li><b>未翻译 key</b> → 自动 fallback 到简体中文（保证 UI 不出乱码）；触发 <code>i18n_fallback_hit</code> 埋点用于翻译覆盖率监控</li>
       </ol>
       <p class="pmh-tip">💡 综合指数 &gt; 75 强势上升 / &gt; 55 上升 / &gt; 45 震荡 / &gt; 25 下降 / 其他弱势下降</p>
     `;

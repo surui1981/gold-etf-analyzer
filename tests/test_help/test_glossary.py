@@ -123,10 +123,10 @@ def test_help_css_exists() -> None:
 
 
 def test_glossary_has_seven_categories() -> None:
-    """GLOSSARY 至少 7 个分组（评估/指标/宏观/品种/交易/系统/时段）。"""
+    """GLOSSARY 至少 7 个核心分组（评估/指标/宏观/品种/交易/系统/时段）；V0.73.0 起允许 8+（新增国际化类）。"""
     text = _extract_const("GLOSSARY")
     cats = re.findall(r'"([^"\\]+)"\s*:\s*\{', text)
-    expected = {
+    expected_core = {
         "评估指数类",
         "指标/均线类",
         "宏观因子类",
@@ -135,7 +135,8 @@ def test_glossary_has_seven_categories() -> None:
         "系统状态类",
         "时段类",
     }
-    assert expected.issubset(set(cats)), f"GLOSSARY 缺少分组：{expected - set(cats)}"
+    assert expected_core.issubset(set(cats)), f"GLOSSARY 缺少核心分组：{expected_core - set(cats)}"
+    assert len(cats) >= 7, f"GLOSSARY 至少 7 个分组，实际 {len(cats)}"
 
 
 def test_glossary_has_at_least_30_terms() -> None:

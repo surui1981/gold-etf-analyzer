@@ -1,4 +1,4 @@
-/* V0.72.0 P3-b：Service Worker（PWA + 离线 + 后台推送）
+/* V0.73.0 P3-c：Service Worker（PWA + 离线 + 后台推送 + i18n precache）
  * ─────────────────────────────────────────────────────────
  * 缓存策略：
  *   - HTML 页面：network-first（回退到 cache → offline.html）
@@ -12,7 +12,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.72.0";
+const VERSION = "v0.73.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -37,6 +37,9 @@ const SHELL_ASSETS = [
     "/static/help.js",
     "/static/telemetry.js",
     "/static/nav-drawer.js",
+    // V0.73.0 i18n：默认 locale 同步加载，必须 precache 离线可用
+    "/static/i18n.js",
+    "/static/i18n/zh-CN.js",
 ];
 
 // ─── install：precache shell + skipWaiting ─────────────────────

@@ -62,6 +62,9 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         # V0.72.0 P3-b：通知中心 + 浏览器通知点击
         "notification_center_open",
         "notification_browser_click",
+        # V0.73.0 P3-c：i18n 语言切换 + 字典 fallback 命中
+        "lang_change",
+        "i18n_fallback_hit",
     }
 )
 

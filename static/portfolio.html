@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黄金ETF 个人交易跟踪与购买决策</title>
+<title data-i18n="portfolio.page_title">黄金ETF 个人交易跟踪与购买决策</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -13,12 +13,24 @@
     document.documentElement.setAttribute("data-theme",eff);
   } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
 })();</script>
+<!-- V0.73.0 i18n FOUC guard（在 theme 之后、zh-CN.js 之前）-->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
 <link rel="stylesheet" href="/static/theme.css">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="黄金ETF">
 <script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n：默认 locale 同步加载，其他 locale 动态注入 -->
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
 <style>
   /* V0.69.0：CSS 变量已迁至 /static/theme.css */
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -161,23 +173,23 @@
 </head>
 <body>
 <!-- V0.69.0 skip-link -->
-<a class="skip-link" href="#main">跳到主要内容</a>
+<a class="skip-link" href="#main" data-i18n="a11y.skip_to_main">跳到主要内容</a>
 <main id="main" tabindex="-1">
 <div class="wrap">
   <!-- 顶部导航（统一，置顶） -->
   <nav class="topnav">
-    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.gold">🏅 黄金价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio" class="active">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" class="active" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
@@ -185,154 +197,154 @@
   <div id="freshnessBar"></div>
   <!-- 投资警示（醒目置顶） -->
   <div class="warn-banner">
-    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
-      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
-      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
-      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
-      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
-      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
+      <li data-i18n-html="warn.b1"><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
+      <li data-i18n-html="warn.b2"><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
+      <li data-i18n-html="warn.b3"><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
+      <li data-i18n-html="warn.b4"><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
+      <li data-i18n-html="warn.b5"><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
     </ol>
   </div>
 
   <header class="hero">
     <div>
-      <h1>黄金价格投资辅助工具 · 持仓与决策</h1>
-      <div class="tagline">个人持仓跟踪 · 盈亏管理 · 参数面 × 交易面 购买决策</div>
-      <p class="intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；以<b>纽约金（COMEX）为投资指引基准</b>的趋势评估指数，结合持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细（交易标的仍为人民币黄金ETF）。</p>
-      <div class="sub" id="subtitle" style="margin-top:6px">加载中…</div>
-      <div class="notice">仅供研究参考，不构成投资建议</div>
+      <h1 data-i18n="portfolio.page_title">黄金价格投资辅助工具 · 持仓与决策</h1>
+      <div class="tagline" data-i18n="portfolio.tagline">个人持仓跟踪 · 盈亏管理 · 参数面 × 交易面 购买决策</div>
+      <p class="intro" data-i18n-html="portfolio.intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；以<b>纽约金（COMEX）为投资指引基准</b>的趋势评估指数，结合持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细（交易标的仍为人民币黄金ETF）。</p>
+      <div class="sub" id="subtitle" style="margin-top:6px" data-i18n="common.loading">加载中…</div>
+      <div class="notice" data-i18n="portfolio.notice">仅供研究参考，不构成投资建议</div>
     </div>
   </header>
 
   <!-- 决策卡片 -->
   <div class="card">
-    <h2>ETF 购买决策建议 <span class="conf" id="signalInfo"></span>
-      <button class="remind-toggle" id="remindToggle" type="button">🔔 提醒：关</button>
+    <h2><span data-i18n="portfolio.decision_card_title">ETF 购买决策建议</span> <span class="conf" id="signalInfo"></span>
+      <button class="remind-toggle" id="remindToggle" type="button" data-i18n="portfolio.remind_off">🔔 提醒：关</button>
     </h2>
     <div id="briefing" class="briefing" style="display:none"></div>
-    <div id="decisionArea"><div class="empty">正在评估…</div></div>
+    <div id="decisionArea"><div class="empty" data-i18n="portfolio.evaluating">正在评估…</div></div>
   </div>
 
   <!-- 开仓表单 -->
   <div class="card">
-    <h2>开仓买入（518880 黄金ETF华安）</h2>
+    <h2 data-i18n="portfolio.open_card_title">开仓买入（518880 黄金ETF华安）</h2>
     <div class="acc-hint" id="openAccHint">开仓将记入账本：<b>加载中…</b></div>
     <form id="openForm">
-      <div class="field"><label for="price">成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required aria-label="成交价（元）" oninput="qtyFromAmount()"><div class="hint" id="priceHint">加载当前市价…</div></div>
-      <div class="field"><label for="amount">买入金额（元）</label><input id="amount" type="number" min="0" step="1" placeholder="输入金额自动换算份数" aria-label="买入金额（元）" oninput="qtyFromAmount()"></div>
-      <div class="field"><label for="qty">数量（份）</label><input id="qty" type="number" min="100" step="100" aria-label="数量（份）" oninput="amountFromQty()"><div class="hint">ETF 最小交易单位 100 份，自动取整</div></div>
+      <div class="field"><label for="price" data-i18n="portfolio.label_price">成交价（元）</label><input id="price" type="number" min="0.001" step="0.001" required aria-label="成交价（元）" oninput="qtyFromAmount()"><div class="hint" id="priceHint" data-i18n="common.loading">加载当前市价…</div></div>
+      <div class="field"><label for="amount" data-i18n="portfolio.label_amount">买入金额（元）</label><input id="amount" type="number" min="0" step="1" data-i18n-placeholder="portfolio.placeholder_amount" placeholder="输入金额自动换算份数" aria-label="买入金额（元）" oninput="qtyFromAmount()"></div>
+      <div class="field"><label for="qty" data-i18n="portfolio.label_qty">数量（份）</label><input id="qty" type="number" min="100" step="100" aria-label="数量（份）" oninput="amountFromQty()"><div class="hint" data-i18n="portfolio.qty_hint">ETF 最小交易单位 100 份，自动取整</div></div>
       <!-- V0.70.0 P2 #8 克数开仓：与 qty 二选一，按当前克价折算份数 -->
-      <div class="field"><label for="grams">克数（g · 实物金 / 积存金）</label><input id="grams" type="number" min="0.001" step="0.001" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="qtyFromGrams()"><div class="hint" id="gramsHint">留空则按「数量」份数开仓</div></div>
-      <div class="field"><label>可用资金（元，选填 · 用于快捷比例）</label><input id="capital" type="number" min="0" step="1" placeholder="如 100000"></div>
+      <div class="field"><label for="grams" data-i18n="portfolio.label_grams">克数（g · 实物金 / 积存金）</label><input id="grams" type="number" min="0.001" step="0.001" data-i18n-placeholder="portfolio.placeholder_grams" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="qtyFromGrams()"><div class="hint" id="gramsHint" data-i18n="portfolio.grams_hint">留空则按「数量」份数开仓</div></div>
+      <div class="field"><label data-i18n="portfolio.label_capital">可用资金（元，选填 · 用于快捷比例）</label><input id="capital" type="number" min="0" step="1" data-i18n-placeholder="portfolio.placeholder_capital" placeholder="如 100000"></div>
       <div class="quick-row">
-        <span class="ql">快捷：</span>
-        <button type="button" class="chip" onclick="applyRatio(0.25)">1/4 仓</button>
-        <button type="button" class="chip" onclick="applyRatio(0.5)">1/2 仓</button>
-        <button type="button" class="chip" onclick="applyRatio(0.75)">3/4 仓</button>
-        <button type="button" class="chip" onclick="applyRatio(1)">全仓</button>
-        <button type="button" class="chip" id="chipSuggest" style="display:none" onclick="applySuggest()">按建议仓位</button>
+        <span class="ql" data-i18n="portfolio.qchip_label">快捷：</span>
+        <button type="button" class="chip" onclick="applyRatio(0.25)" data-i18n="portfolio.qchip_25">1/4 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(0.5)" data-i18n="portfolio.qchip_50">1/2 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(0.75)" data-i18n="portfolio.qchip_75">3/4 仓</button>
+        <button type="button" class="chip" onclick="applyRatio(1)" data-i18n="portfolio.qchip_100">全仓</button>
+        <button type="button" class="chip" id="chipSuggest" style="display:none" onclick="applySuggest()" data-i18n="portfolio.qchip_suggest">按建议仓位</button>
       </div>
-      <div class="field"><label for="fee">手续费（元）</label><input id="fee" type="number" min="0" step="0.01" value="0" aria-label="手续费（元）"></div>
-      <button type="submit">买入开仓</button>
+      <div class="field"><label for="fee" data-i18n="portfolio.label_fee">手续费（元）</label><input id="fee" type="number" min="0" step="0.01" value="0" aria-label="手续费（元）"></div>
+      <button type="submit" data-i18n="portfolio.btn_open">买入开仓</button>
     </form>
     <div class="err" id="openErr"></div>
   </div>
 
   <!-- 持仓列表 -->
   <div class="card">
-    <h2>当前持仓
-      <button class="btn-export" id="btnExport" type="button">导出 CSV</button>
+    <h2><span data-i18n="portfolio.holdings_title">当前持仓</span>
+      <button class="btn-export" id="btnExport" type="button" data-i18n="portfolio.btn_export_csv">导出 CSV</button>
     </h2>
-    <div id="posArea"><div class="empty">加载中…</div></div>
+    <div id="posArea"><div class="empty" data-i18n="common.loading">加载中…</div></div>
   </div>
 
   <!-- 加仓 / 减仓交易面板（V0.61.0：内联面板替代原生 prompt，支持金额反算 + 快捷比例 + 交易后预览） -->
   <div class="card" id="tradeCard" style="display:none">
-    <h2><span id="tradeTitle">加仓</span>
-      <button class="btn-export" type="button" onclick="closeTradePanel()">收起</button>
+    <h2><span id="tradeTitle" data-i18n="portfolio.trade_title_buy">加仓</span>
+      <button class="btn-export" type="button" onclick="closeTradePanel()" data-i18n="portfolio.btn_close_panel">收起</button>
     </h2>
     <div class="trade-meta" id="tradeMeta"></div>
     <form id="tradeForm">
       <div class="quick-row" style="flex-basis:100%">
-        <span class="ql">方向：</span>
-        <button type="button" class="chip" id="sideBuy" onclick="setTradeSide('buy')">加仓（买入）</button>
-        <button type="button" class="chip" id="sideSell" onclick="setTradeSide('sell')">减仓（卖出）</button>
+        <span class="ql" data-i18n="portfolio.trade_side_label">方向：</span>
+        <button type="button" class="chip" id="sideBuy" onclick="setTradeSide('buy')" data-i18n="portfolio.trade_side_buy">加仓（买入）</button>
+        <button type="button" class="chip" id="sideSell" onclick="setTradeSide('sell')" data-i18n="portfolio.trade_side_sell">减仓（卖出）</button>
       </div>
-      <div class="field"><label>成交价（元/份）</label><input id="tPrice" type="number" min="0.001" step="0.001" required oninput="tQtyFromAmount()"><div class="hint" id="tPriceHint"></div></div>
-      <div class="field"><label>金额（元）</label><input id="tAmount" type="number" min="0" step="1" placeholder="自动换算份数" oninput="tQtyFromAmount()"></div>
-      <div class="field"><label>数量（份）</label><input id="tQty" type="number" min="1" step="1" oninput="tAmountFromQty()"><div class="hint" id="tQtyHint"></div></div>
+      <div class="field"><label data-i18n="portfolio.tlabel_price">成交价（元/份）</label><input id="tPrice" type="number" min="0.001" step="0.001" required oninput="tQtyFromAmount()"><div class="hint" id="tPriceHint"></div></div>
+      <div class="field"><label data-i18n="portfolio.tlabel_amount">金额（元）</label><input id="tAmount" type="number" min="0" step="1" data-i18n-placeholder="portfolio.tplaceholder_amount" placeholder="自动换算份数" oninput="tQtyFromAmount()"></div>
+      <div class="field"><label data-i18n="portfolio.tlabel_qty">数量（份）</label><input id="tQty" type="number" min="1" step="1" oninput="tAmountFromQty()"><div class="hint" id="tQtyHint"></div></div>
       <!-- V0.70.0 P2 #8 克数加/减仓：与 tQty 二选一 -->
-      <div class="field"><label>克数（g · V0.70.0）</label><input id="tGrams" type="number" min="0.001" step="0.001" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="tQtyFromGrams()"><div class="hint" id="tGramsHint">留空则按「数量」份数加减仓</div></div>
-      <div class="field"><label>手续费（元）</label><input id="tFee" type="number" min="0" step="0.01" value="0" oninput="tUpdatePreview()"></div>
+      <div class="field"><label data-i18n="portfolio.tlabel_grams">克数（g · V0.70.0）</label><input id="tGrams" type="number" min="0.001" step="0.001" data-i18n-placeholder="portfolio.tplaceholder_grams" placeholder="与「数量」二选一" aria-label="克数（g）" oninput="tQtyFromGrams()"><div class="hint" id="tGramsHint" data-i18n="portfolio.tgrams_hint">留空则按「数量」份数加减仓</div></div>
+      <div class="field"><label data-i18n="portfolio.tlabel_fee">手续费（元）</label><input id="tFee" type="number" min="0" step="0.01" value="0" oninput="tUpdatePreview()"></div>
       <div class="quick-row" style="flex-basis:100%">
-        <span class="ql">快捷比例：</span>
-        <button type="button" class="chip" onclick="tApplyRatio(0.25)">1/4</button>
-        <button type="button" class="chip" onclick="tApplyRatio(0.5)">1/2</button>
-        <button type="button" class="chip" onclick="tApplyRatio(0.75)">3/4</button>
-        <button type="button" class="chip" onclick="tApplyRatio(1)">全部</button>
-        <button type="button" class="chip" onclick="tUseCurrentPrice()">填入现价</button>
+        <span class="ql" data-i18n="portfolio.qratio_label">快捷比例：</span>
+        <button type="button" class="chip" onclick="tApplyRatio(0.25)" data-i18n="portfolio.qratio_25">1/4</button>
+        <button type="button" class="chip" onclick="tApplyRatio(0.5)" data-i18n="portfolio.qratio_50">1/2</button>
+        <button type="button" class="chip" onclick="tApplyRatio(0.75)" data-i18n="portfolio.qratio_75">3/4</button>
+        <button type="button" class="chip" onclick="tApplyRatio(1)" data-i18n="portfolio.qratio_100">全部</button>
+        <button type="button" class="chip" onclick="tUseCurrentPrice()" data-i18n="portfolio.btn_fill_price">填入现价</button>
       </div>
       <div class="trade-preview" id="tPreview"></div>
-      <button type="submit" id="tSubmit">确认加仓</button>
+      <button type="submit" id="tSubmit" data-i18n="portfolio.btn_confirm_buy">确认加仓</button>
     </form>
     <div class="err" id="tErr"></div>
   </div>
 
   <!-- 收益曲线分析（V0.61.0） -->
   <div class="card">
-    <h2>收益曲线分析
-      <button class="btn-export" id="btnEquityRange" type="button" onclick="toggleEquityRange()">区间：90 天</button>
+    <h2><span data-i18n="portfolio.equity_title">收益曲线分析</span>
+      <button class="btn-export" id="btnEquityRange" type="button" onclick="toggleEquityRange()" data-i18n="portfolio.equity_range_medium">区间：90 天</button>
       <!-- V0.70.0 P2 #8 收益曲线单位切换 share↔gram -->
-      <button class="btn-export" id="btnEquityUnit" type="button" onclick="toggleEquityUnit()" style="margin-left:6px">单位：份</button>
+      <button class="btn-export" id="btnEquityUnit" type="button" onclick="toggleEquityUnit()" style="margin-left:6px" data-i18n="portfolio.equity_unit_share">单位：份</button>
     </h2>
     <div class="chart-wrap"><canvas id="equityChart"></canvas></div>
-    <div class="hint" id="equityHint">加载中…</div>
+    <div class="hint" id="equityHint" data-i18n="common.loading">加载中…</div>
   </div>
 
   <!-- 获利分析总结评估（V0.61.0） -->
   <div class="card">
-    <h2>获利分析总结评估</h2>
-    <div class="kpi-grid" id="perfKpis"><div class="empty">加载中…</div></div>
+    <h2 data-i18n="portfolio.perf_title">获利分析总结评估</h2>
+    <div class="kpi-grid" id="perfKpis"><div class="empty" data-i18n="common.loading">加载中…</div></div>
     <div id="perfDetail"></div>
     <div class="summary-box" id="perfSummary" style="display:none"></div>
   </div>
 
-  <footer>gold-etf-analyzer · 红盈绿亏 · 决策仅供参考，不构成投资建议</footer>
+  <footer data-i18n="portfolio.footer">gold-etf-analyzer · 红盈绿亏 · 决策仅供参考，不构成投资建议</footer>
 
   <!-- 二次确认弹窗 -->
   <div class="overlay" id="overlay">
     <div class="modal">
-      <h3 id="modalTitle">确认操作</h3>
+      <h3 id="modalTitle" data-i18n="portfolio.modal_title">确认操作</h3>
       <div class="summary" id="modalBody"></div>
       <div class="actions">
-        <button class="cancel" id="modalCancel" type="button">取消</button>
-        <button class="ok" id="modalOk" type="button">确认</button>
+        <button class="cancel" id="modalCancel" type="button" data-i18n="portfolio.modal_cancel">取消</button>
+        <button class="ok" id="modalOk" type="button" data-i18n="portfolio.modal_confirm">确认</button>
       </div>
     </div>
   </div>
   <!-- 账本管理（P1 #6 单用户多账本） -->
   <div class="card">
-    <h2>账本管理
-      <button class="btn-export" id="btnShowNewAcc" type="button">＋ 新建账本</button>
+    <h2><span data-i18n="portfolio.account_title">账本管理</span>
+      <button class="btn-export" id="btnShowNewAcc" type="button" data-i18n="portfolio.btn_new_account">＋ 新建账本</button>
     </h2>
-    <div class="acc-hint">账本用于把<b>不同用途的资金</b>分开记账（如主账户 / 家人账户 / 定投实验）；
+    <div class="acc-hint" data-i18n-html="portfolio.account_intro">账本用于把<b>不同用途的资金</b>分开记账（如主账户 / 家人账户 / 定投实验）；
       切换账本后，持仓、交易流水、收益曲线、获利分析与决策均只统计该账本。
       <b>归档</b>仅隐藏账本，数据仍可在交易历史页查询到。</div>
     <div id="newAccForm" style="display:none">
-      <div class="field"><label>账本名称</label><input id="newAccName" type="text" maxlength="64" placeholder="如 家人账户"></div>
-      <div class="field"><label>备注（选填）</label><input id="newAccNote" type="text" maxlength="255" placeholder="如 父母的定投账本"></div>
+      <div class="field"><label data-i18n="portfolio.label_account_name">账本名称</label><input id="newAccName" type="text" maxlength="64" data-i18n-placeholder="portfolio.placeholder_account_name" placeholder="如 家人账户"></div>
+      <div class="field"><label data-i18n="portfolio.label_account_note">备注（选填）</label><input id="newAccNote" type="text" maxlength="255" data-i18n-placeholder="portfolio.placeholder_account_note" placeholder="如 父母的定投账本"></div>
       <div class="quick-row">
-        <button class="chip" type="button" id="btnCreateAcc">创建</button>
-        <button class="chip" type="button" id="btnCancelAcc">取消</button>
+        <button class="chip" type="button" id="btnCreateAcc" data-i18n="portfolio.btn_create_account">创建</button>
+        <button class="chip" type="button" id="btnCancelAcc" data-i18n="portfolio.btn_cancel_account">取消</button>
       </div>
     </div>
-    <div id="accListArea"><div class="empty">加载中…</div></div>
+    <div id="accListArea"><div class="empty" data-i18n="common.loading">加载中…</div></div>
     <div class="err" id="accErr"></div>
   </div>
 
   <!-- 撤销提示条 -->
-  <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button">撤销</button></div>
+  <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button" data-i18n="portfolio.btn_undo">撤销</button></div>
   <!-- 主动提醒条 -->
   <div class="alert-bar" id="alertBar"></div>
 </div>
@@ -350,11 +362,26 @@ const API = {
   performance: API_BASE + "/api/v1/portfolio/performance", // 获利分析（V0.61.0）
 };
 
-const ACTION_STYLE = {
-  BUY: { txt: "买入", color: "var(--up)" }, ADD: { txt: "加仓", color: "var(--up)" },
-  HOLD: { txt: "持有", color: "#997417" }, REDUCE: { txt: "减仓", color: "var(--down)" },
-  SELL: { txt: "卖出", color: "var(--down)" }, WAIT: { txt: "观望", color: "#5b6470" },
+// V0.73.0 i18n：action label 通过 I18n.t() 取值；语言切换后刷新持仓表
+function _actionTxt(key) {
+  if (window.I18n && typeof I18n.t === "function") return I18n.t(key);
+  return _ACTION_FALLBACK[key] || key;
+}
+const _ACTION_FALLBACK = {
+  "portfolio.action_buy": "买入", "portfolio.action_add": "加仓",
+  "portfolio.action_hold": "持有", "portfolio.action_reduce": "减仓",
+  "portfolio.action_sell": "卖出", "portfolio.action_wait": "观望",
 };
+const ACTION_STYLE = {
+  BUY: { key: "portfolio.action_buy", color: "var(--up)" },
+  ADD: { key: "portfolio.action_add", color: "var(--up)" },
+  HOLD: { key: "portfolio.action_hold", color: "#997417" },
+  REDUCE: { key: "portfolio.action_reduce", color: "var(--down)" },
+  SELL: { key: "portfolio.action_sell", color: "var(--down)" },
+  WAIT: { key: "portfolio.action_wait", color: "#5b6470" },
+};
+// 取 txt 字段：渲染时用 actionTxt(ACTION_STYLE[k])
+function actionTxt(a) { return a.txt || _actionTxt(a.key); }
 
 // ── 账本上下文（P1 #6 单用户多账本）──
 // 读操作跟随右上角账本切换器；写操作（开仓 / 加仓 / 减仓 / 清仓 / 删除）落到
@@ -680,7 +707,7 @@ async function loadDecision() {
       chip.textContent = `按建议仓位 ${d.suggested_position}%`;
     }
     document.getElementById("decisionArea").innerHTML = `
-      <span class="badge" style="background:${s.color}">${s.txt}</span>
+      <span class="badge" style="background:${s.color}">${actionTxt(s)}</span>
       <span class="conf" style="margin-left:8px">置信度：${d.confidence === "high" ? "高" : d.confidence === "medium" ? "中" : "低"}</span>
       <div class="decision-summary">${d.summary || "暂无总结"}</div>
       <div class="position-rec" style="margin-top:10px;padding:10px 14px;background:#fffaf0;border:1px solid #f0e2b6;border-radius:8px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -1312,6 +1339,13 @@ async function loadPerformance() {
     sum.style.display = "none";
   }
 }
+
+// V0.73.0 i18n：语言切换后刷新动态内容（决策卡 + 持仓表 + 获利分析）
+document.addEventListener("i18n:change", function () {
+  if (typeof loadDecision === "function") loadDecision();
+  if (typeof loadPositions === "function") loadPositions();
+  if (typeof loadPerformance === "function") loadPerformance();
+});
 </script>
   <script src="/static/freshness.js"></script>
   <script src="/static/pwa.js" defer></script>

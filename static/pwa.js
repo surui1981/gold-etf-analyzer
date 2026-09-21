@@ -11,7 +11,7 @@
 
     if (!("serviceWorker" in navigator)) return;
 
-    const VERSION = "v0.72.0";
+    const VERSION = "v0.73.0";
     const LS_SEEN = "pm_pwa_seen_version";
     const LS_DISMISSED = "pm_pwa_install_dismissed";
 
