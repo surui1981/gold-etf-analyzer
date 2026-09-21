@@ -224,11 +224,14 @@ def test_path_map_covers_all_pages() -> None:
 
 
 def test_help_version_constant_present() -> None:
-    """VERSION 必须声明且为 V0.58.0。"""
+    """VERSION 必须声明且符合 Vx.y.z 模式（每次大版本升级时 bump）。
+
+    不再硬编码 V0.58.0 —— V0.72.0 升级通知中心页面时同步 bump VERSION（强制用户重看所有 tour）。
+    """
     src = HELP_JS.read_text(encoding="utf-8")
     m = re.search(r'const\s+VERSION\s*=\s*"([^"]+)"', src)
     assert m, "VERSION 未声明"
-    assert m.group(1) == "V0.58.0"
+    assert re.match(r"^V\d+\.\d+\.\d+$", m.group(1)), f"VERSION 格式不合法：{m.group(1)}"
 
 
 def test_localstorage_namespace_is_pm_help() -> None:

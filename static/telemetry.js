@@ -49,7 +49,10 @@
     // V0.72.0 P3-b：PWA + Web Push funnel
     pwa_install_prompted: 1,
     pwa_installed: 1,
-    push_channel_click: 1
+    push_channel_click: 1,
+    // V0.72.0 P3-b：通知中心 + 浏览器通知点击
+    notification_center_open: 1,
+    notification_browser_click: 1
   };
 
   var queue = [];

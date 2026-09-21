@@ -59,6 +59,9 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "pwa_install_prompted",
         "pwa_installed",
         "push_channel_click",
+        # V0.72.0 P3-b：通知中心 + 浏览器通知点击
+        "notification_center_open",
+        "notification_browser_click",
     }
 )
 

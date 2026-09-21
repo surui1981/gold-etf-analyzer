@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>通知中心 · 黄金ETF</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
+<script src="/static/theme.js" defer></script>
+<link rel="stylesheet" href="/static/help.css">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  header { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+  .card h2 .hint { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .card .desc { font-size: 12.5px; color: var(--muted); margin-bottom: 12px; line-height: 1.7; }
+  .badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; }
+  .badge.on { background: var(--up); }
+  .badge.off { background: var(--muted); }
+  .badge.warn { background: #d97706; }
+  /* 顶部导航（统一） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  /* 表单元素 */
+  .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  .field label { font-size: 12.5px; color: #4b5563; font-weight: 500; }
+  .field .hint { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  input[type=text], input[type=number], input[type=password], input[type=time], select {
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 11px; font-size: 13.5px;
+    background: #fff; color: var(--text); max-width: 280px;
+  }
+  input[readonly], .readonly { background: #f5f5f5 !important; color: var(--muted); cursor: not-allowed; }
+  button { border: none; border-radius: 6px; padding: 8px 16px; font-size: 13px; cursor: pointer; background: #1f2329; color: #fff; }
+  button.ghost { background: #eef0f3; color: var(--text); }
+  button.sm { padding: 5px 12px; font-size: 12px; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .err { color: var(--up); font-size: 13px; margin-top: 8px; min-height: 18px; }
+  .ok-msg { color: var(--up); font-size: 12.5px; margin-top: 6px; }
+  /* 开关 */
+  .switch-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .switch-row:last-child { border-bottom: 0; }
+  .switch-row .label { font-size: 13px; color: #374151; }
+  .switch-row .desc { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .switch input { display: none; }
+  .switch .slider { position: absolute; cursor: pointer; inset: 0; background: #cbd5e1; border-radius: 999px; transition: .18s; }
+  .switch .slider::before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .18s; box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .switch input:checked + .slider { background: var(--accent); }
+  .switch input:checked + .slider::before { transform: translateX(18px); }
+  /* 渠道勾选 */
+  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin-top: 6px; }
+  .channel { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: all .15s; }
+  .channel:hover { border-color: var(--accent); background: #fffaf0; }
+  .channel input { display: none; }
+  .channel.checked { border-color: var(--accent); background: #fffaf0; }
+  .channel .ico { font-size: 18px; }
+  .channel .name { font-size: 13px; font-weight: 500; }
+  .channel .sub { font-size: 11px; color: var(--muted); }
+  /* 时间对 */
+  .time-pair { display: flex; align-items: center; gap: 10px; }
+  .time-pair .sep { color: var(--muted); }
+  /* 推送状态面板 */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-top: 10px; }
+  .stat { background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .stat .label { font-size: 11.5px; color: var(--muted); }
+  .stat .value { font-size: 19px; font-weight: 700; margin-top: 4px; color: var(--text); }
+  /* PWA 状态 */
+  .pwa-state { display: flex; gap: 10px; align-items: center; padding: 10px 12px; background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; }
+  .pwa-state .icon { font-size: 26px; }
+  .pwa-state .info { flex: 1; }
+  .pwa-state .info .t { font-size: 13.5px; font-weight: 600; }
+  .pwa-state .info .s { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  /* 通知抽屉 */
+  .pm-drawer-mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); opacity: 0; pointer-events: none; transition: opacity .18s ease; z-index: 200; }
+  .pm-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 360px; max-width: 88vw; background: #1f2329; box-shadow: -4px 0 12px rgba(0,0,0,.3); transform: translateX(100%); transition: transform .22s ease; z-index: 201; padding: 18px; overflow-y: auto; color: #e5e7eb; }
+  body.pm-notif-open { overflow: hidden; }
+  body.pm-notif-open .pm-drawer { transform: translateX(0); }
+  body.pm-notif-open .pm-drawer-mask { opacity: 1; pointer-events: auto; }
+  .pm-drawer h3 { color: #f5d97a; font-size: 15px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.1); }
+  .pm-drawer .stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .pm-drawer .stat-row:last-child { border-bottom: 0; }
+  .pm-drawer .stat-row .lbl { color: #9aa0a6; }
+  .pm-drawer .stat-row .val { color: #f5d97a; font-weight: 600; }
+  .pm-drawer .notif-empty { text-align: center; color: #6b7280; padding: 24px 0; font-size: 12.5px; }
+  .pm-drawer .notif-close { position: absolute; top: 12px; right: 12px; background: transparent; color: #9aa0a6; border: 0; font-size: 20px; cursor: pointer; }
+  /* footer */
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
+<div class="wrap">
+  <!-- 顶部导航（10 项 · 通知中心 active） -->
+  <nav class="topnav">
+    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="links">
+      <a href="/static/trend.html">趋势追踪</a>
+      <a href="/portfolio">持仓与决策</a>
+      <a href="/trades">交易历史</a>
+      <a href="/weights">权重配置</a>
+      <a href="/news">消息面评估</a>
+      <a href="/review">研判复盘</a>
+      <a href="/central-bank">央行购金统计</a>
+      <a href="/static/silver.html">白银追踪</a>
+      <a href="/static/backtest.html">参数回测</a>
+      <a href="/static/settings.html" class="active">通知中心</a>
+    </div>
+  </nav>
+
+  <header>
+    <h1>🔔 通知中心</h1>
+    <div class="sub">配置告警规则 · 推送渠道 · PWA + Web Push</div>
+  </header>
+
+  <!-- 1. 管理员 Token（高级） -->
+  <div class="card">
+    <h2>管理员 Token <span class="hint">· 仅在 .env.prod 设置 ADMIN_TOKEN 时需要</span></h2>
+    <div class="desc">保存规则 + 测试发送等写端点需要 <code>X-Admin-Token</code> 头。本地 dev 模式（无 ADMIN_TOKEN env）留空即可。Token 仅存 <code>localStorage</code>，不上传。</div>
+    <div class="field">
+      <label for="adminToken">Token</label>
+      <input type="password" id="adminToken" placeholder="粘贴管理员 token（可选）" autocomplete="off">
+      <div class="hint" id="adminTokenHint">未保存</div>
+    </div>
+    <button class="ghost sm" id="btnClearToken" type="button">清空</button>
+  </div>
+
+  <!-- 2. 告警规则 + 通知偏好 -->
+  <div class="card">
+    <h2>告警规则 <span class="hint">· 档位穿越 / 波动阈值 / 静默时段</span></h2>
+    <div class="desc">指数档位从「上升」翻转到「下降」（主轴变化）时推送；单日绝对波动 ≥ 阈值时推送。静默时段内告警入队，醒后 09:30 BJT 汇总推送。</div>
+    <div class="switch-row">
+      <div>
+        <div class="label">档位穿越告警（BULLISH ↔ BEARISH 主轴翻转）</div>
+        <div class="desc">默认开；指数档位跨主轴翻转时触发，SIDEWAYS 抖动忽略</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="ruleLevelCrossing" checked><span class="slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <div>
+        <div class="label">单日波动告警</div>
+        <div class="desc">纽约金单日涨跌幅绝对值 ≥ 阈值时触发；日内去重一次</div>
+      </div>
+      <label class="switch"><input type="checkbox" id="ruleVolatility" checked><span class="slider"></span></label>
+    </div>
+    <div class="field" style="margin-top:14px;max-width:200px">
+      <label for="ruleVolPct">单日波动阈值（%）</label>
+      <input type="number" id="ruleVolPct" min="0.1" max="20" step="0.1" value="3.0">
+      <div class="hint">0.1 - 20；推荐 2.5 - 4.0</div>
+    </div>
+    <div class="field" style="margin-top:6px">
+      <label>静默时段（BJT）</label>
+      <div class="time-pair">
+        <input type="time" id="quietStart" value="22:00">
+        <span class="sep">→</span>
+        <input type="time" id="quietEnd" value="07:00">
+      </div>
+      <div class="hint">跨夜有效（如 22:00 → 次日 07:00）</div>
+    </div>
+    <div style="margin-top:16px">
+      <label style="font-size:12.5px;color:#4b5563;font-weight:500">推送渠道（按顺序尝试）</label>
+      <div class="channels" id="channelBox">
+        <label class="channel" data-ch="browser"><input type="checkbox" value="browser" checked><div><div class="ico">🔔</div><div class="name">浏览器通知</div><div class="sub">页面内 / Notification API</div></div></label>
+        <label class="channel" data-ch="webpush"><input type="checkbox" value="webpush"><div><div class="ico">📲</div><div class="name">Web Push</div><div class="sub">后台 · 需 PWA + 订阅</div></div></label>
+        <label class="channel" data-ch="email"><input type="checkbox" value="email"><div><div class="ico">📧</div><div class="name">邮件</div><div class="sub">SMTP（需 .env 配置）</div></div></label>
+        <label class="channel" data-ch="wechat"><input type="checkbox" value="wechat"><div><div class="ico">💬</div><div class="name">微信</div><div class="sub">Server 酱（需 SendKey）</div></div></label>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button id="btnSaveRules" type="button">保存规则</button>
+      <button class="ghost" id="btnReloadRules" type="button">重新载入</button>
+      <span class="err" id="rulesErr"></span>
+      <span class="ok-msg" id="rulesOk"></span>
+    </div>
+  </div>
+
+  <!-- 3. SMTP 邮件 -->
+  <div class="card">
+    <h2>SMTP 邮件 <span class="hint">· 服务端 .env 配置（只读）</span></h2>
+    <div class="desc">SMTP 凭据保存在服务器的 <code>.env</code> 或 <code>.env.prod</code> 中，本页面不展示密码。SMTP_HOST 留空即禁用邮件渠道。</div>
+    <div class="field">
+      <label>配置状态</label>
+      <input type="text" id="smtpStatus" readonly value="检测中…">
+    </div>
+    <button class="sm" id="btnTestEmail" type="button">📧 发送测试邮件</button>
+    <span class="ok-msg" id="emailOk"></span>
+    <span class="err" id="emailErr"></span>
+  </div>
+
+  <!-- 4. Server 酱 -->
+  <div class="card">
+    <h2>Server 酱微信 <span class="hint">· 服务端 .env 配置（只读）</span></h2>
+    <div class="desc">Server 酱 SendKey（https://sct.ftqq.com/ 申请）保存在 <code>.env</code> 的 SERVERCHAN_SENDKEY 中，留空即禁用微信渠道。</div>
+    <div class="field">
+      <label>配置状态</label>
+      <input type="text" id="wechatStatus" readonly value="检测中…">
+    </div>
+    <button class="sm" id="btnTestWechat" type="button">💬 发送测试微信</button>
+    <span class="ok-msg" id="wechatOk"></span>
+    <span class="err" id="wechatErr"></span>
+  </div>
+
+  <!-- 5. PWA + Web Push -->
+  <div class="card">
+    <h2>PWA · Web Push <span class="hint">· 桌面安装 + 后台推送</span></h2>
+    <div class="desc">安装到桌面后可离线访问；订阅 Web Push 后即使关闭浏览器也能收到告警。iOS 16.4+ 需先添加到主屏。</div>
+    <div class="pwa-state">
+      <span class="icon" id="pwaIcon">📱</span>
+      <div class="info">
+        <div class="t" id="pwaTitle">PWA 状态检测中…</div>
+        <div class="s" id="pwaSub">检测浏览器是否支持安装</div>
+      </div>
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="sm" id="btnSubscribePush" type="button">📲 订阅 Web Push</button>
+      <button class="ghost sm" id="btnUnsubscribePush" type="button">退订</button>
+      <button class="ghost sm" id="btnOpenNotifDrawer" type="button">📊 查看推送统计</button>
+    </div>
+    <div class="err" id="pwaErr"></div>
+    <div class="ok-msg" id="pwaOk"></div>
+  </div>
+
+  <footer>gold-etf-analyzer · 通知中心 V0.72.0</footer>
+</div>
+</main>
+
+<!-- 通知抽屉 -->
+<div class="pm-drawer-mask" id="pmNotifMask"></div>
+<aside class="pm-drawer" id="pmNotifDrawer" aria-label="通知统计">
+  <button class="notif-close" id="pmNotifClose" type="button">×</button>
+  <h3>📊 推送统计 · 近 7 天</h3>
+  <div id="notifStatsBody"><div class="notif-empty">加载中…</div></div>
+</aside>
+
+<script src="/static/freshness.js"></script>
+<script src="/static/settings.js"></script>
+<script src="/static/pwa.js" defer></script>
+<script src="/static/help.js" defer></script>
+<script src="/static/account.js"></script>
+<script src="/static/telemetry.js" defer></script>
+<script src="/static/nav-drawer.js" defer></script>
+<script src="/static/command-palette.js" defer></script>
+<script src="/static/notifications.js" defer></script>
+</body>
+</html>

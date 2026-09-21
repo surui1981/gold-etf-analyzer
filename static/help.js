@@ -17,7 +17,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "V0.71.0";
+  const VERSION = "V0.72.0";
   const LS = {
     tourPrefix: "pm_help_tour_",
     seenVer: "pm_help_seen_version",
@@ -40,6 +40,7 @@
     "/static/trades.html": "/trades",
     "/static/silver.html": "/static/silver.html",
     "/static/backtest.html": "/static/backtest.html",
+    "/static/settings.html": "/static/settings.html",
   };
   function pageKey() {
     const p = window.location.pathname;
@@ -109,6 +110,13 @@
       "BJT": "北京时间 UTC+8",
       "实时": "数据与市场同步",
       "延时": "数据存在 15 分钟以上延迟",
+    },
+    "通知与 PWA 类": {
+      "PWA": "Progressive Web App 渐进式 Web 应用：可安装到桌面、离线访问、接收后台推送",
+      "SMTP": "Simple Mail Transfer Protocol 邮件发送协议；本系统用 aiosmtplib 异步发送，端口 465 + 授权码",
+      "Server酱": "微信推送聚合服务（https://sct.ftqq.com/）；申请 SendKey 后通过 webhook 推送文本到微信",
+      "Web Push": "浏览器后台推送协议：用户在页面订阅后，服务器可通过 Service Worker 推送通知，即使浏览器关闭也能收到（iOS 16.4+ 需添加到主屏）",
+      "VAPID": "Voluntary Application Server Identification：Web Push 签名协议，服务器用私钥签名让浏览器识别来源",
     },
   };
 
@@ -205,6 +213,13 @@
       { selector: "#resultsPanel", text: "回测结果：Sharpe + 最大回撤 双轴图 + 命中详情表 + 5 桶校准曲线", pos: "top" },
       { selector: "#cachedBadge", text: "5 分钟节流：相同参数 5 分钟内直接返回缓存（X-Backtest-Cached header）", pos: "left" },
     ],
+    "/static/settings.html": [
+      { selector: ".topnav", text: "顶栏 10 个页面 · 「通知中心」是 V0.72.0 新增的统一推送配置入口", pos: "bottom" },
+      { selector: "#ruleLevelCrossing, .switch-row:first-of-type", text: "档位穿越 + 波动阈值：触发条件，开关 + 数值；保存后写 app_settings.alert_rules", pos: "top" },
+      { selector: "#channelBox", text: "4 渠道勾选（浏览器 / Web Push / 邮件 / 微信）：按顺序尝试；至少 1 项", pos: "top" },
+      { selector: "#btnTestEmail, #btnTestWechat", text: "测试发送按钮：admin-only；dev 模式无 ADMIN_TOKEN 时直接成功", pos: "top" },
+      { selector: "#btnSubscribePush", text: "Web Push 订阅：浏览器授权 + SW 注册 + VAPID 公钥 + endpoint 上报后端", pos: "top" },
+    ],
   };
 
   /* ── localStorage helpers ─────────────────────────────────────────── */
@@ -234,6 +249,12 @@
       <ol class="pmh-guide">
         <li><b>白银追踪</b> → <a href="/static/silver.html">白银页</a>：白银 ETF 562800 + COMEX SI 双市场 + 趋势评估指数</li>
         <li><b>参数回测</b> → <a href="/static/backtest.html">回测页</a>：在历史 daily_snapshots 上扫权重网格 + 阈值带，输出 Sharpe / 最大回撤 / 校准曲线（5 分钟节流）</li>
+      </ol>
+      <h3>V0.72.0 新增（推送 + PWA + 公开部署）</h3>
+      <ol class="pmh-guide">
+        <li><b>通知中心</b> → <a href="/static/settings.html">设置页</a>：告警规则 + 4 推送渠道 + SMTP / Server 酱测试 + Web Push 订阅 + 推送统计抽屉</li>
+        <li><b>PWA 桌面安装</b> → Chrome / Edge 地址栏右侧「安装」按钮；iOS 16.4+ 通过分享 → 添加到主屏</li>
+        <li><b>公开部署</b> → 多阶段 Dockerfile + docker-compose.prod + Nginx + Let's Encrypt（详见 <a href="/static/settings.html">settings</a> 与 docs/deployment.md）</li>
       </ol>
       <p class="pmh-tip">💡 综合指数 &gt; 75 强势上升 / &gt; 55 上升 / &gt; 45 震荡 / &gt; 25 下降 / 其他弱势下降</p>
     `;
