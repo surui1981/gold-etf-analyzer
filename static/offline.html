@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>离线 · 黄金 ETF 投资辅助</title>
+<meta name="theme-color" content="#1f2329">
+<style>
+:root {
+    --bg: #0f1216;
+    --card: #1f2329;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --accent: #d4a857;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+}
+.card {
+    background: var(--card); border-radius: 12px; padding: 32px;
+    max-width: 420px; text-align: center;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+.icon { font-size: 56px; margin-bottom: 16px; }
+h1 { font-size: 20px; margin-bottom: 12px; color: var(--accent); }
+p { color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+button {
+    background: var(--accent); color: #1f2329; border: 0; padding: 10px 20px;
+    border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+}
+button:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+<main class="card">
+    <div class="icon">📡</div>
+    <h1>当前离线</h1>
+    <p>网络连接已断开。已缓存的趋势数据仍可查看；新分析需要联网后刷新。</p>
+    <button onclick="location.reload()">重新连接</button>
+</main>
+</body>
+</html>

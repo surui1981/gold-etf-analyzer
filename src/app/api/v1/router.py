@@ -13,6 +13,7 @@ from app.api.v1.endpoints import (
     news,
     portfolio,
     position,
+    push,
     resonance,
     review,
     settings,
@@ -38,3 +39,4 @@ api_router.include_router(central_bank.router)
 api_router.include_router(portfolio.router)
 api_router.include_router(telemetry.router)
 api_router.include_router(backtest.router)  # V0.71.0 P3-a
+api_router.include_router(push.router)  # V0.72.0 P3-b Web Push

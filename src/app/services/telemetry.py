@@ -55,6 +55,10 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "alert_email_sent",
         "alert_wechat_sent",
         "alert_browser_click",
+        # V0.72.0 P3-b：PWA + Web Push funnel
+        "pwa_install_prompted",
+        "pwa_installed",
+        "push_channel_click",
     }
 )
 

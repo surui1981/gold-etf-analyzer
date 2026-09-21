@@ -9,6 +9,7 @@ from app.models import (  # noqa: F401
     central_bank,
     news,
     position,
+    push,
     review,
     settings,
     snapshot,

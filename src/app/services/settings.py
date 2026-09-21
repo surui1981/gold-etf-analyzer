@@ -3,6 +3,8 @@
 import json
 import time
 
+from pydantic import BaseModel, ConfigDict
+
 from app.repositories.settings import SettingRepository
 from app.schemas.alert import AlertRuleIn, AlertRuleOut
 from app.schemas.backtest import BacktestConfigIn, BacktestConfigOut
@@ -227,3 +229,47 @@ async def save_alert_rules(repo: SettingRepository, rules: AlertRuleIn) -> Alert
     _ALERT_RULES_CACHE = {"ts": time.time(), "config": saved}
     logger.info("Alert rules saved: %s", saved.model_dump_json())
     return saved
+
+
+# ───────────────────── V0.72.0 P3-b：VAPID 密钥对持久化 ─────────────────────
+
+VAPID_KEYS_KEY = "vapid_keys"
+_VAPID_KEYS_CACHE: dict = {"ts": 0.0, "config": None}
+
+
+def clear_vapid_keys_cache() -> None:
+    """测试隔离。"""
+    global _VAPID_KEYS_CACHE
+    _VAPID_KEYS_CACHE = {"ts": 0.0, "config": None}
+
+
+class VapidKeys(BaseModel):
+    """VAPID 密钥对（私钥服务端持有，公钥发给前端 subscribe）。"""
+
+    model_config = ConfigDict(extra="ignore")
+
+    private_key: str  # PEM 格式（base64url encoded EC private key）
+    public_key: str  # base64url encoded EC public key (uncompressed point)
+
+
+async def get_vapid_keys(repo: SettingRepository) -> VapidKeys | None:
+    """返回 VAPID 密钥对（不存在返回 None，启动期会按需生成）。"""
+    global _VAPID_KEYS_CACHE
+    now = time.time()
+    if _VAPID_KEYS_CACHE["config"] is not None and now - _VAPID_KEYS_CACHE["ts"] < WEIGHTS_CACHE_TTL:
+        return _VAPID_KEYS_CACHE["config"]  # type: ignore[no-any-return]
+    raw = await repo.get(VAPID_KEYS_KEY)
+    if not raw:
+        return None
+    cfg = VapidKeys.model_validate_json(raw)
+    _VAPID_KEYS_CACHE = {"ts": now, "config": cfg}
+    return cfg
+
+
+async def save_vapid_keys(repo: SettingRepository, keys: VapidKeys) -> VapidKeys:
+    """保存 VAPID 密钥对（启动期生成一次后调用）。"""
+    await repo.set(VAPID_KEYS_KEY, keys.model_dump_json())
+    global _VAPID_KEYS_CACHE
+    _VAPID_KEYS_CACHE = {"ts": time.time(), "config": keys}
+    logger.info("VAPID keys saved (public_key length=%d)", len(keys.public_key))
+    return keys

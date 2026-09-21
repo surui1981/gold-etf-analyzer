@@ -17,6 +17,10 @@
 <!-- V0.69.0：Chart.js a11y 封装必须在所有 new Chart() 调用之前同步加载 -->
 <script src="/static/chart-a11y.js"></script>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
 <script src="/static/theme.js" defer></script>
 <style>
   /* V0.69.0：CSS 变量已迁至 /static/theme.css */
@@ -449,7 +453,8 @@
     }
   })();
 </script>
-  <script src="/static/help.js" defer></script>
+  <script src="/static/pwa.js" defer></script>
+<script src="/static/help.js" defer></script>
 <script src="/static/account.js"></script>
   <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->
   <script src="/static/telemetry.js" defer></script>

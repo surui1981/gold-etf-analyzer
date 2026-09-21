@@ -13,9 +13,12 @@ dependencies = [
     "aiosqlite>=0.20,<1.0",
     "akshare>=1.14,<2.0",
     "alembic>=1.13,<2.0",
-    # V0.72.0 P3-b：告警推送（邮件 SMTP + 微信 Server酱 + Web Push 后端预留）
+    # V0.72.0 P3-b：告警推送（邮件 SMTP + 微信 Server酱 + Web Push 后端）
     "aiosmtplib>=3.0,<4.0",
     "jinja2>=3.1,<4.0",
+    "pywebpush>=2.0,<3.0",
+    "py-vapid>=1.9,<2.0",
+    "cryptography>=42,<46",
 ]
 
 [project.optional-dependencies]

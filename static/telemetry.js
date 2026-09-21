@@ -45,7 +45,11 @@
     alert_rule_save: 1,
     alert_email_sent: 1,
     alert_wechat_sent: 1,
-    alert_browser_click: 1
+    alert_browser_click: 1,
+    // V0.72.0 P3-b：PWA + Web Push funnel
+    pwa_install_prompted: 1,
+    pwa_installed: 1,
+    push_channel_click: 1
   };
 
   var queue = [];

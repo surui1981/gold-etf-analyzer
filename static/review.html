@@ -14,6 +14,10 @@
   } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
 })();</script>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
 <script src="/static/theme.js" defer></script>
 <style>
   /* V0.69.0：CSS 变量已迁至 /static/theme.css */
@@ -458,5 +462,6 @@ async function reload() {
   <script src="/static/telemetry.js" defer></script>
   <script src="/static/nav-drawer.js" defer></script>
   <script src="/static/command-palette.js" defer></script>
+<script src="/static/pwa.js" defer></script>
 </body>
 </html>

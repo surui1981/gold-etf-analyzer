@@ -16,6 +16,10 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="/static/chart-a11y.js"></script>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
 <script src="/static/theme.js" defer></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -338,5 +342,6 @@ document.getElementById("daysSel").addEventListener("change", () => window.PM_Ba
 document.getElementById("targetSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
 </script>
 <script src="/static/backtest-chart.js" defer></script>
+<script src="/static/pwa.js" defer></script>
 </body>
 </html>

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
@@ -331,3 +331,21 @@ async def trades_page() -> RedirectResponse:
 # 静态资源（趋势追踪页面等）
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# V0.72.0 P3-b：Service Worker 必须在 / 根 scope（StaticFiles mount 默认是 /static/），
+# 通过 /sw.js 路由 + Service-Worker-Allowed: / 头实现。nginx 也需配同 location。
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker() -> FileResponse:
+    """PWA Service Worker（root scope）。"""
+    sw_path = STATIC_DIR / "sw.js"
+    if not sw_path.exists():
+        return FileResponse(content=b"", media_type="application/javascript")
+    return FileResponse(
+        sw_path,
+        media_type="application/javascript",
+        headers={
+            "Service-Worker-Allowed": "/",
+            "Cache-Control": "no-cache",
+        },
+    )
