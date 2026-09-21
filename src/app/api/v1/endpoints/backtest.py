@@ -15,6 +15,7 @@ from app.dependencies import (
     get_backtest_service,
     get_setting_repository,
 )
+from app.middleware.admin_auth import require_admin
 from app.repositories.settings import SettingRepository
 from app.schemas.backtest import (
     BacktestConfigIn,
@@ -29,7 +30,12 @@ from app.services.settings import get_backtest_config, save_backtest_config
 router = APIRouter(prefix="/backtest", tags=["backtest"])
 
 
-@router.post("/run", response_model=BacktestResultOut, summary="执行回测（V0.71.0）")
+@router.post(
+    "/run",
+    response_model=BacktestResultOut,
+    summary="执行回测（V0.71.0）",
+    dependencies=[Depends(require_admin)],
+)
 async def run_backtest(
     payload: BacktestRequestIn,
     response: Response,

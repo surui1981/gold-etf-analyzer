@@ -104,6 +104,15 @@ async def get_setting_repository(
     return SettingRepository(session)
 
 
+def get_admin_token() -> str | None:
+    """V0.72.0 P3-b：返回 ``settings.admin_token``（None 表示 dev 模式）。
+
+    由 ``require_admin`` Depends 间接消费。生产部署（``APP_ENV=prod``）必须在
+    ``.env.prod`` 设置一个 ≥32 字符随机串。
+    """
+    return get_settings().admin_token
+
+
 def get_weight_service(
     repo: SettingRepository = Depends(get_setting_repository),
 ) -> WeightService:

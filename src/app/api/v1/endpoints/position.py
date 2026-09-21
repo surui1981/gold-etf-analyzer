@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies import get_position_service
+from app.middleware.admin_auth import require_admin
 from app.schemas.position import (
     PositionCreate,
     PositionDeleteOut,
@@ -21,7 +22,13 @@ ACCOUNT_QUERY = Query(
 )
 
 
-@router.post("", response_model=PositionOut, status_code=201, summary="开仓")
+@router.post(
+    "",
+    response_model=PositionOut,
+    status_code=201,
+    summary="开仓",
+    dependencies=[Depends(require_admin)],
+)
 async def open_position(
     request: PositionCreate,
     account_id: int | None = ACCOUNT_QUERY,
@@ -73,7 +80,12 @@ async def list_position_trades(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.post("/{position_id}/trades", response_model=PositionOut, summary="加仓/减仓")
+@router.post(
+    "/{position_id}/trades",
+    response_model=PositionOut,
+    summary="加仓/减仓",
+    dependencies=[Depends(require_admin)],
+)
 async def add_trade(
     position_id: int,
     request: TradeRequest,
@@ -86,7 +98,12 @@ async def add_trade(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/{position_id}/close", response_model=PositionOut, summary="清仓")
+@router.post(
+    "/{position_id}/close",
+    response_model=PositionOut,
+    summary="清仓",
+    dependencies=[Depends(require_admin)],
+)
 async def close_position(
     position_id: int,
     service: PositionService = Depends(get_position_service),
@@ -98,7 +115,12 @@ async def close_position(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/{position_id}", response_model=PositionDeleteOut, summary="软删除（可撤销）")
+@router.delete(
+    "/{position_id}",
+    response_model=PositionDeleteOut,
+    summary="软删除（可撤销）",
+    dependencies=[Depends(require_admin)],
+)
 async def delete_position(
     position_id: int,
     service: PositionService = Depends(get_position_service),
@@ -110,7 +132,12 @@ async def delete_position(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/{position_id}/restore", response_model=PositionDeleteOut, summary="撤销软删除")
+@router.post(
+    "/{position_id}/restore",
+    response_model=PositionDeleteOut,
+    summary="撤销软删除",
+    dependencies=[Depends(require_admin)],
+)
 async def restore_position(
     position_id: int,
     service: PositionService = Depends(get_position_service),

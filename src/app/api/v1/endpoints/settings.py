@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.dependencies import get_setting_repository, get_weight_service
+from app.middleware.admin_auth import require_admin
 from app.repositories.settings import SettingRepository
 from app.schemas.alert import AlertRuleIn, AlertRuleOut, AlertTestResult
 from app.schemas.settings import WeightConfig
@@ -24,7 +25,12 @@ async def get_weights(
     return await service.get_weights()
 
 
-@router.put("/weights", response_model=WeightConfig, summary="保存评估权重")
+@router.put(
+    "/weights",
+    response_model=WeightConfig,
+    summary="保存评估权重",
+    dependencies=[Depends(require_admin)],
+)
 async def save_weights(
     config: WeightConfig,
     service: WeightService = Depends(get_weight_service),
@@ -44,7 +50,12 @@ async def get_alert_rules_endpoint(
     return await get_alert_rules(repo)
 
 
-@router.put("/alert-rules", response_model=AlertRuleOut, summary="保存告警规则")
+@router.put(
+    "/alert-rules",
+    response_model=AlertRuleOut,
+    summary="保存告警规则",
+    dependencies=[Depends(require_admin)],
+)
 async def put_alert_rules_endpoint(
     payload: AlertRuleIn,
     repo: SettingRepository = Depends(get_setting_repository),
@@ -53,7 +64,12 @@ async def put_alert_rules_endpoint(
     return await save_alert_rules(repo, payload)
 
 
-@router.post("/test-email", response_model=AlertTestResult, summary="测试邮件发送")
+@router.post(
+    "/test-email",
+    response_model=AlertTestResult,
+    summary="测试邮件发送",
+    dependencies=[Depends(require_admin)],
+)
 async def test_email_endpoint() -> AlertTestResult:
     """发一封测试邮件到 NOTIFY_FROM 邮箱，验证 SMTP 配置正确。"""
     notifier = NotifierFactory.create("email")
@@ -74,7 +90,12 @@ async def test_email_endpoint() -> AlertTestResult:
     )
 
 
-@router.post("/test-wechat", response_model=AlertTestResult, summary="测试微信发送")
+@router.post(
+    "/test-wechat",
+    response_model=AlertTestResult,
+    summary="测试微信发送",
+    dependencies=[Depends(require_admin)],
+)
 async def test_wechat_endpoint() -> AlertTestResult:
     """发一条测试微信，验证 SendKey 配置正确。"""
     notifier = NotifierFactory.create("wechat")

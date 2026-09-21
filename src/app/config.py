@@ -69,6 +69,16 @@ class Settings(BaseSettings):
     # 默认：09:30 开盘前 / 11:30 上午收盘前 / 14:00 下午开盘前 / 15:30 SGE 收盘前。
     intraday_refresh_hours: str = "9:30,11:30,14:00,15:30"
 
+    # ===== V0.72.0 P3-b · 安全前置 =====
+    # 写端点 admin 守卫 token（X-Admin-Token 头）。None / 空 = dev 模式跳过校验。
+    # 生产部署（.env.prod）必须设置一个 ≥32 字符随机串；建议用：
+    #   python -c "import secrets; print(secrets.token_urlsafe(32))"
+    admin_token: str | None = None
+
+    # 限速（per-IP 滑动窗口，60s）。0 = 禁用。
+    # 默认 120 req/min（足够 9 页 SPA + 60s 轮询）；生产调高 240 应对异常峰值。
+    rate_limit_per_min: int = 120
+
     @property
     def cors_origin_list(self) -> list[str]:
         """解析 CORS 来源为列表，* 表示放行全部。"""

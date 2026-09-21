@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.config import get_settings
+from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.trace import TraceIdMiddleware
 from app.models.base import Base
 from app.repositories.db import engine
@@ -265,6 +266,12 @@ app = FastAPI(
 # V0.67.0：trace_id 注入中间件必须在 CORS 之前注册（LIFO：最后加入的最近路径）。
 # 即使 CORS 预检失败 / OPTIONS 拦截，响应头里也带 X-Request-ID，便于客户端定位。
 app.add_middleware(TraceIdMiddleware)
+
+# V0.72.0 P3-b：per-IP 限速（默认 120 req/min；env RATE_LIMIT_PER_MIN=0 禁用）。
+# 位置在 CORS 之后：LIFO 顺序下，限速包在内层先执行；OPTIONS 预检在中间件内部已豁免。
+# 测试环境（app_env='test'）自动禁用：测试套件大量连发请求，限速会误伤 201/200 测试。
+if settings.rate_limit_per_min > 0 and settings.app_env != "test":
+    app.add_middleware(RateLimitMiddleware, per_min=settings.rate_limit_per_min)
 
 # CORS：开发期前端（如本地静态页）可直接跨域调用
 app.add_middleware(

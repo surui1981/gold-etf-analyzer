@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import get_account_service
+from app.middleware.admin_auth import require_admin
 from app.schemas.account import (
     AccountArchiveOut,
     AccountCreate,
@@ -28,7 +29,13 @@ async def list_accounts(
     return await service.list(include_archived=include_archived)
 
 
-@router.post("", response_model=AccountOut, status_code=201, summary="新建账本")
+@router.post(
+    "",
+    response_model=AccountOut,
+    status_code=201,
+    summary="新建账本",
+    dependencies=[Depends(require_admin)],
+)
 async def create_account(
     request: AccountCreate,
     service: AccountService = Depends(get_account_service),
@@ -52,7 +59,12 @@ async def get_account(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.patch("/{account_id}", response_model=AccountOut, summary="修改账本")
+@router.patch(
+    "/{account_id}",
+    response_model=AccountOut,
+    summary="修改账本",
+    dependencies=[Depends(require_admin)],
+)
 async def update_account(
     account_id: int,
     request: AccountUpdate,
@@ -65,7 +77,12 @@ async def update_account(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/{account_id}/archive", response_model=AccountArchiveOut, summary="归档账本")
+@router.post(
+    "/{account_id}/archive",
+    response_model=AccountArchiveOut,
+    summary="归档账本",
+    dependencies=[Depends(require_admin)],
+)
 async def archive_account(
     account_id: int,
     service: AccountService = Depends(get_account_service),
@@ -80,7 +97,12 @@ async def archive_account(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.post("/{account_id}/restore", response_model=AccountArchiveOut, summary="恢复账本")
+@router.post(
+    "/{account_id}/restore",
+    response_model=AccountArchiveOut,
+    summary="恢复账本",
+    dependencies=[Depends(require_admin)],
+)
 async def restore_account(
     account_id: int,
     service: AccountService = Depends(get_account_service),

@@ -9,6 +9,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import get_news_score_service
+from app.middleware.admin_auth import require_admin
 from app.schemas.news import NewsHistoryOut, NewsScoreIn, NewsScoreOut
 from app.services.news import NewsScoreService
 
@@ -23,7 +24,12 @@ async def get_today_score(
     return await service.get_today()
 
 
-@router.put("", response_model=NewsScoreOut, summary="保存一次消息面打分")
+@router.put(
+    "",
+    response_model=NewsScoreOut,
+    summary="保存一次消息面打分",
+    dependencies=[Depends(require_admin)],
+)
 async def save_today_score(
     payload: NewsScoreIn,
     service: NewsScoreService = Depends(get_news_score_service),
@@ -41,7 +47,12 @@ async def save_today_score(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@router.delete("/{slot}", response_model=NewsScoreOut, summary="撤销某一次打分")
+@router.delete(
+    "/{slot}",
+    response_model=NewsScoreOut,
+    summary="撤销某一次打分",
+    dependencies=[Depends(require_admin)],
+)
 async def delete_today_slot(
     slot: int,
     score_date: date | None = Query(None, description="目标日期；留空为当日（补录需指定）"),
