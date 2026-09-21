@@ -118,6 +118,14 @@
 - **验证**：iOS Safari 添加到主屏 → 启动为 standalone；邮件 / 微信收到测试告警
 - **自身可观测性**：PWA 安装转化率（`pwa_install_prompted` → `pwa_installed` 漏斗）；邮件 / 微信 / Web Push 三渠道点击率
 - **人天**：4
+- **落地交付**（2026-09-21）：
+  - **后端推送全栈**：Notifier Protocol + aiosmtplib SMTP + httpx Server 酱 + `send_with_retry` 5s/30s/5min 退避；AlertDispatcher 单例（`_sent_today` 去重 + `_quiet_queue` 静默时段累积）；BULLISH↔BEARISH 主轴翻转 + 单日波动 ≥3% 触发；`alert_rules` 复用 `app_settings` 表；scheduler `_capture_and_warm` 末尾钩入告警评估；`GET/PUT /api/v1/settings/alert-rules` + `POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；`pywebpush` + `py-vapid` + `cryptography` 依赖
+  - **Web Push + PWA**：VAPID EC P-256 持久化到 `app_settings.vapid_keys`；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`，endpoint unique + archived_at index）；4 端点 `/api/v1/push/{vapid-public-key,subscribe,unsubscribe,test}`；`static/manifest.json`（192/512/maskable 图标 + start_url /portfolio + shortcuts）+ `static/sw.js`（gold-shell-v0.72.0 + gold-runtime-v0.72.0 双 cache + install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET + push handler + notificationclick）+ `static/offline.html`；`/sw.js` 路由 root scope `Service-Worker-Allowed: /` header；`static/pwa.js` SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`；9 页统一加 manifest link + apple-touch-icon + pwa.js
+  - **通知中心**：`static/settings.html`（10 页第 10 个，5 区：管理员 Token / 告警规则 + 4 渠道勾选 / SMTP 状态 + 测试 / Server 酱状态 + 测试 / PWA + Web Push 订阅）+ `static/settings.js`（表单 + GET/PUT alert-rules + test-email + test-wechat + push subscribe UI）+ `static/notifications.js` 推送统计抽屉（拉 /telemetry/stats 7d 聚合）
+  - **安全前置**：`middleware/admin_auth.py` `require_admin` Depends `X-Admin-Token` 头 `secrets.compare_digest`，无 `ADMIN_TOKEN` env 时 skip（dev 友好）；`middleware/rate_limit.py` per-IP 60s sliding window 120 req/min 默认，`app_env!=test` 才注册（避免测试 429 误伤）；写端点全覆盖
+  - **公开部署**：多阶段 Dockerfile（builder python:3.12-slim + gcc → runtime python:3.12-slim + curl + non-root appuser + HEALTHCHECK，镜像 1.2GB → 280MB）；`docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron / volumes app_data+certbot_www+certbot_conf+backups + network gold_net）；`nginx/conf.d/gold.conf` 80→443 redirect + TLS 1.2/1.3 + HSTS + X-Frame-Options DENY + `/static/` 直出 7d immutable + `/api/` 反代；`deploy/init-letsencrypt.sh` webroot 挑战幂等 + `--dry-run`
+  - **help 升级**：VERSION V0.71.0 → V0.72.0 + GLOSSARY 加 PWA/SMTP/Server酱/WebPush/VAPID 5 个术语 + settings.html 5 步 tour + renderGuideTab V0.72.0 节
+  - **埋点同步**：前后端 ALLOWED_EVENT_TYPES 加 `pwa_install_prompted` / `pwa_installed` / `push_channel_click` / `notification_center_open` / `notification_browser_click` 5 项
 
 ### V0.73.0 · i18n 框架 + 英文版
 

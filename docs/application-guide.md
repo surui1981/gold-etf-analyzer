@@ -55,6 +55,10 @@
 | **白银追踪（P3-a P2 #11）** | `SilverHistoryProvider` Protocol + `MockSilverHistoryProvider`（base ETF 2.45 元/份 / NY 31.5 USD/OZ）+ `MarketProviderBundle.silver_history` + `PROVIDER_REGISTRY` 新增 `silver_mock`/`silver_akshare`；`TrendService._TARGET_UNITS` / `_FRESHNESS_KEYS` / `_load_klines` 扩展 `silver_etf/silver_ny`（**复用 5 维算法零修改**）；`DecisionService.target_label()` helper + endpoint pattern 扩 `silver_etf/silver_ny`；新端点 `GET /api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}`（**silver 不新增 router，复用 market.router**）；`static/silver.html` 白银色系（深蓝 #1d4ed8）页面；9 页 nav 注入；新埋点 `silver_page_view` / `silver_nav_click` | ✅ V0.71.0 |
 | **参数回测（P3-a P2 #10）** | `services/backtest.py` 3 维权重网格（tech×macro×news，≤125 组合）× 4 节点阈值带扫描笛卡尔积；`compute_sharpe(mean/std × √252)` / `compute_max_drawdown`（peak-tracking）/ `_direction_from_score(BULLISH/BEARISH/NEUTRAL)` + 复用 `judge_hit`；`daily_snapshots` + `gold_price_daily` 构造 T+1 涨跌幅；5 桶校准分箱（0-20/20-40/40-60/60-80/80-100）；`services/backtest_throttle.py` sha256(canonical_json)[:16] 模块级 5 分钟缓存 + `X-Backtest-Cached` header；`schemas/backtest.py` `WeightGrid` / `ThresholdBand` / `BacktestRequestIn` / `BacktestResultOut` / `BacktestCoverageOut` / `BacktestConfigIn/Out`；新端点 `POST /api/v1/backtest/run` + `GET /api/v1/backtest/coverage` + `GET/PUT /api/v1/backtest/config`（复用 settings 表 key=`backtest_config`，60s 缓存，不新建表）；`static/backtest.html`（参数 chips + 5 张 summary 卡 + 3 张 Chart.js + 命中详情表）+ `static/backtest-chart.js`（IIFE + `window.PM_Backtest` + 自注入 CSS + 500ms debounce）；新埋点 `backtest_run` / `backtest_param_change`；help.js 升级 V0.58.0 → V0.71.0 + silver 4 步 / backtest 3 步 tour | ✅ V0.71.0 |
 | 健康检查 | `GET /api/v1/health` | ✅ |
+| **告警推送（V0.72.0 P3-b #15）** | `Notifier` Protocol + `SMTPNotifier`（aiosmtplib 异步 SSL/STARTTLS）+ `ServerChanNotifier`（httpx POST `sctapi.ftqq.com/{sendkey}.send`）；`send_with_retry` 5s/30s/5min 三次退避；`AlertDispatcher` stateful 单例（`_sent_today` 按日期去重 + `_quiet_queue` 静默时段累积 + 醒后 09:30 BJT 汇总）；BULLISH↔BEARISH 主轴翻转 + 单日波动 ≥3% 触发；`alert_rules` 复用 `app_settings` 表 key='alert_rules'（与 weight_config / backtest_config 共表）；`GET/PUT /api/v1/settings/alert-rules` + `POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；4 渠道偏好 `browser / webpush / email / wechat`；scheduler.py `_capture_and_warm` 末尾钩入告警评估 | ✅ V0.72.0 |
+| **Web Push + PWA（V0.72.0 P3-b #15 续）** | VAPID EC P-256 密钥对（py-vapid X962 UncompressedPoint base64url）持久化到 `app_settings.vapid_keys`；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`）：endpoint unique + p256dh/auth Text + user_agent + created_at + archived_at（410 Gone 时设，查询 `WHERE archived_at IS NULL`）；`PushService.subscribe/unsubscribe/ensure_vapid_keys/deliver`（run_in_executor 包装同步 pywebpush）；4 端点 `GET /push/vapid-public-key`（首次自动生成）/ `POST /push/subscribe`（upsert by endpoint）/ `DELETE /push/subscribe?endpoint=` / `POST /push/test`（admin）；`static/manifest.json`（192/512/maskable 图标 + start_url /portfolio + shortcuts 银 / 回测）+ `static/sw.js`（gold-shell-v0.72.0 + gold-runtime-v0.72.0 双 cache + install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET + push handler + notificationclick）+ `static/offline.html`；`/sw.js` 路由 root scope `Service-Worker-Allowed: /` header；`static/pwa.js`（SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`）；9 页统一加 manifest link + apple-touch-icon + pwa.js | ✅ V0.72.0 |
+| **公开部署（V0.72.0 P3-b #16）** | 多阶段 Dockerfile（builder python:3.12-slim + gcc → runtime python:3.12-slim + curl + non-root appuser + HEALTHCHECK curl /api/v1/health，镜像 1.2GB → 280MB）；`docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron / volumes app_data+certbot_www+certbot_conf+backups + network gold_net）；`nginx/conf.d/gold.conf` 80→443 redirect + TLS 1.2/1.3 + HSTS + X-Frame-Options DENY + `/static/` 直出 7d immutable + `/api/` 反代 X-Forwarded-Proto https；`deploy/init-letsencrypt.sh` webroot 挑战幂等 + `--dry-run`；`middleware/admin_auth.py` `X-Admin-Token` 头（`secrets.compare_digest`，无 ADMIN_TOKEN env 时 skip）+ `middleware/rate_limit.py` per-IP 60s sliding window 120 req/min（`app_env!=test` 自动禁用）；写端点全覆盖；`docs/deployment.md` 完整 runbook | ✅ V0.72.0 |
+| **通知中心（V0.72.0 P3-b UI）** | `static/settings.html`（10 页第 10 个，5 区：管理员 Token / 告警规则 + 4 渠道勾选 / SMTP 状态 + 测试 / Server 酱状态 + 测试 / PWA + Web Push 订阅）+ `static/settings.js`（表单 + GET/PUT alert-rules + test-email + test-wechat + push subscribe UI + 管理员 Token 持久化 localStorage）+ `static/notifications.js` 推送统计抽屉（拉 `/api/v1/telemetry/stats?days=7` 按事件类型聚合）；help 升级 VERSION V0.71.0 → V0.72.0 + GLOSSARY 加 PWA/SMTP/Server酱/WebPush/VAPID 5 个术语 + settings.html 5 步 tour | ✅ V0.72.0 |
 
 ---
 
@@ -224,6 +228,14 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | GET | `/api/v1/resonance/signal` | **当日共振信号（4 类 + confidence 0-100，P2 #7 V0.70.0）** | - |
 | GET | `/api/v1/resonance/history` | **共振信号历史回放（按日期倒序）** | `days`(1-365) |
 | GET | `/api/v1/resonance/strength-up` | **STRONG_UP 命中率统计（样本<20 时 sample_warning=true）** | `days`(1-730)、`horizon`(1-30) |
+| GET | `/api/v1/settings/alert-rules` | **告警规则读取（P3-b #15 V0.72.0）** | - |
+| PUT | `/api/v1/settings/alert-rules` | **告警规则保存（PUT admin 守卫；channel 至少 1 项 + 不重复；波动阈值 0.1-20）** | body: `{level_crossing_enabled, volatility_enabled, volatility_pct, quiet_hours:{start,end}, channels:[]}` |
+| POST | `/api/v1/settings/test-email` | **测试邮件发送（admin 守卫；dev 模式无 ADMIN_TOKEN 时 skip；返回 `{channel,success,message}`）** | - |
+| POST | `/api/v1/settings/test-wechat` | **测试微信发送（admin 守卫；Server 酱 SendKey 验证）** | - |
+| GET | `/api/v1/push/vapid-public-key` | **VAPID 公钥（首次自动生成 EC P-256 持久化到 app_settings，P3-b #15 V0.72.0）** | - |
+| POST | `/api/v1/push/subscribe` | **Web Push 订阅 upsert by endpoint（push_subscriptions 表，P3-b #15 V0.72.0）** | body: `{endpoint, keys:{p256dh,auth}, user_agent?}` |
+| DELETE | `/api/v1/push/subscribe` | **退订（按 endpoint 硬删）** | query: `endpoint` |
+| POST | `/api/v1/push/test` | **管理员测试 push 推送（admin 守卫）** | - |
 
 ### 5.1 机会分析示例
 
@@ -297,6 +309,38 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 
 - 宏观参考指数 = Σ(因子友好度 × 权重)，0-100；**随宏观参数动态变化**（美债实时采集 `bond_zh_us_rate`，美元指数/VIX 静态参考值，央行购金为年度数据）
 - 综合趋势指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%（`services/macro.py::TECH_WEIGHT/MACRO_WEIGHT/NEWS_WEIGHT`，用户可在 `/weights` 调整）
+
+### 6.4 告警规则 + Web Push 订阅（V0.72.0）
+
+**alert_rules**（持久化到 `app_settings` 表，key=`alert_rules`；与 weight_config / backtest_config 同表）：
+
+| 字段 | 类型 | 默认 | 说明 |
+|------|------|------|------|
+| `level_crossing_enabled` | bool | True | 档位穿越告警（BULLISH↔BEARISH 主轴翻转；SIDEWAYS 抖动忽略） |
+| `volatility_enabled` | bool | True | 单日波动告警（按 `volatility_pct` 阈值） |
+| `volatility_pct` | float (0.1-20) | 3.0 | 波动阈值百分比（绝对值 ≥ 此值触发） |
+| `quiet_hours.start` | HH:MM | "22:00" | 静默起始（BJT） |
+| `quiet_hours.end` | HH:MM | "07:00" | 静默结束（BJT，跨夜有效） |
+| `channels` | list[NotifyChannel] | ["browser"] | 推送渠道偏好（按顺序尝试；至少 1 项 + 不重复） |
+| `updated_at` | datetime \| null | — | 上次保存时间（BJT） |
+
+**NotifyChannel**：`"browser" \| "webpush" \| "email" \| "wechat"`（4 选 N，Literal 校验）
+
+**push_subscriptions** 表（迁移 `9e2f4a1b8c7d_push_subscriptions.py`）：
+
+| 列 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| `id` | Integer | PK | 自增主键 |
+| `endpoint` | String(512) | UNIQUE NOT NULL | FCM / Mozilla 推送端点 URL |
+| `p256dh` | Text | NOT NULL | 椭圆曲线公钥（base64url） |
+| `auth` | Text | NOT NULL | 认证密钥（base64url） |
+| `user_agent` | String(256) | NULL | 订阅时浏览器 UA |
+| `created_at` | DateTime(timezone) | DEFAULT CURRENT_TIMESTAMP | 创建时间 |
+| `archived_at` | DateTime(timezone) | NULL + INDEX | 410 Gone 时设；查询 `WHERE archived_at IS NULL` 过滤活跃订阅 |
+
+**vapid_keys**（持久化到 `app_settings` 表，key=`vapid_keys`，BaseModel）：
+- `private_key`: PEM 编码 EC P-256 私钥（启动时若不存在则自动生成一次）
+- `public_key`: base64url 编码的 X962 UncompressedPoint（暴露给前端订阅）
 
 ---
 

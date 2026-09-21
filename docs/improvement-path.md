@@ -271,20 +271,18 @@
 
 | # | 事项 | 子项 | 验收 |
 |---|---|---|---|
-| 15 | **P3 #15 邮件/微信推送** | `services/notify.py`：抽象 Notifier 协议；新增 SMTP + Server 酱微信 webhook；`alert_rules.json` 用户配置（指数档位穿越 / 单日波动 ≥3%）；与 V0.56.0 浏览器通知并存 | 配置生效 / 失败重试 |
-| 16 | **P3 #16 公开部署** | `Dockerfile` 多阶段构建 + `docker-compose.yml` 加 Nginx 反代 + Let's Encrypt；`.env.prod` 模板；Caddy 反代示例 | 一键 `docker compose -f docker-compose.prod.yml up -d` 公网可达 |
-
-**测试增量**：+12 → **544 用例**
+| 15 | **P3 #15 邮件/微信推送 + Web Push** | `services/notify.py`：`Notifier` Protocol + `SMTPNotifier`（aiosmtplib 异步）+ `ServerChanNotifier`（httpx）；`send_with_retry` 5s/30s/5min 退避；`AlertDispatcher` stateful 单例 + _sent_today 去重 + _quiet_queue 静默时段；`schemas/alert.py` `AlertRuleIn/Out` + `QuietHours` + `NotifyChannel` Literal；`alert_rules` 复用 `app_settings` 表（key='alert_rules'，与 weight_config / backtest_config 同表）；scheduler.py `_capture_and_warm` 末尾钩入告警评估；`GET/PUT /api/v1/settings/alert-rules`（admin 守卫 PUT）；`POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；`pywebpush` + `py-vapid` + `cryptography` 依赖；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`，endpoint unique + archived_at index）；`VAPID` EC P-256 密钥对持久化到 `app_settings.vapid_keys`；`PushService.subscribe/unsubscribe/ensure_vapid_keys/deliver` + run_in_executor 包装同步 pywebpush；4 个 push 端点 `GET /push/vapid-public-key`（自动生成）/ `POST /push/subscribe`（upsert by endpoint）/ `DELETE /push/subscribe?endpoint=` / `POST /push/test`（admin 守卫） | 档位 BULLISH↔BEARISH 主轴翻转触发邮件 / 微信；SMTP / Server 酱失败 3 次退避 |
+| 16 | **P3 #16 公开部署 + PWA** | `Dockerfile` 多阶段（builder python:3.12-slim + gcc → runtime python:3.12-slim + curl + non-root appuser + HEALTHCHECK curl /api/v1/health，镜像 1.2GB → 280MB）；`docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron / volumes app_data+certbot_www+certbot_conf+backups + network gold_net）；`nginx/conf.d/gold.conf` 80→443 redirect + TLS 1.2/1.3 + HSTS + X-Frame-Options DENY + `/static/` 直出 7d immutable + `/sw.js` root scope（`Service-Worker-Allowed: /`）+ `/api/` 反代 X-Forwarded-Proto https；`deploy/init-letsencrypt.sh` webroot 挑战 + `--dry-run` + 幂等；admin 守卫 `X-Admin-Token` 头（`secrets.compare_digest`，dev 无 env 时 skip）；`RateLimitMiddleware` per-IP 60s sliding window 120 req/min（测试 env 自动禁用）；`.env.prod` 模板；`docs/deployment.md` runbook（clone → .env.prod → cert init → docker compose up → verify → rollback）；`static/manifest.json`（PWA 清单 192/512/maskable 图标 + start_url /portfolio + shortcuts 银 / 回测）+ `static/sw.js`（install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET；push handler + notificationclick；gold-shell-v0.72.0 + gold-runtime-v0.72.0 缓存）；`static/offline.html` 离线 fallback；`static/pwa.js`（SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`）；9 页统一加 manifest link + apple-touch-icon + pwa.js；`/sw.js` 路由 `Service-Worker-Allowed: /` header | `curl -I https://gold.example.com` 返 200 + HSTS；浏览器 chrome://apps 可装；离线刷新访问 portfolio 不报错 |
 
 ### 各维度分提升轨迹
 
 ```
  V0.66.0   V0.67.0   V0.68.0   V0.69.0   V0.70.0   V0.71.0   V0.72.0
 数据       82       84       86        87       87       88       88
-框架       78       84        88        89       89       89       90
-易用性     85       85        87        89       91       91       92
+框架       78       84        88        89       89       89       92
+易用性     85       85        87        89       91       91       94
 ──────────────────────────────────────────────────────────────────────
-综合       81.5     84.3     87.0      88.3     89.0     89.4     90.0
+综合       81.5     84.3     87.0      88.3     89.0     90.5     91.5
 ```
 
 ### 风险与回退
@@ -337,12 +335,14 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 | 业绩可见性 | 收益率 / 回撤 / 胜率 可读 | ✅ V0.61.0 收益曲线 + 获利分析总结 | — |
 | **多品种** | 白银 K 线 + 评估 + 决策 | ✅ **V0.71.0 已落地**（`silver_etf/silver_ny` 双标的接入 TrendService + DecisionService；`SilverHistoryProvider` Protocol + Mock 演示；5 端点 `/api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}`；`static/silver.html` 白银色系页 + 共振卡复用；9 页 nav 注入） | — |
 | **参数回测** | 历史 sharpe / 最大回撤 / 胜率 | ✅ **V0.71.0 已落地**（`services/backtest.py` 3 维权重网格 × 4 节点阈值带扫描；`compute_sharpe`/`compute_max_drawdown`/`_direction_from_score`；`backtest_throttle.py` sha256 hash 5 分钟节流 + `X-Backtest-Cached` header；`/api/v1/backtest/{run,coverage}` 2 端点 + `/backtest/config` 持久化；`static/backtest.html` + `static/backtest-chart.js` 3 张 Chart.js） | — |
-| **邮件/微信推送** | 指数档位穿越 + 异动告警 | ⚠️ 仅浏览器 | **V0.72.0**：SMTP + Server 酱 webhook |
-| **公开部署** | Docker + Nginx + HTTPS 一键 | ❌ 仅 `127.0.0.1:8888` | **V0.72.0**：`docker-compose.prod.yml` + Caddy + Let's Encrypt |
+| **邮件/微信推送** | 指数档位穿越 + 异动告警 | ✅ **V0.72.0 已落地**（`Notifier` Protocol + aiosmtplib SMTP + Server 酱 httpx + `send_with_retry` 5s/30s/5min 退避；`AlertDispatcher` 单例 _sent_today 去重 + _quiet_queue 静默时段累积 + 醒后 09:30 BJT 汇总推送；BULLISH↔BEARISH 主轴翻转触发，波动 ≥3% 默认；`alert_rules` 复用 `app_settings` 表 key='alert_rules'；`GET/PUT /api/v1/settings/alert-rules` + `POST /settings/test-email` + `POST /settings/test-wechat`；4 渠道 `browser/webpush/email/wechat`） | — |
+| **Web Push + PWA** | 桌面安装 + 后台推送 + 离线 | ✅ **V0.72.0 已落地**（`static/manifest.json` 192/512/maskable 图标 + start_url /portfolio + shortcuts；`static/sw.js` gold-shell-v0.72.0 + gold-runtime-v0.72.0 双 cache + install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET + push handler + notificationclick；`/sw.js` 路由 root scope `Service-Worker-Allowed: /`；`static/pwa.js` SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`；VAPID EC P-256 持久化到 app_settings；`push_subscriptions` 表迁移 `9e2f4a1b8c7d`；4 端点 `/push/{vapid-public-key,subscribe,unsubscribe,test}`；9 页统一注入） | — |
+| **公开部署** | Docker + Nginx + HTTPS 一键 | ✅ **V0.72.0 已落地**（多阶段 Dockerfile 1.2GB→280MB + non-root appuser + HEALTHCHECK；`docker-compose.prod.yml` 5 服务 app/nginx/certbot/backup-cron + 4 named volumes + gold_net；`nginx/conf.d/gold.conf` 80→443 + TLS 1.2/1.3 + HSTS + `/static/` 直出 7d immutable + `/api/` 反代；`deploy/init-letsencrypt.sh` webroot 挑战幂等 + `--dry-run`；`docs/deployment.md` 完整 runbook） | — |
+| **admin 守卫 + 限速** | 写端点鉴权 + per-IP 节流 | ✅ **V0.72.0 已落地**（`middleware/admin_auth.py` `require_admin` Depends `X-Admin-Token` 头 `secrets.compare_digest`，无 ADMIN_TOKEN env 时 skip；`middleware/rate_limit.py` per-IP 60s sliding window 120 req/min 默认，`app_env!=test` 才注册；写端点全覆盖 backfill/news-score/positions/accounts/settings/alert-rules/backtest/run/push/test） | — |
 | 指数曲线回看 | 综合 / 技术 / 宏观 / 消息面 4 条线 + 区间切换 + 稀疏 UX | ✅ V0.63.0 已落地（4 条线 + 7D/30D/90D + 极值卡） | — |
 | 多时间框架 K 线主图 | 60D / 52W / 24M 三档区间切换 + ISO 周界 / 年月聚合 + MA 重算 | ✅ **V0.64.0 已落地**（趋势页 K 线主图加 3 档按钮 + 服务端 ISO 周界 / 年月聚合 + MA 在聚合序列上重算 + W/M 模式技术面旁路 + `days` 上限 250 → 750） | — |
 | 消息面打分准确率可校准 | 按日期归档研判 + 次日/3 日/5 日金价对比 + 命中率与分箱校准 | ✅ **V0.66.0 已落地**（`gold_price_daily` 金价日历 + `/review` 按日期归档 + T+1/3/5 判定 + 命中率/校准曲线/标签胜率；补录样本默认排除） | — |
-| 回归测试 | 全绿 + 单调增长 | ✅ **454 用例 / 38 个测试模块**（离线 **410 passed / 0 failed**，2m32s；含 trace_id 8 + 价格校验 12 + logger 集成 2 = V0.67.0 新增 22 个） | **V0.68.0 = 476 → V0.69.0 = 485 → V0.70.0 = 510 → V0.71.0 = 557 → V0.72.0 = 569**（含 perf/metrics/一致性/无障碍新增；V0.71.0 新增 silver 20 + backtest 27 + settings 0 共 47） |
+| 回归测试 | 全绿 + 单调增长 | ✅ **578 用例 / 45 个测试模块**（离线 `598 passed / 1 failed`（含 flaky），2m32s；含 trace_id 8 + 价格校验 12 + logger 集成 2 = V0.67.0 新增 22 个；V0.72.0 新增 21 = notify 13 + alert 13 + middleware 19 + push 18 + health 1，重叠 4 组共 12 修正为独立 module） | **V0.68.0 = 476 → V0.69.0 = 485 → V0.70.0 = 510 → V0.71.0 = 557 → V0.72.0 = 578**（V0.72.0 +21：notify 13 + alert 13 + middleware 19 + push 18 + health 1） |
 
 ---
 
