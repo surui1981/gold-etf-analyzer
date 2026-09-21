@@ -1,13 +1,29 @@
+# V0.72.0 P3-b：dev 模式单机 docker-compose
+# ─────────────────────────────────────────────────────
+# 用于本地开发：源码 bind mount + .env 直读 + 端口 8888 暴露
+# 生产部署用 docker-compose.prod.yml（5 服务 + nginx + certbot + backup-cron）
+
 services:
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: gold-etf-analyzer
+    env_file: .env
+    environment:
+      - APP_ENV=dev
     ports:
       - "8888:8888"
-    environment:
-      - APP_ENV=prod
-      - DATABASE_URL=sqlite+aiosqlite:///./data/gold_etf.db
     volumes:
-      # 持久化 SQLite 数据文件
+      # 源码 bind mount（开发期改代码 + 容器内 reload 友好）
+      - ./src:/app/src:ro
+      - ./static:/app/static:ro
+      # 持久化 SQLite（开发期 ./data 与容器内 /app/data 共享）
       - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8888/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
     restart: unless-stopped

@@ -1,0 +1,83 @@
+# V0.72.0 P3-b：生产环境 docker-compose（5 服务）
+# ───────────────────────────────────────────────────────
+# 启动顺序：certbot-init（一次性）→ app（healthcheck 通过）→ nginx → certbot（长跑） → backup（长跑）
+# 数据：SQLite 存 named volume `app_data`；备份文件在 named volume `backups`
+# HTTPS：certbot 自动续期，每 12h 跑一次 `certbot renew`
+#
+# 启动命令：
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+# 首次部署前必须跑 init-letsencrypt.sh 签发证书
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: gold-etf-analyzer:v0.72.0
+    container_name: gold-app
+    env_file: .env.prod
+    environment:
+      - APP_ENV=prod
+    volumes:
+      # 持久化 SQLite + 日志
+      - app_data:/app/data
+    expose:
+      - "8888"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8888/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - gold_net
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: gold-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      # 静态资产由 nginx 直出（不经过 FastAPI）
+      - ./static:/usr/share/nginx/html/static:ro
+      # Certbot 证书
+      - certbot_www:/var/www/certbot:ro
+      - certbot_conf:/etc/letsencrypt:ro
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - gold_net
+
+  certbot:
+    image: certbot/certbot
+    container_name: gold-certbot
+    volumes:
+      - certbot_www:/var/www/certbot:rw
+      - certbot_conf:/etc/letsencrypt:rw
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $$!; done'"
+    restart: unless-stopped
+
+  backup:
+    image: alpine:3.20
+    container_name: gold-backup
+    volumes:
+      - app_data:/app/data:ro
+      - backups:/backups
+    entrypoint: "/bin/sh -c 'apk add --no-cache sqlite >/dev/null 2>&1 || true; while :; do sqlite3 /app/data/gold_etf.db \".backup /backups/gold_etf-$$(date +%F).db\"; sleep 86400 & wait $$!; done'"
+    restart: unless-stopped
+
+volumes:
+  app_data:
+  certbot_www:
+  certbot_conf:
+  backups:
+
+networks:
+  gold_net:
+    driver: bridge

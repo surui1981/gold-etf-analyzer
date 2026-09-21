@@ -82,3 +82,37 @@ jobs:
           path: .pytest_results/
           if-no-files-found: ignore
           retention-days: 7
+
+  docker-build:
+    # V0.72.0 P3-b：tag 推送时构建多阶段镜像并 dry-run 启动验证
+    # 仅 tag 触发（PR 不跑，节省 CI 分钟）；构建产物不上传（GHCR 推送在 release workflow）
+    name: docker multi-stage build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (runtime stage)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: runtime
+          tags: gold-etf-analyzer:${{ github.ref_name }}
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test (boot + healthcheck)
+        run: |
+          docker run --rm -d --name gold-smoke -p 8889:8888 \
+            -e APP_ENV=test -e RATE_LIMIT_PER_MIN=0 \
+            gold-etf-analyzer:${{ github.ref_name }}
+          sleep 15
+          curl -fsS http://localhost:8889/api/v1/health || (docker logs gold-smoke; exit 1)
+          docker stop gold-smoke
