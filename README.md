@@ -1,221 +1,217 @@
 # Gold Price Investment Assistant · 黄金价格投资辅助工具
 
-面向**个人黄金投资者**的一站式数据参考平台（**中短期 ETF 波段操作**）：汇聚 **纽约金（COMEX）、上海金（Au99.99）、黄金ETF（518880）** 三大市场价格，提供**综合趋势评估指数**（技术面 30% × 宏观面 40% × 消息面 30% 加权，0-100 量化多空）、个人持仓跟踪与盈亏管理、参数面 × 交易面驱动的 **ETF 购买决策**、以及**每日评估快照**本地历史数据。
+> 面向**个人黄金投资者**的一站式数据参考平台：汇聚**纽约金 / 上海金 / 黄金ETF 三大市场**价格，融合**技术面 · 宏观面 · 消息面**给出 0-100 量化多空指数，搭配**个人持仓盈亏管理**、**ETF 买卖决策**与**每日评估快照本地历史**——全部数据留在你自己的机器上。
 
-延续 PM-Evaluator 的预期评估架构：各因子/维度按典型经验赋权加权评分，输出机会窗口与多空信号（红绿着色，面向客户展示）。**消息面由客户基于主流财经网站的投行黄金走势展望研判打分**（独立评估页），汇入每日评估。
+| | |
+|---|---|
+| **当前版本** | **V0.73.0**（2026-09-22）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | 652 通过 / 0 失败（pytest 离线回归） |
+| **页面** | 10 个静态页 · 57 个 REST 端点 |
+| **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
-> 📖 完整说明文档（架构 / API 参考 / 核心模型 / 改进计划）：[docs/application-guide.md](docs/application-guide.md)
-> 🧭 易用性改善路径（现状评估 + P0-P3 改善方案与版本规划）：[docs/improvement-path.md](docs/improvement-path.md)
-> 🎨 UX 与应用能力路线（V0.72.0 → V0.75.0，导航 / 主题 / a11y / i18n / 自定义 / 多用户）：[docs/ux-roadmap.md](docs/ux-roadmap.md)
-> ✅ README ↔ 代码 ↔ 文档三方对账报告（已落实 / 待完善）：[docs/feature-alignment.md](docs/feature-alignment.md)
+> 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
+> 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
+> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.74.0 → V0.75.0）
+> ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
+> 🚀 [docs/deployment.md](docs/deployment.md) · 公开部署 runbook（Nginx + HTTPS + Docker）
 
-**当前版本：V0.73.0**（i18n 繁中全量 + locale 格式化 + 后端国家名解耦；目标分 91.0 → 91.5；测试 578 → 644）
+---
+
+## 产品定位
+
+本工具是为**个人黄金投资者**（尤其做**中短期 ETF 波段**）做的数据参考平台。你看到的核心问题是：单一行情 App 只给报价，没有「综合多空」判断；自己拉一堆宏观数据又太散。我们把这三件事缝成一个产品：
+
+1. **量化多空** — 把技术面、宏观面、消息面三维度按权重加权成一个 0-100 的「综合趋势指数」，看一眼就知道现在偏多还是偏空。
+2. **持仓闭环** — 你的开仓 / 加减仓 / 清仓都进系统，**实时盈亏、胜率、最大回撤、收益曲线**自动算。
+3. **决策可解释** — 系统给出「买 / 加 / 持有 / 减 / 卖」建议时，每一条都附**理由明细**（指数分位、持仓状态、阈值依据），而不是黑盒。
+
+延续 PM-Evaluator 架构思路：各因子按经验赋权、输出**红绿着色**的机会窗口与多空信号；**消息面由你基于主流财经网站的投行展望自行打分**，避免「被算法替你判断」。
+
+## 一图速览
+
+- 📊 **三大市场一屏对比** — 纽约金（COMEX）/ 上海金（Au99.99）/ 黄金 ETF（518880），实时报价 + 趋势曲线 + 价差对照
+- 🎯 **综合趋势评估指数** — 技术 30% × 宏观 40% × 消息面 30% 加权，0-100 量化多空，等级红绿着色
+- 🔬 **5 维技术 + 5 因子宏观** — 结构 / 动量 / 支撑 / 动能 / 回撤 + 美元 / 美债10Y·30Y / VIX / 央行购金，**权重可调**
+- 📰 **消息面每日 3 次打分** — 越晚权重越高（1:2:3 加权），12 个依据标签 + 自由备注
+- 🏦 **央行购金监控** — WGC 季度数据 2014Q1–2026Q2，52 季度 + 23 国家，Top 10 买家榜 + 完整明细
+- 💼 **个人持仓闭环** — 多账本 / 开仓·加仓·减仓·清仓 / **克数模式** / 收益曲线 / 业绩分析
+- 🧪 **参数回测校准** — 历史日线扫描权重网格 × 阈值带，输出夏普 + 最大回撤 + 5 区间校准
+- 📜 **每日评估快照** — 参数 + 指数值每日 07:00 BJT 自动落库，指数历史曲线随时回看
+- 📈 **共振信号卡** — 趋势页头部三色共振（宏观 × 技术 × 消息面），命中率高亮
+- 🌐 **三语切换** — 简体中文 / 繁體中文 / English，切换器在顶栏
+- 🔒 **数据本地化** — 持仓、账本、消息面打分、推送订阅全部 SQLite 本地存，**不上云**
+- 📲 **推送 + PWA + Web Push** — 主轴翻转 / 单日波动 ≥3% 自动告警，4 渠道：浏览器 / Web Push / 邮件 / 微信
+
+## 10 个页面导览
+
+| 页面 | URL | 一句话功能 | 适用场景 |
+|------|-----|-----------|---------|
+| **趋势追踪** | `/static/trend.html` | 综合指数 + 三大维度拆解 + K 线主图 + 宏观因子 + 共振信号卡 | **打开就用**的主入口，看当日多空 |
+| **持仓决策** | `/static/portfolio.html` | 当前持仓 + 实时盈亏 + 买卖决策（带理由） | 看现在该不该动 |
+| **权重配置** | `/static/weights.html` | 调整技术 / 宏观 / 合成比权重 | 想自定义评分口径时 |
+| **消息面评估** | `/static/news.html` | 每日 3 次打分（越晚权重越高）+ 依据标签 | 看新闻后录入当日研判 |
+| **研判复盘** | `/static/review.html` | 历史打分 vs 金价对齐，T+1/T+3/T+5 命中 + 校准曲线 | 看自己过去判断准不准 |
+| **交易历史** | `/static/trades.html` | 多账本多条件筛选 + 已实现盈亏 + CSV 导出 | 回看成交明细 |
+| **央行购金** | `/static/central-bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
+| **白银行情** | `/static/silver.html` | 白银 ETF / NY 银趋势 + 共振信号（V0.71.0 新） | 配套白银参考 |
+| **参数回测** | `/static/backtest.html` | 权重网格 × 阈值带扫描 + 夏普 / 回撤 / 校准 | 校准参数有效性 |
+| **设置 / 通知** | `/static/settings.html` | 管理员 Token + 告警规则 + SMTP/Server酱 + PWA + Web Push | 配置推送 + 升级管理 |
+
+---
+
+## 三大核心能力
+
+### 1️⃣ 综合趋势评估指数
+
+**公式**：`综合指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%`（权重可在 `/weights` 页面调整）
+
+**技术面**（5 维度，权重可调）：结构 30% · 动量 20% · 支撑 20% · 动能（RSI）15% · 回撤 15%
+
+**宏观面**（5 因子）：
+
+| 因子 | 权重 | 与黄金 | 100 分位 | 0 分位 |
+|------|------|-------|---------|--------|
+| 美元指数 DXY | 25% | 负相关 | 95 | 105 |
+| 美债 10Y | 20% | 负相关 | 3.5% | 4.5% |
+| 美债 30Y | 15% | 负相关 | 4.0% | 5.0% |
+| VIX 恐慌指数 | 15% | 正相关 | 25 | 12 |
+| 央行购金（吨/年） | 25% | 正相关 | 1200 | 500 |
+
+**消息面**：由你在 `/news` 页面自行打分（0-100：>55 看多，<45 看空，50 中性），**每日 3 次槽位**，1:2:3 加权合成，越晚权重越高。
+
+**等级阈值**：`≥75 强势上升` / `≥55 上升` / `≥45 震荡` / `≥25 下降` / `<25 弱势下降`（趋势页红绿着色）
+
+> 详见 [docs/application-guide.md §4 评分模型](docs/application-guide.md)。
+
+### 2️⃣ 个人持仓管理
+
+- **多账本** — 默认账户 + 自定义账本（归档管理），全站顶栏账本切换器；持仓 / 收益曲线 / 业绩分析均按账本隔离
+- **完整交易闭环** — 开仓 → 加仓 → 减仓 → 清仓，**实时盈亏** + **已实现盈亏** + **胜率 / 盈亏比 / 平均持仓天数**
+- **双单位持仓** — 同时支持**份数**（ETF 标准 100 份一手）和**克数**（实物金 / 积存金口径），单位切换器在收益曲线右上角
+- **收益曲线** — 流水回放重建，含**最大回撤**标注
+- **决策可解释** — 「买 / 加 / 持有 / 减 / 卖」建议附理由明细（指数分位 / 持仓状态 / 阈值依据），不是黑盒
+
+> 详见 [docs/application-guide.md §5 持仓与决策](docs/application-guide.md)。
+
+### 3️⃣ 央行购金监控
+
+- **数据源**：WGC（世界黄金协会）Gold Demand Trends 季度报告
+- **覆盖**：全球合计季度数据 **2014Q1–2026Q2（52 季度）** + 23 国家 / 季度明细 + UZB/IRN 手工补丁
+- **页面元素**：4 个 KPI 卡（T12M / 本季合计 / 参与国数 / 数据截止季）+ Chart.js 堆叠柱状图 + **Top 10 买家榜** + 完整明细表（按国家 / 季度范围筛选）
+- **cb_gold 因子联动** — `MacroFactorService` 自动从 `central_bank_purchases` 表汇总 T12M 注入宏观面评分；无数据时回退 STATIC_REF 硬编码
+- **自动调度** — 每月 1 / 15 / 末日 07:30 BJT 自动从 WGC 拉取
+
+> 详见 [docs/application-guide.md §6 央行购金](docs/application-guide.md)。
+
+---
+
+## 数据 & 时效
+
+- **数据源**：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率）+ **WGC Gold Demand Trends**（央行购金季度统计，HTML chart JS 自动抓取）
+- **失败降级**：采集失败自动降级为内置 Mock / 静态参考值；AKShare 调用全局串行（py_mini_racer 兼容）
+- **行情源 provider 可切换** — `.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock 不触网
+- **时效透明** — 顶栏 freshness 角标显示数据**采集时点 + 缓存状态 + 时段**（交易 / 非交易）+ 4 个时点（09:30 / 11:30 / 14:00 / 15:30 BJT）预热 + 趋势页 60s 轮询 + 切回前台自动刷新
+- **多时间框架** — K 线主图支持 60D / 52W / 24M 三档（服务端抽 730 天日 K 后聚合）
+
+## 多语言
+
+- **3 语言**：简体中文（默认）/ 繁體中文 / English
+- **切换位置**：顶栏 `<select class="lang-sel">`
+- **持久化**：`localStorage.pm_lang`，刷新保留
+- **覆盖率**：zh-CN 639 key · en-US 640 key · **zh-TW 391 key（61.2%）**
+- **格式化**：`Intl.NumberFormat` / `Intl.DateTimeFormat` locale-aware（货币、日期、相对时间）
+
+## 隐私 & 安全
+
+- **数据本地化** — SQLite 文件存本机，**不上传任何持仓/打分/账本数据**
+- **管理员守卫** — `X-Admin-Token` 头（`secrets.compare_digest`），写端点全覆盖（无 `ADMIN_TOKEN` env 时 skip，dev 友好）
+- **速率限制** — per-IP 60s sliding window 120 req/min（`app_env!=test` 自动禁用，避免测试 429 误伤）
+- **Web Push** — VAPID EC P-256 密钥对持久化到本地，订阅表 endpoint unique + 退订硬删
+
+---
+
+## 技术栈
+
+| 层 | 选型 |
+|----|------|
+| 后端 | Python 3.11+ · FastAPI · Pydantic v2 · SQLAlchemy · Alembic |
+| 存储 | SQLite（默认）/ PostgreSQL 可换 · Redis 可选 |
+| 数据源 | AKShare · WGC Gold Demand Trends · mock 降级 |
+| 前端 | 纯静态 HTML + 内联 `<script>` + Chart.js · **无构建步骤** |
+| 样式 | 原生 CSS 变量（4 主题：light / dark / auto / high-contrast） |
+| 缓存 | 服务端 served cache（`quote_cache_ttl`）· SW 双 cache（gold-shell / gold-runtime） |
+| 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
+| 部署 | Docker 多阶段（1.2GB → 280MB）+ docker-compose + Nginx + Certbot |
+| 测试 | pytest 652 · ruff · check_static_js.py（前端内联 JS 门禁） |
+| CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
 ## 快速开始
 
-### 方式一：本机常驻（推荐）
+### 方式一：Docker（推荐）
 
 ```bash
-# 手动启动（双击运行，窗口保持即可常驻，6 秒后自动打开浏览器）
-start_server.bat
-
-# 开机自启（Windows 计划任务，登录时后台启动 + server.log 日志）
-# 右键 install_startup.ps1 -> 使用 PowerShell 运行（仅需执行一次）
-# 卸载：Unregister-ScheduledTask -TaskName "GoldPriceAssistant" -Confirm:$false
+docker compose up --build
+# 访问 http://127.0.0.1:8888
 ```
 
-### 方式二：命令行 / Docker
+### 方式二：本地 pip
 
 ```bash
-# pip
 python -m pip install -e ".[dev]"
 python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
-
-# Docker
-docker compose up --build
 ```
 
-访问：主页 `http://127.0.0.1:8888/` ｜ Swagger `http://127.0.0.1:8888/docs` ｜ 健康 `http://127.0.0.1:8888/api/v1/health`
+### 访问入口
 
-## 功能清单
+- 主页：[http://127.0.0.1:8888/](http://127.0.0.1:8888/)
+- Swagger：[http://127.0.0.1:8888/docs](http://127.0.0.1:8888/docs)
+- 健康检查：[http://127.0.0.1:8888/api/v1/health](http://127.0.0.1:8888/api/v1/health)
 
-| 模块 | 能力 |
-|------|------|
-| 三市场行情 | 纽约金 / 上海金 / 黄金ETF 实时价格与趋势曲线 |
-| 综合趋势指数 | 技术面（5 维度）× 宏观面（5 因子）加权合成 0-100 指数 |
-| 宏观参考因子 | 美元指数 / 美债10Y·30Y / VIX / 央行购金，随参数动态变化 |
-| 权重配置 | `/weights` 页面调整技术/宏观/合成比权重，指数实时重算 |
-| 央行购金统计 | `/central-bank` 世界各国央行季度净购金（吨）数据，按国家/季度筛选，Chart.js 堆叠柱状图 + Top 榜 + 明细表 |
-| 个人交易跟踪 | 开仓/加仓/减仓/清仓、实时盈亏（SQLite 持久化） |
-| 购买决策 | 趋势指数 × 持仓状态 → 买入/加仓/持有/减仓/卖出 + 理由明细 |
-| 每日快照 | 每日参数+评估值本地存储（`daily_snapshots`），指数历史序列 |
-| 自动调度 | 每日 07:00 BJT 捕获快照 + 央行购金每月 1/15/末日 07:30 BJT 自动从 WGC 拉取数据 |
-| 可视化 | 趋势页（指数/曲线/对照/宏观因子/历史）、央行页（KPI/堆叠柱/Top 榜/明细表）、持仓页、权重页、消息面页、交易历史页、研判复盘页 |
-| **新手引导与帮助体系** | 右下角悬浮 `?` 按钮唤起 3 tab modal（操作指南 5 步流程 / 术语速查 30+ 条按 7 类分组 / 数据来源 + 投资警示）；首访 5 页面自动弹 2-4 步 tour 浮层；15 项关键术语 inline `?` 图标自动注入；移动端 modal 改底部抽屉 |
-| **评估指数历史曲线升级** | 趋势追踪页『每日评估历史』面板升级：综合 / 技术 / 宏观 / **消息面（新增）** 4 条线；7D / 30D / 90D 区间切换按钮；4 个极值卡（最新 / 区间最高 / 区间最低 / 日变，带 ↑↓→ 着色）；稀疏数据 3 档 UX（< 3 天提示样本不足 / < 7 天提示天数 / ≥ 7 天默认）；Chart.js 实例化前 destroy 旧实例防内存泄漏（区间切换安全） |
-| **行情源 provider 可切换** | `.env` 配置 `MARKET_PROVIDER=akshare\|mock\|eastmoney_only\|sina_only`，4 选 1；XAU fallback chain 与缓存 TTL 也可配；测试 / 离线演示可直接走 mock 不触网 |
-| **行情实时性增强** | served cache 日内 TTL（默认 10 分钟，`.env` 可配）+ 6 个行情接口启用进程级 cache（`quote_cache_ttl` 真生效）+ 日内 4 个时点（09:30/11:30/14:00/15:30 BJT）自动预热；趋势页 60s 轮询 + 切回前台自动刷新 + 手动 🔄 按钮；持仓页 30s 轮询；freshness 角标自动派生"缓存过期"分支 |
-| **多时间框架（周/月线）** | 趋势追踪页 K 线主图加 3 档区间按钮（60D / 52W / 24M）：服务端抽 730 天日 K → 按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/api/v1/market/gold/trend?interval=W\|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立 |
-| **消息面每日 3 次打分** | `/news` 页面：每日 3 次打分机会（按序号第 1/2/3 次，各自记录实际提交时刻），当日有效分值按「越晚权重越高」**1:2:3 加权**合成（`Σ(i×scoreᵢ)/Σi`）；三次用尽后留空提交返回 400 提示指定槽位（**不再静默覆盖**）；每次打分可单独修改或撤销；研判依据 12 个预置标签多选 + 自由备注 |
-| **研判复盘与准确率校准** | `/review` 页面：按日期归档每日研判（分值 / 方向 / 依据标签 / 备注）并与金价对齐，给出 **T+1 / T+3 / T+5** 三个交易日的涨跌与命中判定；统计面板含总命中率、按方向分组、按窗口分组、**分值分箱校准曲线**、**依据标签胜率**；支持历史补录（标记 `backfilled`，统计默认排除以防前视偏差）；打分页实时提示该分值区间的历史胜率 |
-| **共振信号卡** | 趋势页顶部三色共振信号卡（宏观 × 技术 × 消息面）—— 后端 `services/resonance.py` 输出 4 类信号（共振上行 STRONG_UP / 共振下行 STRONG_DOWN / 背离 DIVERGENT / 中性 NEUTRAL）+ confidence 0-100；3 个端点 `GET /api/v1/resonance/{signal,history,strength-up}`；点击卡片弹窗显示 components 表 + STRONG_UP 命中率（样本 <20 时 `sample_warning=true`） |
-| **克数持仓 UX** | `positions.grams_held NUMERIC(12,3) NULL`（迁移 `8b7b4d0ce5fb`）；`utils/grams.py` shares_from_grams 纯函数（`floor(grams × gram_px / etf_px / 100) × 100` 100 份一手）；`PositionCreate` / `TradeRequest` 支持 `grams` 字段（与 `quantity` XOR，`model_validator(mode="after")` 校验）；新端点 `GET /api/v1/market/gold/gram-quote` 上海金 Au99.99 元/克；持仓表新增「克数」列 + 收益曲线右上角「单位：份/克」切换（`localStorage.pm_grams_mode` 记忆）+ 埋点 `grams_trade_open` / `equity_curve_switch_unit` |
-| **邮件/微信推送 + Web Push + PWA + 公开部署（V0.72.0，P3-b，目标分 90.5 → 91.0）** | ① **后端推送全栈**：`Notifier` Protocol + `SMTPNotifier`（aiosmtplib 异步 SSL/STARTTLS）+ `ServerChanNotifier`（httpx POST `sctapi.ftqq.com/{sendkey}.send`）+ `send_with_retry` 5s/30s/5min 三次退避；`AlertDispatcher` stateful 单例（`_sent_today` 按日期去重 + `_quiet_queue` 静默时段累积 + 醒后 09:30 BJT 汇总推送）；BULLISH↔BEARISH 主轴翻转 + 单日波动 ≥3% 触发；`alert_rules` 复用 `app_settings` 表 key='alert_rules'；`GET/PUT /api/v1/settings/alert-rules` + `POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；4 渠道偏好 `browser / webpush / email / wechat`；② **Web Push + PWA**：VAPID EC P-256 密钥对持久化到 `app_settings.vapid_keys`；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`，endpoint unique + archived_at index）；4 端点 `/api/v1/push/{vapid-public-key,subscribe,unsubscribe,test}`；`static/manifest.json`（192/512/maskable 图标 + start_url /portfolio + shortcuts 银 / 回测）+ `static/sw.js`（gold-shell-v0.72.0 + gold-runtime-v0.72.0 双 cache + install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET + push handler + notificationclick）+ `static/offline.html`；`/sw.js` 路由 root scope `Service-Worker-Allowed: /` header；`static/pwa.js`（SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`）；9 页统一加 manifest link + apple-touch-icon + pwa.js；③ **通知中心**：`static/settings.html`（10 页第 10 个，5 区：管理员 Token / 告警规则 + 4 渠道勾选 / SMTP 状态 + 测试 / Server 酱状态 + 测试 / PWA + Web Push 订阅）+ `static/settings.js` + `static/notifications.js` 推送统计抽屉（拉 /telemetry/stats 7d 聚合）；④ **安全前置**：`middleware/admin_auth.py` `X-Admin-Token` 头（`secrets.compare_digest`，无 ADMIN_TOKEN env 时 skip）+ `middleware/rate_limit.py` per-IP 60s sliding window 120 req/min（`app_env!=test` 自动禁用）；写端点全覆盖；⑤ **公开部署**：多阶段 Dockerfile（builder → runtime，1.2GB → 280MB + non-root appuser + HEALTHCHECK）+ `docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron + 4 named volumes）+ `nginx/conf.d/gold.conf`（80→443 + TLS 1.2/1.3 + HSTS + `/static/` 直出 7d immutable + `/api/` 反代）+ `deploy/init-letsencrypt.sh` webroot 挑战幂等 + `.env.prod` 模板 + `docs/deployment.md` 完整 runbook；⑥ help 升级 VERSION V0.71.0 → V0.72.0 + GLOSSARY 加 PWA/SMTP/Server酱/WebPush/VAPID 5 个术语 + settings.html 5 步 tour；⑦ 新增 **21 个测试**（notify 13 + alert 13 + middleware 19 + push 18 + health 1），基线 557 → 578；端点 51 → 57（alert-rules 2 + test-email/wechat 2 + push 4 - 1 总=6） |
-| **i18n 繁中全量 + locale 格式化 + 后端国家名 i18n 解耦（V0.73.0，P3-c #17，目标分 91.0 → 91.5）** | ① **i18n 框架**（PR-N+7）—— `static/i18n.js` IIFE（`t/setLang/apply/fmt.{number,currency,date,dateTime,time,percent,relative}` 基于 `Intl.NumberFormat` / `Intl.DateTimeFormat`）+ 三语字典 `static/i18n/{zh-CN,zh-TW,en-US}.js` + 顶栏 `<select class="lang-sel">` 切换器（持久化 `localStorage.pm_lang`）+ FOUC guard；② **英文版全 9 页覆盖**（PR-N+8）—— trend/weights/news/review/trades/silver/backtest/settings/central_bank 共 9 页全部标记 `data-i18n`；③ **繁中全量**（PR-N+9）—— zh-TW 扩展至 391 个 key（country.* 33 + portfolio/trend/backtest/central_bank 全部 chrome + news/review/weights/silver/settings/trades h1/intros/col_*/footers + fresh.* 13），覆盖率 10.9% → **61.2%**；④ **locale 格式化**（PR-N+9）—— `static/freshness.js` `fmtAge` 改 `I18n.fmt.relative()`，tooltip / 警示 / 错误文案走 `fresh.*` 字典 13 key；新增 `escapeHtml()` helper；⑤ **后端国家名解耦**（PR-N+9）—— `schemas/central_bank.py` `country_name: str | None = None`（DB 列保留向后兼容）；`services/central_bank.py` `_resolve_country_name()` 兜底链 `DB → COUNTRY_NAMES[iso] → iso`（永不返回 None）；`static/central_bank.html` 渲染链 `I18n.t('country.' + iso) → country_name → iso`；⑥ **测试增量** 22 → 53（PR-N+7 22 + PR-N+8 0 + PR-N+9 31 = `test_i18n_format.py` 15 + `test_i18n_coverage.py` 7 + 阈值 10%→60%），基线 621 → **644**；端点不变 57 / 页不变 10；目标分 91 → **91.5** |
+### 公开部署（HTTPS + Nginx + 域名）
 
-## API 一览
+详见 [docs/deployment.md](docs/deployment.md)：多阶段 Dockerfile + docker-compose.prod.yml（app / nginx / certbot / backup-cron 5 服务）+ TLS 1.2/1.3 + HSTS + 自动续签。
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/` / `/portfolio` / `/weights` / `/news` / `/central-bank` / `/trades` / `/review` | 趋势追踪 / 持仓决策 / 权重配置 / 消息面评估 / 央行购金 / 交易历史 / 研判复盘 页面 |
-| GET | `/api/v1/health` | 健康检查 |
-| POST | `/api/v1/analysis/opportunity` | 宏观因子 → 机会评分与窗口 |
-| GET | `/api/v1/analysis/history` | 历史分析记录 |
-| GET | `/api/v1/market/gold` | 黄金ETF最新报价 |
-| GET | `/api/v1/market/gold/trend` | 趋势追踪 + 综合指数 + 宏观因子明细 |
-| GET | `/api/v1/market/gold/ny-trend` | 纽约金 60 天曲线（美元/盎司） |
-| GET | `/api/v1/market/gold/compare` | ETF vs 上海金 对照 |
-| POST | `/api/v1/positions` | 开仓 |
-| GET | `/api/v1/positions` | 持仓列表（实时盈亏） |
-| POST | `/api/v1/positions/{id}/trades` | 加仓/减仓 |
-| POST | `/api/v1/positions/{id}/close` | 清仓 |
-| GET | `/api/v1/decision/etf` | 购买决策 |
-| GET/PUT | `/api/v1/settings/weights` | 权重配置读取/保存 |
-| GET/PUT | `/api/v1/news-score` | 消息面打分（客户评估；支持 `basis` 依据标签 / `review_note` 复盘批注 / `score_date` 补录） |
-| DELETE | `/api/v1/news-score/{slot}` | 撤销当日某一次打分（释放该槽位） |
-| GET | `/api/v1/news-score/history` | 历史打分记录（跨日回看） |
-| GET | `/api/v1/review/meta` | 复盘配置元信息（基准标的 / 窗口 / 12 个依据标签 / 价格日历覆盖） |
-| GET | `/api/v1/review/journal` | 研判日志（按日期倒序，含基准收盘 → T+1/3/5 收盘、涨跌幅、命中判定） |
-| GET | `/api/v1/review/stats` | 复盘统计（命中率 / 方向分组 / 窗口分组 / 分值分箱校准 / 依据标签胜率） |
-| GET | `/api/v1/review/hint` | 打分页校准提示（指定分值区间的历史胜率） |
-| GET | `/api/v1/review/horizons` | 可用判定窗口（T+1 / T+3 / T+5） |
-| POST | `/api/v1/review/backfill` | 回填历史金价日历（幂等，来自 `/gold/ny-trend`） |
-| GET | `/api/v1/central-bank/summary` | 央行购金摘要（T12M 总量 / 参与国数 / 最新季度） |
-| GET | `/api/v1/central-bank/top-buyers` | 某年度 Top N 买家 |
-| GET | `/api/v1/central-bank/purchases` | 央行购金明细（按国家 / 季度范围筛选） |
-| POST | `/api/v1/snapshots/capture` | 捕获当日快照 |
-| GET | `/api/v1/snapshots` | 每日评估历史（自动补当日） |
-| POST | `/api/v1/telemetry/ingest` | 客户端埋点批量入库（白名单校验） |
-| GET | `/api/v1/telemetry/stats?days=N` | 派生指标聚合（按事件类型 24h / N 天） |
-| GET/PUT | `/api/v1/settings/alert-rules` | **告警规则读取/保存（V0.72.0 P3-b #15）** | PUT admin 守卫；body: `{level_crossing_enabled, volatility_enabled, volatility_pct, quiet_hours:{start,end}, channels:[]}` |
-| POST | `/api/v1/settings/test-email` | **测试邮件发送（admin 守卫，验证 SMTP 配置）** | - |
-| POST | `/api/v1/settings/test-wechat` | **测试微信发送（admin 守卫，验证 Server 酱 SendKey）** | - |
-| GET | `/api/v1/push/vapid-public-key` | **VAPID 公钥（首次自动生成 EC P-256）** | - |
-| POST | `/api/v1/push/subscribe` | **Web Push 订阅（upsert by endpoint，V0.72.0 P3-b #15）** | body: `{endpoint, keys:{p256dh,auth}, user_agent?}` |
-| DELETE | `/api/v1/push/subscribe` | **退订（按 endpoint 硬删）** | query: `endpoint` |
-| POST | `/api/v1/push/test` | **管理员测试 push 推送（admin 守卫）** | - |
-
-> 数据源：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率）+ **WGC Gold Demand Trends**（央行购金月度统计，HTML chart JS 自动抓取），
-> 采集失败自动降级内置 Mock / 静态参考值；akshare 调用全局串行（py_mini_racer 兼容）。
-
-## 央行购金数据
-
-独立的 `/central-bank` 页面（`static/central_bank.html`）展示世界各国央行近年来的黄金净购金（吨）：
-
-- **数据源**：WGC（世界黄金协会）Gold Demand Trends 季度报告 HTML chart JS（`fsapi.gold.org/api/v12/charts/js/...`），绕开 XLSX 直链 403 反爬
-- **覆盖**：全球合计季度数据 2014Q1–2026Q2（52 季度）+ H1 2026 按国家（19 买家 + 4 卖家）+ UZB/IRN 手工补丁（26 季度）
-- **页面元素**：4 个 KPI 卡（T12M / 本季合计 / 参与国数 / 数据截止季） + Chart.js 堆叠柱状图（季度 × 国家） + Top 10 排行榜 + 完整明细表（按国家 / 季度范围筛选）
-- **cb_gold 因子联动**：`MacroFactorService` 注入 `CentralBankService`，从 `central_bank_purchases` 表自动汇总 T12M；表无数据时回退 STATIC_REF 硬编码
-- **手动刷新**：
-  ```bash
-  python -m app.scripts.import_central_bank             # 全量落库
-  python -m app.scripts.import_central_bank --dry-run    # 预览
-  ```
-- **自动调度**：每月 1 / 15 / 末日 07:30 BJT 自动从 WGC 拉取；通过 `CENTRAL_BANK_AUTO_REFRESH` 环境变量控制（`0` / `false` / `no` / `off` 关闭）
-
-## 综合趋势评估指数
-
-```
-综合指数 = 技术面评分 × 30% + 宏观参考评分 × 40% + 消息面评分 × 30%（可在 /weights 调整）
-```
-
-**技术面（5 维度）**：结构 30% / 动量 20% / 支撑 20% / 动能(RSI) 15% / 回撤 15%
-
-**消息面（客户评估）**：消息面评估页（API `/news-score`）基于主流财经网站（金十/新浪/东财/英为财情/汇通/华尔街见闻）的**投行黄金走势展望**研判打分（0-100：>55 看多、<45 看空、50 中性），保存后立即汇入综合指数与每日快照。
-
-> **每日 3 次打分（V0.65.0）**：按序号第 1/2/3 次占用槽位（不绑定具体时段，各自记录实际提交时刻），当日有效分值 = `Σ(i × scoreᵢ) / Σ(i)`（**越晚权重越高**，1:2:3）。打满 3 次后留空 slot 提交会返回明确报错而**不再静默覆盖**；点卡片「修改」可指定槽位覆盖，或「撤销」释放槽位（剩余次数按权重重新归一）。每次打分可挂 **12 个预置依据标签**（美元指数 / 美债收益率 / 实际利率 / 通胀预期 / 美联储政策 / 央行购金 / 地缘风险 / 避险情绪 / ETF 资金流 / 人民币汇率 / 技术面 / 投行观点）+ 自由备注。
-
-> **研判复盘（V0.66.0）**：`/review` 页面按日期归档研判（分值 / 方向 / 依据 / 备注），对齐金价日历给出 **T+1 / T+3 / T+5** 三个交易日的涨跌与命中判定（看多须涨、看空须跌、看平容差 ±0.3%），并汇总总命中率、**分值分箱校准曲线**与**依据标签胜率**，用于回看「判断准不准、哪类依据更可靠」。金价日历 `gold_price_daily` 独立于快照表，只存客观价格，可长期积累与回填。
-
-> **框架基础补齐（V0.67.0）**：CI/CD（GitHub Actions + Python 3.11/3.12 matrix + uv 缓存）落地；`X-Request-ID` 全链路追踪（中间件 + contextvars + 日志自动附加）—— 任意一行日志都能 grep 到对应 HTTP 请求；价格日历入库前 schema 校验（`close>0`、source 白名单、涨跌幅 ±50% 边界），脏数据整批拒绝不入库。
-
-**宏观参考（5 因子）**：
-
-| 因子 | 权重 | 与黄金关系 | 100 分位 | 0 分位 |
-|------|------|-----------|----------|--------|
-| 美元指数 | 25% | 负相关 | 95 | 105 |
-| 美债10Y | 20% | 负相关 | 3.5% | 4.5% |
-| 美债30Y | 15% | 负相关 | 4.0% | 5.0% |
-| VIX | 15% | 正相关（避险） | 25 | 12 |
-| 央行购金 | 25% | 正相关（结构性） | 1200吨/年 | 500吨/年 |
-
-等级：`≥75 强势上升` / `≥55 上升` / `≥45 震荡` / `≥25 下降` / `<25 弱势下降`。
-权重集中在 `services/macro.py` / `services/trend.py`，可在 `/weights` 页面调整。
-
-## 架构分层
-
-```
-gold-etf-analyzer/
-├── src/app/
-│   ├── main.py              # 入口：路由装配、CORS、lifespan、静态页、调度器启动
-│   ├── config.py            # pydantic-settings 配置
-│   ├── dependencies.py      # 依赖注入容器
-│   ├── models/              # ORM：analysis / position / snapshot / settings / central_bank / account / news / review
-│   ├── schemas/             # Pydantic v2 请求/响应 + 枚举
-│   ├── services/            # scoring / trend / macro / decision / position / account / trades / compare / freshness / news / review / snapshot / settings / central_bank / cache / scheduler
-│   ├── repositories/        # analysis / market_data(AKShare) / market_providers / position / account / snapshot / settings / news / review(价格日历) / central_bank / central_bank_data (WGC fetcher)
-│   ├── api/v1/              # health / analysis / market / position / account / trades / decision / settings / snapshot / news / review / central_bank
-│   └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
-├── static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html
-│                            #   + account.js（账本切换器）/ freshness.js / help.js / responsive.css
-├── data/
-│   └── central_bank_manual_overrides.json   # UZB/IRN 手工补丁
-├── tests/                   # pytest（578 个用例，含 fetcher / scheduler / 集成 / help / providers / cache / intraday / 业绩分析 / 多账本 / 指数曲线 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / 通知推送 / admin 守卫 / 限速 / Web Push）
-├── start_server.bat         # 本机常驻：手动启动（自动开浏览器）
-├── install_startup.ps1      # 本机常驻：注册开机自启计划任务
-├── Dockerfile / docker-compose.yml
-└── README.md
-```
-
-## 测试与代码质量
+## 测试
 
 ```bash
-python -m pytest -v          # 578 用例（离线回归 598 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler + help + providers + cache + intraday + 业绩分析 + 多账本 + 指数曲线 + 多时间框架 + 消息面槽位 + 研判复盘 + trace_id + 价格校验 + 共振信号 + 克数持仓 + 白银 + 回测 + notify + alert + middleware(admin/rate_limit) + push
-python scripts/check_static_js.py   # 静态页内联 JS 门禁（语法 / 未定义调用 / DOM id）——改完前端必跑
-ruff check src tests
-ruff format src tests
+python -m pytest -v                                      # 652 用例（离线回归）
+ruff check src tests                                     # lint
+ruff format src tests                                    # format
+python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
 ```
 
-> 前端为「纯静态 HTML + 内联 `<script>`」，**没有构建步骤**：JS 写错不会被任何编译期拦截，却会让整页脚本失效（按钮无响应、数据不加载），而后端测试依旧全绿。因此改动 `static/*.html` 后请务必执行上面的 `check_static_js.py`（等价于 `make check-web`）。
+> ⚠️ **前端没有构建步骤** — JS 写错不会被任何编译期拦截，却会让整页脚本失效（按钮无响应、数据不加载），而后端测试依旧全绿。改完 `static/*.html` / `static/*.js` 后**务必**跑 `check_static_js.py`（等价于 `make check-web`）。
 
-## 待办 / 优化方向
+## 版本历程
 
-- [ ] 宏观×技术共振深化：决策引擎纳入宏观机会评分（消息面权重生效）
-- [ ] 克数持仓跟踪：实物金/积存金按克持仓，与 ETF 并列盈亏
-- [x] **导航折叠 + 全局搜索 + 客户端埋点底座（V0.68.0）**：移动端 ≤768px 自动折叠顶栏为汉堡抽屉（自注入，不改 HTML）；桌面 ⌘K / Ctrl+K 唤起全局命令面板（13 个命令：7 页导航 + 刷新 + 时间区间 1D/5D/1M + 主题切换预埋 + 帮助重看）；新增 `telemetry_events` 表（append-only，白名单 10 类事件：page_view / action_click / range_change / error_caught / palette_open / palette_query / palette_select / nav_drawer_open / nav_drawer_select / theme_change）+ `POST /api/v1/telemetry/ingest`（白名单 + page `/` 开头 + payload ≤50 字段）+ `GET /api/v1/telemetry/stats?days=N`（按类型 24h/7d 聚合）；前端 `telemetry.js` 用 sendBeacon 批量上报（4s/20 条 flush + visibilitychange 兜底 + 全局 error 兜底）；7 页统一注入；新增 14 个测试（服务 9 + API 5），基线 454 → 468
-- [x] **主题切换 + 无障碍扩面（V0.69.0）**：4 主题（light / dark / auto / high-contrast）统一 CSS 变量 + `prefers-color-scheme` 监听 + `localStorage.pm_theme` 持久化；Chart.js canvas 加 `role="img"` + `aria-label` + 数据表 fallback；全站 axe-core 0 critical + skip-to-content 链接 + 键盘 Tab 序修复；主题切换埋点 `theme_change`
-- [x] **共振信号卡 + 克数持仓 UX（V0.70.0，P2-b + UX 路线 V0.70.0）**：① **后端共振**（P2 #7）—— 新增 `services/resonance.py`（4 类信号 STRONG_UP/STRONG_DOWN/WEAK_UP/DIVERGENT/NEUTRAL + confidence 0-100）+ 3 端点 `GET /api/v1/resonance/{signal,history,strength-up}`（horizon 1-30）；② **后端克数**（P2 #8）—— 迁移 `8b7b4d0ce5fb` 新增 `positions.grams_held NUMERIC(12,3) NULL`、`utils/grams.py` shares_from_grams 纯函数、`PositionCreate/TradeRequest` 加 `grams` 字段与 `model_validator(mode="after")` XOR 校验、新端点 `GET /api/v1/market/gold/gram-quote`（Au99.99 元/克）；③ **前端共振卡** —— `static/resonance-card.js` IIFE + 趋势页头部 `<section id="resonanceCard">` + 弹窗显示 components + STRONG_UP 命中率；④ **前端克数 UX** —— `static/portfolio.html` 7 处外科插入（持仓表克数列 / 开仓 + 加减仓 XOR 输入 / `<button id="btnEquityUnit">单位：份</button>` 切换 / 克数模式第二数据集为 Σgrams_held）；⑤ **埋点同步** 3 类（`resonance_card_click` / `grams_trade_open` / `equity_curve_switch_unit`，前后端白名单同步）；⑥ 新增 25 个测试（共振 service 11 + 共振 API 3 + position service 10 + position API 4 + market API 1），基线 485 → 510；端点 40 → 43
-- [x] **多品种白银 + 参数回测（V0.71.0，P3-a + UX 路线 V0.71.0，目标分 90 → 90.5）**：① **后端白银**（P2 #11）—— 新增 `SilverHistoryProvider` Protocol + `MockSilverHistoryProvider`（base ETF 2.45 元/份 / NY 31.5 USD/OZ）+ `MarketProviderBundle.silver_history` 字段 + `PROVIDER_REGISTRY` 加 `silver_mock` / `silver_akshare`（stub 留 V0.72+）；`TrendService._TARGET_UNITS` / `_FRESHNESS_KEYS` / `_load_klines` 扩展 `silver_etf/silver_ny`（**复用 5 维算法零修改**）；`DecisionService.target_label()` helper + endpoint pattern 扩 `silver_etf/silver_ny`；新端点 `GET /api/v1/market/silver/{quote,etf-quote,trend,ny-trend,compare}`（**silver 不新增 router**）；② **后端回测**（P2 #10）—— 新增 `services/backtest.py`（3 维权重网格 × 4 节点阈值带扫描笛卡尔积；`compute_sharpe`（mean/std × √252）/ `compute_max_drawdown`（peak-tracking）/ `_direction_from_score` + 复用 `judge_hit`；`daily_snapshots` + `gold_price_daily` 构造 T+1 涨跌幅；5 桶校准分箱）+ `services/backtest_throttle.py`（sha256(canonical_json)[:16] 模块级 5 分钟缓存 + `X-Backtest-Cached` header）；`schemas/backtest.py` `WeightGrid`（≤125 组合边界）/ `ThresholdBand` / `BacktestRequestIn` / `BacktestResultOut` / `BacktestCoverageOut` / `BacktestConfigIn/Out`；新端点 `POST /api/v1/backtest/run` + `GET /api/v1/backtest/coverage` + `GET/PUT /api/v1/backtest/config`（复用 settings 表 key=`backtest_config`，60s 缓存，不新建表）；③ **前端白银** —— `static/silver.html`（530 行白银色系：hero + 实时评估摘要 + 共振信号卡复用 + 趋势参数维度 + 白银 ETF vs NY 对照 + 趋势主图 D/W/M + 双市场报价卡 + 60 秒自动刷新）；9 页 nav 注入白银加 `/backtest`；④ **前端回测** —— `static/backtest.html`（参数 chips + 5 张 summary 卡 + 3 张 Chart.js + 命中详情表）+ `static/backtest-chart.js`（IIFE + `window.PM_Backtest` + 自注入 CSS + 500ms debounce）；⑤ **埋点同步** 4 类（`silver_page_view` / `silver_nav_click` / `backtest_run` / `backtest_param_change`，前后端白名单同步）；⑥ help.js 升级 `V0.58.0 → V0.71.0`（major 升级触发重看 tour）+ silver.html 4 步 + backtest.html 3 步 tour + GLOSSARY 加 562800/SI/Sharpe/最大回撤/校准曲线/回测 6 个术语；⑦ 新增 **47 个测试**（silver 后端 20：market_providers 6 + trend 4 + decision 3 + market_api 5 + decision_api 2；backtest 后端 27：service 18 + API 9），基线 510 → 557；端点 43 → 51（silver 5 + backtest 3 + backtest_config 0 新增 router 仅挂在 settings 上）
-- [x] **推送 + PWA + 公开部署（V0.72.0，P3-b + UX 路线 V0.72.0，目标分 90.5 → 91.0）**：① **后端推送全栈**（P3 #15）—— `Notifier` Protocol + `SMTPNotifier`（aiosmtplib 异步 SSL/STARTTLS）+ `ServerChanNotifier`（httpx POST `sctapi.ftqq.com/{sendkey}.send`）+ `send_with_retry` 5s/30s/5min 三次退避；`AlertDispatcher` stateful 单例（`_sent_today` 按日期去重 + `_quiet_queue` 静默时段累积 + 醒后 09:30 BJT 汇总推送）；BULLISH↔BEARISH 主轴翻转 + 单日波动 ≥3% 触发；`alert_rules` 复用 `app_settings` 表 key='alert_rules'；`GET/PUT /api/v1/settings/alert-rules` + `POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；4 渠道偏好 `browser / webpush / email / wechat`；scheduler.py `_capture_and_warm` 末尾钩入告警评估；② **Web Push + PWA** —— VAPID EC P-256 密钥对（py-vapid X962 UncompressedPoint base64url）持久化到 `app_settings.vapid_keys`；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`：endpoint unique + p256dh/auth Text + user_agent + created_at + archived_at 索引）；`PushService.subscribe/unsubscribe/ensure_vapid_keys/deliver`（run_in_executor 包装同步 pywebpush，404/410 自动 archive）；4 端点 `/api/v1/push/{vapid-public-key,subscribe,unsubscribe,test}`；`static/manifest.json`（192/512/maskable 图标 + start_url /portfolio + shortcuts 银 / 回测）+ `static/sw.js`（gold-shell-v0.72.0 + gold-runtime-v0.72.0 双 cache + install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET + push handler + notificationclick）+ `static/offline.html`；`/sw.js` 路由 root scope `Service-Worker-Allowed: /` header；`static/pwa.js`（SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`）；9 页统一加 manifest link + apple-touch-icon + pwa.js；③ **通知中心** —— `static/settings.html`（10 页第 10 个，5 区：管理员 Token / 告警规则 + 4 渠道勾选 / SMTP 状态 + 测试 / Server 酱状态 + 测试 / PWA + Web Push 订阅）+ `static/settings.js`（表单 + GET/PUT alert-rules + test-email + test-wechat + push subscribe UI + 管理员 Token 持久化 localStorage）+ `static/notifications.js` 推送统计抽屉（拉 `/api/v1/telemetry/stats?days=7` 按事件类型聚合）；④ **安全前置** —— `middleware/admin_auth.py` `X-Admin-Token` 头（`secrets.compare_digest`，无 ADMIN_TOKEN env 时 skip，dev 友好）+ `middleware/rate_limit.py` per-IP 60s sliding window 120 req/min（`app_env!=test` 自动禁用，避免测试 429 误伤）；写端点全覆盖 backfill/news-score/positions/accounts/settings/alert-rules/backtest/run/push/test；⑤ **公开部署**（P3 #16）—— 多阶段 Dockerfile（builder python:3.12-slim + gcc → runtime python:3.12-slim + curl + non-root appuser + HEALTHCHECK curl /api/v1/health，镜像 1.2GB → 280MB）+ `docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron + 4 named volumes + gold_net network）+ `nginx/conf.d/gold.conf`（80→443 redirect + TLS 1.2/1.3 + HSTS + X-Frame-Options DENY + `/static/` 直出 7d immutable + `/api/` 反代 X-Forwarded-Proto https）+ `deploy/init-letsencrypt.sh` webroot 挑战幂等 + `.env.prod` 模板 + `docs/deployment.md` 完整 runbook；⑥ **help 升级** —— VERSION V0.71.0 → V0.72.0 + GLOSSARY 加 PWA/SMTP/Server酱/WebPush/VAPID 5 个术语 + settings.html 5 步 tour + renderGuideTab V0.72.0 节；⑦ **埋点同步** 5 类（`pwa_install_prompted` / `pwa_installed` / `push_channel_click` / `notification_center_open` / `notification_browser_click`，前后端白名单同步）；⑧ 新增 **21 个测试**（notify 13 + alert 13 + middleware 19 + push 18 + health 1），基线 557 → 578；端点 51 → 57（alert-rules 2 + test-email/wechat 2 + push 4）
-- [x] **CI/CD + trace_id + 价格校验（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix，uv 缓存，concurrency 取消旧 PR，`fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地
-- [x] **研判复盘与准确率校准（V0.66.0）**：新增 `gold_price_daily` 金价日历（客观价格，独立于快照表，可回填）+ `news_scores.basis/review_note/backfilled`；`/review` 页面按日期归档研判并与金价对齐，给出 **T+1 / T+3 / T+5** 三窗口涨跌与命中判定（看多须涨、看空须跌、看平 ±0.3%）；统计面板含总命中率 / 方向分组 / 窗口分组 / **分值分箱校准曲线** / **依据标签胜率**；补录标记 `backfilled` 且统计默认排除（避免前视偏差）；打分页实时显示该分值区间历史胜率；新增 6 个 review 接口 + `/review` 路由（路由 32 → 40 条），新增 24 个测试（服务 16 + API 8）
-- [x] **框架基础补齐（V0.67.0，P0 框架基础补齐）**：新增 `.github/workflows/ci.yml`（Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR + `fail-fast: false`）；新增 `TraceIdMiddleware` 纯 ASGI 中间件（X-Request-ID 入站沿用或 UUIDv4 hex 自动生成、contextvars 进程内隔离、响应头回写、防日志注入清洗 8-128 字符 alnum+-._）；日志格式器自动附加 trace_id（`时间 | 级别 | trace_id | logger | 消息`）；价格日历 `upsert_many` 加 schema 校验（`close > 0` 拒 NaN/0/负、`source` 白名单 `{live, manual, import, test}`、单日涨跌幅超 ±50% 跳过该条目其余正常）；新增 22 个测试（中间件 8 + 价格校验 12 + 集成 2）。工程评估 P0 三项全部落地
-- [x] **消息面每日 3 次打分（V0.65.0）**：`news_scores` 增 `slot`(1-3) / `scored_at` 并改 `(score_date, slot)` 复合唯一；当日有效分值按 **1:2:3 加权**（越晚权重越高）合成；三次用尽后留空提交返回 400（**修复同日第二次打分被静默覆盖**的原缺陷）；`DELETE /news-score/{slot}` 撤销 + `GET /news-score/history`；前端三槽位卡片 + 加权算式面板 + 剩余次数提示
-- [x] 每日快照定时任务（V0.50 看门狗 06:00/16:00 自动捕获）✅
-- [x] Alembic 数据库迁移（替代启动时 create_all，V0.50 已落地）
-- [x] 世界央行购金统计页（`/central-bank`，WGC 自动抓取 + 手工补丁，月度调度）
-- [x] 新手引导与帮助体系（`?` 按钮 + 3 tab modal + 首访 tour + 15 项 inline tooltip，5 页面统一注入）
-- [x] 行情源 provider 可切换（`.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock）
-- [x] 行情实时性增强（V0.60.0：served cache 日内 TTL + 行情 cache 启用 + 日内 4 点预热 + 趋势页 60s 轮询 + visibilitychange + 持仓页 30s）
-- [x] **评估指数历史曲线升级（V0.63.0）**：综合 / 技术 / 宏观 / 消息面 4 条线 + 7D/30D/90D 区间切换 + 极值卡（最新/区间最高/区间最低/日变）+ 稀疏数据 3 档 UX + chart.destroy 内存管理
-- [x] **多时间框架（V0.64.0，P2 #9）**：趋势追踪页 K 线主图加 3 档区间按钮（60D / 52W / 24M）—— 服务端抽 730 天日 K 后按 ISO 周界聚合到 ~52 根周 K / 按年月聚合到 ~24 根月 K；MA 在聚合后序列上重算；W/M 模式技术面 5 维度旁路（指标对日 K 敏感）；`/gold/trend?interval=W|M` + `days` 上限 250 → 750；缓存 key 扩展为 (target, interval, date) 三维独立；新增 14 个测试用例（服务 4 + API 4 + 工具 6）
-- [x] **单用户多账本 + 交易历史查询页（V0.62.0，P1 #6）**：`accounts` 表 + `positions.account_id`（迁移把历史持仓归入 id=1「默认账户」）；`/api/v1/accounts` 账本增改归档（默认账本不可归档、有未平仓持仓不可归档）；`/api/v1/trades` 多条件筛选（账本/方向/日期/持仓/关键字）+ 均价法回放给出每笔卖出的**已实现盈亏**与**成交后份额** + CSV 导出；全站账本切换器（`account.js`，localStorage 记忆，支持「全部账本」合并视图）；持仓 / 收益曲线 / 获利分析 / 决策均按账本隔离
-- [x] **收益回放口径修复（V0.62.1）**：修复「成交日晚于行情序列最后一个交易日」时交易被静默丢弃的问题 —— 此前会导出 `sell_count=2` 却 `closed_trades=0`、累计投入本金显示 **0.00 元** 的自相矛盾（行情源 T-1 滞后或周末录入成交时必现）；现改为归入最后一个可得交易日，本金 / 已实现盈亏 / 胜率统计恢复正确
-- [x] 交易闭环与业绩分析（V0.61.0：**ETF 报价口径修正**（`/market/gold/etf-quote`，元/份）+ 加仓/减仓内联面板（金额换算 / 快捷比例 / 摊薄成本与已实现盈亏预览）+ 收益曲线（流水回放重建，含最大回撤）+ 获利分析总结（胜率 / 盈亏比 / 平均持仓天数））
-- [ ] 指数参数回测校准：用历史数据回测权重与阈值有效性（消息面打分校准已由 V0.66.0 研判复盘覆盖）
-- [ ] 监控告警：数据源失败告警、价格异动提醒（浏览器通知已做，邮件 / 微信待做）
-- [ ] 公开部署：域名 + HTTPS（内部 → 公开发布）
+| 版本 | 日期 | 亮点 |
+|------|------|------|
+| **V0.73.0** | 2026-09-22 | i18n 三语 + locale 格式化 + 后端国家名解耦（目标分 91.0 → 91.5） |
+| V0.72.0 | 2026-09 | 推送 + PWA + Web Push + 公开部署（90.5 → 91.0） |
+| V0.71.0 | 2026-08 | 白银 + 参数回测全链路（90 → 90.5） |
+| V0.70.0 | 2026-08 | 共振信号 + 克数持仓（89 → 90） |
+| V0.69.0 | 2026-07 | 4 主题 + 无障碍扩面（axe-core 0 critical） |
+| V0.68.0 | 2026-07 | 导航折叠 + 全局搜索（⌘K）+ 客户端埋点底座 |
+| V0.67.0 | 2026-06 | CI/CD + trace_id 全链路 + 价格校验 |
+| V0.66.0 | 2026-06 | 研判复盘与准确率校准（T+1/T+3/T+5 + 分值分箱） |
+| V0.65.0 | 2026-05 | 消息面每日 3 次打分（1:2:3 加权，槽位修复） |
+| V0.64.0 | 2026-05 | 多时间框架（60D / 52W / 24M） |
+| V0.63.0 | 2026-04 | 评估指数历史曲线升级（4 条线 + 极值卡） |
+| V0.62.0 | 2026-04 | 单用户多账本 + 交易历史查询页 |
+| V0.61.0 | 2026-03 | 交易闭环 + 业绩分析（胜率 / 盈亏比 / 最大回撤） |
+| V0.60.0 | 2026-03 | 行情实时性增强（cache TTL + 4 点预热 + 60s 轮询） |
+| V0.50.0 | 2026-01 | Alembic 迁移 + 每日快照定时任务（看门狗 06/16 点） |
 
-> 完整三阶段改进计划见 [docs/application-guide.md](docs/application-guide.md) 第 11 章。
-> 易用性专项改善路径（P0 稳定性/可信度优先）见 [docs/improvement-path.md](docs/improvement-path.md)。
-> 用户体验（UX）专项改进方向（数据时效透明 / 响应式 / 决策可解释性 / 主动提醒 / 加载与离线体验等）见 [docs/improvement-path.md](docs/improvement-path.md) 第六章。
+完整 release notes 见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases)。
+
+## 文档
+
+- 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
+- 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
+- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（V0.74.0 → V0.75.0：导航 / 主题 / a11y / i18n / 自定义 / 多用户）
+- ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
+- 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
+
+## 许可
+
+个人研究项目，无对外许可证。所有数据源版权归原机构（AKShare / WGC）所有。
