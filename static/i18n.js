@@ -221,6 +221,11 @@
     SUPPORTED: SUPPORTED,
     DEFAULT_LANG: DEFAULT_LANG,
     get lang() { return state.lang; },
+    // 测试用：直接注入字典 + 切 lang（绕开 setLang 异步加载）
+    __test_setLang: function (lang, dict) {
+      if (dict) state.dict[lang] = dict;
+      state.lang = lang;
+    },
   };
 
   if (document.readyState === "loading") {

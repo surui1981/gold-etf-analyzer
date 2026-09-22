@@ -270,6 +270,14 @@
     return `<span class="src-badge src-wgc">WGC 手工</span>`;
   }
 
+  // V0.73.0 N+9：HTML escape helper（country name 走 i18n 字典或后端字段；防止 XSS）
+  function escapeHtml(s) {
+    if (s == null) return "";
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   // ============ 状态 ============
   let fullData = null;  // 原始 API 响应
 
@@ -305,9 +313,12 @@
     }
     tbody.innerHTML = top.map((t) => {
       const cls = t.tonnes_net > 0 ? "up" : t.tonnes_net < 0 ? "down" : "";
+      // V0.73.0 N+9：渲染链 I18n.t('country.' + iso) → 后端 country_name → iso
+      const name = (window.I18n && window.I18n.t) ? window.I18n.t("country." + t.country_iso) : t.country_name;
+      const displayName = name && name !== "country." + t.country_iso ? name : (t.country_name || t.country_iso);
       return `<tr>
         <td>${t.rank}</td>
-        <td><b>${t.country_name}</b></td>
+        <td><b>${escapeHtml(displayName)}</b></td>
         <td>${t.country_iso}</td>
         <td class="num ${cls}">${fmt.numSign(t.tonnes_net)}</td>
         <td>${srcBadge(t.country_iso === "UZB" || t.country_iso === "IRN" ? "WGC 手工" : "IMF IRFCL")}</td>
@@ -396,9 +407,12 @@
     }
     tbody.innerHTML = items.map((it) => {
       const cls = it.tonnes_net > 0 ? "up" : it.tonnes_net < 0 ? "down" : "";
+      // V0.73.0 N+9：渲染链 I18n.t('country.' + iso) → 后端 country_name → iso
+      const name = (window.I18n && window.I18n.t) ? window.I18n.t("country." + it.country_iso) : it.country_name;
+      const displayName = name && name !== "country." + it.country_iso ? name : (it.country_name || it.country_iso);
       return `<tr>
         <td>${it.quarter}</td>
-        <td><b>${it.country_name}</b></td>
+        <td><b>${escapeHtml(displayName)}</b></td>
         <td>${it.country_iso}</td>
         <td class="num ${cls}">${fmt.numSign(it.tonnes_net)}</td>
         <td>${srcBadge(it.source)}</td>
@@ -421,7 +435,10 @@
     for (const c of countries) {
       const opt = document.createElement("option");
       opt.value = c.iso;
-      opt.textContent = `${c.iso} · ${c.name}`;
+      // V0.73.0 N+9：渲染链 I18n.t('country.' + iso) → 后端 name → iso
+      const name = (window.I18n && window.I18n.t) ? window.I18n.t("country." + c.iso) : c.name;
+      const displayName = name && name !== "country." + c.iso ? name : (c.name || c.iso);
+      opt.textContent = `${c.iso} · ${displayName}`;
       sel.appendChild(opt);
     }
   }

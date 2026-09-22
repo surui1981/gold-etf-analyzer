@@ -189,6 +189,7 @@
 | **P2-b** | P2 #7 宏观×技术共振 + P2 #8 克数持仓 | V0.70.0 | 89 → 90（+1） | `services/resonance.py` 4 类信号；`positions.grams_held` | 4 人天 |
 | **P3-a** | P2 #11 多品种白银 + P2 #10 参数回测校准 | V0.71.0 | 90 → 90.5（+0.5） | `silver/silver_gram` 标的接入；`/backtest` 页 + `POST /api/v1/backtest/run` | 6 人天 |
 | **P3-b** | P3 #15 邮件/微信推送 + P3 #16 公开部署 | V0.72.0 | 90.5 → 91（+0.5） | `services/notify.py` 抽象 + SMTP/Server酱；`docker-compose.prod.yml` + Nginx + Let's Encrypt | 5 人天 |
+| **P3-c** | P3 #17 i18n 繁中全量 + 后端国家名解耦 | V0.73.0 | 91 → **91.5**（+0.5） | zh-TW 33→391 key + `country_name` schema Optional + freshness.js 本地化 + escapeHtml | 6 人天 |
 
 ### P0 · V0.67.0（1 周）· 框架基础补齐 ✅ 已落地
 
@@ -274,6 +275,14 @@
 | 15 | **P3 #15 邮件/微信推送 + Web Push** | `services/notify.py`：`Notifier` Protocol + `SMTPNotifier`（aiosmtplib 异步）+ `ServerChanNotifier`（httpx）；`send_with_retry` 5s/30s/5min 退避；`AlertDispatcher` stateful 单例 + _sent_today 去重 + _quiet_queue 静默时段；`schemas/alert.py` `AlertRuleIn/Out` + `QuietHours` + `NotifyChannel` Literal；`alert_rules` 复用 `app_settings` 表（key='alert_rules'，与 weight_config / backtest_config 同表）；scheduler.py `_capture_and_warm` 末尾钩入告警评估；`GET/PUT /api/v1/settings/alert-rules`（admin 守卫 PUT）；`POST /settings/test-email` + `POST /settings/test-wechat`（admin 守卫）；`pywebpush` + `py-vapid` + `cryptography` 依赖；`push_subscriptions` 表（迁移 `9e2f4a1b8c7d`，endpoint unique + archived_at index）；`VAPID` EC P-256 密钥对持久化到 `app_settings.vapid_keys`；`PushService.subscribe/unsubscribe/ensure_vapid_keys/deliver` + run_in_executor 包装同步 pywebpush；4 个 push 端点 `GET /push/vapid-public-key`（自动生成）/ `POST /push/subscribe`（upsert by endpoint）/ `DELETE /push/subscribe?endpoint=` / `POST /push/test`（admin 守卫） | 档位 BULLISH↔BEARISH 主轴翻转触发邮件 / 微信；SMTP / Server 酱失败 3 次退避 |
 | 16 | **P3 #16 公开部署 + PWA** | `Dockerfile` 多阶段（builder python:3.12-slim + gcc → runtime python:3.12-slim + curl + non-root appuser + HEALTHCHECK curl /api/v1/health，镜像 1.2GB → 280MB）；`docker-compose.prod.yml` 5 服务（app / nginx / certbot / backup-cron / volumes app_data+certbot_www+certbot_conf+backups + network gold_net）；`nginx/conf.d/gold.conf` 80→443 redirect + TLS 1.2/1.3 + HSTS + X-Frame-Options DENY + `/static/` 直出 7d immutable + `/sw.js` root scope（`Service-Worker-Allowed: /`）+ `/api/` 反代 X-Forwarded-Proto https；`deploy/init-letsencrypt.sh` webroot 挑战 + `--dry-run` + 幂等；admin 守卫 `X-Admin-Token` 头（`secrets.compare_digest`，dev 无 env 时 skip）；`RateLimitMiddleware` per-IP 60s sliding window 120 req/min（测试 env 自动禁用）；`.env.prod` 模板；`docs/deployment.md` runbook（clone → .env.prod → cert init → docker compose up → verify → rollback）；`static/manifest.json`（PWA 清单 192/512/maskable 图标 + start_url /portfolio + shortcuts 银 / 回测）+ `static/sw.js`（install/activate/fetch network-first HTML + cache-first /static/ + SWR /api/ GET；push handler + notificationclick；gold-shell-v0.72.0 + gold-runtime-v0.72.0 缓存）；`static/offline.html` 离线 fallback；`static/pwa.js`（SW 注册 + beforeinstallprompt 横幅 + iOS Safari 永久指引卡 + `urlBase64ToUint8Array` + `ensurePushSubscribed`）；9 页统一加 manifest link + apple-touch-icon + pwa.js；`/sw.js` 路由 `Service-Worker-Allowed: /` header | `curl -I https://gold.example.com` 返 200 + HSTS；浏览器 chrome://apps 可装；离线刷新访问 portfolio 不报错 |
 
+### P3-c · V0.73.0（2 周）· i18n 繁中全量 + 后端国家名解耦 ✅ 已落地（2026-09-22）
+
+**目标分**：91 → **91.5**（+0.5）
+
+| # | 事项 | 子项 | 验收 | 状态 |
+|---|---|---|---|---|
+| 17 | **P3 #17 i18n 繁中全量 + 后端解耦** | ① zh-TW 字典扩展 country.* (33) + portfolio/trend/backtest/central_bank 全部 chrome + news/review/weights/silver/settings/trades h1/intros/col_*/footers + fresh.* (13)，覆盖率 10.9% → **61.2%**；② `schemas/central_bank.py` `country_name: str \| None = None`（DB 列保留向后兼容）；`services/central_bank.py` `_resolve_country_name()` 兜底链 `DB → COUNTRY_NAMES[iso] → iso`（永不返回 None）；③ `static/freshness.js` `fmtAge` 改 `I18n.fmt.relative()`，tooltip/警示/错误全部走 `fresh.*` 字典 13 key；新增 `escapeHtml()` helper；④ 前端 `central_bank.html` 渲染链 `I18n.t('country.' + iso) → country_name → iso`；⑤ 新增 `test_i18n_format.py` 15 + `test_i18n_coverage.py` 7，阈值 10%→60% | zh-TW ≥60% 覆盖；freshness.js 无残留硬编码中文（除 `_t()` fallback 字面量）；后端 `_resolve_country_name()` 兜底链永不返回 None | ✅ V0.73.0 已落地（**+23 测试**：format 15 + coverage 7 + 阈值升级，基线 621 → **644**；目标分 91 → **91.5**） |
+
 ### 各维度分提升轨迹
 
 ```
@@ -315,7 +324,7 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 
 | 指标 | 目标 | 当前（V0.67.0） | 下一阶段目标（V0.68.0 → V0.72.0） |
 |------|------|------|------|
-| **工程性评估综合分** | 90 / 100（A-） | 84.3 / 100（B+）V0.67.0 | V0.68.0 = 87.0 → V0.69.0 = 88.3 → V0.70.0 = 89.0 → V0.71.0 = 90.5 → **V0.72.0 = 91.0** |
+| **工程性评估综合分** | 90 / 100（A-） | 84.3 / 100（B+）V0.67.0 | V0.68.0 = 87.0 → V0.69.0 = 88.3 → V0.70.0 = 89.0 → V0.71.0 = 90.5 → V0.72.0 = 91.0 → **V0.73.0 = 91.5** |
 | 服务可用性（7 天） | ≥ 99%（无需人工重启） | ✅ 看门狗自愈 + 开机自启 | — |
 | 首屏加载（缓存命中） | < 5 秒 | ✅ 缓存持久化 + 后台预热，冷启动 ~1.6s | — |
 | 数据源状态可见性 | 100% | ✅ 三态标识 + 健康度 + 备源兜底 | — |

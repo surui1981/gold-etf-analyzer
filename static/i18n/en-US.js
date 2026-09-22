@@ -675,4 +675,19 @@ window.PM_I18N_en_US = {
   "country.Switzerland": "Switzerland",
   "country.region_global": "Global Total",
   "country.region_official": "Official Sector",
+
+  /* ── Data Freshness (fresh.* 13 keys, V0.73.0 N+9 new) ── */
+  "fresh.title": "🕒 Data Freshness",
+  "fresh.tip_session": "Session: ",
+  "fresh.tip_windows": "Trading Hours: ",
+  "fresh.tip_next": "Next Event: ",
+  "fresh.tip_data_date": "Data Cutoff: ",
+  "fresh.sep": " · ",
+  "fresh.refresh_hint": " (auto-refresh every {secs}s)",
+  "fresh.alert_mock": "<b>demo data (not real quotes)</b>",
+  "fresh.alert_cached": "<b>cached (may be stale)</b>",
+  "fresh.alert_suffix": " — do not trade on this",
+  "fresh.alert_icon": "⚠",
+  "fresh.load_failed": "Failed to load freshness: ",
+  "fresh.local_time_suffix": "Local time",
 };

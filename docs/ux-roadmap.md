@@ -127,18 +127,24 @@
   - **help 升级**：VERSION V0.71.0 → V0.72.0 + GLOSSARY 加 PWA/SMTP/Server酱/WebPush/VAPID 5 个术语 + settings.html 5 步 tour + renderGuideTab V0.72.0 节
   - **埋点同步**：前后端 ALLOWED_EVENT_TYPES 加 `pwa_install_prompted` / `pwa_installed` / `push_channel_click` / `notification_center_open` / `notification_browser_click` 5 项
 
-### V0.73.0 · i18n 框架 + 英文版
+### V0.73.0 · i18n 框架 + 英文版 ✅ 已落地（2026-09-22）
 
-- **目标**：海外华人 / 港台 / 英文用户可用。
+- **目标**：海外华人 / 港台 / 英文用户可用；繁中覆盖达 60%；后端国家名解耦前端 i18n 字典。
 - **关键能力**：
-  1. `data-i18n` 属性 + `i18n.js` + 简繁英三语字典（zh-CN / zh-TW / en-US）
-  2. 顶栏语言切换器（持久化到 `localStorage.pm_lang`）
-  3. 货币 / 日期 / 百分比自动 locale 化（基于 `Intl.NumberFormat` / `Intl.DateTimeFormat`）
-- **复用模式**：`static/trades.html:215, 219` 现有 `toLocaleString("zh-CN")` 模式 → 全局 `format(num, locale)`；`static/account.js` 切换器 UI
-- **依赖**：无（纯前端）
-- **验证**：英文版 7 页无残留中文；语言切换 ≤ 200ms；货币日期按 locale 渲染
-- **自身可观测性**：英文用户占比；语言切换频率
-- **人天**：4
+  1. **PR-N+7 · i18n 框架** —— `static/i18n.js` IIFE（`t/setLang/apply/fmt.{number,currency,date,dateTime,time,percent,relative}` 基于 `Intl.NumberFormat` / `Intl.DateTimeFormat`）+ 三语字典 `static/i18n/{zh-CN,zh-TW,en-US}.js` + 顶栏 `<select class="lang-sel">` 切换器（持久化 `localStorage.pm_lang`）+ FOUC guard inline head script
+  2. **PR-N+8 · 英文版全 10 页覆盖** —— portfolio（已在 N+7）+ trend / weights / news / review / trades / silver / backtest / settings / central_bank 共 9 页全部标记 `data-i18n`；zh-CN 626 / en-US 627 / zh-TW 33 个 key
+  3. **PR-N+9 · 繁中全量 + locale 格式化 + 后端解耦** —— ① zh-TW 扩展至 391 个 key，覆盖率 10.9% → 61.2%（country.* 33 + portfolio/trend/backtest/central_bank 全部 chrome + 6 页 h1/intros/col_*/footers + fresh.* 13）；② `static/freshness.js` `fmtAge` 改 `I18n.fmt.relative()`，tooltip / 警示 / 错误文案走 `fresh.*` 字典 13 key；③ 后端 `schemas/central_bank.py` `country_name: str \| None = None`（DB 列保留向后兼容）；`services/central_bank.py` `_resolve_country_name()` 兜底链 `DB → COUNTRY_NAMES[iso] → iso`；前端 `central_bank.html` 渲染链 `I18n.t('country.' + iso) → country_name → iso`；④ 新增 `test_i18n_format.py` 15 + `test_i18n_coverage.py` 7 + 阈值 10%→60%
+- **落地交付**（2026-09-22）：
+  - **PR-N+7**（已合 `ffabc9b`）：i18n.js + 三语字典 + 切换器 + portfolio 英文版 + 22 个 i18n 测试
+  - **PR-N+8**（已合 `566063b`）：9 页英文版全覆盖（trend/weights/news/review/trades/silver/backtest/settings/central_bank）
+  - **PR-N+9**（本次）：zh-TW 391 个 key + freshness.js 全本地化 + 后端 schema Optional + Service 兜底链 + 前端渲染链
+  - **测试**：22 → 53（+31，含 format 15 + coverage 7 + 阈值升级），基线 621 → **644**
+  - **目标分**：91.0 → **91.5**
+- **复用模式**：`static/trades.html:215, 219` 现有 `toLocaleString("zh-CN")` 模式 → 全局 `format(num, locale)`；`static/account.js` 切换器 UI；后端 `COUNTRY_NAMES` dict（central_bank_data.py:55）→ 前端 `I18n.t('country.' + iso)`
+- **依赖**：无（纯前端 + 后端 schema Optional 微调）
+- **验证**：英文 / 繁中版 9 页无残留中文；语言切换 ≤ 200ms；货币日期按 locale 渲染；后端 `country_name` 兜底链永不返回 None
+- **自身可观测性**：英文 / 繁中用户占比；语言切换频率；`i18n_fallback_hit` 埋点
+- **人天**：6
 
 ### V0.74.0 · 仪表盘自定义 + 通知偏好
 

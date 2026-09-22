@@ -677,4 +677,19 @@ window.PM_I18N_ZH_CN = {
   "country.Switzerland": "瑞士",
   "country.region_global": "全球合计",
   "country.region_official": "官方部门",
+
+  /* ── 数据时效（fresh.* 13 项，V0.73.0 N+9 新）── */
+  "fresh.title": "🕒 数据时效",
+  "fresh.tip_session": "时段：",
+  "fresh.tip_windows": "交易时间：",
+  "fresh.tip_next": "下一时点：",
+  "fresh.tip_data_date": "数据截止：",
+  "fresh.sep": "；",
+  "fresh.refresh_hint": "（每 {secs} 秒自动刷新）",
+  "fresh.alert_mock": "为<b>演示数据（非真实行情）</b>",
+  "fresh.alert_cached": "为<b>缓存数据（可能过期）</b>",
+  "fresh.alert_suffix": "，请勿据此决策",
+  "fresh.alert_icon": "⚠",
+  "fresh.load_failed": "数据时效加载失败：",
+  "fresh.local_time_suffix": "本地时间",
 };

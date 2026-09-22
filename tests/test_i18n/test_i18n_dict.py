@@ -108,17 +108,17 @@ def test_en_us_covers_zh_cn_core() -> None:
 
 
 def test_zh_tw_subset_of_zh_cn() -> None:
-    """zh-TW 是 zh-CN 的子集（PR-N+7 最小覆盖；后续 PR-N+9 扩到全集）。"""
+    """zh-TW 是 zh-CN 的子集（PR-N+7 最小覆盖；PR-N+9 升级到 ≥60% 全量 chrome）。"""
     zh = _load_dict(ZH_CN)
     tw = _load_dict(ZH_TW)
     tw_keys = set(tw.keys())
     zh_keys = set(zh.keys())
-    # 允许 tw_keys 中有不在 zh 中的（理论上不应该，因为繁中派生自简中）
+    # 繁中派生自简中，不应有 extras（V0.73.0 N+9 起收紧约束）
     extras = tw_keys - zh_keys
     assert not extras, f"zh-TW 有 zh-CN 中没有的 key：{list(extras)[:3]}"
-    # zh-TW 至少覆盖 zh-CN 的 10%（topnav + common + time + brand + help + theme）
+    # zh-TW 至少覆盖 zh-CN 的 60%（country.* 33 + nav + common + time + brand + help + theme + warn + portfolio/trend/backtest/central_bank chrome + fresh.*）
     coverage = len(tw_keys) / max(len(zh_keys), 1)
-    assert coverage >= 0.1, f"zh-TW 覆盖率仅 {coverage:.1%}（≥10%）"
+    assert coverage >= 0.6, f"zh-TW 覆盖率仅 {coverage:.1%}（≥60%，PR-N+9 全量 chrome 落地后）"
 
 
 def test_required_keys_present_in_zh_cn() -> None:

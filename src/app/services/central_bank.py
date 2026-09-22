@@ -1,12 +1,23 @@
 """世界央行黄金购买 业务服务：摘要 + Top 排序 + 明细查询。"""
 
 from app.repositories.central_bank import CentralBankPurchaseRepository
+from app.repositories.central_bank_data import COUNTRY_NAMES
 from app.schemas.central_bank import (
     CentralBankListOut,
     CentralBankPurchaseOut,
     CentralBankSummaryOut,
     CentralBankTopBuyer,
 )
+
+
+def _resolve_country_name(iso: str, db_name: str | None) -> str:
+    """V0.73.0 N+9：country_name 改 Optional；兜底链 DB 字段 → ISO→中文 dict → ISO。
+
+    永不返回 None，避免前端拿到 null 显示 undefined。
+    """
+    if db_name:
+        return db_name
+    return COUNTRY_NAMES.get(iso, iso)
 
 
 class CentralBankService:
@@ -79,7 +90,8 @@ class CentralBankService:
                 CentralBankTopBuyer(
                     rank=rank,
                     country_iso=iso,
-                    country_name=name,
+                    # V0.73.0 N+9：兜底链保证永不返回 None
+                    country_name=_resolve_country_name(iso, name),
                     tonnes_net=round(total, 1),
                 )
             )
@@ -134,7 +146,8 @@ class CentralBankService:
             CentralBankTopBuyer(
                 rank=i + 1,
                 country_iso=iso,
-                country_name=name,
+                # V0.73.0 N+9：兜底链保证永不返回 None
+                country_name=_resolve_country_name(iso, name),
                 tonnes_net=round(total, 1),
             )
             for i, (iso, (name, total)) in enumerate(ranked[:limit])
@@ -142,10 +155,14 @@ class CentralBankService:
 
 
 def _to_out(it) -> CentralBankPurchaseOut:
-    """ORM → Pydantic Out。"""
+    """ORM → Pydantic Out。
+
+    V0.73.0 N+9：country_name 改 Optional；前端 ISO→字典渲染优先，
+    此处用兜底链（DB 字段 → COUNTRY_NAMES[iso] → iso）保证永不返回 None。
+    """
     return CentralBankPurchaseOut(
         country_iso=it.country_iso,
-        country_name=it.country_name,
+        country_name=_resolve_country_name(it.country_iso, it.country_name),
         quarter=it.quarter,
         tonnes_net=float(it.tonnes_net),
         source=it.source,

@@ -9,7 +9,10 @@ class CentralBankPurchaseOut(BaseModel):
     """单条央行季度购金记录。"""
 
     country_iso: str = Field(..., description="ISO 3 字母代码")
-    country_name: str = Field(..., description="国家中文名")
+    country_name: str | None = Field(
+        None,
+        description="国家中文名（V0.73.0 N+9 起为可空；前端优先用 I18n.t('country.' + country_iso) 渲染，DB 字段保留向后兼容）",
+    )
     quarter: str = Field(..., description="季度，如 2026Q2")
     tonnes_net: float = Field(..., description="季度净购金（吨），正=买入/负=卖出")
     source: str = Field(..., description="数据源：IMF IRFCL / WGC 手工")
@@ -21,7 +24,10 @@ class CentralBankTopBuyer(BaseModel):
 
     rank: int = Field(..., ge=1, description="排名，从 1 开始")
     country_iso: str
-    country_name: str
+    country_name: str | None = Field(
+        None,
+        description="国家中文名（V0.73.0 N+9 起为可空；前端用 I18n.t('country.' + iso) 渲染）",
+    )
     tonnes_net: float = Field(..., description="当年累计净购金（吨）")
 
 
