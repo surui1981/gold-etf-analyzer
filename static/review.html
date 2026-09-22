@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>研判复盘 · 黄金价格投资辅助工具</title>
+<title data-i18n="review.page_title">研判复盘 · 黄金价格投资辅助工具</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -111,36 +111,36 @@
 <main id="main" tabindex="-1">
 <div class="wrap">
   <nav class="topnav">
-    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.gold">黄金价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review" class="active">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <div id="freshnessBar"></div>
   <div class="warn-banner">
-    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
-      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
-      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
-      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
-      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
-      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
+      <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
+      <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
+      <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
+      <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
+      <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
     </ol>
   </div>
 
   <div class="hero">
-    <h1>研判复盘 · 判断与结果对齐</h1>
-    <p class="intro">
+    <h1 data-i18n="review.h1">研判复盘 · 判断与结果对齐</h1>
+    <p class="intro" data-i18n-html="review.intro">
       把每天的<b>研判（分值 + 依据 + 备注）</b>与<b>之后的实际金价</b>放在同一张表里对齐：
       当日收盘 → 第 1 / 3 / 5 个交易日收盘的涨跌幅，按方向判定<b>命中或偏离</b>。
       统计反馈（命中率 / 校准曲线 / 依据胜率）用于逐步校正打分习惯。
@@ -149,41 +149,41 @@
 
   <!-- 控制条 -->
   <div class="card">
-    <h2>⚙️ 复盘设置</h2>
-    <div class="desc">基准价默认取<b>纽约金 COMEX</b>（与投资指引口径一致）；窗口按<b>交易日</b>对齐，自动跳过周末。</div>
+    <h2 data-i18n="review.settings_title">⚙️ 复盘设置</h2>
+    <div class="desc" data-i18n-html="review.settings_desc">基准价默认取<b>纽约金 COMEX</b>（与投资指引口径一致）；窗口按<b>交易日</b>对齐，自动跳过周末。</div>
     <div class="toolbar" style="margin-top:12px">
-      <label class="desc">基准标的
+      <label class="desc" data-i18n="review.label_target">基准标的
         <select id="selTarget"></select>
       </label>
-      <label class="desc">判定窗口
+      <label class="desc" data-i18n="review.label_horizon">判定窗口
         <select id="selHorizon"></select>
       </label>
-      <label class="desc">回看天数
+      <label class="desc" data-i18n="review.label_days">回看天数
         <select id="selDays">
-          <option value="30">近 30 天</option>
-          <option value="90" selected>近 90 天</option>
-          <option value="180">近 180 天</option>
-          <option value="365">近 365 天</option>
+          <option value="30" data-i18n="review.days_30">近 30 天</option>
+          <option value="90" selected data-i18n="review.days_90">近 90 天</option>
+          <option value="180" data-i18n="review.days_180">近 180 天</option>
+          <option value="365" data-i18n="review.days_365">近 365 天</option>
         </select>
       </label>
-      <button class="btn-save" id="btnRefresh" onclick="reload()">🔄 刷新</button>
-      <button class="btn-ghost" id="btnBackfill" onclick="backfill()">📥 回填历史金价</button>
+      <button class="btn-save" id="btnRefresh" onclick="reload()" data-i18n="review.btn_refresh">🔄 刷新</button>
+      <button class="btn-ghost" id="btnBackfill" onclick="backfill()" data-i18n="review.btn_backfill">📥 回填历史金价</button>
     </div>
     <div id="ctlMsg" class="desc" style="margin-top:8px"></div>
   </div>
 
   <!-- 命中率总览 -->
   <div class="card">
-    <h2>🎯 命中率总览 <span id="statScope" class="desc"></span></h2>
+    <h2 data-i18n="review.stats_title">🎯 命中率总览 <span id="statScope" class="desc"></span></h2>
     <div class="kpis" id="kpis"></div>
     <div id="statBanner"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px" id="statGrid">
       <div>
-        <div class="desc" style="font-weight:600;color:var(--text)">按研判方向</div>
+        <div class="desc" style="font-weight:600;color:var(--text)" data-i18n="review.by_direction">按研判方向</div>
         <div class="bars" id="dirBars"></div>
       </div>
       <div>
-        <div class="desc" style="font-weight:600;color:var(--text)">按判定窗口</div>
+        <div class="desc" style="font-weight:600;color:var(--text)" data-i18n="review.by_horizon">按判定窗口</div>
         <div class="bars" id="hzBars"></div>
       </div>
     </div>
@@ -191,8 +191,8 @@
 
   <!-- 校准曲线 -->
   <div class="card">
-    <h2>📐 分值校准（打多少分时，实际上涨概率多大）</h2>
-    <div class="desc">
+    <h2 data-i18n="review.calibration_title">📐 分值校准（打多少分时，实际上涨概率多大）</h2>
+    <div class="desc" data-i18n-html="review.calibration_desc">
       把当日有效分值分成 5 档，统计每档之后窗口中<b>实际上涨的比例</b>。
       理想的打分应当<b>单调递增</b>——分数越高，上涨概率越大。若高分档并不比低分档更高，说明打分存在高估。
     </div>
@@ -202,11 +202,11 @@
 
   <!-- 依据标签胜率 -->
   <div class="card">
-    <h2>🏷️ 研判依据胜率（哪类依据更可靠）</h2>
-    <div class="desc">统计每个依据标签出现时的方向命中率；样本量越大越可信（≥5 次才列出参考值）。</div>
+    <h2 data-i18n="review.basis_title">🏷️ 研判依据胜率（哪类依据更可靠）</h2>
+    <div class="desc" data-i18n="review.basis_desc">统计每个依据标签出现时的方向命中率；样本量越大越可信（≥5 次才列出参考值）。</div>
     <div style="overflow:auto;max-height:340px">
       <table class="hist" id="tagTable">
-        <thead><tr><th>依据标签</th><th>出现次数</th><th>命中</th><th>命中率</th><th>参考度</th></tr></thead>
+        <thead><tr><th data-i18n="review.col_basis">依据标签</th><th data-i18n="review.col_count">出现次数</th><th data-i18n="review.col_hits">命中</th><th data-i18n="review.col_hit_rate">命中率</th><th data-i18n="review.col_ref">参考度</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -214,12 +214,12 @@
 
   <!-- 研判日志 -->
   <div class="card">
-    <h2>📅 研判日志（按日期归档 + 后续表现）</h2>
-    <div class="desc" id="journalDesc">每日研判的分值、依据与备注，以及之后第 1/3/5 个交易日的金价对比。</div>
+    <h2 data-i18n="review.journal_title">📅 研判日志（按日期归档 + 后续表现）</h2>
+    <div class="desc" id="journalDesc" data-i18n="review.journal_desc">每日研判的分值、依据与备注，以及之后第 1/3/5 个交易日的金价对比。</div>
     <div id="journal"></div>
   </div>
 
-  <footer>gold-etf-analyzer · 研判复盘 · 统计仅为个人打分习惯的自我校正，不构成投资建议</footer>
+  <footer data-i18n="review.footer">gold-etf-analyzer · 研判复盘 · 统计仅为个人打分习惯的自我校正，不构成投资建议</footer>
 </div>
 </main>
 
@@ -278,7 +278,7 @@ async function loadStats() {
 
   const bn = document.getElementById("statBanner");
   if (!s.evaluated) {
-    bn.innerHTML = `<div class="banner info">暂无可统计样本。命中率需要「历史研判 + 之后价格」两者齐备；请先在<a href="/news">消息面评估</a>页打分，并确保价格日历已回填。</div>`;
+    bn.innerHTML = `<div class="banner info">暂无可统计样本。命中率需要「历史研判 + 之后价格」两者齐备；请先在<a href="/news" data-i18n="nav.news">消息面评估</a>页打分，并确保价格日历已回填。</div>`;
   } else if (s.sample_warning) {
     bn.innerHTML = `<div class="banner warn">⚠️ 样本仅 <b>${s.evaluated}</b> 天，统计波动较大，<b>仅作趋势参考</b>。建议持续积累到 20 天以上再据此调整打分习惯。</div>`;
   } else {
@@ -356,7 +356,7 @@ async function loadJournal() {
     `近 ${journal.days ?? cfg.days} 天共 <b>${journal.total ?? 0}</b> 天有研判，其中 <b>${journal.pending ?? 0}</b> 天待验证（T+${journal.horizon ?? cfg.horizon} 尚未到期）。`;
 
   if (!journal.items.length) {
-    box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news">消息面评估</a> 页完成打分；若想补录历史研判，可在该页填写并指定日期。</div>`;
+    box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news" data-i18n="nav.news">消息面评估</a> 页完成打分；若想补录历史研判，可在该页填写并指定日期。</div>`;
     return;
   }
   box.innerHTML = journal.items.map(renderDay).join("");

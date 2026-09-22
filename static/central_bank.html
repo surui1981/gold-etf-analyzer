@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>世界央行黄金购买统计 · 黄金价格投资辅助工具</title>
+<title data-i18n="central_bank.page_title">世界央行黄金购买统计 · 黄金价格投资辅助工具</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -109,63 +109,63 @@
 <div class="wrap">
   <!-- 顶部导航 -->
   <nav class="topnav">
-    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.gold">黄金价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/central-bank" class="active">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <!-- Hero -->
   <section class="hero">
     <div class="en">CENTRAL BANK GOLD PURCHASES · 2020 – 2026</div>
-    <h1>📊 世界央行黄金购买统计</h1>
-    <div class="tagline">数据驱动研判：各国央行结构性购金 vs 卖出</div>
-    <div class="intro">
+    <h1 data-i18n="central_bank.h1">📊 世界央行黄金购买统计</h1>
+    <div class="tagline" data-i18n="central_bank.tagline">数据驱动研判：各国央行结构性购金 vs 卖出</div>
+    <div class="intro" data-i18n="central_bank.intro_long">
       央行黄金储备变化是金价最长期、最结构性的支撑因素之一。
       本页汇总 15 个主要购金国 2020Q1 – 2026Q2 的季度净购金吨数，按国家、按季度拆解。
       数据主源为 IMF IRFCL（覆盖 13 国，免费无 KEY），UZB/IRN 因不向 IMF 披露，辅以 WGC 月报手工补丁。
     </div>
-    <div class="notice">数据滞后 6-12 个月 · 仅供研究参考，不构成投资建议</div>
+    <div class="notice" data-i18n="central_bank.notice">数据滞后 6-12 个月 · 仅供研究参考，不构成投资建议</div>
   </section>
 
   <!-- 投资警示 -->
   <div class="warn-banner">
-    <div class="w-title">⚠️ 数据使用注意</div>
+    <div class="w-title" data-i18n="central_bank.warn_title">⚠️ 数据使用注意</div>
     <ol>
-      <li><b>IMF IRFCL</b> 月度发布（T+1~T+3 月滞后），单日汇率波动不影响；季度 delta 由相邻两月 oz 持仓差值推算。</li>
-      <li><b>UZB / IRN</b> 因制裁或主动不披露，IMF 无数据，使用 WGC 月报公开估读，已标注 source=<b>WGC 月报估读</b>。</li>
-      <li>季度净购金 = (本季度末 oz − 上季度末 oz) / 32,150.7466；<b>负值代表卖出</b>（俄罗斯/土耳其历史多次）。</li>
-      <li>本统计仅反映<b>官方部门</b>净买卖，不含 ETF、首饰、工业需求等其他黄金消费。</li>
+      <li><b data-i18n="central_bank.warn_b1_strong">IMF IRFCL</b><span data-i18n="central_bank.warn_b1_rest">月度发布（T+1~T+3 月滞后），单日汇率波动不影响；季度 delta 由相邻两月 oz 持仓差值推算。</span></li>
+      <li><b data-i18n="central_bank.warn_b2_strong">UZB / IRN</b><span data-i18n="central_bank.warn_b2_rest">因制裁或主动不披露，IMF 无数据，使用 WGC 月报公开估读，已标注 source=</span><b data-i18n="central_bank.warn_b2_wgc">WGC 月报估读</b>。</li>
+      <li><span data-i18n="central_bank.warn_b3_pre">季度净购金 = (本季度末 oz − 上季度末 oz) / 32,150.7466；</span><b data-i18n="central_bank.warn_b3_strong">负值代表卖出</b><span data-i18n="central_bank.warn_b3_rest">（俄罗斯/土耳其历史多次）。</span></li>
+      <li><span data-i18n="central_bank.warn_b4_pre">本统计仅反映</span><b data-i18n="central_bank.warn_b4_strong">官方部门</b><span data-i18n="central_bank.warn_b4_rest">净买卖，不含 ETF、首饰、工业需求等其他黄金消费。</span></li>
     </ol>
   </div>
 
   <!-- KPI 卡 -->
   <div class="kpi-grid">
     <div class="kpi">
-      <div class="label">T12M 滚动 12 月合计</div>
+      <div class="label" data-i18n="central_bank.kpi_t12m">T12M 滚动 12 月合计</div>
       <div class="value" id="kpiT12m">—</div>
       <div class="extra" id="kpiT12mWindow">窗口：—</div>
     </div>
     <div class="kpi">
-      <div class="label">最新季度合计</div>
+      <div class="label" data-i18n="central_bank.kpi_this_q">最新季度合计</div>
       <div class="value" id="kpiCurrent">—</div>
       <div class="extra" id="kpiCurrentLabel">截至 —</div>
     </div>
     <div class="kpi">
-      <div class="label">参与国家数</div>
+      <div class="label" data-i18n="central_bank.kpi_countries">参与国家数</div>
       <div class="value" id="kpiCountries">—</div>
-      <div class="extra">覆盖 IMF 上报 13 + WGC 补丁 2</div>
+      <div class="extra" data-i18n="central_bank.kpi_coverage">覆盖 IMF 上报 13 + WGC 补丁 2</div>
     </div>
     <div class="kpi">
-      <div class="label">数据截止季</div>
+      <div class="label" data-i18n="central_bank.kpi_latest">数据截止季</div>
       <div class="value" id="kpiLatest">—</div>
       <div class="extra" id="kpiRefresh">最后刷新：—</div>
     </div>
@@ -173,22 +173,22 @@
 
   <!-- 堆叠柱状图 -->
   <section class="panel">
-    <div class="panel-title">📈 季度净购金堆叠图 <span class="accent">· Top 10 国家 + Other</span></div>
+    <div class="panel-title" data-i18n="central_bank.stacked_title">📈 季度净购金堆叠图 <span class="accent">· Top 10 国家 + Other</span></div>
     <div class="chart-wrap"><canvas id="stackedChart"></canvas></div>
     <div class="legend-list" id="chartLegend"></div>
   </section>
 
   <!-- Top 10 买家榜 -->
   <section class="panel">
-    <div class="panel-title">🏆 T12M Top 10 买家（按滚动 12 月合计降序）</div>
+    <div class="panel-title" data-i18n="central_bank.top_buyers_title">🏆 T12M Top 10 买家（按滚动 12 月合计降序）</div>
     <table id="topTable">
       <thead>
         <tr>
-          <th style="width:50px">排名</th>
-          <th>国家</th>
-          <th style="width:120px">ISO</th>
-          <th style="width:120px" class="num">T12M 净购金（吨）</th>
-          <th style="width:100px">数据源</th>
+          <th style="width:50px" data-i18n="central_bank.col_rank">排名</th>
+          <th data-i18n="central_bank.col_country">国家</th>
+          <th style="width:120px" data-i18n="central_bank.col_iso">ISO</th>
+          <th style="width:120px" class="num" data-i18n="central_bank.col_t12m">T12M 净购金（吨）</th>
+          <th style="width:100px" data-i18n="central_bank.col_source">数据源</th>
         </tr>
       </thead>
       <tbody id="topBody"></tbody>
@@ -197,30 +197,30 @@
 
   <!-- 完整明细表 + 过滤器 -->
   <section class="panel">
-    <div class="panel-title">📋 完整明细（按国家 / 季度筛选）</div>
+    <div class="panel-title" data-i18n="central_bank.detail_title">📋 完整明细（按国家 / 季度筛选）</div>
     <div class="filters">
-      <label for="filterCountry">国家</label>
+      <label for="filterCountry" data-i18n="central_bank.label_country">国家</label>
       <select id="filterCountry" aria-label="按国家筛选">
-        <option value="">全部</option>
+        <option value="" data-i18n="central_bank.opt_all">全部</option>
       </select>
-      <label>起始季度</label>
-      <input id="filterFrom" placeholder="2024Q1" maxlength="6">
-      <label>结束季度</label>
-      <input id="filterTo" placeholder="2026Q2" maxlength="6">
-      <button id="filterApply">应用筛选</button>
-      <button id="filterReset" style="background:var(--muted)">重置</button>
+      <label data-i18n="central_bank.label_from">起始季度</label>
+      <input id="filterFrom" data-i18n-placeholder="central_bank.filter_from_ph" placeholder="2024Q1" maxlength="6">
+      <label data-i18n="central_bank.label_to">结束季度</label>
+      <input id="filterTo" data-i18n-placeholder="central_bank.filter_to_ph" placeholder="2026Q2" maxlength="6">
+      <button id="filterApply" data-i18n="central_bank.btn_apply">应用筛选</button>
+      <button id="filterReset" style="background:var(--muted)" data-i18n="central_bank.btn_reset">重置</button>
     </div>
     <div class="scroll-x" tabindex="0" role="region" aria-label="央行购金明细（可滚动）" style="max-height:420px;overflow:auto">
       <table id="detailTable">
         <caption class="sr-only">央行购金明细（按季度 + 国家）</caption>
         <thead>
           <tr>
-            <th>季度</th>
-            <th>国家</th>
-            <th>ISO</th>
-            <th class="num">净购金（吨）</th>
-            <th>数据源</th>
-            <th>数据截止日</th>
+            <th data-i18n="central_bank.col_quarter">季度</th>
+            <th data-i18n="central_bank.col_country">国家</th>
+            <th data-i18n="central_bank.col_iso">ISO</th>
+            <th class="num" data-i18n="central_bank.col_qty">净购金（吨）</th>
+            <th data-i18n="central_bank.col_source">数据源</th>
+            <th data-i18n="central_bank.col_data_date">数据截止日</th>
           </tr>
         </thead>
         <tbody id="detailBody"></tbody>
@@ -228,7 +228,7 @@
     </div>
   </section>
 
-  <footer>© 黄金价格投资辅助工具 · 数据来源 IMF IRFCL + WGC 月报</footer>
+  <footer data-i18n="central_bank.footer">© 黄金价格投资辅助工具 · 数据来源 IMF IRFCL + WGC 月报</footer>
 </div>
 </main>
 

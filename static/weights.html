@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>权重配置 · 黄金价格投资辅助工具</title>
+<title data-i18n="weights.page_title">权重配置 · 黄金价格投资辅助工具</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -78,82 +78,82 @@
 <div class="wrap">
   <!-- 顶部导航（统一，置顶） -->
   <nav class="topnav">
-    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.gold">黄金价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights" class="active">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <!-- 数据时效（UX 6.1：交易时段 + 时效等级 + 数据截止日 + 采集时间，全站一致） -->
   <div id="freshnessBar"></div>
   <div class="warn-banner">
-    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
-      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
-      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
-      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
-      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
-      <li><b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</li>
+      <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
+      <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
+      <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
+      <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
+      <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
     </ol>
   </div>
 
   <div class="hero">
-    <h1>权重配置 · 黄金价格投资辅助工具</h1>
-    <p class="intro">调整<b>综合趋势评估指数</b>的计算权重：技术面各维度、宏观面各因子、以及技术/宏观/消息面合成占比。保存后立即影响综合指数与购买决策（默认值为典型经验配置）。</p>
+    <h1 data-i18n="weights.h1">权重配置 · 黄金价格投资辅助工具</h1>
+    <p class="intro" data-i18n-html="weights.intro">调整<b>综合趋势评估指数</b>的计算权重：技术面各维度、宏观面各因子、以及技术/宏观/消息面合成占比。保存后立即影响综合指数与购买决策（默认值为典型经验配置）。</p>
   </div>
 
   <!-- 技术面权重 -->
   <div class="card">
-    <h2>📈 技术面权重（趋势 5 维度）</h2>
-    <div class="desc">综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配</div>
+    <h2 data-i18n="weights.tech_title">📈 技术面权重（趋势 5 维度）</h2>
+    <div class="desc" data-i18n="weights.tech_desc">综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配</div>
     <div id="trendRows"></div>
-    <div class="sum-line">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n="weights.sum_trend">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
 
   <!-- 宏观面权重 -->
   <div class="card">
-    <h2>🌐 宏观面权重（5 大参考因子）</h2>
-    <div class="desc">美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重</div>
+    <h2 data-i18n="weights.macro_title">🌐 宏观面权重（5 大参考因子）</h2>
+    <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重</div>
     <div id="macroRows"></div>
-    <div class="sum-line">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
 
   <!-- 合成权重 -->
   <div class="card">
-    <h2>⚖️ 合成权重（技术面 / 宏观面 / 消息面）</h2>
-    <div class="desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）</div>
+    <h2 data-i18n="weights.combine_title">⚖️ 合成权重（技术面 / 宏观面 / 消息面）</h2>
+    <div class="desc" data-i18n="weights.combine_desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）</div>
     <div id="combineRows"></div>
-    <div class="sum-line">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n="weights.sum_combine">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-      <span style="font-size:12.5px;color:var(--muted)">预设：</span>
-      <button class="chip" onclick="applyPreset(0.20, 0.50, 0.30)">保守（重宏观）</button>
-      <button class="chip" onclick="applyPreset(0.30, 0.40, 0.30)">均衡（默认）</button>
-      <button class="chip" onclick="applyPreset(0.45, 0.30, 0.25)">激进（重技术）</button>
+      <span style="font-size:12.5px;color:var(--muted)" data-i18n="weights.preset_label">预设：</span>
+      <button class="chip" onclick="applyPreset(0.20, 0.50, 0.30)" data-i18n="weights.preset_conservative">保守（重宏观）</button>
+      <button class="chip" onclick="applyPreset(0.30, 0.40, 0.30)" data-i18n="weights.preset_balanced">均衡（默认）</button>
+      <button class="chip" onclick="applyPreset(0.45, 0.30, 0.25)" data-i18n="weights.preset_aggressive">激进（重技术）</button>
     </div>
   </div>
 
   <!-- 实时预览（拖动滑块即时可见调整后指数） -->
   <div class="card" id="previewCard">
-    <h2>👁 调整后综合指数 · 实时预览</h2>
-    <div id="previewBox" class="empty">正在获取最新评估数据…</div>
+    <h2 data-i18n="weights.preview_title">👁 调整后综合指数 · 实时预览</h2>
+    <div id="previewBox" class="empty" data-i18n="weights.preview_loading">正在获取最新评估数据…</div>
   </div>
 
   <div class="actions">
-    <button class="btn-save" onclick="save()">💾 保存权重</button>
-    <button class="btn-reset" onclick="resetAll()">恢复默认</button>
+    <button class="btn-save" onclick="save()" data-i18n="weights.btn_save">💾 保存权重</button>
+    <button class="btn-reset" onclick="resetAll()" data-i18n="weights.btn_reset">恢复默认</button>
   </div>
   <div class="msg" id="msg"></div>
 
-  <footer>gold-etf-analyzer · 权重修改仅影响本机评估计算 · 不构成投资建议</footer>
+  <footer data-i18n="weights.footer">gold-etf-analyzer · 权重修改仅影响本机评估计算 · 不构成投资建议</footer>
 </div>
 </main>
 

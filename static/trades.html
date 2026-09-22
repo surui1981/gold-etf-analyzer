@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>黄金ETF 交易历史查询</title>
+<title data-i18n="trades.page_title">黄金ETF 交易历史查询</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -99,124 +99,124 @@
 <div class="wrap">
   <!-- 顶部导航（统一，置顶；账本切换器由 account.js 注入） -->
   <nav class="topnav">
-    <div class="brand">🏅 黄金价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.gold">黄金价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades" class="active">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <div id="freshnessBar"></div>
 
   <header class="hero">
-    <h1>交易历史查询</h1>
-    <div class="tagline">按账本 / 方向 / 日期区间 / 持仓筛选每一笔成交，附已实现盈亏与成交后份额，可导出 CSV 对账</div>
-    <div class="notice">仅供研究参考，不构成投资建议</div>
+    <h1 data-i18n="trades.h1">交易历史查询</h1>
+    <div class="tagline" data-i18n="trades.tagline">按账本 / 方向 / 日期区间 / 持仓筛选每一笔成交，附已实现盈亏与成交后份额，可导出 CSV 对账</div>
+    <div class="notice" data-i18n="brand.notice_short">仅供研究参考，不构成投资建议</div>
   </header>
 
   <!-- 筛选 -->
   <div class="card">
-    <h2>筛选条件</h2>
-    <div class="acc-hint" id="accHint">账本：<b>加载中…</b>（可在右上角切换；「全部账本」为合并视图）</div>
+    <h2 data-i18n="trades.filter_title">筛选条件</h2>
+    <div class="acc-hint" id="accHint" data-i18n-html="trades.acc_hint">账本：<b>加载中…</b>（可在右上角切换；「全部账本」为合并视图）</div>
     <div class="filters">
       <div class="fld">
-        <label for="fSide">方向</label>
+        <label for="fSide" data-i18n="trades.filter_side">方向</label>
         <select id="fSide">
-          <option value="">全部</option>
-          <option value="buy">买入</option>
-          <option value="sell">卖出</option>
+          <option value="" data-i18n="trades.opt_all">全部</option>
+          <option value="buy" data-i18n="trades.side_buy">买入</option>
+          <option value="sell" data-i18n="trades.side_sell">卖出</option>
         </select>
       </div>
       <div class="fld">
-        <label for="fStart">起始日期</label>
+        <label for="fStart" data-i18n="trades.filter_start">起始日期</label>
         <input type="date" id="fStart">
       </div>
       <div class="fld">
-        <label for="fEnd">结束日期</label>
+        <label for="fEnd" data-i18n="trades.filter_end">结束日期</label>
         <input type="date" id="fEnd">
       </div>
       <div class="fld">
-        <label for="fPosition">持仓</label>
-        <select id="fPosition"><option value="">全部持仓</option></select>
+        <label for="fPosition" data-i18n="trades.filter_position">持仓</label>
+        <select id="fPosition"><option value="" data-i18n="trades.opt_all_positions">全部持仓</option></select>
       </div>
       <div class="fld">
-        <label for="fKeyword">关键字</label>
-        <input type="text" id="fKeyword" placeholder="名称或代码，如 518880">
+        <label for="fKeyword" data-i18n="trades.filter_keyword">关键字</label>
+        <input type="text" id="fKeyword" data-i18n-placeholder="trades.filter_keyword_ph" placeholder="名称或代码，如 518880">
       </div>
       <div class="fld">
-        <label for="fSize">每页</label>
+        <label for="fSize" data-i18n="trades.filter_size">每页</label>
         <select id="fSize">
-          <option value="20">20 条</option>
-          <option value="50" selected>50 条</option>
-          <option value="100">100 条</option>
+          <option value="20" data-i18n="trades.size_20">20 条</option>
+          <option value="50" selected data-i18n="trades.size_50">50 条</option>
+          <option value="100" data-i18n="trades.size_100">100 条</option>
         </select>
       </div>
       <div class="fld">
         <label>&nbsp;</label>
-        <button class="btn" id="btnQuery" type="button">查询</button>
+        <button class="btn" id="btnQuery" type="button" data-i18n="trades.btn_query">查询</button>
       </div>
       <div class="fld">
         <label>&nbsp;</label>
-        <button class="btn ghost" id="btnReset" type="button">重置</button>
+        <button class="btn ghost" id="btnReset" type="button" data-i18n="trades.btn_reset">重置</button>
       </div>
       <div class="fld">
         <label>&nbsp;</label>
-        <button class="btn ghost" id="btnExport" type="button">⬇ 导出 CSV</button>
+        <button class="btn ghost" id="btnExport" type="button" data-i18n="trades.btn_export">⬇ 导出 CSV</button>
       </div>
     </div>
     <div class="chips">
-      <span class="cl">快捷区间：</span>
-      <button class="chip" data-days="7" type="button">近 7 天</button>
-      <button class="chip" data-days="30" type="button">近 30 天</button>
-      <button class="chip" data-days="90" type="button">近 90 天</button>
-      <button class="chip" data-days="365" type="button">近 1 年</button>
-      <button class="chip active" data-days="" type="button">全部</button>
+      <span class="cl" data-i18n="trades.quick_label">快捷区间：</span>
+      <button class="chip" data-days="7" type="button" data-i18n="trades.quick_7">近 7 天</button>
+      <button class="chip" data-days="30" type="button" data-i18n="trades.quick_30">近 30 天</button>
+      <button class="chip" data-days="90" type="button" data-i18n="trades.quick_90">近 90 天</button>
+      <button class="chip" data-days="365" type="button" data-i18n="trades.quick_365">近 1 年</button>
+      <button class="chip active" data-days="" type="button" data-i18n="trades.quick_all">全部</button>
     </div>
   </div>
 
   <!-- 汇总 -->
   <div class="card">
-    <h2>汇总 <span class="sub" id="summaryScope">（覆盖全部筛选结果，非当前页）</span></h2>
+    <h2 data-i18n="trades.summary_title">汇总 <span class="sub" id="summaryScope" data-i18n="trades.summary_scope">（覆盖全部筛选结果，非当前页）</span></h2>
     <div class="kpi-grid" id="kpiArea"></div>
   </div>
 
   <!-- 明细 -->
   <div class="card">
-    <h2>成交明细 <span class="sub" id="listInfo"></span></h2>
+    <h2 data-i18n="trades.detail_title">成交明细 <span class="sub" id="listInfo"></span></h2>
     <div class="tbl-wrap">
       <table class="trades">
         <thead>
           <tr>
-            <th>成交时间</th>
-            <th>账本</th>
-            <th>品种</th>
-            <th>方向</th>
-            <th class="num">数量(份)</th>
-            <th class="num">成交价</th>
-            <th class="num">成交金额</th>
-            <th class="num">手续费</th>
-            <th class="num">已实现盈亏</th>
-            <th class="num">成交后份额</th>
-            <th>持仓</th>
+            <th data-i18n="trades.col_time">成交时间</th>
+            <th data-i18n="trades.col_account">账本</th>
+            <th data-i18n="trades.col_symbol">品种</th>
+            <th data-i18n="trades.col_side">方向</th>
+            <th class="num" data-i18n="trades.col_qty">数量(份)</th>
+            <th class="num" data-i18n="trades.col_price">成交价</th>
+            <th class="num" data-i18n="trades.col_amount">成交金额</th>
+            <th class="num" data-i18n="trades.col_fee">手续费</th>
+            <th class="num" data-i18n="trades.col_pnl">已实现盈亏</th>
+            <th class="num" data-i18n="trades.col_shares">成交后份额</th>
+            <th data-i18n="trades.col_position">持仓</th>
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="11" class="empty">加载中…</td></tr>
+          <tr><td colspan="11" class="empty" data-i18n="common.loading">加载中…</td></tr>
         </tbody>
       </table>
     </div>
     <div class="pager">
       <span id="pageInfo"></span>
-      <button id="btnPrev" type="button">上一页</button>
-      <button id="btnNext" type="button">下一页</button>
+      <button id="btnPrev" type="button" data-i18n="trades.btn_prev">上一页</button>
+      <button id="btnNext" type="button" data-i18n="trades.btn_next">下一页</button>
     </div>
   </div>
 </div>

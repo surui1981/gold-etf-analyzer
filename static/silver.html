@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>白银趋势追踪（白银 ETF + 纽约白银）</title>
+<title data-i18n="silver.page_title">白银趋势追踪（白银 ETF + 纽约白银）</title>
 <!-- V0.69.0 FOUC 防护：必须在 <head> 第一行、theme.css 之前（同步执行） -->
 <script>(function(){
   try {
@@ -130,48 +130,48 @@
 <main id="main" tabindex="-1">
 <div class="wrap">
   <nav class="topnav">
-    <div class="brand">🪙 白银价格投资辅助工具</div>
+    <div class="brand" data-i18n="brand.silver">白银价格投资辅助工具</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html" class="active">白银追踪</a>
-      <a href="/static/backtest.html">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <div id="freshnessBar"></div>
   <div id="sourceBar" class="source-bar" style="display:none"></div>
   <div id="healthInfo" style="font-size:11.5px;color:var(--muted);margin:-6px 0 14px"></div>
-  <div id="loadBar" class="source-bar source-warn">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
+  <div id="loadBar" class="source-bar source-warn" data-i18n="trend.loading_hint">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
 
   <div class="warn-banner">
-    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
-      <li><b>投资是超高难度的综合能力挑战</b>——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</li>
-      <li><b>正确筛选信息、聚焦市场核心要素</b>——这是做出正确判断的基石，切勿被噪音裹挟。</li>
-      <li><b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。</li>
-      <li><b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。</li>
-      <li><b>白银数据来源</b>——白银 ETF 562800（易方达白银 ETF）+ COMEX SI 期货（纽约白银），仅供研究参考，不构成投资建议。</li>
+      <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
+      <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
+      <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
+      <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
+      <li><b data-i18n="silver.warn_b5_strong">白银数据来源</b><span data-i18n="silver.warn_b5_rest">——白银 ETF 562800（易方达白银 ETF）+ COMEX SI 期货（纽约白银），仅供研究参考，不构成投资建议。</span></li>
     </ol>
   </div>
 
   <header class="hero">
     <div>
-      <h1>白银价格投资辅助工具 <span id="badge"></span>
+      <h1 data-i18n="silver.h1">白银价格投资辅助工具 <span id="badge"></span>
         <button id="refreshBtn" class="refresh-btn" title="手动刷新行情（每 60 秒自动刷新）">🔄</button>
       </h1>
-      <div class="en">Silver Price Investment Assistant</div>
-      <div class="tagline">白银 ETF + 纽约白银双市场 · 趋势评估指数 · 与黄金相关性与决策</div>
-      <p class="intro">汇聚<b>纽约白银（COMEX SI）、白银ETF（562800 易方达白银 ETF）</b>两大市场价格数据，量化评估白银投资窗口——以趋势评估指数量化多空、以参数维度辅助 ETF 购买决策，为个人白银投资者提供数据参考。白银波动率高于黄金，请同步关注金价联动。</p>
-      <div class="sub" id="subtitle" style="margin-top:8px">加载中…</div>
+      <div class="en" data-i18n="silver.subtitle_en">Silver Price Investment Assistant</div>
+      <div class="tagline" data-i18n="silver.tagline">白银 ETF + 纽约白银双市场 · 趋势评估指数 · 与黄金相关性与决策</div>
+      <p class="intro" data-i18n-html="silver.intro">汇聚<b>纽约白银（COMEX SI）、白银ETF（562800 易方达白银 ETF）</b>两大市场价格数据，量化评估白银投资窗口——以趋势评估指数量化多空、以参数维度辅助 ETF 购买决策，为个人白银投资者提供数据参考。白银波动率高于黄金，请同步关注金价联动。</p>
+      <div class="sub" id="subtitle" style="margin-top:8px" data-i18n="common.loading">加载中…</div>
       <div style="margin-top:6px"><span id="freshBadge"></span></div>
-      <div class="notice">数据来自 AKShare（白银 ETF 562800 + COMEX SI 期货）· 仅供研究参考，不构成投资建议</div>
+      <div class="notice" data-i18n="silver.notice">数据来自 AKShare（白银 ETF 562800 + COMEX SI 期货）· 仅供研究参考，不构成投资建议</div>
     </div>
   </header>
 
@@ -179,11 +179,11 @@
 
   <!-- 白银实时评估摘要 -->
   <section class="headline" aria-label="白银实时评估摘要">
-    <div class="headline-title">📊 白银实时评估摘要 · 趋势指数 × 双市场报价</div>
+    <div class="headline-title" data-i18n="silver.headline_title">📊 白银实时评估摘要 · 趋势指数 × 双市场报价</div>
     <div class="index-panel">
       <div class="index-score">
         <div class="num" id="idxNum">--</div>
-        <div class="lbl">白银趋势评估指数 (0-100)</div>
+        <div class="lbl" data-i18n="silver.idx_label">白银趋势评估指数 (0-100)</div>
       </div>
       <div class="index-info">
         <span class="badge" id="idxBadge" style="display:none"></span>
@@ -191,9 +191,9 @@
         <div style="font-size:11px;color:var(--muted);margin-top:4px" id="snapTime"></div>
         <div class="method" id="idxMethod"></div>
         <div class="macro-box">
-          <div class="macro-title">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
+          <div class="macro-title" data-i18n="trend.macro_label">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
           <div id="macroFactors"></div>
-          <div class="macro-title" style="margin-top:8px">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
+          <div class="macro-title" style="margin-top:8px" data-i18n="trend.news_label">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
           <div id="newsFactor"></div>
         </div>
       </div>
@@ -203,18 +203,18 @@
 
   <!-- 共振信号卡（V0.70.0 复用，silver 数据由 silver 端点驱动） -->
   <section class="panel" id="resonanceCard" role="status" aria-live="polite" aria-label="共振信号">
-    <div class="rc-loading">🔄 共振信号加载中…</div>
+    <div class="rc-loading" data-i18n="trend.resonance_loading">🔄 共振信号加载中…</div>
   </section>
 
   <!-- 趋势参数维度 -->
   <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:14px">白银趋势参数维度 <span style="font-weight:400;font-size:12px;color:var(--muted)">加权合成 · 红=利多 绿=利空</span></div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:14px" data-i18n="silver.dims_title">白银趋势参数维度 <span style="font-weight:400;font-size:12px;color:var(--muted)" data-i18n="trend.dims_sub">加权合成 · 红=利多 绿=利空</span></div>
     <div id="indicators"></div>
   </div>
 
   <!-- 白银 ETF vs 纽约白银 对照 -->
   <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:4px">白银 ETF vs 纽约白银 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px" data-i18n="silver.cmp_title">白银 ETF vs 纽约白银 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
     <div class="cards" id="cmpCards" style="margin-bottom:12px"></div>
     <table id="cmpTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"></table>
     <canvas id="compareChart" style="max-height:260px"></canvas>
@@ -224,18 +224,18 @@
   <!-- 白银趋势主图 -->
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
-      <div style="font-size:15px;font-weight:600">📈 白银趋势主图 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="trendSub">加载中…</span></div>
+      <div style="font-size:15px;font-weight:600" data-i18n="silver.main_chart_title">📈 白银趋势主图 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="trendSub" data-i18n="common.loading">加载中…</span></div>
       <div id="klineRangeBtns" style="display:flex;gap:6px" title="V0.71.0 多时间框架">
         <button class="range-btn active" data-days="60" data-interval="D" type="button">60D</button>
         <button class="range-btn" data-days="365" data-interval="W" type="button">52W</button>
         <button class="range-btn" data-days="730" data-interval="M" type="button">24M</button>
       </div>
     </div>
-    <div id="chartArea"><div class="loading">正在加载白银行情数据…</div></div>
+    <div id="chartArea"><div class="loading" data-i18n="silver.chart_loading">正在加载白银行情数据…</div></div>
     <div class="summary" id="summary"></div>
   </div>
 
-  <footer>gold-etf-analyzer · 白银版 · 仅供研究参考，不构成投资建议</footer>
+  <footer data-i18n="silver.footer">gold-etf-analyzer · 白银版 · 仅供研究参考，不构成投资建议</footer>
 </div>
 </main>
 

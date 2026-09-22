@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>参数回测（Sharpe + 最大回撤 + 校准）</title>
+<title data-i18n="backtest.page_title">参数回测（Sharpe + 最大回撤 + 校准）</title>
 <!-- V0.69.0 FOUC 防护 -->
 <script>(function(){
   try {
@@ -91,39 +91,39 @@
 <main id="main" tabindex="-1">
 <div class="wrap">
   <nav class="topnav">
-    <div class="brand">⚙️ 参数回测</div>
+    <div class="brand" data-i18n="brand.backtest">参数回测</div>
     <div class="links">
-      <a href="/static/trend.html">趋势追踪</a>
-      <a href="/portfolio">持仓与决策</a>
-      <a href="/trades">交易历史</a>
-      <a href="/weights">权重配置</a>
-      <a href="/news">消息面评估</a>
-      <a href="/review">研判复盘</a>
-      <a href="/central-bank">央行购金统计</a>
-      <a href="/static/silver.html">白银追踪</a>
-      <a href="/static/backtest.html" class="active">参数回测</a>
-      <a href="/static/settings.html">通知中心</a>
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <div class="warn-banner">
-    <div class="w-title">⚠️ 投资警示 · 谨记于心</div>
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
     <ol>
-      <li><b>回测是事后统计，不是预测工具</b>——历史 Sharpe 不代表未来收益，请结合宏观环境独立判断。</li>
-      <li><b>样本不足时结论不可靠</b>——daily_snapshots 覆盖期有限（V0.52.0 起），少于 20 天请忽略。</li>
-      <li><b>网格扫描有「过拟合」风险</b>——Sharpe 最高的组合 ≠ 未来最优，建议关注 top 5 共有特征。</li>
-      <li><b>5 分钟节流是体验优化，不是限制</b>——同 params 5 分钟内直接复用上次结果（X-Backtest-Cached 头）。</li>
-      <li><b>数据来源</b>——历史 daily_snapshots（tech/macro/news 三面指数 + 金价 T+1），仅供研究参考，不构成投资建议。</li>
+      <li><b data-i18n="backtest.warn_b1_strong">回测是事后统计，不是预测工具</b><span data-i18n="backtest.warn_b1_rest">——历史 Sharpe 不代表未来收益，请结合宏观环境独立判断。</span></li>
+      <li><b data-i18n="backtest.warn_b2_strong">样本不足时结论不可靠</b><span data-i18n="backtest.warn_b2_rest">——daily_snapshots 覆盖期有限（V0.52.0 起），少于 20 天请忽略。</span></li>
+      <li><b data-i18n="backtest.warn_b3_strong">网格扫描有「过拟合」风险</b><span data-i18n="backtest.warn_b3_rest">——Sharpe 最高的组合 ≠ 未来最优，建议关注 top 5 共有特征。</span></li>
+      <li><b data-i18n="backtest.warn_b4_strong">5 分钟节流是体验优化，不是限制</b><span data-i18n="backtest.warn_b4_rest">——同 params 5 分钟内直接复用上次结果（X-Backtest-Cached 头）。</span></li>
+      <li><b data-i18n="backtest.warn_b5_strong">数据来源</b><span data-i18n="backtest.warn_b5_rest">——历史 daily_snapshots（tech/macro/news 三面指数 + 金价 T+1），仅供研究参考，不构成投资建议。</span></li>
     </ol>
   </div>
 
   <header class="hero">
     <div>
-      <h1>参数回测工具</h1>
-      <div class="en">Backtest Workbench</div>
-      <div class="tagline">权重网格 × 阈值带扫描 · Sharpe / 最大回撤 / 命中率 / 校准曲线</div>
-      <p class="intro">在 <code>daily_snapshots</code>（V0.52.0 起的每日评估历史）上重算不同参数组合的<b>事前收益</b>：把「技术 / 宏观 / 消息」三面权重按网格展开 + 4 节点阈值带扫描，输出 Sharpe（年化）×√252、最大回撤、命中率、5 桶校准曲线，让你在真正下单前先看参数准不准。</p>
-      <div class="notice">⚙️ 默认参数：tech=[0.3, 0.4, 0.5] / macro=[0.4] / news=[0.3]，阈值带 [55-70 / 45-30]，最大 27 组合</div>
+      <h1 data-i18n="backtest.h1">参数回测工具</h1>
+      <div class="en" data-i18n="backtest.subtitle_en">Backtest Workbench</div>
+      <div class="tagline" data-i18n="backtest.tagline">权重网格 × 阈值带扫描 · Sharpe / 最大回撤 / 命中率 / 校准曲线</div>
+      <p class="intro" data-i18n-html="backtest.intro">在 <code>daily_snapshots</code>（V0.52.0 起的每日评估历史）上重算不同参数组合的<b>事前收益</b>：把「技术 / 宏观 / 消息」三面权重按网格展开 + 4 节点阈值带扫描，输出 Sharpe（年化）×√252、最大回撤、命中率、5 桶校准曲线，让你在真正下单前先看参数准不准。</p>
+      <div class="notice" data-i18n="backtest.default_notice">⚙️ 默认参数：tech=[0.3, 0.4, 0.5] / macro=[0.4] / news=[0.3]，阈值带 [55-70 / 45-30]，最大 27 组合</div>
     </div>
   </header>
 
@@ -132,58 +132,58 @@
   <!-- 参数区 -->
   <section class="panel" id="paramsPanel">
     <div class="panel-title">
-      <span>⚙️ 参数区 <span class="sub">配置后点「立即回测」（500ms 防抖 + 后端 5 分钟节流）</span></span>
+      <span data-i18n="backtest.params_title">⚙️ 参数区 <span class="sub" data-i18n="backtest.params_sub">配置后点「立即回测」（500ms 防抖 + 后端 5 分钟节流）</span></span>
     </div>
 
     <div class="params-row">
-      <label>基准标的：</label>
+      <label data-i18n="backtest.label_target">基准标的：</label>
       <select id="targetSel">
-        <option value="etf">黄金 ETF（518880）</option>
-        <option value="ny">纽约金（COMEX GC）</option>
-        <option value="gram">上海金克价（Au99.99）</option>
-        <option value="silver_etf">白银 ETF（562800）</option>
-        <option value="silver_ny">纽约白银（COMEX SI）</option>
+        <option value="etf" data-i18n="backtest.tgt_etf">黄金 ETF（518880）</option>
+        <option value="ny" data-i18n="backtest.tgt_ny">纽约金（COMEX GC）</option>
+        <option value="gram" data-i18n="backtest.tgt_gram">上海金克价（Au99.99）</option>
+        <option value="silver_etf" data-i18n="backtest.tgt_silver_etf">白银 ETF（562800）</option>
+        <option value="silver_ny" data-i18n="backtest.tgt_silver_ny">纽约白银（COMEX SI）</option>
       </select>
 
-      <label>回看窗口：</label>
+      <label data-i18n="backtest.label_days">回看窗口：</label>
       <select id="daysSel">
-        <option value="60">60 日</option>
-        <option value="90" selected>90 日</option>
-        <option value="180">180 日</option>
-        <option value="365">365 日</option>
+        <option value="60" data-i18n="backtest.days_60">60 日</option>
+        <option value="90" selected data-i18n="backtest.days_90">90 日</option>
+        <option value="180" data-i18n="backtest.days_180">180 日</option>
+        <option value="365" data-i18n="backtest.days_365">365 日</option>
       </select>
 
-      <button class="run-btn" id="runBtn" type="button">▶ 立即回测</button>
-      <span class="bt-debounce" id="debounceHint">参数变更后 500ms 内自动重算</span>
+      <button class="run-btn" id="runBtn" type="button" data-i18n="backtest.btn_run">▶ 立即回测</button>
+      <span class="bt-debounce" id="debounceHint" data-i18n="backtest.debounce_hint">参数变更后 500ms 内自动重算</span>
     </div>
 
     <div class="grid-row">
       <div class="grid-box">
-        <div class="nm">技术面权重候选（tech）</div>
+        <div class="nm" data-i18n="backtest.grid_tech">技术面权重候选（tech）</div>
         <div class="chips" id="chipsTech" data-name="tech"></div>
       </div>
       <div class="grid-box">
-        <div class="nm">宏观面权重候选（macro）</div>
+        <div class="nm" data-i18n="backtest.grid_macro">宏观面权重候选（macro）</div>
         <div class="chips" id="chipsMacro" data-name="macro"></div>
       </div>
       <div class="grid-box">
-        <div class="nm">消息面权重候选（news）</div>
+        <div class="nm" data-i18n="backtest.grid_news">消息面权重候选（news）</div>
         <div class="chips" id="chipsNews" data-name="news"></div>
       </div>
     </div>
 
     <div class="grid-row">
       <div class="grid-box">
-        <div class="nm">看多阈值 BULLISH ≥</div>
+        <div class="nm" data-i18n="backtest.grid_bull">看多阈值 BULLISH ≥</div>
         <div class="chips" id="chipsBull" data-name="bullish"></div>
       </div>
       <div class="grid-box">
-        <div class="nm">看空阈值 BEARISH ≤</div>
+        <div class="nm" data-i18n="backtest.grid_bear">看空阈值 BEARISH ≤</div>
         <div class="chips" id="chipsBear" data-name="bearish"></div>
       </div>
     </div>
 
-    <div style="font-size:11px;color:var(--muted);margin-top:6px">
+    <div style="font-size:11px;color:var(--muted);margin-top:6px" data-i18n="backtest.grid_hint">
       💡 网格组合数 = tech × macro × news × bullish × bearish（≤ 125，超出会拒绝）；同组合 5 分钟内复用缓存
     </div>
   </section>
@@ -191,30 +191,30 @@
   <!-- 回测结果 -->
   <section class="panel" id="resultsPanel" style="position:relative">
     <div class="panel-title">
-      <span>📊 回测结果 <span class="sub" id="resultSub">尚未运行</span></span>
+      <span data-i18n="backtest.result_title">📊 回测结果 <span class="sub" id="resultSub" data-i18n="backtest.result_sub">尚未运行</span></span>
     </div>
-    <div id="cachedBadge">⏱ 已用 5 分钟内缓存</div>
+    <div id="cachedBadge" data-i18n="backtest.cached_badge">⏱ 已用 5 分钟内缓存</div>
 
     <div id="btSummary" class="bt-summary"></div>
 
-    <div style="font-size:13px;font-weight:600;margin:8px 0 6px">🎯 Sharpe（年化）— 125 个组合分布</div>
+    <div style="font-size:13px;font-weight:600;margin:8px 0 6px" data-i18n="backtest.sharpe_title">🎯 Sharpe（年化）— 125 个组合分布</div>
     <canvas id="sharpeChart"></canvas>
 
-    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">📉 最大回撤 % — 越低越好</div>
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.drawdown_title">📉 最大回撤 % — 越低越好</div>
     <canvas id="drawdownChart"></canvas>
 
-    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">🎓 校准曲线 — 实际命中率 vs 理论概率（5 桶）</div>
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.calibration_chart_title">🎓 校准曲线 — 实际命中率 vs 理论概率（5 桶）</div>
     <canvas id="calibrationChart"></canvas>
 
-    <div style="font-size:13px;font-weight:600;margin:16px 0 6px">📋 命中详情表 <span style="font-weight:400;font-size:11px;color:var(--muted)">（按 Sharpe 降序，前 30 行）</span></div>
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.detail_table_title">📋 命中详情表 <span style="font-weight:400;font-size:11px;color:var(--muted)" data-i18n="backtest.detail_table_sub">（按 Sharpe 降序，前 30 行）</span></div>
     <div style="max-height:400px;overflow:auto;border:1px solid var(--border);border-radius:8px">
-      <table id="btTable"><tr><td style="padding:24px;text-align:center;color:var(--muted)">点「立即回测」开始计算</td></tr></table>
+      <table id="btTable"><tr><td style="padding:24px;text-align:center;color:var(--muted)" data-i18n="backtest.run_prompt">点「立即回测」开始计算</td></tr></table>
     </div>
 
     <div class="summary" id="resultSummary"></div>
   </section>
 
-  <footer>gold-etf-analyzer · 参数回测 · Sharpe 仅供研究参考，不构成投资建议</footer>
+  <footer data-i18n="backtest.footer">gold-etf-analyzer · 参数回测 · Sharpe 仅供研究参考，不构成投资建议</footer>
 </div>
 </main>
 
