@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | **当前版本** | **V0.73.0**（2026-09-22）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | 652 通过 / 0 失败（pytest 离线回归） |
+| **测试基线** | 664 通过 / 0 失败（pytest 离线回归） |
 | **页面** | 10 个静态页 · 57 个 REST 端点 |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
@@ -107,9 +107,9 @@
 
 ## 数据 & 时效
 
-- **数据源**：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率）+ **WGC Gold Demand Trends**（央行购金季度统计，HTML chart JS 自动抓取）
-- **失败降级**：采集失败自动降级为内置 Mock / 静态参考值；AKShare 调用全局串行（py_mini_racer 兼容）
-- **行情源 provider 可切换** — `.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only`，测试 / 离线演示直接走 mock 不触网
+- **数据源**：**AKShare**（新浪 ETF / 东方财富备选 / SGE 上海金 / 英为财情纽约金 / 中债美债收益率）+ **WGC Gold Demand Trends**（央行购金季度统计，HTML chart JS 自动抓取）+ **Yahoo Finance**（白银 `562800.SS` / `SI=F`，**V0.73.0 新**）
+- **失败降级**：采集失败自动降级为内置 Mock / 静态参考值；AKShare 调用全局串行（py_mini_racer 兼容）；**Yahoo Silver 失败自动降级 mock，HTTP 200 不掉链**（V0.73.0 N+12）
+- **行情源 provider 可切换** — `.env` 配置 `MARKET_PROVIDER=akshare|mock|eastmoney_only|sina_only|silver_yahoo`，测试 / 离线演示直接走 mock 不触网；白银可选 `silver_yahoo` 拉真实报价
 - **时效透明** — 顶栏 freshness 角标显示数据**采集时点 + 缓存状态 + 时段**（交易 / 非交易）+ 4 个时点（09:30 / 11:30 / 14:00 / 15:30 BJT）预热 + 趋势页 60s 轮询 + 切回前台自动刷新
 - **多时间框架** — K 线主图支持 60D / 52W / 24M 三档（服务端抽 730 天日 K 后聚合）
 
@@ -142,7 +142,7 @@
 | 缓存 | 服务端 served cache（`quote_cache_ttl`）· SW 双 cache（gold-shell / gold-runtime） |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（1.2GB → 280MB）+ docker-compose + Nginx + Certbot |
-| 测试 | pytest 652 · ruff · check_static_js.py（前端内联 JS 门禁） |
+| 测试 | pytest 664 · ruff · check_static_js.py（前端内联 JS 门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
 ## 快速开始
@@ -174,7 +174,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 652 用例（离线回归）
+python -m pytest -v                                      # 664 用例（离线回归）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -186,7 +186,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
-| **V0.73.0** | 2026-09-22 | i18n 三语 + locale 格式化 + 后端国家名解耦（目标分 91.0 → 91.5） |
+| **V0.73.0** | 2026-09-22 | i18n 三语（zh-CN 626 + zh-TW 391 + en-US 627 key）+ locale 格式化 + 后端国家名解耦 + **Yahoo Silver provider + 自动降级 mock** + i18n.apply() inline 子节点保留修复（目标分 91.0 → 91.5） |
 | V0.72.0 | 2026-09 | 推送 + PWA + Web Push + 公开部署（90.5 → 91.0） |
 | V0.71.0 | 2026-08 | 白银 + 参数回测全链路（90 → 90.5） |
 | V0.70.0 | 2026-08 | 共振信号 + 克数持仓（89 → 90） |

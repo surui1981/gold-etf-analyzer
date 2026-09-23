@@ -389,7 +389,7 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 | **全量回归（含联网 fetcher）** | **431 passed / 1 skipped / 0 failed**（432 collected，19m59s；跳过项为 fetcher 依赖 gitignore 数据文件的既有 skipif 守卫） | `python -m pytest -q` |
 | **JS 门禁** | 10 个脚本全 OK（7 静态页 + 3 共享） | `python scripts/check_static_js.py` / `make check-web` |
 | **ruff 检查** | 0 错误 | `ruff check src tests` |
-| **行情源灵活度** | 4 选 1（akshare / mock / eastmoney_only / sina_only） | `.env` `MARKET_PROVIDER` |
+| **行情源灵活度** | 5 选 1（akshare / mock / eastmoney_only / sina_only / silver_yahoo） | `.env` `MARKET_PROVIDER` |
 | **依赖** | 仅 `fastapi + uvicorn + sqlalchemy + aiosqlite + akshare + pydantic-settings + ruff + pytest` | `pyproject.toml` `[project.optional-dependencies]` |
 
 > **ruff 基线说明（V0.63.0 起）**：`[tool.ruff.lint]` 的 `select` 使用**规则组前缀**（`E/F/I/UP/B/SIM/RUF`），因此**必须配合版本锁定**——ruff 小版本会在组内新增规则，门禁会毫无征兆地从 0 条变成数千条（0.16.5 曾一次报出 3749 条，其中 3494 条为中文全角标点的 `RUF001/002/003` 误报）。现锁 `ruff>=0.16,<0.17`，并显式 ignore：中文全角标点（`RUF001/002/003`）、`B008`（FastAPI `Depends(...)` 默认参数）、`BLE001`（行情源失败降级需捕获宽泛异常）、`UP017`（`timezone.utc`）。**升级 ruff 前请先重跑 `ruff check src tests` 并复核 ignore 列表。**
