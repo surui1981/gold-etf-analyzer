@@ -34,8 +34,8 @@ from app.repositories.market_providers import (
 # ─────────────── 工厂解析 ───────────────
 
 
-def test_registry_has_six_providers() -> None:
-    """工厂注册表固定包含 6 种 provider（V0.71.0 增加 silver_mock / silver_akshare）。"""
+def test_registry_has_seven_providers() -> None:
+    """工厂注册表固定包含 7 种 provider（V0.73.x+ 增加 silver_yahoo）。"""
     assert set(PROVIDER_REGISTRY.keys()) == {
         "akshare",
         "mock",
@@ -43,6 +43,7 @@ def test_registry_has_six_providers() -> None:
         "sina_only",
         "silver_mock",
         "silver_akshare",
+        "silver_yahoo",
     }
 
 
@@ -501,6 +502,152 @@ def test_build_provider_bundle_silver_akshare_resolves() -> None:
     settings = Settings(market_provider="silver_akshare")
     bundle = build_provider_bundle(settings)
     assert isinstance(bundle.silver_history, AkshareSilverHistoryProvider)
+
+
+# ───────────────────── V0.73.x+ Yahoo Silver Provider ─────────────────────
+
+
+def test_resolve_yahoo_symbol() -> None:
+    """YahooSilverHistoryProvider.resolve_yahoo_symbol 把内部 symbol 映射到 Yahoo ticker。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    p = YahooSilverHistoryProvider()
+    assert p.resolve_yahoo_symbol("562800") == "562800.SS"
+    assert p.resolve_yahoo_symbol("silver_etf") == "562800.SS"
+    assert p.resolve_yahoo_symbol("SI") == "SI=F"
+    assert p.resolve_yahoo_symbol("silver_ny") == "SI=F"
+    # 未知 symbol 原样透传（用户可直传 Yahoo ticker）
+    assert p.resolve_yahoo_symbol("AG=F") == "AG=F"
+
+
+def test_yahoo_silver_symbols_registry_complete() -> None:
+    """YAHOO_SILVER_SYMBOLS 至少覆盖 562800 + SI + 两个 alias。"""
+    from app.repositories.market_providers import YAHOO_SILVER_SYMBOLS
+
+    for key in ("562800", "SI", "silver_etf", "silver_ny"):
+        assert key in YAHOO_SILVER_SYMBOLS, f"YAHOO_SILVER_SYMBOLS 缺 {key!r}"
+
+
+def test_build_provider_bundle_silver_yahoo_resolves() -> None:
+    """MARKET_PROVIDER=silver_yahoo → silver_history 为 YahooSilverHistoryProvider。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    settings = Settings(market_provider="silver_yahoo")
+    bundle = build_provider_bundle(settings)
+    assert isinstance(bundle.silver_history, YahooSilverHistoryProvider)
+
+
+@pytest.mark.asyncio
+async def test_yahoo_silver_parses_chart_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Yahoo chart v8 响应能正确解析为 GoldKline 列表。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    fake_payload = {
+        "chart": {
+            "result": [{
+                "meta": {"symbol": "562800.SS", "currency": "CNY"},
+                "timestamp": [1700000000, 1700086400, 1700172800],
+                "indicators": {
+                    "quote": [{
+                        "open": [2.45, 2.46, 2.48],
+                        "high": [2.47, 2.49, 2.50],
+                        "low": [2.44, 2.45, 2.47],
+                        "close": [2.46, 2.48, 2.49],
+                        "volume": [1000.0, 1100.0, 1200.0],
+                    }],
+                },
+            }],
+            "error": None,
+        },
+    }
+
+    async def fake_fetch(self, yahoo_symbol, days):
+        return self._parse_yahoo_chart(fake_payload, days)
+
+    monkeypatch.setattr(YahooSilverHistoryProvider, "_fetch_yahoo", fake_fetch)
+    provider = YahooSilverHistoryProvider()
+    klines = await provider.get_silver_history(symbol="562800", days=60)
+    assert len(klines) == 3
+    assert all(k.close > 0 for k in klines)
+    # 升序（旧→新）
+    assert klines[0].date < klines[-1].date
+
+
+@pytest.mark.asyncio
+async def test_yahoo_silver_falls_back_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Yahoo 返回 401/429/500 → 自动 fallback MockSilverHistoryProvider。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    async def fake_fetch_500(self, yahoo_symbol, days):
+        raise RuntimeError("Yahoo Finance HTTP 500 for 562800.SS")
+
+    monkeypatch.setattr(YahooSilverHistoryProvider, "_fetch_yahoo", fake_fetch_500)
+    provider = YahooSilverHistoryProvider()
+    # 不抛错，返回 mock 数据（设计目标：有数据 > 没数据）
+    klines = await provider.get_silver_history(symbol="562800", days=60)
+    assert len(klines) > 0
+    # 应该是 mock 数据（约 2.45 起步）
+    assert all(k.close > 0 for k in klines)
+
+
+@pytest.mark.asyncio
+async def test_yahoo_silver_falls_back_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """网络异常（DNS / 连接拒绝）→ 自动 fallback MockSilverHistoryProvider。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    async def fake_fetch_network_error(self, yahoo_symbol, days):
+        raise ConnectionError("DNS lookup failed")
+
+    monkeypatch.setattr(YahooSilverHistoryProvider, "_fetch_yahoo", fake_fetch_network_error)
+    provider = YahooSilverHistoryProvider()
+    klines = await provider.get_silver_history(symbol="SI", days=60)
+    # SI 走 NY 路径，mock 返回 ~31.5 USD/oz
+    assert len(klines) > 0
+    assert 25 < klines[-1].close < 50  # 美元/盎司应在合理区间
+
+
+@pytest.mark.asyncio
+async def test_yahoo_silver_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Yahoo 返回 429 → 退避后重试；最终成功 → 不 fallback。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    call_count = {"n": 0}
+    fake_payload = {
+        "chart": {"result": [{
+            "timestamp": [1700000000],
+            "indicators": {"quote": [{"close": [2.46], "open": [2.45], "high": [2.47], "low": [2.44], "volume": [100.0]}]},
+        }], "error": None},
+    }
+
+    class FakeResp:
+        def __init__(self, code, body):
+            self.status_code = code
+            self.text = ""
+        def json(self):
+            return fake_payload
+
+    async def fake_get(self, url, params, headers):
+        call_count["n"] += 1
+        code = 429 if call_count["n"] <= 2 else 200
+        return FakeResp(code, fake_payload)
+
+    # Patch httpx.AsyncClient.get 方法
+    import httpx
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    # 把 RETRY_ON_429 设为 2 让测试快一点
+    monkeypatch.setattr(YahooSilverHistoryProvider, "RETRY_ON_429", 2)
+    monkeypatch.setattr(YahooSilverHistoryProvider, "TIMEOUT_SECONDS", 1.0)
+    # 跳过 sleep 加速
+    real_sleep = YahooSilverHistoryProvider
+    async def no_sleep(*a, **k): return None
+    import asyncio as _asyncio
+    monkeypatch.setattr(_asyncio, "sleep", no_sleep)
+
+    provider = YahooSilverHistoryProvider()
+    klines = await provider.get_silver_history(symbol="562800", days=60)
+    assert call_count["n"] == 3, f"应调用3次（2次429 + 1次200），实际 {call_count['n']}"
+    assert len(klines) == 1
+    assert klines[0].close == 2.46
 
 
 def test_silver_history_provider_present_in_all_bundles() -> None:

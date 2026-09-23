@@ -26,6 +26,11 @@ import subprocess
 import sys
 import threading
 import urllib.request
+
+try:
+    import httpx  # V0.73.x+ Yahoo Silver HTTP 客户端（白银数据源）
+except ImportError:  # pragma: no cover — 已在 pyproject.toml 声明 httpx；此处仅兜底
+    httpx = None  # type: ignore[assignment]
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -753,6 +758,144 @@ class AkshareSilverHistoryProvider:
         )
 
 
+# ───────────────────── V0.73.x+ Yahoo Silver ─────────────────────
+
+# Yahoo Finance symbol 映射：内部 symbol → Yahoo ticker
+# 562800（华安白银 ETF）→ 562800.SS（上交所）
+# SI / silver_ny → SI=F（NY 银主连期货）
+YAHOO_SILVER_SYMBOLS: dict[str, str] = {
+    "562800": "562800.SS",
+    "silver_etf": "562800.SS",
+    "SI": "SI=F",
+    "silver_ny": "SI=F",
+    "GC_NY": "GC=F",
+}
+
+
+class YahooSilverHistoryProvider:
+    """Yahoo Finance 白银数据源（V0.73.x+ 新增）。
+
+    端点：``https://query1.finance.yahoo.com/v8/finance/chart/{symbol}``
+    参数：``interval=1d&range={N}d&includeAdjustedClose=true``
+    响应：``chart.result[0].timestamp[]`` + ``indicators.quote[0].{open,high,low,close,volume}[]``
+
+    **降级策略**：任何 HTTP/解析错误 → 自动 fallback 到 ``MockSilverHistoryProvider``，
+    日志 warning；保证白银页永不因外部源挂掉。设计目标是「有数据 > 没数据」。
+
+    使用：在 ``.env`` 设 ``MARKET_PROVIDER=silver_yahoo`` 即可。
+    """
+
+    YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart"
+    USER_AGENT = (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    )
+    TIMEOUT_SECONDS = 10.0
+    # Yahoo 偶发 429；429 时退避 1s 再试一次
+    RETRY_ON_429 = 1
+
+    def __init__(self) -> None:
+        self._fallback = MockSilverHistoryProvider()
+
+    @classmethod
+    def resolve_yahoo_symbol(cls, symbol: str) -> str:
+        """内部 symbol → Yahoo ticker（大小写不敏感）。"""
+        sym = (symbol or "").upper()
+        # 大小写不敏感匹配（dict key 是小写）
+        for key, val in YAHOO_SILVER_SYMBOLS.items():
+            if key.upper() == sym:
+                return val
+        # 默认：原样作为 Yahoo symbol（如用户直接传 562800.SS）
+        return symbol
+
+    @staticmethod
+    def _parse_yahoo_chart(payload: dict, days: int) -> list[GoldKline]:
+        """解析 Yahoo chart v8 响应为 GoldKline 列表（按日期降序截取最后 N 天）。"""
+        results = payload.get("chart", {}).get("result") or []
+        if not results:
+            return []
+        r0 = results[0]
+        ts_list = r0.get("timestamp") or []
+        quote = (r0.get("indicators", {}).get("quote") or [{}])[0]
+        opens = quote.get("open") or []
+        highs = quote.get("high") or []
+        lows = quote.get("low") or []
+        closes = quote.get("close") or []
+        volumes = quote.get("volume") or []
+        out: list[GoldKline] = []
+        for i, ts in enumerate(ts_list):
+            close = closes[i] if i < len(closes) else None
+            if close is None:
+                continue  # Yahoo 偶发 null close（节假日占位）
+            d = datetime.fromtimestamp(int(ts), tz=timezone.utc).date()
+            out.append(
+                GoldKline(
+                    date=d,
+                    open=opens[i] if i < len(opens) and opens[i] is not None else close,
+                    high=highs[i] if i < len(highs) and highs[i] is not None else close,
+                    low=lows[i] if i < len(lows) and lows[i] is not None else close,
+                    close=float(close),
+                    volume=float(volumes[i]) if i < len(volumes) and volumes[i] is not None else 0.0,
+                )
+            )
+        # 升序（旧→新），截取最后 days 天
+        out.sort(key=lambda k: k.date, reverse=False)
+        return out[-days:] if len(out) > days else out
+
+    async def _fetch_yahoo(self, yahoo_symbol: str, days: int) -> list[GoldKline]:
+        if httpx is None:
+            raise RuntimeError("httpx 未安装，YahooSilverHistoryProvider 不可用")
+        # Yahoo range 至少要大于 days（避免节假日窗口不足）
+        range_days = max(days * 2, 60)
+        url = f"{self.YAHOO_BASE}/{yahoo_symbol}"
+        params = {
+            "interval": "1d",
+            "range": f"{range_days}d",
+            "includeAdjustedClose": "true",
+            "events": "history",
+        }
+        headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
+        last_exc: Exception | None = None
+        for attempt in range(self.RETRY_ON_429 + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self.TIMEOUT_SECONDS) as client:
+                    resp = await client.get(url, params=params, headers=headers)
+                if resp.status_code == 200:
+                    return self._parse_yahoo_chart(resp.json(), days)
+                if resp.status_code == 429 and attempt < self.RETRY_ON_429:
+                    await asyncio.sleep(1.0)
+                    continue
+                raise RuntimeError(
+                    f"Yahoo Finance HTTP {resp.status_code} for {yahoo_symbol}: {resp.text[:200]}"
+                )
+            except Exception as exc:  # 网络异常 / 解析失败 / HTTP 4xx/5xx
+                last_exc = exc
+                break
+        raise last_exc if last_exc else RuntimeError("Yahoo fetch failed (unknown)")
+
+    async def get_silver_history(
+        self,
+        symbol: str = "562800",
+        days: int = 60,
+    ) -> list[GoldKline]:
+        yahoo_symbol = self.resolve_yahoo_symbol(symbol)
+        try:
+            data = await self._fetch_yahoo(yahoo_symbol, days)
+            if data:
+                return data
+            # Yahoo 返回空（罕见）→ 仍降级
+            logger.warning(
+                "Yahoo Silver %s 返回空数据，降级到 mock", yahoo_symbol,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Yahoo Silver %s 拉取失败（%s），降级到 mock",
+                yahoo_symbol, type(exc).__name__,
+            )
+        # 自动 fallback 到 mock（设计目标：有数据 > 没数据）
+        return await self._fallback.get_silver_history(symbol=symbol, days=days)
+
+
 # ───────────────────── 工厂 ─────────────────────
 
 
@@ -803,6 +946,13 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
+    ),
+    # V0.73.x+：白银 Yahoo Finance（实时数据 + 自动 fallback mock）
+    "silver_yahoo": lambda s: MarketProviderBundle(
+        history=AkshareGoldHistoryProvider(s),
+        live=AkshareLiveQuoteProvider(s),
+        treasury=AkshareTreasuryYieldProvider(s),
+        silver_history=YahooSilverHistoryProvider(),
     ),
 }
 
