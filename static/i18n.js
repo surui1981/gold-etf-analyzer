@@ -108,7 +108,24 @@
       "[data-i18n], [data-i18n-html], [data-i18n-placeholder], [data-i18n-title], [data-i18n-aria]"
     );
     nodes.forEach(function (el) {
-      if (el.dataset.i18n) el.textContent = t(el.dataset.i18n);
+      if (el.dataset.i18n) {
+        // 保留内联元素子节点（badge / button / icon / sub-span）——只更新直接文本节点
+        const translated = t(el.dataset.i18n);
+        let textNode = null;
+        for (const child of Array.from(el.childNodes)) {
+          if (child.nodeType === 3 /* TEXT_NODE */) {
+            if (textNode === null) {
+              child.nodeValue = translated;
+              textNode = child;
+            } else {
+              el.removeChild(child);
+            }
+          }
+        }
+        if (textNode === null) {
+          el.insertBefore(document.createTextNode(translated), el.firstChild);
+        }
+      }
       if (el.dataset.i18nHtml) el.innerHTML = t(el.dataset.i18nHtml);
       if (el.dataset.i18nPlaceholder) el.setAttribute("placeholder", t(el.dataset.i18nPlaceholder));
       if (el.dataset.i18nTitle) el.setAttribute("title", t(el.dataset.i18nTitle));
