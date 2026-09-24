@@ -895,6 +895,41 @@ class YahooSilverHistoryProvider:
         # 自动 fallback 到 mock（设计目标：有数据 > 没数据）
         return await self._fallback.get_silver_history(symbol=symbol, days=days)
 
+    async def get_silver_spot(self, symbol: str = "562800") -> GoldKline | None:
+        """拉取白银**当日最新 K 线**（range=2d，确保包含今天）。
+
+        与 ``get_silver_history(days=60)`` 不同：后者请求 60 天会触发 Yahoo 429，
+        这里用最小请求 ``range=2d`` 只为拿到今天的 close + date。
+        Yahoo 对当日 bar 会**日内增量更新**（SI=F 几乎实时；562800.SS 也跟随
+        A 股交易时段更新），所以 ``last_close`` 就是当前价格。
+
+        Returns:
+            最新一天的 ``GoldKline``；任意失败（HTTP 429 / 网络 / 解析 / Yahoo
+            还没生成今日 bar）均返回 ``None``，由调用方决定降级到 history。
+        """
+        if httpx is None:
+            return None
+        yahoo_symbol = self.resolve_yahoo_symbol(symbol)
+        url = f"{self.YAHOO_BASE}/{yahoo_symbol}"
+        params = {
+            "interval": "1d",
+            "range": "2d",
+            "includeAdjustedClose": "true",
+            "events": "history",
+        }
+        headers = {"User-Agent": self.USER_AGENT, "Accept": "application/json"}
+        try:
+            async with httpx.AsyncClient(timeout=self.TIMEOUT_SECONDS) as client:
+                resp = await client.get(url, params=params, headers=headers)
+            if resp.status_code != 200:
+                return None
+            bars = self._parse_yahoo_chart(resp.json(), days=2)
+            if not bars:
+                return None
+            return bars[-1]  # 最新一天（含今日的 running bar）
+        except Exception:
+            return None
+
 
 # ───────────────────── 工厂 ─────────────────────
 

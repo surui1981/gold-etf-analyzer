@@ -672,3 +672,136 @@ def test_silver_history_provider_present_in_all_bundles() -> None:
         assert isinstance(bundle.silver_history, expected_cls), (
             f"{name} 应使用 {expected_cls.__name__}，实际 {type(bundle.silver_history).__name__}"
         )
+
+
+# ───────────────────── V0.73.x+ get_silver_spot 测试 ─────────────────────
+
+
+async def test_yahoo_silver_spot_returns_latest_bar(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.73.x+：YahooSilverHistoryProvider.get_silver_spot() 用 range=2d 拿最新 bar。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    provider = YahooSilverHistoryProvider()
+
+    # 构造 Yahoo chart v8 响应（2 根 bar：昨天 + 今天）
+    today_epoch = 1758000000  # 任意近未来时间
+    yesterday_epoch = today_epoch - 86400
+    payload = {
+        "chart": {
+            "result": [
+                {
+                    "timestamp": [yesterday_epoch, today_epoch],
+                    "indicators": {"quote": [{
+                        "open":  [31.5, 32.1],
+                        "high":  [31.7, 32.3],
+                        "low":   [31.4, 32.0],
+                        "close": [31.6, 32.2],
+                        "volume": [0.0, 100.0],
+                    }]},
+                }
+            ],
+            "error": None,
+        }
+    }
+
+    class _FakeResp:
+        status_code = 200
+
+        def json(self):
+            return payload
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params=None, headers=None):
+            # 验证 range=2d（不是 60d）以确认是 spot 调用
+            assert params.get("range") == "2d", f"spot 应使用 range=2d，实际 {params.get('range')}"
+            return _FakeResp()
+
+    monkeypatch.setattr("httpx.AsyncClient", _FakeAsyncClient)
+    spot = await provider.get_silver_spot(symbol="SI")
+    assert spot is not None, "spot 应返回最新 bar"
+    assert spot.close == 32.2, f"spot.close 应为最新 bar close (32.2)，实际 {spot.close}"
+    # date 应为今天（datetime.fromtimestamp(today_epoch)）
+    import datetime as _dt
+    expected_date = _dt.datetime.fromtimestamp(today_epoch, tz=_dt.timezone.utc).date()
+    assert spot.date == expected_date
+
+
+async def test_yahoo_silver_spot_returns_none_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """spot 在 HTTP 非 200 时返回 None（不抛异常）。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    provider = YahooSilverHistoryProvider()
+
+    class _FakeResp:
+        status_code = 429
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params=None, headers=None):
+            return _FakeResp()
+
+    monkeypatch.setattr("httpx.AsyncClient", _FakeAsyncClient)
+    spot = await provider.get_silver_spot(symbol="562800")
+    assert spot is None
+
+
+async def test_yahoo_silver_spot_returns_none_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """spot 在网络异常时返回 None（不抛异常）。"""
+    from app.repositories.market_providers import YahooSilverHistoryProvider
+
+    provider = YahooSilverHistoryProvider()
+
+    class _FakeAsyncClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def get(self, url, params=None, headers=None):
+            raise ConnectionError("network down")
+
+    monkeypatch.setattr("httpx.AsyncClient", _FakeAsyncClient)
+    spot = await provider.get_silver_spot(symbol="SI")
+    assert spot is None
+
+
+async def test_try_silver_spot_uses_yahoo_when_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """MarketDataRepository._try_silver_spot() 在 YahooSilverHistoryProvider 上返回 spot。"""
+    from app.config import Settings
+    from app.repositories.market_data import MarketDataRepository
+    from app.repositories.market_providers import build_provider_bundle
+
+    settings = Settings(market_provider="silver_yahoo")
+    bundle = build_provider_bundle(settings)
+    repo = MarketDataRepository(bundle=bundle, settings=settings)
+
+    from datetime import date as _date
+    fake_spot = GoldKline(
+        date=_date(2026, 9, 24), open=2.65, close=2.68, high=2.70, low=2.63, volume=100.0,
+    )
+
+    async def fake_spot_getter(symbol="562800"):
+        return fake_spot
+    monkeypatch.setattr(repo._bundle.silver_history, "get_silver_spot", fake_spot_getter)
+
+    spot = await repo._try_silver_spot("562800")
+    assert spot is fake_spot
+    assert spot.date == _date(2026, 9, 24)
+    assert spot.close == 2.68
+
+
+async def test_try_silver_spot_returns_none_for_non_yahoo_provider() -> None:
+    """MarketDataRepository._try_silver_spot() 在非 Yahoo provider 上返回 None。"""
+    from app.config import Settings
+    from app.repositories.market_data import MarketDataRepository
+    from app.repositories.market_providers import build_provider_bundle
+
+    # mock provider 不实现 get_silver_spot
+    settings = Settings(market_provider="mock")
+    bundle = build_provider_bundle(settings)
+    repo = MarketDataRepository(bundle=bundle, settings=settings)
+    spot = await repo._try_silver_spot("562800")
+    assert spot is None, "非 Yahoo provider 应直接返回 None"

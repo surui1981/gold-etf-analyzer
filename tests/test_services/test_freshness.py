@@ -1,5 +1,6 @@
 """数据时效服务测试（UX 6.1）：时效分级 + 交易时段 + 采集元信息。"""
 
+import asyncio
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -100,11 +101,14 @@ async def test_report_returns_all_markets() -> None:
         "ny": {"status": "live", "fetched_at": _NOW, "last_date": date(2026, 9, 2)},
         "sge": {"status": "stale", "fetched_at": _NOW, "last_date": date(2026, 9, 1)},
         "etf": {"status": "mock", "fetched_at": None, "last_date": None},
+        # V0.73.x+：白银市场也注册（仅校验接口契约，不参与具体 freshness 断言）
+        "silver_ny": {"status": "live", "fetched_at": _NOW, "last_date": date(2026, 9, 2)},
+        "silver_etf": {"status": "live", "fetched_at": _NOW, "last_date": date(2026, 9, 2)},
     }
     out = await FreshnessService(FakeMetaRepo(meta)).report(now=_NOW)
 
     assert isinstance(out, FreshnessOut)
-    assert set(out.markets) == {"ny", "sge", "etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
     assert out.markets["ny"].freshness == FreshnessLevel.REALTIME
     assert out.markets["sge"].freshness == FreshnessLevel.CACHED
     assert out.markets["etf"].freshness == FreshnessLevel.MOCK
@@ -117,7 +121,7 @@ async def test_report_returns_all_markets() -> None:
 async def test_report_without_meta_is_unknown() -> None:
     """仓储无采集元信息时（冷启动），全部判为未采集且不降级，接口不报错。"""
     out = await FreshnessService(FakeMetaRepo({})).report(now=_NOW)
-    assert set(out.markets) == {"ny", "sge", "etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
     assert all(v.freshness == FreshnessLevel.UNKNOWN for v in out.markets.values())
     assert out.degraded is False
 
@@ -129,7 +133,7 @@ async def test_report_handles_repo_without_source_meta() -> None:
         pass
 
     out = await FreshnessService(Bare()).report(now=_NOW)  # type: ignore[arg-type]
-    assert set(out.markets) == {"ny", "sge", "etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
 
 
 async def test_repo_records_fetch_meta() -> None:
@@ -188,10 +192,45 @@ async def test_repo_marks_mock_when_provider_fails() -> None:
     )
 
 
-@pytest.mark.parametrize("market", ["ny", "sge", "etf"])
+@pytest.mark.parametrize("market", ["ny", "sge", "etf", "silver_ny", "silver_etf"])
 def test_build_data_freshness_covers_all_markets(market: str) -> None:
-    """三个市场均可构造时效输出，且携带各自交易时段。"""
+    """V0.73.x+：五个市场（3 黄金 + 2 白银）均可构造时效输出。"""
     out = build_data_freshness(market, status="live", data_date=date(2026, 9, 2), now=_NOW)
     assert out.market == market
-    assert out.session.market == market
     assert out.session.state in {"open", "pre", "break", "closed"}
+    # 白银复用黄金时段判定：silver_ny 跟 ny 走（COMEX），silver_etf 跟 etf 走（A 股）
+    if market in {"silver_ny", "ny"}:
+        assert "白银" in out.name or "金" in out.name  # 展示名带「白银」或「金」
+
+
+def test_freshness_markets_include_silver() -> None:
+    """V0.73.x+：_MARKETS 注册表必须包含 silver_ny / silver_etf。"""
+    from app.services.freshness import _MARKETS
+    assert "silver_ny" in _MARKETS, "白银 NY 未注册到 freshness _MARKETS"
+    assert "silver_etf" in _MARKETS, "白银 ETF 未注册到 freshness _MARKETS"
+    silver_ny_name, _ = _MARKETS["silver_ny"]
+    silver_etf_name, _ = _MARKETS["silver_etf"]
+    assert "白银" in silver_ny_name
+    assert "白银" in silver_etf_name
+    assert "SI" in silver_ny_name
+    assert "562800" in silver_etf_name
+
+
+async def test_freshness_service_report_includes_silver(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.73.x+：FreshnessService.report() 输出 markets 必须含 5 个（3 金 + 2 银）。"""
+    from app.services.freshness import FreshnessService, _MARKETS
+    # 用 FakeMetaRepo 注入采集元信息（避免触网 + 避免请求级仓储）
+    meta = {
+        k: {"status": "live", "last_date": date(2026, 9, 2), "fetched_at": _NOW}
+        for k in _MARKETS
+    }
+    svc = FreshnessService(FakeMetaRepo(meta=meta))  # type: ignore[arg-type]
+    # 关闭冷启动 _warm（不需要走真实取数）
+    async def _noop_warm(market: str) -> None:
+        await asyncio.sleep(0)
+    monkeypatch.setattr(svc, "_warm", _noop_warm)
+    out = await svc.report(now=_NOW)
+    assert set(out.markets.keys()) == set(_MARKETS.keys())
+    assert {"silver_ny", "silver_etf"}.issubset(set(out.markets.keys()))
+    # summary 必须提到白银
+    assert "白银" in out.summary or "Silver" in out.summary.lower()

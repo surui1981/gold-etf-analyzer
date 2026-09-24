@@ -280,6 +280,20 @@ class MarketDataRepository:
         if last_date is not None:
             self._last_date[key] = last_date
 
+    async def _try_silver_spot(self, symbol: str) -> GoldKline | None:
+        """尝试白银 spot 报价（Yahoo 最小请求 ``range=2d``）。
+
+        仅 ``YahooSilverHistoryProvider`` 支持；其他 provider 返回 ``None``。
+        失败（HTTP 429 / 网络 / 解析 / 今日 bar 尚未生成）一律返回 ``None``。
+        """
+        spot_getter = getattr(self._bundle.silver_history, "get_silver_spot", None)
+        if spot_getter is None:
+            return None
+        try:
+            return await spot_getter(symbol=symbol)
+        except Exception:
+            return None
+
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。
 
@@ -694,12 +708,31 @@ class MarketDataRepository:
     # ───────────────────── V0.71.0：白银 5 个方法 ─────────────────────
 
     async def get_silver_etf_quote(self, symbol: str = DEFAULT_SILVER_ETF) -> SilverQuote:
-        """白银 ETF（562800）最新价（人民币元/份）。"""
+        """白银 ETF（562800）最新价（人民币元/份）。
+
+        V0.73.x+：优先尝试 ``YahooSilverHistoryProvider.get_silver_spot()``
+        （最小请求 ``range=2d``，拿到今天日内增量 bar），失败再走 history 兜底。
+        这样即使当日 K 线 Yahoo 已生成（盘中有 tick 更新），``updated_at`` 就是今天。
+        """
         cache_key = ("quote_silver_etf", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
         if cached is not None:
             return cached
         try:
+            spot = await self._try_silver_spot(symbol)
+            if spot is not None:
+                self._mark("silver_etf", True, last_date=spot.date)
+                quote = SilverQuote(
+                    symbol=symbol,
+                    price_usd=round(spot.close, 3),
+                    change_pct=0.0,
+                    updated_at=datetime.combine(
+                        spot.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
+            # spot 不可用 → 回退到 history（last bar 的 date 作为 updated_at）
             klines = await self.get_silver_etf_history(days=3)
             if klines:
                 last = klines[-1]
@@ -761,12 +794,29 @@ class MarketDataRepository:
             return self._mock_silver_etf_history(days=days)
 
     async def get_silver_ny_quote(self, symbol: str = DEFAULT_SILVER_NY) -> SilverQuote:
-        """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。"""
+        """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。
+
+        V0.73.x+：优先尝试 Yahoo Silver spot（``range=2d`` 拿今天日内增量 bar），
+        失败回退 history。
+        """
         cache_key = ("quote_silver_ny", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
         if cached is not None:
             return cached
         try:
+            spot = await self._try_silver_spot(symbol)
+            if spot is not None:
+                self._mark("silver_ny", True, last_date=spot.date)
+                quote = SilverQuote(
+                    symbol=symbol,
+                    price_usd=round(spot.close, 3),
+                    change_pct=0.0,
+                    updated_at=datetime.combine(
+                        spot.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
             klines = await self.get_silver_ny_history(days=3)
             if klines:
                 last = klines[-1]

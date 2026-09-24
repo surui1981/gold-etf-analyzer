@@ -1,6 +1,7 @@
 """依赖注入容器：集中管理 FastAPI 依赖，方便测试时替换。"""
 
 from collections.abc import AsyncIterator
+from functools import lru_cache
 
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,17 +68,32 @@ def get_scoring_service() -> OpportunityScoringService:
     return OpportunityScoringService()
 
 
-def get_market_data_repository(
-    settings: Settings = Depends(get_settings),
-) -> MarketDataRepository:
-    """行情数据源仓储（V0.59.0 配置化）。
+def get_market_data_repository() -> MarketDataRepository:
+    """行情数据源仓储（V0.59.0 配置化，V0.73.x+ 进程级单例）。
 
     按 ``settings.market_provider`` 自动解析 provider bundle：
     - ``akshare``（默认）：东财 + 新浪 + 英为财情 + gold-api + H.15
     - ``mock``：纯内存确定性序列（离线演示 / 测试）
     - ``eastmoney_only``：仅东财 ETF
     - ``sina_only``：仅新浪 ETF（东财 403 时）
+    - ``silver_yahoo``（V0.73.0+）：白银走 Yahoo Finance（金仍走默认 akshare）
+
+    V0.73.x+ 修复：原先每次请求都新建 ``MarketDataRepository``，
+    导致进程级状态 ``_sources / _fetched_at / _last_date`` 被立刻丢弃，
+    ``/api/v1/market/health`` 永远返回 ``{"sources":{}}`` 空字典（连带
+    FreshnessService 看到所有市场都是"未采集"）。改用进程级 ``lru_cache``
+    单例，所有请求复用同一份状态。
+
+    测试时仍可通过 ``app.dependency_overrides[get_market_data_repository]``
+    整体替换。
     """
+    return _get_market_data_repository_singleton()
+
+
+@lru_cache(maxsize=1)
+def _get_market_data_repository_singleton() -> MarketDataRepository:
+    """仓储进程级单例（延迟到首次调用时构造）。"""
+    settings = get_settings()
     bundle = build_provider_bundle(settings)
     return MarketDataRepository(bundle=bundle, settings=settings)
 

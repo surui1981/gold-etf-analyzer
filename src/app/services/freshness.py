@@ -37,6 +37,9 @@ _MARKETS: dict[str, tuple[str, object]] = {
     "ny": ("纽约金（COMEX GC）", ny_gold_session),
     "sge": ("上海金（SGE Au99.99）", sge_session),
     "etf": ("黄金ETF（518880）", etf_session),
+    # V0.73.x+：白银市场复用相同时段判定（COMEX SI 与 GC 同窗口；562800 与 518880 同窗口）
+    "silver_ny": ("纽约白银（COMEX SI）", ny_gold_session),
+    "silver_etf": ("白银ETF（562800）", etf_session),
 }
 
 # 冷启动采集超时（秒）：避免时效接口被慢数据源拖住
@@ -157,6 +160,10 @@ class FreshnessService:
                 coro = self._repo.get_us_gold_history(days=_WARM_DAYS)
             elif market == "sge":
                 coro = self._repo.get_gold_gram_history(days=_WARM_DAYS)
+            elif market == "silver_ny":
+                coro = self._repo.get_silver_ny_history(days=_WARM_DAYS)
+            elif market == "silver_etf":
+                coro = self._repo.get_silver_etf_history(days=_WARM_DAYS)
             else:
                 coro = self._repo.get_gold_history(days=_WARM_DAYS)
             await asyncio.wait_for(coro, timeout=_WARM_TIMEOUT)
