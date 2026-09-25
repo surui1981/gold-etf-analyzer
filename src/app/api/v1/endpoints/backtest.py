@@ -57,7 +57,7 @@ async def run_backtest(
     summary="回测数据覆盖期报告",
 )
 async def backtest_coverage(
-    target: str = Query("etf", pattern="^(ny|etf|gram|silver_ny|silver_etf)$"),
+    target: str = Query("etf", pattern="^(ny|etf|gram|silver_ny|silver_etf|silver_gram)$"),
     days: int = Query(90, ge=20, le=365),
     service: BacktestService = Depends(get_backtest_service),
 ) -> BacktestCoverageOut:

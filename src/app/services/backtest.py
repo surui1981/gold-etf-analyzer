@@ -252,7 +252,7 @@ class BacktestService:
     @staticmethod
     def _normalize_target(target: str | None) -> str:
         """兼容传入未知 target：回退 etf。"""
-        valid = {"ny", "etf", "gram", "silver_ny", "silver_etf"}
+        valid = {"ny", "etf", "gram", "silver_ny", "silver_etf", "silver_gram"}
         return target if target in valid else "etf"
 
     async def _load_snapshots(self, target: str) -> list[DailySnapshot]:

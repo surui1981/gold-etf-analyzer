@@ -141,8 +141,19 @@ class FakeMarket:
         ]
 
     async def get_silver_gram_quote(self):
-        """V0.71.0 白银克价占位：返回 None。"""
-        return None
+        """V0.73.0 N+16：白银克价 fake（按 ETF × 1000 推导）。"""
+        from datetime import datetime, timezone
+
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": "Ag",
+                "price_usd": 2450.0,
+                "change_pct": 0.0,
+                "updated_at": datetime.now(timezone.utc),
+            },
+        )()
 
 
 @pytest.fixture(autouse=True)

@@ -127,8 +127,24 @@ class FakeMarketRepo:
         ]
 
     async def get_silver_gram_quote(self):
-        """V0.71.0 白银克价占位：返回 None（接口已上线，数据源留 V0.72+）。"""
-        return None
+        """V0.73.0 N+16：白银克价 = silver_etf_price × 1000。
+
+        测试 fake 直接给出克价值 2450 元/克（≈ ETF 2.45 元/份 × 1000）。
+        """
+        from datetime import datetime, timezone
+
+        return type(
+            "Q",
+            (),
+            {
+                "symbol": "Ag",
+                "price_usd": 2450.0,  # 2.45 × 1000
+                "change_pct": 1.2,
+                "updated_at": datetime.combine(
+                    date.today(), datetime.min.time(), tzinfo=timezone.utc
+                ),
+            },
+        )()
 
 
 @pytest.fixture(autouse=True)
@@ -327,6 +343,18 @@ async def test_silver_etf_quote_returns_200(client: AsyncClient) -> None:
     assert body["price"] == pytest.approx(2.45, abs=0.01)
     assert body["currency"] == "CNY"
     assert body["unit"] == "元/份"
+
+
+async def test_silver_gram_quote_returns_200(client: AsyncClient) -> None:
+    """V0.73.0 N+16：GET /market/silver/gram-quote 白银克价（元/克，ETF × 1000）。"""
+    resp = await client.get("/api/v1/market/silver/gram-quote")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["symbol"] == "Ag"
+    assert body["price"] == pytest.approx(2450.0, abs=0.01)  # 2.45 × 1000
+    assert body["currency"] == "CNY"
+    assert body["unit"] == "元/克"
+    assert body["source"] == "silver_etf×1000"
 
 
 async def test_silver_trend_returns_silver_trend_out(client: AsyncClient) -> None:

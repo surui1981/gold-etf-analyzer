@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # V0.71.0：5 种标的共享回测基准（与前端 select 一致）
-BacktestTarget = Literal["ny", "etf", "gram", "silver_ny", "silver_etf"]
+BacktestTarget = Literal["ny", "etf", "gram", "silver_ny", "silver_etf", "silver_gram"]
 
 
 class WeightGrid(BaseModel):
@@ -72,7 +72,7 @@ class BacktestRequestIn(BaseModel):
     )
     target: BacktestTarget = Field(
         "etf",
-        description="基准标的：ny / etf / gram / silver_ny / silver_etf",
+        description="基准标的：ny / etf / gram / silver_ny / silver_etf / silver_gram",
     )
     weight_grid: WeightGrid = Field(
         default_factory=lambda: WeightGrid(tech=[0.3, 0.4, 0.5], macro=[0.4], news=[0.3]),

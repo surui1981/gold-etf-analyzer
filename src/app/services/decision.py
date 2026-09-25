@@ -35,6 +35,7 @@ _TARGET_LABELS = {
     "gram": "上海金克价",
     "silver_ny": "纽约白银",
     "silver_etf": "白银ETF",
+    "silver_gram": "白银克价",  # V0.73.0 N+16：白银克价（ETF × 1000 推导）
 }
 
 

@@ -299,6 +299,26 @@ class SilverEtfQuoteOut(BaseModel):
     updated_at: datetime
 
 
+class SilverGramQuoteOut(BaseModel):
+    """白银克价报价输出（V0.73.0 N+16）。
+
+    计算口径：``gram_price = silver_etf_price × 1000``（562800 易方达白银 ETF
+    单位 ≈ 1000 克白银现货，公开换算含 0.5% 管理费）。
+    与 ``SilverEtfQuoteOut`` 同源同步，保证 ETF 持仓估值与克价口径一致。
+    """
+
+    symbol: str = Field("Ag", description="标的代码（白银化学符号 Ag）")
+    price: float = Field(..., gt=0, description="最新价，元/克")
+    currency: str = Field("CNY", description="计价币种")
+    unit: str = Field("元/克", description="计价单位")
+    source: str = Field(
+        "silver_etf×1000",
+        description="口径标注：恒等 silver_etf×1000 推导，便于审计追溯",
+    )
+    change_pct: float = Field(..., description="涨跌幅 %")
+    updated_at: datetime
+
+
 class SilverTrendPoint(BaseModel):
     """白银趋势序列点：收盘价 + 移动均线。"""
 

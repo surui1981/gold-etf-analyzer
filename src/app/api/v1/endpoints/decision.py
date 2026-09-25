@@ -14,10 +14,11 @@ async def etf_decision(
     days: int = Query(60, ge=20, le=250, description="趋势指数覆盖交易日数"),
     target: str = Query(
         "etf",
-        pattern="^(ny|etf|gram|silver_etf|silver_ny)$",
-        description="指引标的（V0.71.0 扩展白银）："
+        pattern="^(ny|etf|gram|silver_etf|silver_ny|silver_gram)$",
+        description="指引标的（V0.71.0 扩展白银 / V0.73.0 N+16 加 silver_gram）："
         "ny=纽约金COMEX / etf=黄金ETF 518880 / gram=上海金Au99.99 / "
-        "silver_etf=白银ETF 562800 / silver_ny=纽约白银COMEX SI",
+        "silver_etf=白银ETF 562800 / silver_ny=纽约白银COMEX SI / "
+        "silver_gram=白银克价（ETF×1000 推导）",
     ),
     account_id: int | None = Query(None, description="账本 ID；不传=全部账本（持仓摘要合并口径）"),
     service: DecisionService = Depends(get_decision_service),

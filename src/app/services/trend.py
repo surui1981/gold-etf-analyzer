@@ -75,6 +75,7 @@ _TARGET_UNITS = {
     "ny": "美元/盎司",
     "silver_etf": "元",  # V0.71.0：白银 ETF 562800（易方达白银 ETF，元/份）
     "silver_ny": "美元/盎司",  # V0.71.0：纽约白银 COMEX SI（美元/盎司）
+    "silver_gram": "元/克",  # V0.73.0 N+16：白银克价（ETF × 1000 推导）
 }
 
 # 投资指引基准：默认以纽约金（COMEX GC）交易数据为准，
@@ -90,6 +91,7 @@ _FRESHNESS_KEYS = {
     "etf": "etf",
     "silver_ny": "ny",  # V0.71.0：白银 SI 复用 ny 时段判定
     "silver_etf": "etf",  # V0.71.0：白银 ETF 复用 etf 时段判定
+    "silver_gram": "etf",  # V0.73.0 N+16：白银克价复用 ETF 时段判定（同源同步）
 }
 
 
@@ -487,6 +489,10 @@ class TrendService:
         if target == "silver_etf":
             klines = await self._repo.get_silver_etf_history(days=days)
             return klines, DEFAULT_SILVER_ETF, DEFAULT_SILVER_ETF_NAME
+        # V0.73.0 N+16：白银克价（silver_gram）走 ETF 同源推导
+        if target == "silver_gram":
+            klines = await self._repo.get_silver_gram_history(days=days)
+            return klines, "Ag", "白银克价"
         klines = await self._repo.get_gold_history(days=days)
         return klines, DEFAULT_GOLD_ETF, DEFAULT_GOLD_ETF_NAME
 

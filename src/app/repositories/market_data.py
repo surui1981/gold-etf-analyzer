@@ -294,6 +294,29 @@ class MarketDataRepository:
         except Exception:
             return None
 
+    def _is_silver_data_real(self, provider: object) -> bool:
+        """判断白银 provider 这次返回的数据是否为真实数据（V0.73.0 N+17）。
+
+        真实数据 = live / realtime；mock / fallback 一律视为演示数据（status=mock）。
+
+        **契约**（V0.73.0 N+17 统一）：
+        - provider 有 ``_last_was_fallback`` 属性 → 依其值判断（True=mock，False=live）；
+        - 否则视为默认真数据（向后兼容未知 provider）。
+
+        实现方责任：
+        - ``YahooSilverHistoryProvider``：成功时 ``_last_was_fallback=False``，fallback 时 ``True``；
+        - ``MockSilverHistoryProvider``：始终 ``_last_was_fallback=True``（兜底标记）；
+        - ``AkshareSilverHistoryProvider``：默认 ``_last_was_fallback=False``（失败抛错由仓储层走 mock）。
+        """
+        # 统一契约：依 _last_was_fallback 标志位（V0.73.0 N+17 替代 N+15 的 class 名单）
+        last_fallback = getattr(provider, "_last_was_fallback", None)
+        if last_fallback is True:
+            return False
+        if last_fallback is False:
+            return True
+        # 向后兼容：未声明契约的 provider 默认视为真数据
+        return True
+
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。
 
@@ -785,7 +808,9 @@ class MarketDataRepository:
                     for k in klines
                 ]
                 _cache_set(cache_key, silver_klines)
-                self._mark("silver_etf", True, last_date=silver_klines[-1].date)
+                # V0.73.0 N+15：只有真实数据才标 live；mock / fallback 一律标 mock。
+                ok = self._is_silver_data_real(self._bundle.silver_history)
+                self._mark("silver_etf", ok, last_date=silver_klines[-1].date)
                 return silver_klines
             raise RuntimeError("empty silver ETF history")
         except Exception as exc:
@@ -796,33 +821,43 @@ class MarketDataRepository:
     async def get_silver_ny_quote(self, symbol: str = DEFAULT_SILVER_NY) -> SilverQuote:
         """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。
 
-        V0.73.x+：优先尝试 Yahoo Silver spot（``range=2d`` 拿今天日内增量 bar），
-        失败回退 history。
+        V0.73.0 N+17：按 ``settings.silver_fallback_chain`` 顺序逐源尝试：
+            - ``sina_si`` → Sina hf_SI 实时（与 gold hf_GC 1:1 对称）
+            - ``yahoo_spot`` → Yahoo Finance SI=F 当日 running bar（仅 Yahoo 模式有效）
+            - 全部失败 → 历史 K 线最后一根（隐式兜底）
+            - 最后 → Mock
+
+        设计目标：默认 ``MARKET_PROVIDER=akshare`` 下 NY 银即可拿到实时报价
+        （不再依赖 ``silver_yahoo`` 配置项）。
         """
         cache_key = ("quote_silver_ny", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
         if cached is not None:
             return cached
-        try:
-            spot = await self._try_silver_spot(symbol)
-            if spot is not None:
-                self._mark("silver_ny", True, last_date=spot.date)
+
+        # 第一段：silver_fallback_chain 逐源尝试（实时优先）
+        chain = self._settings.silver_fallback_chain_list
+        for token in chain:
+            price = await self._fetch_silver_ny_by_token(token, symbol)
+            if price and price > 0:
+                self._mark("silver_ny", True)
                 quote = SilverQuote(
                     symbol=symbol,
-                    price_usd=round(spot.close, 3),
+                    price_usd=round(price, 3),
                     change_pct=0.0,
-                    updated_at=datetime.combine(
-                        spot.date, datetime.min.time(), tzinfo=timezone.utc
-                    ),
+                    updated_at=datetime.now(timezone.utc),
                 )
                 _cache_set(cache_key, quote)
                 return quote
+
+        # 第二段：历史 K 线最后一根（隐式兜底，所有 silver_history 实现都适用）
+        try:
             klines = await self.get_silver_ny_history(days=3)
             if klines:
                 last = klines[-1]
                 prev = klines[-2] if len(klines) >= 2 else last
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-                self._mark("silver_ny", True)
+                self._mark("silver_ny", True, last_date=last.date)
                 quote = SilverQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 3),
@@ -834,15 +869,52 @@ class MarketDataRepository:
                 _cache_set(cache_key, quote)
                 return quote
         except Exception as exc:
-            logger.warning("silver NY 报价取数失败: %s", exc)
+            logger.warning("silver NY 报价历史兜底失败: %s", exc)
 
+        # 第三段：Mock 演示兜底
         self._mark("silver_ny", False)
         return SilverQuote(
             symbol=symbol,
-            price_usd=31.5,
+            price_usd=64.0,
             change_pct=0.0,
             updated_at=datetime.now(timezone.utc),
         )
+
+    async def _fetch_silver_ny_by_token(self, token: str, symbol: str) -> float | None:
+        """按 token 从对应源取白银实时价（V0.73.0 N+17 silver_fallback_chain）。
+
+        Token:
+            - ``sina_si``: Sina hf_SI 实时（通过 bundle.silver_live，akshare/mock 共用）
+            - ``yahoo_spot``: Yahoo Finance SI=F 当日 running bar（仅 silver_yahoo 模式有效）
+            - 其它 token / 未知 → 跳过（避免拼写错误导致静默失败）
+        """
+        token = token.strip().lower()
+        if token == "sina_si":
+            silver_live = getattr(self._bundle, "silver_live", None)
+            if silver_live is None:
+                logger.warning("silver_live provider 未配置，跳过 sina_si token")
+                return None
+            try:
+                return await silver_live.get_silver_spot(symbol=symbol)
+            except Exception as exc:
+                logger.warning("sina_si 取数失败: %s", exc)
+                return None
+        if token == "yahoo_spot":
+            spot = await self._try_silver_spot(symbol)
+            return spot.close if spot is not None else None
+        if token == "history":
+            # 直接从 silver_history 拿最后一根（不走缓存层，避免递归）
+            try:
+                klines = await self._bundle.silver_history.get_silver_history(
+                    symbol=symbol, days=3
+                )
+                if klines:
+                    return float(klines[-1].close)
+            except Exception as exc:
+                logger.warning("history 取数失败: %s", exc)
+            return None
+        logger.warning("未知 silver_fallback_chain token: %s", token)
+        return None
 
     async def get_silver_ny_history(
         self,
@@ -869,7 +941,9 @@ class MarketDataRepository:
                     for k in klines
                 ]
                 _cache_set(cache_key, silver_klines)
-                self._mark("silver_ny", True, last_date=silver_klines[-1].date)
+                # V0.73.0 N+15：只有真实数据才标 live；mock / fallback 一律标 mock。
+                ok = self._is_silver_data_real(self._bundle.silver_history)
+                self._mark("silver_ny", ok, last_date=silver_klines[-1].date)
                 return silver_klines
             raise RuntimeError("empty silver NY history")
         except Exception as exc:
@@ -877,16 +951,120 @@ class MarketDataRepository:
             self._mark("silver_ny", False)
             return self._mock_silver_ny_history(days=days)
 
+    # ───────────────────── V0.73.0 N+16：白银克价接口 ─────────────────────
+
+    # 562800 易方达白银 ETF 单位 ≈ 1000 克白银现货（公开口径，含 0.5% 管理费）
+    # → 白银克价 (CNY/g) = 562800 现价 × 1000
+    # 这是国内零售白银克价最贴近的公开源，避免引入新外部数据源
+    # （SGE 无 Ag99.99 标准化合约；上海有色/华通/长江白银报价均无免费 API）。
+    # 偏差约 ±0.5%（ETF 申赎溢价 + 管理费），零售场景可接受。
+    _SILVER_GRAM_PER_ETF_SHARE = 1000.0
+
     async def get_silver_gram_quote(self) -> SilverQuote | None:
-        """白银克价占位接口（V0.71.0 暂不实现，SGE 无白银 Au99.99 标准产品）。
+        """白银克价最新报价（人民币 元/克，V0.73.0 N+16 上线）。
+
+        计算口径：
+            ``gram_price = etf_price × 1000``
+        数据源：复用 ``get_silver_etf_quote()``，与白银 ETF 同数据源同时间戳，
+        保证 ETF 持仓估值与克价口径严格一致。
 
         Returns:
-            None — 示意接口已上线，数据源留 V0.72+。
+            SilverQuote（symbol="Ag"，price_usd 字段承载 元/克，结构沿用统一口径）。
+            任何异常降级 Mock（基于 ETF mock × 1000）。
         """
-        # V0.71.0 设计决策：白银克价无公开权威日 K 数据源，留 V0.72+；
-        # 此处返回 None，前端展示「白银克价暂未上线，敬请期待」。
+        cache_key = ("quote_silver_gram",)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            etf_quote = await self.get_silver_etf_quote()
+            if etf_quote is None or etf_quote.price_usd <= 0:
+                raise RuntimeError("silver ETF quote unavailable")
+            gram_price = round(etf_quote.price_usd * self._SILVER_GRAM_PER_ETF_SHARE, 2)
+            self._mark("silver_gram", True, last_date=etf_quote.updated_at.date())
+            quote = SilverQuote(
+                symbol="Ag",
+                price_usd=gram_price,
+                change_pct=etf_quote.change_pct,
+                updated_at=etf_quote.updated_at,
+            )
+            _cache_set(cache_key, quote)
+            return quote
+        except Exception as exc:
+            logger.warning("silver gram quote failed (%s), fallback to mock", exc)
         self._mark("silver_gram", False)
-        return None
+        return SilverQuote(
+            symbol="Ag",
+            price_usd=2.45 * self._SILVER_GRAM_PER_ETF_SHARE,  # 2450 元/克 演示
+            change_pct=0.0,
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    async def get_silver_gram_history(
+        self,
+        symbol: str = "Ag",
+        days: int = 60,
+    ) -> list[SilverKline]:
+        """白银克价历史日 K（人民币 元/克，V0.73.0 N+16 上线）。
+
+        计算口径：
+            ``gram_kline[i] = etf_kline[i] × 1000``（按日反推）
+        数据源：复用 ``get_silver_etf_history()``，与 ETF 历史同源同步。
+
+        Args:
+            symbol: 仅作语义标识（统一 SilverKline 接口），实际不影响数据源。
+            days: 历史天数。
+
+        Returns:
+            list[SilverKline]（close/open/high/low 均为 元/克）。
+        """
+        cache_key = ("silver_gram", symbol, days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        try:
+            etf_klines = await self.get_silver_etf_history(days=days)
+            if not etf_klines:
+                raise RuntimeError("empty silver ETF history")
+            mul = self._SILVER_GRAM_PER_ETF_SHARE
+            gram_klines = [
+                SilverKline(
+                    date=k.date,
+                    open=round(k.open * mul, 2),
+                    close=round(k.close * mul, 2),
+                    high=round(k.high * mul, 2),
+                    low=round(k.low * mul, 2),
+                    volume=k.volume,
+                )
+                for k in etf_klines
+            ]
+            _cache_set(cache_key, gram_klines)
+            # 继承 ETF freshness：ETF 真 → gram 真；ETF mock → gram mock
+            ok = self._sources.get("silver_etf") == "live"
+            self._mark("silver_gram", ok, last_date=gram_klines[-1].date)
+            return gram_klines
+        except Exception as exc:
+            logger.warning("silver gram history failed (%s), fallback to mock", exc)
+        self._mark("silver_gram", False)
+        return self._mock_silver_gram_history(days=days)
+
+    @staticmethod
+    def _mock_silver_gram_history(days: int) -> list[SilverKline]:
+        """确定性 Mock 白银克价序列（继承 ETF mock × 1000，约 2450 元/克）。"""
+        from app.repositories.market_providers import _mock_silver_etf_history
+
+        mul = MarketDataRepository._SILVER_GRAM_PER_ETF_SHARE
+        return [
+            SilverKline(
+                date=k.date,
+                open=round(k.open * mul, 2),
+                close=round(k.close * mul, 2),
+                high=round(k.high * mul, 2),
+                low=round(k.low * mul, 2),
+                volume=k.volume,
+            )
+            for k in _mock_silver_etf_history(days=days)
+        ]
 
     @staticmethod
     def _mock_silver_etf_history(days: int) -> list[SilverKline]:
@@ -897,7 +1075,7 @@ class MarketDataRepository:
 
     @staticmethod
     def _mock_silver_ny_history(days: int) -> list[SilverKline]:
-        """确定性 Mock 纽约白银序列（约 31.5 美元/盎司）。"""
+        """确定性 Mock 纽约白银序列（约 64.0 美元/盎司，V0.73.0 N+15 随现实上调）。"""
         from app.repositories.market_providers import _mock_silver_ny_history
 
         return _mock_silver_ny_history(days=days)

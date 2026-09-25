@@ -50,6 +50,13 @@ class Settings(BaseSettings):
     # 可选 token：goldapi | sina | etf_history
     xau_fallback_chain: str = "goldapi,sina,etf_history"
 
+    # V0.73.0 N+17：白银实时报价 fallback chain（NY SI 美元/盎司）
+    # 可选 token：sina_si | yahoo_spot | history
+    # - sina_si：新浪 hf_SI 实时（与 gold hf_GC 1:1 对称，零KEY、稳定）
+    # - yahoo_spot：Yahoo Finance SI=F 最小请求 range=2d 拿当日 running bar
+    # - history：复用 silver_history 历史 K 线最后一根（最终兜底）
+    silver_fallback_chain: str = "sina_si,yahoo_spot"
+
     # 行情缓存 TTL（秒）；测试环境可设 0 禁用
     quote_cache_ttl: int = 300
 
@@ -89,6 +96,11 @@ class Settings(BaseSettings):
     def xau_fallback_chain_list(self) -> list[str]:
         """解析 XAU fallback chain 为 token 列表（已 trim + 过滤空）。"""
         return [t.strip() for t in self.xau_fallback_chain.split(",") if t.strip()]
+
+    @property
+    def silver_fallback_chain_list(self) -> list[str]:
+        """解析白银 fallback chain 为 token 列表（已 trim + 过滤空）。"""
+        return [t.strip() for t in self.silver_fallback_chain.split(",") if t.strip()]
 
     @property
     def intraday_refresh_hour_list(self) -> list[tuple[int, int]]:

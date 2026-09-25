@@ -102,14 +102,25 @@ class SilverHistoryProvider(Protocol):
     ) -> list[GoldKline]: ...
 
 
+class SilverLiveQuoteProvider(Protocol):
+    """白银实时报价数据源接口（V0.73.0 N+17 新增）。
+
+    返回白银**当前价**（美元/盎司或元/份，由实现决定）。
+    实现示例：AkshareSilverLiveProvider（Sina hf_SI 实时）。
+    """
+
+    async def get_silver_spot(self, symbol: str = "SI") -> float | None: ...
+
+
 @dataclass(frozen=True)
 class MarketProviderBundle:
-    """Provider 四件套打包（V0.71.0 起含白银数据源），便于按名一次性注入。"""
+    """Provider 五件套打包（V0.73.0 N+17 起含白银实时源），便于按名一次性注入。"""
 
     history: GoldHistoryProvider
     live: GoldLiveQuoteProvider
     treasury: TreasuryYieldProvider
     silver_history: SilverHistoryProvider | None = None  # V0.71.0 新增
+    silver_live: SilverLiveQuoteProvider | None = None  # V0.73.0 N+17 新增
 
 
 # ───────────────────── AKShare 子进程隔离模板 ─────────────────────
@@ -696,8 +707,12 @@ def _mock_silver_etf_history(days: int) -> list[GoldKline]:
 
 
 def _mock_silver_ny_history(days: int) -> list[GoldKline]:
-    """确定性 Mock 纽约白银序列（约 31.5 美元/盎司）。"""
-    base = 31.5
+    """确定性 Mock 纽约白银序列（锚定当前 SI=F 现实区间 ~64 美元/盎司）。
+
+    V0.73.0 N+15：base 从 31.5 上调到 64.0（2026-09 银价已升至 $60+）；
+    若再次严重偏离现实（如 $100+），请同步更新此常量与下列说明。
+    """
+    base = 64.0
     today = date.today()
     points: list[GoldKline] = []
     for i in range(days, 0, -1):
@@ -723,9 +738,14 @@ def _mock_silver_ny_history(days: int) -> list[GoldKline]:
 class MockSilverHistoryProvider:
     """纯内存白银历史 Provider：返回确定性 Mock 序列（V0.71.0 silver_mock 模式默认）。
 
-    区分 ETF（562800，约 2.45 元/份）与 NY SI（约 31.5 美元/盎司）：
+    区分 ETF（562800，约 2.45 元/份）与 NY SI（约 64.0 美元/盎司，V0.73.0 N+15 随现实上调）：
     symbol 以 ``"SI"`` / ``"silver_ny"`` 视作 NY 路径，其余 ETF 路径。
+
+    V0.73.0 N+17：声明 ``_last_was_fallback=True`` 契约，让仓储层 ``_is_silver_data_real()``
+    自动识别这是 mock 数据（前端 freshness 角标不会误标为 live）。
     """
+
+    _last_was_fallback: bool = True  # 始终 mock
 
     async def get_silver_history(
         self,
@@ -737,25 +757,131 @@ class MockSilverHistoryProvider:
         return _mock_silver_etf_history(days=days)
 
 
-class AkshareSilverHistoryProvider:
-    """AKShare 白银数据源（V0.71.0 占位）。
+class AkshareSilverLiveProvider:
+    """白银实时报价（V0.73.0 N+17 新增）：新浪 hf_SI。
 
-    实际接入计划（V0.72+）：
-    - ETF（562800）：与 518880 完全同路径，``fund_etf_hist_em(symbol="562800", ...)``；
-    - NY SI：``futures_foreign_hist(symbol="SI")``，与 GC 同路径。
+    端点：``https://hq.sinajs.cn/list=hf_SI``
+    字段顺序（15 字段，0-indexed）：
+        0=当前价 | 1=_ | 2=开盘 | 3=最新 | 4=最高 | 5=最低 | 6=时间 |
+        7=买价 | 8=卖价 | 9=成交量 | 10=持仓 | 11=日期序号 | 12=日期 | 13=品种名 | 14=市场
 
-    V0.71.0 仅保留 stub：``MARKET_PROVIDER=silver_akshare`` 调用时立即抛
-    ``NotImplementedError``，引导用户用 ``silver_mock``。
+    返回：当前 SI 价（美元/盎司，纽约白银期货主力）。
+
+    **与黄金 hf_GC 1:1 对称**：复用现有 ``_fetch_sina_hf_gc`` 模式，无 V8 依赖、
+    零 KEY、零依赖 urllib。失败 → 返回 ``None``，由仓储层降级。
     """
+
+    HF_SI_URL = "https://hq.sinajs.cn/list=hf_SI"
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
+
+    async def get_silver_spot(self, symbol: str = "SI") -> float | None:
+        try:
+            url = self.HF_SI_URL
+
+            def _get() -> str:
+                req = urllib.request.Request(
+                    url,
+                    headers={
+                        "User-Agent": "Mozilla/5.0",
+                        "Referer": "https://finance.sina.com.cn",
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=12) as r:
+                    return r.read().decode("utf-8", "ignore")
+
+            text = await asyncio.to_thread(_get)
+            seg = text.split('hf_SI="', 1)[-1].split('"', 1)[0]
+            parts = seg.split(",")
+            price = float(parts[0])  # 当前价
+            if price > 0:
+                return price
+        except Exception as exc:
+            logger.warning("sina hf_SI 取数失败: %s", exc)
+        return None
+
+
+class MockSilverLiveQuoteProvider:
+    """Mock 白银实时报价：固定值（与 MockLiveQuoteProvider 对称）。
+
+    NY SI 默认 64.0 美元/盎司（V0.73.0 N+15 现实锚定）；ETF 默认 2.45 元/份。
+    """
+
+    NY_MOCK_PRICE = 64.0
+    ETF_MOCK_PRICE = 2.45
+
+    async def get_silver_spot(self, symbol: str = "SI") -> float | None:
+        if str(symbol).upper() in ("562800", "SILVER_ETF"):
+            return self.ETF_MOCK_PRICE
+        return self.NY_MOCK_PRICE
+
+
+class AkshareSilverHistoryProvider:
+    """AKShare 白银数据源（V0.73.0 N+17 完整实现，替代 V0.71.0 stub）。
+
+    - ETF（562800）：``fund_etf_hist_em``（与 518880 完全同路径，不依赖 V8，主进程直调）；
+    - NY SI：``futures_foreign_hist(symbol="SI")``（与 GC 同路径，可能触发 V8 → 子进程隔离）。
+
+    任一源失败 → 抛 ``RuntimeError``，由仓储层标记 mock 并降级到内置 Mock 序列。
+    """
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
+        # V0.73.0 N+17：与 YahooSilverHistoryProvider 对齐 _last_was_fallback 契约
+        # —— 本 provider 失败时由仓储层走 mock 兜底，不在这里静默降级。
+        self._last_was_fallback: bool = False
 
     async def get_silver_history(
         self,
         symbol: str = "562800",
         days: int = 60,
     ) -> list[GoldKline]:
-        raise NotImplementedError(
-            "silver_akshare 留 V0.72+ 接入；当前请用 MARKET_PROVIDER=silver_mock"
-        )
+        sym_upper = str(symbol).upper()
+        if sym_upper in ("SI", "SILVER_NY", "GC_NY"):
+            return await self._fetch_ny_silver(days)
+        return await self._fetch_etf_silver(symbol, days)
+
+    async def _fetch_etf_silver(self, symbol: str, days: int) -> list[GoldKline]:
+        """ETF 路径：fund_etf_hist_em（与 AkshareGoldHistoryProvider 完全对称）。"""
+        try:
+            import akshare as ak
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("akshare 未安装") from exc
+
+        def _fetch() -> list[GoldKline]:
+            end = datetime.now()
+            start = end - timedelta(days=days * 2)
+            df = ak.fund_etf_hist_em(
+                symbol=symbol,
+                period="daily",
+                start_date=start.strftime("%Y%m%d"),
+                end_date=end.strftime("%Y%m%d"),
+                adjust="qfq",
+            )
+            if df is None or df.empty:
+                raise RuntimeError(f"eastmoney empty for {symbol}")
+            df = df.tail(days)
+            return [
+                GoldKline(
+                    date=_parse_date(row["日期"]),
+                    open=float(row["开盘"]),
+                    close=float(row["收盘"]),
+                    high=float(row["最高"]),
+                    low=float(row["最低"]),
+                    volume=float(row.get("成交量", 0) or 0),
+                )
+                for _, row in df.iterrows()
+            ]
+
+        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
+
+    async def _fetch_ny_silver(self, days: int) -> list[GoldKline]:
+        """NY 路径：futures_foreign_hist 子进程隔离（与 GC 同路径）。"""
+        sub = await asyncio.to_thread(_us_gold_via_subprocess, "SI", days)
+        if not sub:
+            raise RuntimeError("akshare NY silver subprocess empty")
+        return sub
 
 
 # ───────────────────── V0.73.x+ Yahoo Silver ─────────────────────
@@ -796,6 +922,9 @@ class YahooSilverHistoryProvider:
 
     def __init__(self) -> None:
         self._fallback = MockSilverHistoryProvider()
+        # V0.73.0 N+15：标记上一次 ``get_silver_history()`` 是否走 fallback 到 mock。
+        # 仓储层据此判断 ``_mark(ok=True/False)``，避免 mock 数据被错标为 live。
+        self._last_was_fallback: bool = False
 
     @classmethod
     def resolve_yahoo_symbol(cls, symbol: str) -> str:
@@ -882,6 +1011,7 @@ class YahooSilverHistoryProvider:
         try:
             data = await self._fetch_yahoo(yahoo_symbol, days)
             if data:
+                self._last_was_fallback = False
                 return data
             # Yahoo 返回空（罕见）→ 仍降级
             logger.warning(
@@ -893,6 +1023,8 @@ class YahooSilverHistoryProvider:
                 yahoo_symbol, type(exc).__name__,
             )
         # 自动 fallback 到 mock（设计目标：有数据 > 没数据）
+        # V0.73.0 N+15：同时设 ``_last_was_fallback=True``，让仓储层知道这是 mock。
+        self._last_was_fallback = True
         return await self._fallback.get_silver_history(symbol=symbol, days=days)
 
     async def get_silver_spot(self, symbol: str = "562800") -> GoldKline | None:
@@ -949,25 +1081,29 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         history=AkshareGoldHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
-        silver_history=AkshareSilverHistoryProvider(),  # V0.71.0：gold 模式下白银 stub 占位
+        silver_history=AkshareSilverHistoryProvider(),  # V0.73.0 N+17：完整实现
+        silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17：Sina hf_SI 实时
     ),
     "mock": lambda s: MarketProviderBundle(
         history=MockGoldHistoryProvider(),
         live=MockLiveQuoteProvider(),
         treasury=MockTreasuryYieldProvider(),
         silver_history=MockSilverHistoryProvider(),  # V0.71.0：mock 模式白银 mock
+        silver_live=MockSilverLiveQuoteProvider(),  # V0.73.0 N+17
     ),
     "eastmoney_only": lambda s: MarketProviderBundle(
         history=EastmoneyOnlyHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
+        silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
     ),
     "sina_only": lambda s: MarketProviderBundle(
         history=SinaOnlyHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
+        silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
     ),
     # V0.71.0：白银专用 provider 名（不影响 gold 行为，仅 silver_history 走对应实现）
     "silver_mock": lambda s: MarketProviderBundle(
@@ -975,12 +1111,14 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=MockSilverHistoryProvider(),
+        silver_live=MockSilverLiveQuoteProvider(),  # V0.73.0 N+17
     ),
     "silver_akshare": lambda s: MarketProviderBundle(
         history=AkshareGoldHistoryProvider(s),
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
+        silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
     ),
     # V0.73.x+：白银 Yahoo Finance（实时数据 + 自动 fallback mock）
     "silver_yahoo": lambda s: MarketProviderBundle(
@@ -988,6 +1126,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         live=AkshareLiveQuoteProvider(s),
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=YahooSilverHistoryProvider(),
+        silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17：Yahoo 失败时 sina 兜底
     ),
 }
 

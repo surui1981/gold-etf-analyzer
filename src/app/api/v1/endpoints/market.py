@@ -19,6 +19,7 @@ from app.schemas.market import (
     SilverCompareOut,
     SilverComparePoint,
     SilverEtfQuoteOut,
+    SilverGramQuoteOut,
     SilverQuoteOut,
     SilverTrendMetrics,
     SilverTrendOut,
@@ -231,6 +232,34 @@ async def silver_etf_quote(
         price=quote.price_usd,
         currency="CNY",
         unit="元/份",
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
+    "/silver/gram-quote",
+    response_model=SilverGramQuoteOut,
+    summary="白银克价报价（V0.73.0 N+16，元/克）",
+)
+async def silver_gram_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverGramQuoteOut:
+    """白银克价（人民币 元/克）最新报价。
+
+    **口径**：``gram_price = silver_etf_price × 1000``
+    （562800 易方达白银 ETF 单位 ≈ 1000 克白银现货，公开换算）。
+
+    与 ``/market/silver/etf-quote``（562800 元/份）口径严格区分。
+    与 ``/market/silver/quote``（NY SI 美元/盎司）口径严格区分。
+    """
+    quote = await repo.get_silver_gram_quote()
+    return SilverGramQuoteOut(
+        symbol=quote.symbol,
+        price=quote.price_usd,
+        currency="CNY",
+        unit="元/克",
+        source="silver_etf×1000",
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
     )

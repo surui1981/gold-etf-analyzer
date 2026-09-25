@@ -108,7 +108,7 @@ async def test_report_returns_all_markets() -> None:
     out = await FreshnessService(FakeMetaRepo(meta)).report(now=_NOW)
 
     assert isinstance(out, FreshnessOut)
-    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf", "silver_gram"}
     assert out.markets["ny"].freshness == FreshnessLevel.REALTIME
     assert out.markets["sge"].freshness == FreshnessLevel.CACHED
     assert out.markets["etf"].freshness == FreshnessLevel.MOCK
@@ -121,7 +121,7 @@ async def test_report_returns_all_markets() -> None:
 async def test_report_without_meta_is_unknown() -> None:
     """仓储无采集元信息时（冷启动），全部判为未采集且不降级，接口不报错。"""
     out = await FreshnessService(FakeMetaRepo({})).report(now=_NOW)
-    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf", "silver_gram"}
     assert all(v.freshness == FreshnessLevel.UNKNOWN for v in out.markets.values())
     assert out.degraded is False
 
@@ -133,7 +133,7 @@ async def test_report_handles_repo_without_source_meta() -> None:
         pass
 
     out = await FreshnessService(Bare()).report(now=_NOW)  # type: ignore[arg-type]
-    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf"}
+    assert set(out.markets) == {"ny", "sge", "etf", "silver_ny", "silver_etf", "silver_gram"}
 
 
 async def test_repo_records_fetch_meta() -> None:
@@ -218,7 +218,7 @@ def test_freshness_markets_include_silver() -> None:
 
 async def test_freshness_service_report_includes_silver(monkeypatch: pytest.MonkeyPatch) -> None:
     """V0.73.x+：FreshnessService.report() 输出 markets 必须含 5 个（3 金 + 2 银）。"""
-    from app.services.freshness import FreshnessService, _MARKETS
+    from app.services.freshness import _MARKETS, FreshnessService
     # 用 FakeMetaRepo 注入采集元信息（避免触网 + 避免请求级仓储）
     meta = {
         k: {"status": "live", "last_date": date(2026, 9, 2), "fetched_at": _NOW}
