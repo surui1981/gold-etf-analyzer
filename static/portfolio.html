@@ -164,6 +164,17 @@
   .perf-table th { color: var(--muted); font-weight: 500; font-size: 12px; }
   .perf-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
   .summary-box { margin-top: 12px; padding: 12px 14px; background: #f8f9fa; border-left: 3px solid var(--accent); border-radius: 8px; font-size: 13px; line-height: 1.9; color: #374151; }
+  /* V0.74.0 N+17 · 仪表盘拖拽视觉反馈 */
+  .card[data-card-key] { cursor: grab; transition: box-shadow 0.15s, transform 0.15s; }
+  .card[data-card-key]:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  .card[data-card-key]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .card.is-dragging { opacity: 0.4; cursor: grabbing; }
+  .card.drop-target { border-color: var(--accent); border-style: dashed; transform: translateY(-2px); }
+  .card.is-grabbed { outline: 3px solid var(--accent); outline-offset: 2px; cursor: grabbing; }
+  @media print {
+    .dashboard-controls { display: none !important; }
+    .card[data-card-key] { cursor: default !important; }
+  }
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
@@ -215,11 +226,19 @@
       <p class="intro" data-i18n-html="portfolio.intro">记录您的黄金ETF持仓与交易流水，实时估值盈亏；以<b>纽约金（COMEX）为投资指引基准</b>的趋势评估指数，结合持仓状态，为您输出<b>买入 / 加仓 / 持有 / 减仓 / 卖出</b>建议与理由明细（交易标的仍为人民币黄金ETF）。</p>
       <div class="sub" id="subtitle" style="margin-top:6px" data-i18n="common.loading">加载中…</div>
       <div class="notice" data-i18n="portfolio.notice">仅供研究参考，不构成投资建议</div>
+      <!-- V0.74.0 N+17 · 仪表盘自定义控制条 -->
+      <div class="dashboard-controls" style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <span class="drag-hint" data-i18n="dashboard.hint_drag" style="font-size:12px;color:var(--muted)">拖拽卡片调整顺序</span>
+        <button id="btnResetLayout" type="button" class="btn-export" data-i18n="dashboard.btn_reset_layout" title="恢复默认布局" style="margin-left:auto">↺ 恢复默认布局</button>
+      </div>
     </div>
   </header>
 
+  <!-- V0.74.0 N+17 · 仪表盘自定义：可拖拽卡片容器 -->
+  <div id="dashboardRoot">
+
   <!-- 决策卡片 -->
-  <div class="card">
+  <div class="card" data-card-key="decision">
     <h2><span data-i18n="portfolio.decision_card_title">ETF 购买决策建议</span> <span class="conf" id="signalInfo"></span>
       <button class="remind-toggle" id="remindToggle" type="button" data-i18n="portfolio.remind_off">🔔 提醒：关</button>
     </h2>
@@ -228,7 +247,7 @@
   </div>
 
   <!-- 开仓表单 -->
-  <div class="card">
+  <div class="card" data-card-key="open">
     <h2 data-i18n="portfolio.open_card_title">开仓买入（518880 黄金ETF华安）</h2>
     <div class="acc-hint" id="openAccHint">开仓将记入账本：<b>加载中…</b></div>
     <form id="openForm">
@@ -253,7 +272,7 @@
   </div>
 
   <!-- 持仓列表 -->
-  <div class="card">
+  <div class="card" data-card-key="positions">
     <h2><span data-i18n="portfolio.holdings_title">当前持仓</span>
       <button class="btn-export" id="btnExport" type="button" data-i18n="portfolio.btn_export_csv">导出 CSV</button>
     </h2>
@@ -261,7 +280,7 @@
   </div>
 
   <!-- 加仓 / 减仓交易面板（V0.61.0：内联面板替代原生 prompt，支持金额反算 + 快捷比例 + 交易后预览） -->
-  <div class="card" id="tradeCard" style="display:none">
+  <div class="card" data-card-key="trade" id="tradeCard" style="display:none">
     <h2><span id="tradeTitle" data-i18n="portfolio.trade_title_buy">加仓</span>
       <button class="btn-export" type="button" onclick="closeTradePanel()" data-i18n="portfolio.btn_close_panel">收起</button>
     </h2>
@@ -293,7 +312,7 @@
   </div>
 
   <!-- 收益曲线分析（V0.61.0） -->
-  <div class="card">
+  <div class="card" data-card-key="equity">
     <h2><span data-i18n="portfolio.equity_title">收益曲线分析</span>
       <button class="btn-export" id="btnEquityRange" type="button" onclick="toggleEquityRange()" data-i18n="portfolio.equity_range_medium">区间：90 天</button>
       <!-- V0.70.0 P2 #8 收益曲线单位切换 share↔gram -->
@@ -304,7 +323,7 @@
   </div>
 
   <!-- 获利分析总结评估（V0.61.0） -->
-  <div class="card">
+  <div class="card" data-card-key="perf">
     <h2 data-i18n="portfolio.perf_title">获利分析总结评估</h2>
     <div class="kpi-grid" id="perfKpis"><div class="empty" data-i18n="common.loading">加载中…</div></div>
     <div id="perfDetail"></div>
@@ -325,7 +344,7 @@
     </div>
   </div>
   <!-- 账本管理（P1 #6 单用户多账本） -->
-  <div class="card">
+  <div class="card" data-card-key="accounts">
     <h2><span data-i18n="portfolio.account_title">账本管理</span>
       <button class="btn-export" id="btnShowNewAcc" type="button" data-i18n="portfolio.btn_new_account">＋ 新建账本</button>
     </h2>
@@ -344,10 +363,14 @@
     <div class="err" id="accErr"></div>
   </div>
 
+  </div><!-- /dashboardRoot -->
+
   <!-- 撤销提示条 -->
   <div id="toast"><span id="toastMsg"></span><button class="undo" id="toastUndo" type="button" data-i18n="portfolio.btn_undo">撤销</button></div>
   <!-- 主动提醒条 -->
   <div class="alert-bar" id="alertBar"></div>
+  <!-- V0.74.0 N+17 · 仪表盘拖拽操作的 aria-live 公告（屏幕阅读器可达） -->
+  <div id="dashboardLive" aria-live="polite" aria-atomic="true" style="position:absolute;left:-9999px;height:1px;width:1px;overflow:hidden"></div>
 </div>
 </main>
 
@@ -1352,6 +1375,8 @@ document.addEventListener("i18n:change", function () {
   <script src="/static/pwa.js" defer></script>
 <script src="/static/help.js" defer></script>
 <script src="/static/account.js"></script>
+<!-- V0.74.0 N+17 · 仪表盘拖拽排序 -->
+<script src="/static/dashboard.js" defer></script>
   <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->
   <script src="/static/telemetry.js" defer></script>
   <script src="/static/nav-drawer.js" defer></script>

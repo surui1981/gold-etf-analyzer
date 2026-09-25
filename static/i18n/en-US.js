@@ -718,4 +718,14 @@ window.PM_I18N_en_US = {
   "fresh.alert_icon": "⚠",
   "fresh.load_failed": "Failed to load freshness: ",
   "fresh.local_time_suffix": "Local time",
+  /* ── V0.74.0 N+17 · Dashboard Layout ─────────────────── */
+  "dashboard.btn_reset_layout": "↺ Reset to default layout",
+  "dashboard.hint_drag": "Drag cards to reorder",
+  "dashboard.saved_toast": "Layout saved",
+  "dashboard.a11y_grabbed": "Grabbed. Use Up/Down arrows to move, Space to drop.",
+  "dashboard.a11y_moved_to": "Moved to position N",
+  "dashboard.a11y_already_default": "Already using default layout",
+  "dashboard.a11y_reset_done": "Default layout restored",
+  "dashboard.a11y_undone": "Undone",
+  "dashboard.reset_toast_msg": "Default layout restored",
 };

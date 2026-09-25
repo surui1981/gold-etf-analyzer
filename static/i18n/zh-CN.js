@@ -720,4 +720,14 @@ window.PM_I18N_ZH_CN = {
   "fresh.alert_icon": "⚠",
   "fresh.load_failed": "数据时效加载失败：",
   "fresh.local_time_suffix": "本地时间",
+  /* ── V0.74.0 N+17 · 仪表盘自定义 ───────────────────────── */
+  "dashboard.btn_reset_layout": "↺ 恢复默认布局",
+  "dashboard.hint_drag": "拖拽卡片调整顺序",
+  "dashboard.saved_toast": "布局已保存",
+  "dashboard.a11y_grabbed": "已抓取，使用上下方向键移动，再次按空格放下",
+  "dashboard.a11y_moved_to": "已移动到第 N 位",
+  "dashboard.a11y_already_default": "已经是默认布局",
+  "dashboard.a11y_reset_done": "已恢复默认布局",
+  "dashboard.a11y_undone": "已撤销",
+  "dashboard.reset_toast_msg": "已恢复默认布局",
 };

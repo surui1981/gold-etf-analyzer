@@ -55,7 +55,10 @@
     notification_browser_click: 1,
     // V0.73.0 P3-c：i18n 语言切换 + 字典 fallback 命中
     lang_change: 1,
-    i18n_fallback_hit: 1
+    i18n_fallback_hit: 1,
+    // V0.74.0 N+17：仪表盘自定义（卡片拖拽 + 布局持久化）
+    dashboard_drag_end: 1,
+    dashboard_layout_reset: 1
   };
 
   var queue = [];

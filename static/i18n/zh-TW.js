@@ -472,4 +472,14 @@ window.PM_I18N_zh_TW = {
 
   /* ── a11y 共用 ── */
   "a11y.skip_to_main": "跳至主要內容",
+  /* ── V0.74.0 N+17 · 儀表盤自訂 ───────────────────────── */
+  "dashboard.btn_reset_layout": "↺ 恢復預設佈局",
+  "dashboard.hint_drag": "拖曳卡片調整順序",
+  "dashboard.saved_toast": "佈局已儲存",
+  "dashboard.a11y_grabbed": "已抓取，使用上下方向鍵移動，再次按空格放下",
+  "dashboard.a11y_moved_to": "已移動到第 N 位",
+  "dashboard.a11y_already_default": "已經是預設佈局",
+  "dashboard.a11y_reset_done": "已恢復預設佈局",
+  "dashboard.a11y_undone": "已復原",
+  "dashboard.reset_toast_msg": "已恢復預設佈局",
 };
