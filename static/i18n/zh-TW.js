@@ -37,6 +37,7 @@ window.PM_I18N_zh_TW = {
   "nav.central_bank": "央行購金統計",
   "nav.silver": "白銀追蹤",
   "nav.backtest": "參數回測",
+  "nav.health": "資料健康",
   "nav.settings": "通知中心",
 
   /* ── 時間相對格式 ── */
@@ -60,6 +61,7 @@ window.PM_I18N_zh_TW = {
   "brand.gold": "🏅 黃金價格投資輔助工具",
   "brand.silver": "🪙 白銀價格投資輔助工具",
   "brand.backtest": "⚙️ 參數回測",
+  "brand.health": "🩺 資料健康",
 
   /* ── 主題（V0.69.0）── */
   "theme.light": "淺色模式",
@@ -79,6 +81,31 @@ window.PM_I18N_zh_TW = {
   "warn.b4_rest": "，僅以實物黃金 / 白銀 / 對應 ETF 為標的。",
   "warn.b5_strong": "資料來源與風險聲明",
   "warn.b5_rest": " — 資料透過 AKShare（新浪 / 東方財富 / 英為財情 / 上海黃金交易所）；僅供研究，不構成投資建議。",
+  "health.page_title": "資料健康 · 行情源 / 時效 / 採集",
+  "health.h1": "🩺 資料健康",
+  "health.subtitle_en": "資料健康 · 行情源 / 時效 / 採集",
+  "health.tagline": "行情源即時狀態 · 資料時效 · 採集元資訊",
+  "health.intro": "集中展示各資料源（黃金 ETF / 上海金 / 紐約金 / 白銀 ETF / 白銀克重 / 紐約白銀）的即時運行狀態、時效分級與交易時段。降級資料永不靜默 — 進入決策前請先確認本頁所有資料源均為「即時」。",
+  "health.notice": "狀態為行程內累計，重啟後清零；資料來自 AKShare（新浪/東方財富/英為財情/上金所） + Yahoo Finance。",
+  "health.warn_b1": "<b>示範資料不可決策</b> — 若任一標的狀態為「示範資料（非真實行情）」，所有依賴該標的的指數 / 決策 / 回測均不可信，請勿據此操作。",
+  "health.warn_b2": "<b>快取資料可能過期</b> — 「快取資料（可能過期）」僅作為上次成功採集的快照，可能與當前市價存在顯著偏差，需結合其他資料源交叉驗證。",
+  "health.warn_b3": "<b>交易時段判定</b> — 紐約金按美東時間、上海金與 ETF 按北京時間計算；休市期間資料為上一交易日收盤價，標的狀態正常。",
+  "health.section_overall": "📊 總體概覽",
+  "health.section_sources": "📡 資料源即時狀態",
+  "health.section_sources_hint": "6 個資料源的即時運行狀態。綠 = 真實（live），橙 = 快取（stale），紅 = 示範（mock），灰 = 未知。",
+  "health.section_freshness": "⏱ 時效詳情",
+  "health.section_freshness_hint": "各市場的時效分級、交易時段、資料截止與採集時間戳。",
+  "health.section_note": "📝 健康說明",
+  "health.loading": "資料載入中…",
+  "health.col_market": "市場",
+  "health.col_session": "交易時段",
+  "health.col_freshness": "時效",
+  "health.col_data_date": "資料截止",
+  "health.col_age": "相對時長",
+  "health.card_total": "資料源總數",
+  "health.card_live": "即時 (live)",
+  "health.card_stale": "快取 (stale)",
+  "health.card_mock": "示範 (mock)",
 
   /* ── 品牌補充 ── */
   "brand.subtitle_en": "黃金價格投資輔助工具",
@@ -164,6 +191,7 @@ window.PM_I18N_zh_TW = {
 
   /* ── 央行購金（central_bank.html）chrome ── */
   "central_bank.h1": "央行購金統計",
+  "central_bank.subtitle_en": "世界央行黃金購買統計 · 2020 – 2026",
   "central_bank.tagline": "追蹤全球央行黃金儲備變化（T12 月合計 / 本季 / 國家數）。",
   "central_bank.intro_long": "資料來源 WGC（世界黃金協會）季度報告 + AKShare 公開資料。覆蓋 T12 月視窗，量化口徑為噸（t）。",
   "central_bank.notice": "資料按季度更新；非即時。",

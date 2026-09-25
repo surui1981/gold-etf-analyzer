@@ -167,15 +167,13 @@
       <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
       <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
       <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/data-health.html" data-i18n="nav.health">数据健康</a>
       <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
     </div>
   </nav>
 
   <!-- 数据时效（UX 6.1：交易时段 + 时效等级 + 数据截止日 + 采集时间，全站一致） -->
   <div id="freshnessBar"></div>
-  <!-- 数据源状态（降级可感知） -->
-  <div id="sourceBar" class="source-bar" style="display:none"></div>
-  <div id="healthInfo" style="font-size:11.5px;color:var(--muted);margin:-6px 0 14px"></div>
 
   <!-- 加载进度提示（首屏不再空白） -->
   <div id="loadBar" class="source-bar source-warn" data-i18n="trend.loading_hint">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
@@ -344,7 +342,6 @@ async function loadTrend(days = 60, interval = "D") {
   try {
     const data = await fetchJSON(API_BASE + `/api/v1/market/gold/trend?days=${days}&interval=${interval}`);
     lastTrend = data;
-    renderSourceBar(data);
     render(data);
     loadAlerts();
   } catch (e) {
@@ -461,44 +458,6 @@ async function loadAlerts() {
     <div class="source-bar ${a.type === "level" ? "source-warn" : (a.type === "price" && d1 > 0 ? "source-bad" : "source-ok")}" style="margin-bottom:10px">
       🔔 ${a.text}
     </div>`).join("");
-}
-
-// 数据源健康度展示
-async function loadHealth() {
-  try {
-    const h = await fetchJSON(API_BASE + "/api/v1/market/health");
-    const names = { etf: "黄金ETF", sge: "上海金", ny: "纽约金" };
-    const items = Object.entries(h.sources || {}).map(([k, v]) =>
-      `${names[k] || k}：${v.success_rate}% 成功 · 均耗 ${v.avg_ms}ms`);
-    const el = document.getElementById("healthInfo");
-    if (el && items.length) el.textContent = "数据源健康： " + items.join(" ｜ ");
-  } catch (e) { /* 静默 */ }
-}
-
-function renderSourceBar(d) {
-  const bar = document.getElementById("sourceBar");
-  const names = { etf: "黄金ETF（新浪/东财）", sge: "上海金（SGE）", ny: "纽约金（英为财情）" };
-  const src = d.data_sources || {};
-  const keys = Object.keys(src);
-  if (!keys.length) { bar.style.display = "none"; return; }
-
-  const bad = keys.filter(k => src[k] === "mock");
-  const staled = keys.filter(k => src[k] === "stale");
-  const detail = keys.map(k => {
-    const st = src[k] === "live" ? "实时" : src[k] === "stale" ? "缓存(可能过期)" : "演示";
-    return `${names[k] || k}：${st}`;
-  }).join(" ｜ ");
-
-  bar.className = "source-bar " + (bad.length === 0 && staled.length === 0 ? "source-ok" : bad.length === keys.length ? "source-bad" : "source-warn");
-  if (bad.length === 0 && staled.length === 0) {
-    bar.innerHTML = `● 数据源正常：全部为实时行情 — ${detail}`;
-  } else {
-    const parts = [];
-    if (bad.length) parts.push(`${bad.map(k => names[k] || k).join("、")} 为<b>演示数据（非真实行情）</b>，请勿据此决策`);
-    if (staled.length) parts.push(`${staled.map(k => names[k] || k).join("、")} 为<b>缓存数据（可能过期）</b>`);
-    bar.innerHTML = `▲ ${parts.join("；")} — ${detail}`;
-  }
-  bar.style.display = "block";
 }
 
 // 数据时效角标（UX 6.1）：在标题与图表上持续标注，降级数据绝不静默
@@ -906,7 +865,7 @@ document.getElementById("klineRangeBtns")?.addEventListener("click", (ev) => {
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
-  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge(), loadSnapshots(), loadHealth()]);
+  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge(), loadSnapshots()]);
   bar.style.display = "none";
   startTrendPolling();  // V0.60.0：60s 轮询 + visibilitychange 切回前台自动刷新
 })();

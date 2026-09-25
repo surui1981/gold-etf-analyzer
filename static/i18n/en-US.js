@@ -36,6 +36,7 @@ window.PM_I18N_en_US = {
   "nav.central_bank": "Central Bank",
   "nav.silver": "Silver Tracker",
   "nav.backtest": "Backtest",
+  "nav.health": "Data Health",
   "nav.settings": "Notifications",
 
   /* ── Time relative format ── */
@@ -59,6 +60,7 @@ window.PM_I18N_en_US = {
   "brand.gold": "🏅 Gold ETF Investment Assistant",
   "brand.silver": "🪙 Silver Investment Assistant",
   "brand.backtest": "⚙️ Backtest",
+  "brand.health": "🩺 Data Health",
 
   /* ── Investment warning ── */
   "warn.title": "⚠️ Investment Disclaimer · Keep in Mind",
@@ -67,6 +69,31 @@ window.PM_I18N_en_US = {
   "warn.b3": "<b>Know yourself and the market; reason over impulse</b> — the first rule for surviving ruthless markets.",
   "warn.b4": "<b>Stay disciplined, ignore emotional swings</b> — own every decision you make.",
   "warn.b5": "<b>Data sources & risk notice</b> — Data comes from AKShare (Sina/Eastmoney/Investing.com/SGE) and is for research only; not investment advice.",
+  "health.page_title": "Data Health · Providers / Freshness / Sources",
+  "health.h1": "🩺 Data Health",
+  "health.subtitle_en": "DATA HEALTH · Provider · Freshness · Source",
+  "health.tagline": "Provider live status · Data freshness · Collection metadata",
+  "health.intro": "Centralised view of all data sources (Gold ETF / SGE / COMEX GC / Silver ETF / Silver gram / COMEX SI) — live status, freshness tier, and trading session. Degradation is never silent — before making any decision, confirm every source on this page is \"live\".",
+  "health.notice": "Status is process-local and resets on restart. Sources: AKShare (Sina/Eastmoney/Investing.com/SGE) + Yahoo Finance.",
+  "health.warn_b1": "<b>Mock data cannot be used for decisions</b> — If any source is marked \"mock\" (not real market data), all derived indices / decisions / backtests relying on it are unreliable. Do not act on them.",
+  "health.warn_b2": "<b>Stale data may be out of date</b> — \"Stale\" only reflects the last successful snapshot. The current market price may differ significantly; cross-validate with other sources.",
+  "health.warn_b3": "<b>Trading session rules</b> — COMEX uses US/Eastern time; SGE and ETF use Beijing time. During market closure, data shows the previous trading day's close — this is normal.",
+  "health.section_overall": "📊 Overall",
+  "health.section_sources": "📡 Provider Live Status",
+  "health.section_sources_hint": "Live status of 6 data sources. Green = real (live), orange = cache (stale), red = demo (mock), grey = unknown.",
+  "health.section_freshness": "⏱ Freshness Detail",
+  "health.section_freshness_hint": "Freshness tier, trading session, data date, and collection timestamp per market.",
+  "health.section_note": "📝 Health Notes",
+  "health.loading": "Loading…",
+  "health.col_market": "Market",
+  "health.col_session": "Session",
+  "health.col_freshness": "Freshness",
+  "health.col_data_date": "Data Date",
+  "health.col_age": "Age",
+  "health.card_total": "Total sources",
+  "health.card_live": "Live",
+  "health.card_stale": "Stale",
+  "health.card_mock": "Mock",
 
   /* ── Portfolio page ── */
   "portfolio.page_title": "Gold ETF Assistant · Portfolio & Decision",
@@ -517,6 +544,7 @@ window.PM_I18N_en_US = {
 
   "central_bank.page_title": "World Central Bank Gold Purchases · Gold ETF Assistant",
   "central_bank.h1": "World Central Bank Gold Purchases",
+  "central_bank.subtitle_en": "CENTRAL BANK GOLD PURCHASES · 2020 – 2026",
   "central_bank.tagline": "Data-driven insight: structural CB gold purchases vs sales",
   "central_bank.intro_long": "Central bank reserve changes are among the most long-term and structural gold price supports. This page aggregates quarterly net purchases in tonnes for 15 major buying countries from 2020Q1 – 2026Q2, broken down by country and quarter. Primary source: IMF IRFCL (13 countries, free no key); UZB/IRN don't disclose to IMF and are supplemented via WGC monthly estimates.",
   "central_bank.notice": "Data lags 6-12 months · For research only, not investment advice",

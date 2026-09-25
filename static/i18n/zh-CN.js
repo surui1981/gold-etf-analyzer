@@ -36,6 +36,7 @@ window.PM_I18N_ZH_CN = {
   "nav.central_bank": "央行购金统计",
   "nav.silver": "白银追踪",
   "nav.backtest": "参数回测",
+  "nav.health": "数据健康",
   "nav.settings": "通知中心",
 
   /* ── 时间相对格式 ── */
@@ -59,6 +60,7 @@ window.PM_I18N_ZH_CN = {
   "brand.gold": "🏅 黄金价格投资辅助工具",
   "brand.silver": "🪙 白银价格投资辅助工具",
   "brand.backtest": "⚙️ 参数回测",
+  "brand.health": "🩺 数据健康",
 
   /* ── 投资警示 ── */
   "warn.title": "⚠️ 投资警示 · 谨记于心",
@@ -67,6 +69,31 @@ window.PM_I18N_ZH_CN = {
   "warn.b3": "<b>认识自己、认识市场，理性评估与判断</b>——这是残酷市场中生存的第一法则。",
   "warn.b4": "<b>不被情绪波动左右，坚守投资纪律</b>——对自己的每一笔决策负责。",
   "warn.b5": "<b>数据来源与风险声明</b>——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。",
+  "health.page_title": "数据健康 · 行情源 / 时效 / 采集",
+  "health.h1": "🩺 数据健康",
+  "health.subtitle_en": "DATA HEALTH · Provider · Freshness · Source",
+  "health.tagline": "行情源实时状态 · 数据时效 · 采集元信息",
+  "health.intro": "集中展示各数据源（黄金 ETF / 上海金 / 纽约金 / 白银 ETF / 白银克重 / 纽约白银）的实时运行状态、时效分级与交易时段。降级数据永不静默 — 进入决策前请先确认本页所有数据源均为「实时」。",
+  "health.notice": "状态为进程内累计，重启后清零；数据来自 AKShare（新浪/东方财富/英为财情/上金所） + Yahoo Finance。",
+  "health.warn_b1": "<b>演示数据不可决策</b> — 若任一标的状态为「演示数据（非真实行情）」，所有依赖该标的的指数 / 决策 / 回测均不可信，请勿据此操作。",
+  "health.warn_b2": "<b>缓存数据可能过期</b> — 「缓存数据（可能过期）」仅作为上次成功采集的快照，可能与当前市价存在显著偏差，需结合其他数据源交叉验证。",
+  "health.warn_b3": "<b>交易时段判定</b> — 纽约金按美东时间、上海金与 ETF 按北京时间计算；休市期间数据为上一交易日收盘价，标的状态正常。",
+  "health.section_overall": "📊 总体概览",
+  "health.section_sources": "📡 数据源实时状态",
+  "health.section_sources_hint": "6 个数据源的实时运行状态。绿 = 真实（live），橙 = 缓存（stale），红 = 演示（mock），灰 = 未知。",
+  "health.section_freshness": "⏱ 时效详情",
+  "health.section_freshness_hint": "各市场的时效分级、交易时段、数据截止与采集时间戳。",
+  "health.section_note": "📝 健康说明",
+  "health.loading": "数据加载中…",
+  "health.col_market": "市场",
+  "health.col_session": "交易时段",
+  "health.col_freshness": "时效",
+  "health.col_data_date": "数据截止",
+  "health.col_age": "相对时长",
+  "health.card_total": "数据源总数",
+  "health.card_live": "实时 (live)",
+  "health.card_stale": "缓存 (stale)",
+  "health.card_mock": "演示 (mock)",
 
   /* ── Portfolio 页面（持仓与决策）── */
   "portfolio.page_title": "黄金价格投资辅助工具 · 持仓与决策",
@@ -520,6 +547,7 @@ window.PM_I18N_ZH_CN = {
 
   "central_bank.page_title": "世界央行黄金购买统计 · 黄金价格投资辅助工具",
   "central_bank.h1": "世界央行黄金购买统计",
+  "central_bank.subtitle_en": "CENTRAL BANK GOLD PURCHASES · 2020 – 2026",
   "central_bank.tagline": "数据驱动研判：各国央行结构性购金 vs 卖出",
   "central_bank.intro_long": "央行黄金储备变化是金价最长期、最结构性的支撑因素之一。本页汇总 15 个主要购金国 2020Q1 – 2026Q2 的季度净购金吨数，按国家、按季度拆解。数据主源为 IMF IRFCL（覆盖 13 国，免费无 KEY），UZB/IRN 因不向 IMF 披露，辅以 WGC 月报手工补丁。",
   "central_bank.notice": "数据滞后 6-12 个月 · 仅供研究参考，不构成投资建议",

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="health.page_title">数据健康 · 行情源 / 时效 / 采集</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="数据健康">
+<script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  header.hero {
+    background: linear-gradient(135deg, #f0f6ff 0%, #ffffff 60%, #f7f8fa 100%);
+    border: 1px solid #b6d6f0; border-radius: 12px;
+    padding: 20px 24px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+  }
+  header.hero h1 { font-size: 25px; letter-spacing: .5px; }
+  header.hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+  header.hero .tagline { color: #1d4ed8; font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  header.hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 780px; }
+  header.hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
+  .topnav .brand { font-weight: 700; font-size: 15px; color: #93c5fd; letter-spacing: .5px; }
+  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
+  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
+  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
+  .topnav a.active { background: #1d4ed8; color: #fff; font-weight: 600; }
+  .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
+  .section h2 { font-size: 15px; font-weight: 700; color: #1d4ed8; letter-spacing: .5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .section .hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+  .market-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .market-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; transition: border-color .2s; }
+  .market-card.live { border-left: 3px solid #1a7f37; }
+  .market-card.stale { border-left: 3px solid #b35309; }
+  .market-card.mock { border-left: 3px solid #c92a2a; }
+  .market-card.unknown { border-left: 3px solid #5b6470; }
+  .market-card .nm { font-size: 13.5px; font-weight: 600; margin-bottom: 6px; }
+  .market-card .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 600; margin-bottom: 6px; }
+  .badge-live { background: #e8f7ee; color: #1a7f37; border: 1px solid #b7e4c7; }
+  .badge-stale { background: #fff1e6; color: #b35309; border: 1px solid #ffd8a8; }
+  .badge-mock { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
+  .badge-unknown { background: #e9ecef; color: #5b6470; border: 1px solid #ced4da; }
+  .market-card .meta { font-size: 11.5px; color: var(--muted); line-height: 1.6; }
+  .market-card .meta b { color: var(--text); font-weight: 600; }
+  .freshness-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .freshness-table th, .freshness-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  .freshness-table th { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+  .freshness-table .nm { font-weight: 600; }
+  .freshness-table .ok { color: #1a7f37; }
+  .freshness-table .warn { color: #b35309; }
+  .freshness-table .bad { color: #c92a2a; }
+  .freshness-table .dim { color: var(--muted); }
+  .note { font-size: 12px; color: var(--muted); background: var(--bg); border: 1px dashed var(--border); border-radius: 8px; padding: 10px 12px; line-height: 1.7; }
+  .overall { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .overall-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; }
+  .overall-card .lbl { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+  .overall-card .vl { font-size: 18px; font-weight: 700; }
+  .overall-card .vl.ok { color: #1a7f37; }
+  .overall-card .vl.warn { color: #b35309; }
+  .overall-card .vl.bad { color: #c92a2a; }
+  .refresh-btn { background: transparent; border: 1px solid var(--border); border-radius: 8px;
+    padding: 3px 10px; font-size: 16px; cursor: pointer; margin-left: 8px;
+    transition: transform 0.4s, background 0.2s; vertical-align: middle; }
+  .refresh-btn:hover { background: var(--card); }
+  .refresh-btn.refreshing { transform: rotate(360deg); }
+  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid #1d4ed8; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+  .warn-banner .w-title { color: #93c5fd; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
+  .warn-banner ol { margin: 0; padding-left: 20px; }
+  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-banner li b { color: #ffffff; }
+  .loading { text-align: center; color: var(--muted); padding: 60px 0; }
+  .error { color: var(--up); text-align: center; padding: 40px 0; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+<link rel="stylesheet" href="/static/help.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳到主要内容</a>
+<main id="main" tabindex="-1">
+<div class="wrap">
+  <nav class="topnav">
+    <div class="brand" data-i18n="brand.health">🩺 数据健康</div>
+    <div class="links">
+      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
+      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
+      <a href="/trades" data-i18n="nav.trades">交易历史</a>
+      <a href="/weights" data-i18n="nav.weights">权重配置</a>
+      <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
+      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
+      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
+      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
+      <a href="/static/data-health.html" class="active" data-i18n="nav.health">数据健康</a>
+      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
+    </div>
+  </nav>
+
+  <div id="freshnessBar"></div>
+
+  <header class="hero">
+    <h1 data-i18n="health.h1">🩺 数据健康
+      <button id="refreshBtn" class="refresh-btn" title="手动刷新" aria-label="刷新数据健康">🔄</button>
+    </h1>
+    <div class="en" data-i18n="health.subtitle_en">DATA HEALTH · Provider · Freshness · Source</div>
+    <div class="tagline" data-i18n="health.tagline">行情源实时状态 · 数据时效 · 采集元信息</div>
+    <div class="intro" data-i18n="health.intro">
+      集中展示各数据源（黄金 ETF / 上海金 / 纽约金 / 白银 ETF / 白银克重 / 纽约白银）的实时运行状态、时效分级与交易时段。降级数据永不静默 — 进入决策前请先确认本页所有数据源均为「实时」。
+    </div>
+    <div class="notice" data-i18n="health.notice">状态为进程内累计，重启后清零；数据来自 AKShare（新浪/东方财富/英为财情/上金所） + Yahoo Finance。</div>
+  </header>
+
+  <div class="warn-banner">
+    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
+    <ol>
+      <li><span data-i18n="health.warn_b1"><b>演示数据不可决策</b> — 若任一标的状态为「演示数据（非真实行情）」，所有依赖该标的的指数 / 决策 / 回测均不可信，请勿据此操作。</span></li>
+      <li><span data-i18n="health.warn_b2"><b>缓存数据可能过期</b> — 「缓存数据（可能过期）」仅作为上次成功采集的快照，可能与当前市价存在显著偏差，需结合其他数据源交叉验证。</span></li>
+      <li><span data-i18n="health.warn_b3"><b>交易时段判定</b> — 纽约金按美东时间、上海金与 ETF 按北京时间计算；休市期间数据为上一交易日收盘价，标的状态正常。</span></li>
+    </ol>
+  </div>
+
+  <!-- 概览 -->
+  <div class="section">
+    <h2 data-i18n="health.section_overall">📊 总体概览</h2>
+    <div class="overall" id="overallCards"></div>
+  </div>
+
+  <!-- 数据源实时状态 -->
+  <div class="section">
+    <h2 data-i18n="health.section_sources">📡 数据源实时状态</h2>
+    <div class="hint" data-i18n="health.section_sources_hint">6 个数据源的实时运行状态。绿 = 真实（live），橙 = 缓存（stale），红 = 演示（mock），灰 = 未知。</div>
+    <div class="market-grid" id="sourceGrid"></div>
+  </div>
+
+  <!-- 时效详情 -->
+  <div class="section">
+    <h2 data-i18n="health.section_freshness">⏱ 时效详情</h2>
+    <div class="hint" data-i18n="health.section_freshness_hint">各市场的时效分级、交易时段、数据截止与采集时间戳。</div>
+    <table class="freshness-table" id="freshnessTable">
+      <thead>
+        <tr>
+          <th data-i18n="health.col_market">市场</th>
+          <th data-i18n="health.col_session">交易时段</th>
+          <th data-i18n="health.col_freshness">时效</th>
+          <th data-i18n="health.col_data_date">数据截止</th>
+          <th data-i18n="health.col_age">相对时长</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- 健康说明 -->
+  <div class="section">
+    <h2 data-i18n="health.section_note">📝 健康说明</h2>
+    <div class="note" id="apiNote"></div>
+  </div>
+
+  <div class="loading" id="loadingHint" data-i18n="health.loading">数据加载中…</div>
+  <div class="error" id="errorHint" style="display:none"></div>
+
+  <footer data-i18n="brand.footer">gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
+</div>
+</main>
+
+<script src="/static/freshness.js"></script>
+<script src="/static/help.js" defer></script>
+<script>
+(function () {
+  var REFRESH_MS = 60000;
+  var SOURCE_LABELS = {
+    etf: "黄金 ETF（华安 518880）",
+    sge: "上海金（SGE Au99.99）",
+    ny: "纽约金（COMEX GC）",
+    silver_etf: "白银 ETF（易方达 562800）",
+    silver_gram: "白银克重（上海银）",
+    silver_ny: "纽约白银（COMEX SI）"
+  };
+  var STATUS_LABELS = {
+    live:    { txt: "实时",     cls: "live",   badge: "badge-live"   },
+    realtime:{ txt: "实时",     cls: "live",   badge: "badge-live"   },
+    delayed: { txt: "盘后静态", cls: "live",   badge: "badge-live"   },
+    t1:      { txt: "T-1",      cls: "stale",  badge: "badge-stale"  },
+    lagged:  { txt: "滞后多日", cls: "stale",  badge: "badge-stale"  },
+    cached:  { txt: "缓存",     cls: "stale",  badge: "badge-stale"  },
+    stale:   { txt: "缓存",     cls: "stale",  badge: "badge-stale"  },
+    mock:    { txt: "演示",     cls: "mock",   badge: "badge-mock"   },
+    unknown: { txt: "未知",     cls: "unknown",badge: "badge-unknown"}
+  };
+  var API_BASE = (location.port === "8888" || location.port === "8889") ? "" : "http://127.0.0.1:8888";
+
+  function _t(key, fallback) {
+    try {
+      if (window.I18n && typeof window.I18n.t === "function") {
+        var v = window.I18n.t(key);
+        if (v && v !== key) return v;
+      }
+    } catch (e) {}
+    return fallback;
+  }
+
+  function fmtAge(min) {
+    if (min == null || min < 0) return "—";
+    var absMin = Math.abs(min);
+    if (absMin < 60) return Math.round(absMin) + " 分钟";
+    if (absMin < 1440) return (absMin / 60).toFixed(1) + " 小时";
+    return (absMin / 1440).toFixed(1) + " 天";
+  }
+
+  function safeText(s) { return String(s == null ? "" : s); }
+
+  function fetchJSON(url) {
+    var ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer = ctl ? setTimeout(function () { ctl.abort(); }, 20000) : null;
+    return fetch(url, ctl ? { signal: ctl.signal } : undefined).then(function (r) {
+      if (timer) clearTimeout(timer);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    });
+  }
+
+  function renderOverall(healthData) {
+    var grid = document.getElementById("overallCards");
+    if (!grid) return;
+    var sources = healthData.sources || {};
+    var keys = Object.keys(sources);
+    var live = keys.filter(function (k) { return sources[k] === "live"; }).length;
+    var stale = keys.filter(function (k) { return sources[k] === "stale"; }).length;
+    var mock = keys.filter(function (k) { return sources[k] === "mock"; }).length;
+    var total = keys.length;
+    var degraded = mock > 0 || stale > 0;
+
+    grid.innerHTML = [
+      overallCard(_t("health.card_total", "数据源总数"),     total,        ""),
+      overallCard(_t("health.card_live",  "实时 (live)"),    live,         live === total ? "ok" : (degraded ? "warn" : "ok")),
+      overallCard(_t("health.card_stale", "缓存 (stale)"),   stale,        stale > 0 ? "warn" : "ok"),
+      overallCard(_t("health.card_mock",  "演示 (mock)"),    mock,         mock > 0 ? "bad" : "ok")
+    ].join("");
+  }
+
+  function overallCard(label, value, klass) {
+    return '<div class="overall-card">' +
+             '<div class="lbl">' + safeText(label) + '</div>' +
+             '<div class="vl ' + (klass || "") + '">' + value + '</div>' +
+           '</div>';
+  }
+
+  function renderSourceGrid(healthData) {
+    var grid = document.getElementById("sourceGrid");
+    if (!grid) return;
+    var sources = healthData.sources || {};
+    var keys = Object.keys(SOURCE_LABELS);
+    var html = keys.map(function (k) {
+      var status = sources[k] || "unknown";
+      var meta = STATUS_LABELS[status] || STATUS_LABELS.unknown;
+      var label = SOURCE_LABELS[k];
+      return '<div class="market-card ' + meta.cls + '">' +
+               '<div class="nm">' + safeText(label) + '</div>' +
+               '<div class="badge ' + meta.badge + '">' + safeText(meta.txt) + '</div>' +
+               '<div class="meta">键: <b>' + safeText(k) + '</b></div>' +
+             '</div>';
+    }).join("");
+    grid.innerHTML = html || '<div class="hint">—</div>';
+  }
+
+  function renderFreshnessTable(freshData) {
+    var tbody = document.querySelector("#freshnessTable tbody");
+    if (!tbody) return;
+    var markets = freshData.markets || {};
+    var order = ["ny", "sge", "etf", "silver_ny", "silver_etf", "silver_gram"];
+    var keys = order.filter(function (k) { return markets[k]; });
+    Object.keys(markets).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
+
+    tbody.innerHTML = keys.map(function (k) {
+      var m = markets[k];
+      var status = m.status || "unknown";
+      var sm = STATUS_LABELS[status] || STATUS_LABELS.unknown;
+      var ageTxt = fmtAge(m.age_minutes);
+      var ageCls = status === "live" ? "ok" : (status === "mock" ? "bad" : "warn");
+      return '<tr>' +
+               '<td class="nm">' + safeText(SOURCE_LABELS[k] || m.name || k) + '</td>' +
+               '<td>' + safeText(m.session && m.session.state_label || "—") + '</td>' +
+               '<td class="' + sm.cls + '">' + safeText(m.freshness_label || sm.txt) + '</td>' +
+               '<td>' + safeText(m.data_date || "—") + '</td>' +
+               '<td class="' + ageCls + '">' + ageTxt + '</td>' +
+             '</tr>';
+    }).join("");
+  }
+
+  function renderNote(healthData) {
+    var el = document.getElementById("apiNote");
+    if (!el) return;
+    el.textContent = healthData.note || "—";
+  }
+
+  function showLoading(loading, errMsg) {
+    var l = document.getElementById("loadingHint");
+    var e = document.getElementById("errorHint");
+    if (l) l.style.display = loading ? "block" : "none";
+    if (e) {
+      e.style.display = errMsg ? "block" : "none";
+      e.textContent = errMsg || "";
+    }
+  }
+
+  function load() {
+    var btn = document.getElementById("refreshBtn");
+    if (btn) btn.classList.add("refreshing");
+    showLoading(true, "");
+
+    Promise.all([
+      fetchJSON(API_BASE + "/api/v1/market/health").catch(function () { return { sources: {}, note: "数据源健康度接口不可用" }; }),
+      fetchJSON(API_BASE + "/api/v1/market/freshness").catch(function () { return { markets: {} }; })
+    ]).then(function (arr) {
+      var h = arr[0], f = arr[1];
+      renderOverall(h);
+      renderSourceGrid(h);
+      renderFreshnessTable(f);
+      renderNote(h);
+      showLoading(false, "");
+    }).catch(function (e) {
+      showLoading(false, "加载失败：" + e.message);
+    }).then(function () {
+      if (btn) setTimeout(function () { btn.classList.remove("refreshing"); }, 400);
+    });
+  }
+
+  function boot() {
+    load();
+    setInterval(load, REFRESH_MS);
+    var btn = document.getElementById("refreshBtn");
+    if (btn) btn.addEventListener("click", load);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+})();
+</script>
+</body>
+</html>
