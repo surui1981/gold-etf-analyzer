@@ -191,3 +191,21 @@ async def _send_one(
                 trace_id,
             )
         return False
+
+
+# ───────────────────── V0.74.0 N+18 · 单例 accessor ─────────────────────
+# AlertDispatcher 在 evaluate_and_dispatch() 时无法获取依赖注入的
+# PushService(因为 dispatcher 由 scheduler 静态创建),通过模块级单例注入。
+
+_PUSH_SERVICE_SINGLETON: "PushService | None" = None
+
+
+def set_push_service_singleton(push_service: "PushService | None") -> None:
+    """V0.74.0 N+18 · 设置 PushService 单例(由启动期 lifespan / scheduler 调用)。"""
+    global _PUSH_SERVICE_SINGLETON
+    _PUSH_SERVICE_SINGLETON = push_service
+
+
+def get_push_service_singleton() -> "PushService | None":
+    """V0.74.0 N+18 · 读取 PushService 单例。未设置时返回 None。"""
+    return _PUSH_SERVICE_SINGLETON

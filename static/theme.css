@@ -343,3 +343,87 @@ body { background: var(--bg); color: var(--text); }
 [data-theme="hc"] input,
 [data-theme="hc"] select,
 [data-theme="hc"] textarea { border-width: 2px !important; }
+
+/* V0.74.0 N+18 · 告警规则 CRUD 列表 + modal */
+.rule-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.rule-list:empty::before {
+  content: attr(data-empty);
+  display: block;
+  padding: 14px;
+  border: 1px dashed var(--rule-empty-bd, #d1d5db);
+  border-radius: 8px;
+  color: var(--rule-empty-fg, #6b7280);
+  text-align: center;
+  font-size: 13px;
+}
+.rule-list[data-empty]::before { content: "(" attr(data-empty) ")"; }
+.rule-card {
+  display: flex; gap: 12px; align-items: center;
+  padding: 10px 12px;
+  background: var(--rule-card-bg, #f8fafc);
+  border: 1px solid var(--rule-card-bd, #e2e8f0);
+  border-radius: 8px;
+}
+.rule-card.disabled { opacity: 0.55; }
+.rule-card .kind-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.5px;
+  background: var(--badge-bg, #eef2ff); color: var(--badge-fg, #4338ca);
+  flex-shrink: 0; min-width: 78px; text-align: center;
+}
+.rule-card.kind-volatility .kind-badge { background: #fef3c7; color: #92400e; }
+.rule-card.kind-crossing   .kind-badge { background: #dbeafe; color: #1e40af; }
+.rule-card.kind-window     .kind-badge { background: #f3e8ff; color: #6b21a8; }
+.rule-card.kind-t_plus_n   .kind-badge { background: #d1fae5; color: #065f46; }
+.rule-card .rule-desc { flex: 1; min-width: 0; font-size: 13px; color: var(--rule-desc-fg, #374151); }
+.rule-card .rule-note { font-size: 11px; color: var(--rule-note-fg, #9ca3af); margin-left: 4px; }
+.rule-card .rule-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.rule-card button {
+  padding: 4px 10px; font-size: 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--rule-btn-bd, #cbd5e1); background: var(--rule-btn-bg, #fff);
+  color: var(--rule-btn-fg, #334155);
+}
+.rule-card button:hover { background: var(--rule-btn-bg-h, #f1f5f9); }
+.rule-card .btn-del:hover { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
+
+/* modal */
+.modal[hidden] { display: none; }
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.modal-card {
+  background: var(--modal-bg, #fff); color: var(--modal-fg, #111827);
+  border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,0.18);
+  width: 100%; max-width: 460px; max-height: 90vh; display: flex; flex-direction: column;
+}
+.modal-card header, .modal-card footer {
+  padding: 14px 18px; display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--modal-bd, #e5e7eb);
+}
+.modal-card footer { border-top: 1px solid var(--modal-bd, #e5e7eb); border-bottom: none; gap: 8px; justify-content: flex-end; }
+.modal-card header h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.modal-card .modal-body { padding: 18px; overflow-y: auto; }
+.modal-card #btnCancelRule {
+  border: none; background: transparent; font-size: 20px; line-height: 1;
+  padding: 4px 8px; cursor: pointer; color: var(--modal-fg, #6b7280);
+}
+.modal-card #btnCancelRule:hover { color: var(--modal-fg, #111827); }
+
+.kind-picker { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.kind-opt {
+  display: flex; align-items: center; gap: 4px; padding: 6px 12px;
+  border: 1px solid var(--rule-btn-bd, #cbd5e1); border-radius: 8px;
+  cursor: pointer; font-size: 13px; background: var(--rule-btn-bg, #fff);
+}
+.kind-opt input { margin: 0; }
+.kind-opt:has(input:checked) {
+  background: var(--badge-bg, #eef2ff); border-color: var(--badge-fg, #4338ca);
+  color: var(--badge-fg, #4338ca); font-weight: 600;
+}
+
+[data-theme="dark"] .rule-card { background: #1f2937; border-color: #374151; }
+[data-theme="dark"] .rule-card .rule-desc { color: #d1d5db; }
+[data-theme="dark"] .modal-card { background: #1f2937; }
+[data-theme="dark"] .modal-card header, [data-theme="dark"] .modal-card footer { border-color: #374151; }

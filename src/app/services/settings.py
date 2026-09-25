@@ -213,15 +213,16 @@ async def get_alert_rules(repo: SettingRepository) -> AlertRuleOut:
 
 
 async def save_alert_rules(repo: SettingRepository, rules: AlertRuleIn) -> AlertRuleOut:
-    """保存告警规则到 settings 表（key='alert_rules'），保存后失效缓存。"""
+    """保存告警规则到 settings 表（key='alert_rules'），保存后失效缓存。
+
+    V0.74.0 N+18：直接用 rules.model_dump() 序列化整张 AlertRuleIn
+    (含异构 ``rules`` 列表 + 旧兼容字段 + channels)；AlertRuleIn.model_validator
+    已经把旧扁平字段迁移到 rules,所以 AlertRuleOut.rules 就是最终生效的列表。
+    """
     from datetime import datetime
 
     saved = AlertRuleOut(
-        level_crossing_enabled=rules.level_crossing_enabled,
-        volatility_enabled=rules.volatility_enabled,
-        volatility_pct=rules.volatility_pct,
-        quiet_hours=rules.quiet_hours,
-        channels=rules.channels,
+        **rules.model_dump(),  # 保留 rules.* + 旧字段 + channels
         updated_at=datetime.now(),
     )
     await repo.set(ALERT_RULES_KEY, saved.model_dump_json())

@@ -668,6 +668,31 @@ window.PM_I18N_ZH_CN = {
   "settings.push_subscribed": "Web Push 已订阅",
   "settings.push_unsubscribed": "Web Push 已退订",
 
+  /* ── V0.74.0 N+18 · 告警规则 CRUD ── */
+  "settings.btn_add_rule": "+ 添加规则",
+  "settings.rule_count_hint": "共 {n} 条",
+  "settings.modal_title_add": "添加规则",
+  "settings.modal_kind_label": "规则类型",
+  "settings.kind_volatility": "波动阈值",
+  "settings.kind_crossing": "指数跨档",
+  "settings.kind_window": "自定义时段",
+  "settings.kind_t_plus_n": "T+N 命中",
+  "settings.label_threshold_pct": "波动阈值（%）",
+  "settings.label_axis_levels": "档位粒度",
+  "settings.label_axis_2": "主轴 2 档(BULLISH ↔ BEARISH)",
+  "settings.label_axis_4": "细粒度 4 档(含 STRONG_UP/STRONG_DOWN)",
+  "settings.label_window_mode": "时段模式",
+  "settings.label_window_mode_quiet": "静默(窗口内入队不推)",
+  "settings.label_window_mode_active": "仅窗口内才推",
+  "settings.label_window_time": "时段（BJT）",
+  "settings.label_t_plus_n_days": "回看天数 N",
+  "settings.label_t_plus_n_pct": "命中阈值（%）",
+  "settings.label_t_plus_n_pct_hint": "N 天内累积涨跌需达此阈值(预测方向一致)",
+  "settings.label_rule_enabled": "启用",
+  "settings.label_rule_note": "备注(可选)",
+  "settings.modal_cancel": "取消",
+  "settings.modal_confirm": "确认添加",
+
   /* ── 跳过链接 ── */
   "a11y.skip_to_main": "跳到主要内容",
 

@@ -9,6 +9,8 @@ from datetime import date, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from app.schemas.alert import AlertRuleOut, NotifyChannel, QuietHours
 from app.schemas.market import TrendIndexLevel
 from app.services.alert import AlertDispatcher, _SnapshotInput
@@ -295,3 +297,277 @@ async def test_fan_out_multiple_channels() -> None:
     assert "level_crossing" in triggered
     assert len(notifier_email.sent) == 1
     assert len(notifier_wechat.sent) == 1
+
+
+# ───────────────────── V0.74.0 N+18 · discriminated union ──────────
+
+
+from app.schemas.alert import (  # noqa: E402  -- late import for V0.74.0 N+18 tests
+    CrossingRule,
+    TPlusNRule,
+    VolatilityRule,
+    WindowRule,
+    WindowSpec,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_alert_rules_cache():
+    """V0.74.0 N+18 · 清空 settings._ALERT_RULES_CACHE,避免上一个测试的缓存干扰本测试。"""
+    from app.services.settings import _ALERT_RULES_CACHE  # noqa: PLC0415
+    _ALERT_RULES_CACHE["config"] = None
+    _ALERT_RULES_CACHE["ts"] = 0.0
+    yield
+    _ALERT_RULES_CACHE["config"] = None
+    _ALERT_RULES_CACHE["ts"] = 0.0
+
+
+def _rules_v2(rules: list, channels: list[NotifyChannel] | None = None, quiet: QuietHours | None = None) -> AlertRuleOut:
+    """V0.74.0 N+18 helper：直接构造 rules 列表。"""
+    return AlertRuleOut(
+        rules=rules,
+        quiet_hours=quiet,
+        channels=channels or ["email"],
+        updated_at=datetime.now(),
+    )
+
+
+async def test_n18_crossing_axis_4_strong_to_strong_triggers() -> None:
+    """V0.74.0 N+18 · axis_levels=4 细粒度跨档：STRONG_UP↔STRONG_DOWN 也算。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = CrossingRule(kind="crossing", axis_levels=4, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 95.0, 1.0, TrendIndexLevel.STRONG_UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 15.0, -5.0, TrendIndexLevel.STRONG_DOWN)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    assert "level_crossing" in triggered
+    assert len(notifier.sent) == 1
+
+
+async def test_n18_crossing_axis_4_same_level_no_trigger() -> None:
+    """V0.74.0 N+18 · axis_levels=4：相同档位不触发。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = CrossingRule(kind="crossing", axis_levels=4, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 1.0, TrendIndexLevel.UP)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    assert "level_crossing" not in triggered
+
+
+async def test_n18_crossing_disabled_no_trigger() -> None:
+    """V0.74.0 N+18 · crossing rule.enabled=False 时不触发。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = CrossingRule(kind="crossing", axis_levels=2, enabled=False)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.STRONG_UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 20.0, -5.0, TrendIndexLevel.STRONG_DOWN)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    assert "level_crossing" not in triggered
+    assert notifier.sent == []
+
+
+async def test_n18_volatility_disabled_no_trigger() -> None:
+    """V0.74.0 N+18 · volatility rule.enabled=False 时不触发。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=False)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)  # 大波动
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    assert "volatility" not in triggered
+
+
+async def test_n18_volatility_threshold_zero_always_trigger() -> None:
+    """V0.74.0 N+18 · threshold_pct=0.1（小阈值）：小幅波动也触发。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = VolatilityRule(kind="volatility", threshold_pct=0.1, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 0.5, TrendIndexLevel.UP)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    assert "volatility" in triggered
+
+
+class _FakeSnap:
+    """V0.74.0 N+18 · mock DailySnapshot for T+N lookup."""
+
+    def __init__(self, snapshot_date, index_level, close):
+        self.snapshot_date = snapshot_date
+        self.index_level = index_level
+        self.close = close
+
+
+class _FakeSnapRepo:
+    """V0.74.0 N+18 · mock SnapshotRepository.get_latest_before()."""
+
+    def __init__(self, by_date: dict):
+        self._by = by_date
+
+    async def get_latest_before(self, before):
+        # 与 production SnapshotRepository 一致:严格小于 before
+        candidates = sorted(
+            [(d, s) for d, s in self._by.items() if d < before],
+            key=lambda x: x[0],
+            reverse=True,
+        )
+        return candidates[0][1] if candidates else None
+
+
+async def test_n18_t_plus_n_buy_hit() -> None:
+    """V0.74.0 N+18 · T+3 买入命中：3 天前信号为 UP，今日涨 2%。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = TPlusNRule(kind="t_plus_n", t_plus_n_days=3, t_plus_n_pct=1.5, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    # curr=9-21, target_date=9-18, prod repo 严格小于 target,所以 past=9-17
+    past = _FakeSnap(date(2026, 9, 17), "up", close=100.0)
+    snap_repo = _FakeSnapRepo({past.snapshot_date: past})
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 82.0, 1.0, TrendIndexLevel.UP, close_price=102.0)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+    )
+    assert any(k.startswith("t_plus_n") for k in triggered)
+    assert len(notifier.sent) == 1
+    assert "T+3" in notifier.sent[0][0]
+    assert "买入" in notifier.sent[0][0]
+
+
+async def test_n18_t_plus_n_buy_miss() -> None:
+    """V0.74.0 N+18 · T+3 买入未达阈值：不触发。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = TPlusNRule(kind="t_plus_n", t_plus_n_days=3, t_plus_n_pct=2.0, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    past = _FakeSnap(date(2026, 9, 17), "up", close=100.0)
+    snap_repo = _FakeSnapRepo({past.snapshot_date: past})
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.5, 0.5, TrendIndexLevel.UP, close_price=100.5)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+    )
+    assert not any(k.startswith("t_plus_n") for k in triggered)
+
+
+async def test_n18_t_plus_n_neutral_past_no_trigger() -> None:
+    """V0.74.0 N+18 · 3 天前信号为 SIDEWAYS：不触发（无方向预测）。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = TPlusNRule(kind="t_plus_n", t_plus_n_days=3, t_plus_n_pct=1.0, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    past = _FakeSnap(date(2026, 9, 17), "sideways", close=100.0)
+    snap_repo = _FakeSnapRepo({past.snapshot_date: past})
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.SIDEWAYS)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP, close_price=110.0)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+    )
+    assert not any(k.startswith("t_plus_n") for k in triggered)
+
+
+async def test_n18_t_plus_n_no_snapshots_repo_silent() -> None:
+    """V0.74.0 N+18 · 未传 snapshots_repo：T+N 静默 no-op,不抛异常。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    rule = TPlusNRule(kind="t_plus_n", t_plus_n_days=3, t_plus_n_pct=1.5, enabled=True)
+    repo = _mock_repo(_rules_v2([rule]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 82.0, 1.0, TrendIndexLevel.UP, close_price=102.0)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, snapshots_repo=None, notifiers=[notifier],
+    )
+    assert not any(k.startswith("t_plus_n") for k in triggered)
+
+
+async def test_n18_legacy_migration_compat() -> None:
+    """V0.74.0 N+18 · 旧 schema(扁平 boolean) → 自动迁移为 rules 列表。"""
+    from app.schemas.alert import AlertRuleIn
+
+    # 旧 PUT 体
+    payload = {
+        "level_crossing_enabled": True,
+        "volatility_enabled": True,
+        "volatility_pct": 2.5,
+        "quiet_hours": {"start": "22:00", "end": "07:00"},
+        "channels": ["email"],
+    }
+    parsed = AlertRuleIn.model_validate(payload)
+    kinds = sorted(r.kind for r in parsed.rules)
+    assert kinds == ["crossing", "volatility", "window"], f"迁移后 kinds 不对: {kinds}"
+    # 验证 volatility 阈值正确迁移
+    vol = next(r for r in parsed.rules if r.kind == "volatility")
+    assert vol.threshold_pct == 2.5
+
+
+async def test_n18_window_rule_quiet_in_window_queues() -> None:
+    """V0.74.0 N+18 · window rule(mode=quiet) 当前在窗口内 → volatility 触发入队。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    vol = VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=True)
+    win = WindowRule(kind="window", window=WindowSpec(mode="quiet", start="00:00", end="23:59"), enabled=True)
+    repo = _mock_repo(_rules_v2([vol, win]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    # 静默内:入队不推送
+    assert "volatility" in triggered
+    assert len(notifier.sent) == 0
+    assert len(dispatcher._quiet_queue) == 1
+
+
+async def test_n18_window_rule_active_outside_window_queues() -> None:
+    """V0.74.0 N+18 · window rule(mode=active) 当前在窗口外 → volatility 触发入队。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    vol = VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=True)
+    # active mode,start=00:00 end=00:01 → 几乎所有时刻都在窗口外
+    win = WindowRule(kind="window", window=WindowSpec(mode="active", start="00:00", end="00:01"), enabled=True)
+    repo = _mock_repo(_rules_v2([vol, win]))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    # 窗口外:入队
+    assert "volatility" in triggered
+    assert len(notifier.sent) == 0
+    assert len(dispatcher._quiet_queue) == 1
+
+
+async def test_n18_multiple_rules_same_day_dedup_isolated() -> None:
+    """V0.74.0 N+18 · 多条 enabled 规则同日命中：各自去重互不干扰。"""
+    notifier = _RecordingNotifier()
+    dispatcher = AlertDispatcher()
+    # vol@1.0 + vol@5.0:两条独立 volatility 规则
+    rules = [
+        VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=True),
+        VolatilityRule(kind="volatility", threshold_pct=5.0, enabled=True),
+    ]
+    repo = _mock_repo(_rules_v2(rules))
+    prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
+    curr = _SnapshotInput(date(2026, 9, 21), 80.0, 3.0, TrendIndexLevel.UP)
+    triggered = await dispatcher.evaluate_and_dispatch(
+        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+    )
+    # 3% >= 1.0 触发；3% < 5.0 不触发
+    assert "volatility" in triggered
+    # 因为只有一条规则触发,只推 1 次
+    assert len(notifier.sent) == 1

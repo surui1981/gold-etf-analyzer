@@ -90,34 +90,203 @@
     });
   }
 
-  /* ── 2. 告警规则 ────────────────────────────────── */
+  /* ── 2. 告警规则 (V0.74.0 N+18 · discriminated union CRUD) ────── */
+  // 内存中的规则列表（discriminated union）。GET 同步、PATCH 异步落盘。
+  let _ruleStore = []; //  [{ kind, ... }, ...]
+
+  const KIND_LABEL = {
+    volatility: "波动阈值",
+    crossing: "指数跨档",
+    window: "自定义时段",
+    t_plus_n: "T+N 命中",
+  };
+
+  function ruleDesc(r) {
+    switch (r.kind) {
+      case "volatility":
+        return "单日 |涨跌| ≥ " + r.threshold_pct + "%";
+      case "crossing":
+        return r.axis_levels === 4 ? "细粒度 4 档跨档" : "主轴 2 档跨档(BULLISH↔BEARISH)";
+      case "window":
+        return (r.window && r.window.mode === "active" ? "仅窗口内推:" : "窗口内静默:")
+          + (r.window ? (r.window.start + "→" + r.window.end) : "");
+      case "t_plus_n":
+        return "T+" + r.t_plus_n_days + " · 阈值 " + r.t_plus_n_pct + "%";
+      default:
+        return r.kind;
+    }
+  }
+
+  function renderRuleList() {
+    const list = $("ruleList");
+    list.innerHTML = "";
+    if (!_ruleStore.length) {
+      list.dataset.empty = "暂无规则,点击「+ 添加规则」开始";
+      list.setAttribute("data-empty", "暂无规则,点击「+ 添加规则」开始");
+      return;
+    }
+    delete list.dataset.empty;
+    list.removeAttribute("data-empty");
+    _ruleStore.forEach((r, i) => {
+      const card = document.createElement("div");
+      card.className = "rule-card kind-" + r.kind + (r.enabled === false ? " disabled" : "");
+      card.setAttribute("role", "listitem");
+      const badge = document.createElement("span");
+      badge.className = "kind-badge";
+      badge.textContent = KIND_LABEL[r.kind] || r.kind;
+      const desc = document.createElement("span");
+      desc.className = "rule-desc";
+      desc.textContent = ruleDesc(r);
+      if (r.note) {
+        const note = document.createElement("span");
+        note.className = "rule-note";
+        note.textContent = " · " + r.note;
+        desc.appendChild(note);
+      }
+      const actions = document.createElement("div");
+      actions.className = "rule-actions";
+      const toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.textContent = r.enabled === false ? "启用" : "停用";
+      toggle.addEventListener("click", () => {
+        r.enabled = r.enabled === false ? true : false;
+        renderRuleList();
+      });
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "btn-del";
+      del.textContent = "删除";
+      del.addEventListener("click", () => {
+        _ruleStore.splice(i, 1);
+        renderRuleList();
+      });
+      actions.appendChild(toggle);
+      actions.appendChild(del);
+      card.appendChild(badge);
+      card.appendChild(desc);
+      card.appendChild(actions);
+      list.appendChild(card);
+    });
+    $("ruleCountHint").textContent = "共 " + _ruleStore.length + " 条";
+  }
+
   function readRulesFromForm() {
     const channels = Array.from(document.querySelectorAll("#channelBox .channel input:checked"))
       .map((cb) => cb.value);
     return {
-      level_crossing_enabled: $("ruleLevelCrossing").checked,
-      volatility_enabled: $("ruleVolatility").checked,
-      volatility_pct: parseFloat($("ruleVolPct").value) || 3.0,
-      quiet_hours: {
-        start: $("quietStart").value || "22:00",
-        end: $("quietEnd").value || "07:00",
-      },
+      rules: _ruleStore.map((r) => JSON.parse(JSON.stringify(r))), // 深拷贝避免后续修改原对象
       channels: channels,
     };
   }
 
   function writeRulesToForm(rules) {
-    $("ruleLevelCrossing").checked = !!rules.level_crossing_enabled;
-    $("ruleVolatility").checked = !!rules.volatility_enabled;
-    $("ruleVolPct").value = rules.volatility_pct != null ? rules.volatility_pct : 3.0;
-    $("quietStart").value = (rules.quiet_hours && rules.quiet_hours.start) || "22:00";
-    $("quietEnd").value = (rules.quiet_hours && rules.quiet_hours.end) || "07:00";
+    // V0.74.0 N+18：优先使用新字段 rules；旧扁平字段保留兼容（若无 rules 字段则构造）
+    if (Array.isArray(rules.rules)) {
+      _ruleStore = rules.rules.map((r) => JSON.parse(JSON.stringify(r)));
+    } else {
+      // 旧 schema 兜底（理论上不应再出现,但万一 GET 返旧数据）
+      _ruleStore = [];
+      if (rules.level_crossing_enabled) {
+        _ruleStore.push({ kind: "crossing", axis_levels: 2, enabled: true });
+      }
+      if (rules.volatility_enabled) {
+        _ruleStore.push({
+          kind: "volatility",
+          threshold_pct: rules.volatility_pct || 3.0,
+          enabled: true,
+        });
+      }
+      if (rules.quiet_hours) {
+        _ruleStore.push({
+          kind: "window",
+          window: { mode: "quiet", start: rules.quiet_hours.start, end: rules.quiet_hours.end },
+          enabled: true,
+        });
+      }
+    }
+    renderRuleList();
     document.querySelectorAll("#channelBox .channel").forEach((box) => {
       const ch = box.dataset.ch;
       const cb = box.querySelector("input");
       const on = (rules.channels || []).indexOf(ch) >= 0;
       cb.checked = on;
       box.classList.toggle("checked", on);
+    });
+  }
+
+  /* modal + 添加规则 */
+  function openRuleModal() {
+    // 重置 modal 到默认 volatility
+    document.querySelectorAll('input[name="ruleKind"]').forEach((r) => {
+      r.checked = r.value === "volatility";
+    });
+    switchKindForm("volatility");
+    $("modalVolPct").value = "3.0";
+    $("modalAxisLevels").value = "2";
+    $("modalWindowMode").value = "quiet";
+    $("modalWinStart").value = "22:00";
+    $("modalWinEnd").value = "07:00";
+    $("modalTPlusNDays").value = "3";
+    $("modalTPlusNPct").value = "1.5";
+    $("modalEnabled").checked = true;
+    $("modalNote").value = "";
+    $("ruleModal").hidden = false;
+    // a11y: 焦点移到第一个 input
+    setTimeout(() => $("modalVolPct").focus(), 30);
+  }
+  function closeRuleModal() { $("ruleModal").hidden = true; }
+  function switchKindForm(kind) {
+    document.querySelectorAll(".kind-form").forEach((f) => {
+      f.hidden = f.dataset.kindForm !== kind;
+    });
+  }
+  function collectModalRule() {
+    const kind = document.querySelector('input[name="ruleKind"]:checked').value;
+    const base = { kind: kind, enabled: $("modalEnabled").checked };
+    const note = ($("modalNote").value || "").trim();
+    if (note) base.note = note.slice(0, 120);
+    if (kind === "volatility") {
+      base.threshold_pct = parseFloat($("modalVolPct").value) || 3.0;
+    } else if (kind === "crossing") {
+      base.axis_levels = parseInt($("modalAxisLevels").value, 10) || 2;
+    } else if (kind === "window") {
+      base.window = {
+        mode: $("modalWindowMode").value,
+        start: $("modalWinStart").value || "22:00",
+        end: $("modalWinEnd").value || "07:00",
+      };
+    } else if (kind === "t_plus_n") {
+      base.t_plus_n_days = parseInt($("modalTPlusNDays").value, 10) || 3;
+      base.t_plus_n_pct = parseFloat($("modalTPlusNPct").value) || 1.5;
+    }
+    return base;
+  }
+
+  function bindRuleModal() {
+    document.querySelectorAll('input[name="ruleKind"]').forEach((r) => {
+      r.addEventListener("change", () => switchKindForm(r.value));
+    });
+    $("btnAddRule").addEventListener("click", openRuleModal);
+    $("btnCancelRule").addEventListener("click", closeRuleModal);
+    $("btnCancelRule2").addEventListener("click", closeRuleModal);
+    $("btnConfirmRule").addEventListener("click", () => {
+      const rule = collectModalRule();
+      // 客户端兜底校验
+      if (rule.kind === "volatility" && (rule.threshold_pct < 0.1 || rule.threshold_pct > 20)) {
+        alert("波动阈值必须在 0.1 - 20 之间");
+        return;
+      }
+      if (rule.kind === "t_plus_n" && (rule.t_plus_n_pct < 0.1 || rule.t_plus_n_pct > 10)) {
+        alert("T+N 阈值必须在 0.1 - 10 之间");
+        return;
+      }
+      _ruleStore.push(rule);
+      renderRuleList();
+      closeRuleModal();
+    });
+    // Esc 关闭 modal
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && !$("ruleModal").hidden) closeRuleModal();
     });
   }
 
@@ -155,8 +324,8 @@
       errEl.textContent = "请至少选择一个推送渠道";
       return;
     }
-    if (payload.volatility_pct < 0.1 || payload.volatility_pct > 20) {
-      errEl.textContent = "波动阈值必须在 0.1 - 20 之间";
+    if (!payload.rules.length) {
+      errEl.textContent = "请至少添加一条规则";
       return;
     }
     try {
@@ -165,9 +334,11 @@
         body: JSON.stringify(payload),
       });
       writeRulesToForm(saved);
+      const kinds = payload.rules.map((r) => r.kind);
       okEl.textContent = "✅ 已保存（" + (saved.updated_at || new Date().toISOString()) + "）";
       setTimeout(() => { okEl.textContent = ""; }, 4000);
-      track("alert_rule_save", { channels: payload.channels.join(","), vol_pct: payload.volatility_pct });
+      track("alert_rule_save", { channels: payload.channels.join(","), rule_count: payload.rules.length });
+      track("notification_rule_save", { rule_count: payload.rules.length, rule_kinds: kinds.join(",") });
     } catch (e) {
       errEl.textContent = "保存失败：" + e.message + (e.status === 401 ? "（管理员 Token 缺失或错误）" : "");
     }
@@ -301,6 +472,7 @@
   function init() {
     bindAdminTokenUi();
     bindChannelUi();
+    bindRuleModal();
     $("btnSaveRules").addEventListener("click", saveRules);
     $("btnReloadRules").addEventListener("click", loadRules);
     $("btnTestEmail").addEventListener("click", () => testChannel("email"));

@@ -158,39 +158,21 @@
     <button class="ghost sm" id="btnClearToken" type="button" data-i18n="settings.btn_clear">清空</button>
   </div>
 
-  <!-- 2. 告警规则 + 通知偏好 -->
+  <!-- 2. 告警规则 + 通知偏好 (V0.74.0 N+18 · discriminated union 重构) -->
   <div class="card">
-    <h2 data-i18n="settings.section_alerts">告警规则 <span class="hint" data-i18n="settings.section_alerts_hint">· 档位穿越 / 波动阈值 / 静默时段</span></h2>
-    <div class="desc" data-i18n="settings.section_alerts_desc">指数档位从「上升」翻转到「下降」（主轴变化）时推送；单日绝对波动 ≥ 阈值时推送。静默时段内告警入队，醒后 09:30 BJT 汇总推送。</div>
-    <div class="switch-row">
-      <div>
-        <div class="label" data-i18n="settings.label_alert_level_crossing">档位穿越告警（BULLISH ↔ BEARISH 主轴翻转）</div>
-        <div class="desc" data-i18n="settings.label_alert_level_crossing_desc">默认开；指数档位跨主轴翻转时触发，SIDEWAYS 抖动忽略</div>
-      </div>
-      <label class="switch"><input type="checkbox" id="ruleLevelCrossing" checked><span class="slider"></span></label>
+    <h2 data-i18n="settings.section_alerts">告警规则 <span class="hint" data-i18n="settings.section_alerts_hint">· 4 种规则 · 异构列表 CRUD</span></h2>
+    <div class="desc" data-i18n="settings.section_alerts_desc">新增任意条规则,4 种 kind 自由组合:波动阈值 / 指数跨档 / 自定义时段 / T+N 命中。每条规则独立启停。静默时段由 window kind(mode=quiet)取代。</div>
+
+    <div id="ruleList" class="rule-list" aria-label="告警规则列表">
+      <!-- 动态渲染 -->
     </div>
-    <div class="switch-row">
-      <div>
-        <div class="label" data-i18n="settings.label_alert_volatility">单日波动告警</div>
-        <div class="desc" data-i18n="settings.label_alert_volatility_desc">纽约金单日涨跌幅绝对值 ≥ 阈值时触发；日内去重一次</div>
-      </div>
-      <label class="switch"><input type="checkbox" id="ruleVolatility" checked><span class="slider"></span></label>
+
+    <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button id="btnAddRule" type="button" data-i18n="settings.btn_add_rule">+ 添加规则</button>
+      <span class="hint" data-i18n="settings.rule_count_hint" id="ruleCountHint">共 0 条</span>
     </div>
-    <div class="field" style="margin-top:14px;max-width:200px">
-      <label for="ruleVolPct" data-i18n="settings.label_alert_volatility_pct">单日波动阈值（%）</label>
-      <input type="number" id="ruleVolPct" min="0.1" max="20" step="0.1" value="3.0">
-      <div class="hint" data-i18n="settings.label_alert_volatility_pct_hint">0.1 - 20；推荐 2.5 - 4.0</div>
-    </div>
-    <div class="field" style="margin-top:6px">
-      <label data-i18n="settings.label_quiet">静默时段（BJT）</label>
-      <div class="time-pair">
-        <input type="time" id="quietStart" value="22:00">
-        <span class="sep">→</span>
-        <input type="time" id="quietEnd" value="07:00">
-      </div>
-      <div class="hint" data-i18n="settings.label_quiet_hint">跨夜有效（如 22:00 → 次日 07:00）</div>
-    </div>
-    <div style="margin-top:16px">
+
+    <div style="margin-top:18px">
       <label style="font-size:12.5px;color:#4b5563;font-weight:500" data-i18n="settings.channels_label">推送渠道（按顺序尝试）</label>
       <div class="channels" id="channelBox">
         <label class="channel" data-ch="browser"><input type="checkbox" value="browser" checked><div><div class="ico">🔔</div><div class="name" data-i18n="settings.ch_browser">浏览器通知</div><div class="sub" data-i18n="settings.ch_browser_sub">页面内 / Notification API</div></div></label>
@@ -204,6 +186,84 @@
       <button class="ghost" id="btnReloadRules" type="button" data-i18n="settings.btn_reload">重新载入</button>
       <span class="err" id="rulesErr"></span>
       <span class="ok-msg" id="rulesOk"></span>
+    </div>
+  </div>
+
+  <!-- V0.74.0 N+18 · 添加规则 modal -->
+  <div id="ruleModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="ruleModalTitle" hidden>
+    <div class="modal-card">
+      <header><h3 id="ruleModalTitle" data-i18n="settings.modal_title_add">添加规则</h3><button type="button" class="ghost" id="btnCancelRule" aria-label="关闭">×</button></header>
+      <div class="modal-body">
+        <div class="field">
+          <label data-i18n="settings.modal_kind_label">规则类型</label>
+          <div class="kind-picker" id="kindPicker">
+            <label class="kind-opt"><input type="radio" name="ruleKind" value="volatility" checked><span data-i18n="settings.kind_volatility">波动阈值</span></label>
+            <label class="kind-opt"><input type="radio" name="ruleKind" value="crossing"><span data-i18n="settings.kind_crossing">指数跨档</span></label>
+            <label class="kind-opt"><input type="radio" name="ruleKind" value="window"><span data-i18n="settings.kind_window">自定义时段</span></label>
+            <label class="kind-opt"><input type="radio" name="ruleKind" value="t_plus_n"><span data-i18n="settings.kind_t_plus_n">T+N 命中</span></label>
+          </div>
+        </div>
+
+        <!-- 各 kind 表单区(volatility 默认显) -->
+        <div class="kind-form" data-kind-form="volatility">
+          <div class="field">
+            <label for="modalVolPct" data-i18n="settings.label_threshold_pct">单日波动阈值（%）</label>
+            <input type="number" id="modalVolPct" min="0.1" max="20" step="0.1" value="3.0">
+            <div class="hint" data-i18n="settings.label_alert_volatility_pct_hint">0.1 - 20;推荐 2.5 - 4.0</div>
+          </div>
+        </div>
+        <div class="kind-form" data-kind-form="crossing" hidden>
+          <div class="field">
+            <label data-i18n="settings.label_axis_levels">档位粒度</label>
+            <select id="modalAxisLevels">
+              <option value="2" data-i18n="settings.label_axis_2">主轴 2 档 (BULLISH ↔ BEARISH)</option>
+              <option value="4" data-i18n="settings.label_axis_4">细粒度 4 档 (含 STRONG_UP/STRONG_DOWN)</option>
+            </select>
+          </div>
+        </div>
+        <div class="kind-form" data-kind-form="window" hidden>
+          <div class="field">
+            <label data-i18n="settings.label_window_mode">时段模式</label>
+            <select id="modalWindowMode">
+              <option value="quiet" data-i18n="settings.label_window_mode_quiet">静默(窗口内入队不推)</option>
+              <option value="active" data-i18n="settings.label_window_mode_active">仅窗口内才推</option>
+            </select>
+          </div>
+          <div class="field">
+            <label data-i18n="settings.label_window_time">时段（BJT）</label>
+            <div class="time-pair">
+              <input type="time" id="modalWinStart" value="22:00">
+              <span class="sep">→</span>
+              <input type="time" id="modalWinEnd" value="07:00">
+            </div>
+          </div>
+        </div>
+        <div class="kind-form" data-kind-form="t_plus_n" hidden>
+          <div class="field">
+            <label for="modalTPlusNDays" data-i18n="settings.label_t_plus_n_days">回看天数 N</label>
+            <select id="modalTPlusNDays">
+              <option value="1">1</option><option value="3" selected>3</option><option value="5">5</option><option value="10">10</option><option value="20">20</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="modalTPlusNPct" data-i18n="settings.label_t_plus_n_pct">命中阈值（%）</label>
+            <input type="number" id="modalTPlusNPct" min="0.1" max="10" step="0.1" value="1.5">
+            <div class="hint" data-i18n="settings.label_t_plus_n_pct_hint">N 天内累积涨跌需达到此阈值(预测方向一致)</div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="switch-row"><span data-i18n="settings.label_rule_enabled">启用</span><label class="switch"><input type="checkbox" id="modalEnabled" checked><span class="slider"></span></label></label>
+        </div>
+        <div class="field">
+          <label for="modalNote" data-i18n="settings.label_rule_note">备注(可选)</label>
+          <input type="text" id="modalNote" maxlength="120" placeholder="">
+        </div>
+      </div>
+      <footer>
+        <button type="button" class="ghost" id="btnCancelRule2" data-i18n="settings.modal_cancel">取消</button>
+        <button type="button" id="btnConfirmRule" data-i18n="settings.modal_confirm">确认添加</button>
+      </footer>
     </div>
   </div>
 

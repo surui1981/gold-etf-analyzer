@@ -202,18 +202,20 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
     except Exception as exc:
         logger.error("Served cache warmup failed: %s", exc)
 
-    # V0.72.0 P3-b：告警分发钩子（仅快照成功时评估）
+    # V0.72.0 P3-b + V0.74.0 N+18：告警分发钩子（仅快照成功时评估）
     if snap_ok and out is not None:
         try:
             from app.database import async_session_factory
             from app.dependencies import get_alert_dispatcher
             from app.repositories.settings import SettingRepository
+            from app.repositories.snapshot import SnapshotRepository
             from app.schemas.market import TrendIndexLevel
             from app.services.alert import _SnapshotInput
 
             dispatcher = get_alert_dispatcher()
             async with async_session_factory() as session:
                 repo = SettingRepository(session)
+                snap_repo = SnapshotRepository(session)
                 prev_snapshot = await snapshot_svc.get_previous(out.snapshot_date)
                 prev_input = None
                 if prev_snapshot is not None:
@@ -223,17 +225,20 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
                         trend_score=prev_snapshot.trend_index,
                         change_1d_pct=prev_snapshot.change_pct or 0.0,
                         trend_level=prev_level,
+                        close_price=prev_snapshot.close or 0.0,
                     )
                 curr_input = _SnapshotInput(
                     snapshot_date=out.snapshot_date,
                     trend_score=out.trend_index,
                     change_1d_pct=out.change_pct or 0.0,
                     trend_level=out.index_level,
+                    close_price=out.close or 0.0,
                 )
                 triggered = await dispatcher.evaluate_and_dispatch(
                     prev=prev_input,
                     curr=curr_input,
                     repo=repo,
+                    snapshots_repo=snap_repo,
                 )
                 if triggered:
                     logger.info("Alert dispatched: %s", triggered)
@@ -241,11 +246,17 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
             logger.warning("alert dispatch failed: %s", exc)
 
 
-async def intraday_warm_once(trend_svc: TrendService) -> None:
+async def intraday_warm_once(
+    trend_svc: TrendService,
+    snapshot_svc: DailySnapshotService | None = None,
+) -> None:
     """单次日内预热（V0.60.0）：调 trend.analyze 并写入 served cache。
 
     不落库（区别于 daily_capture_and_warm 的快照落库）；只刷新 served cache，
     让趋势页 60s 轮询在前端立即拉到最新结果。失败仅日志，不抛异常。
+
+    V0.74.0 N+18：传入 snapshot_svc 时,顺手评估一次 dispatcher(T+N 命中可能在
+    日内多个时点被发现,不必等 07:00 BJT)。
     """
     try:
         result = await trend_svc.analyze(days=60, target=GUIDE_TARGET)
@@ -253,6 +264,69 @@ async def intraday_warm_once(trend_svc: TrendService) -> None:
         logger.info("Intraday warmup done (index=%.1f)", result.index.score)
     except Exception as exc:
         logger.error("Intraday warmup failed: %s", exc)
+
+    # V0.74.0 N+18 · 日内告警评估
+    if snapshot_svc is not None:
+        try:
+            await _intraday_dispatch(snapshot_svc)
+        except Exception as exc:
+            logger.warning("intraday alert dispatch failed: %s", exc)
+
+
+async def _intraday_dispatch(snapshot_svc: DailySnapshotService) -> None:
+    """V0.74.0 N+18 · 日内 60min 评估告警（无需重新落快照）。"""
+    from datetime import date as _date
+
+    from app.database import async_session_factory
+    from app.dependencies import get_alert_dispatcher
+    from app.repositories.settings import SettingRepository
+    from app.repositories.snapshot import SnapshotRepository
+    from app.schemas.market import TrendIndexLevel
+    from app.services.alert import _SnapshotInput
+
+    today = _date.today()
+    dispatcher = get_alert_dispatcher()
+    async with async_session_factory() as session:
+        snap_repo = SnapshotRepository(session)
+        # + 1 day 确保今天也能命中(若数据库已存今日快照)
+        tomorrow = today.fromordinal(today.toordinal() + 1)
+        latest = await snap_repo.get_latest_before(tomorrow)
+        if latest is None:
+            return
+        prev = await snap_repo.get_latest_before(latest.snapshot_date)
+        repo = SettingRepository(session)
+        prev_input = None
+        if prev is not None:
+            try:
+                prev_level = TrendIndexLevel(prev.index_level)
+            except ValueError:
+                prev_level = TrendIndexLevel.SIDEWAYS
+            prev_input = _SnapshotInput(
+                snapshot_date=prev.snapshot_date,
+                trend_score=prev.trend_index or 0.0,
+                change_1d_pct=prev.change_pct or 0.0,
+                trend_level=prev_level,
+                close_price=prev.close or 0.0,
+            )
+        try:
+            curr_level = TrendIndexLevel(latest.index_level)
+        except ValueError:
+            curr_level = TrendIndexLevel.SIDEWAYS
+        curr_input = _SnapshotInput(
+            snapshot_date=latest.snapshot_date,
+            trend_score=latest.trend_index or 0.0,
+            change_1d_pct=latest.change_pct or 0.0,
+            trend_level=curr_level,
+            close_price=latest.close or 0.0,
+        )
+        triggered = await dispatcher.evaluate_and_dispatch(
+            prev=prev_input,
+            curr=curr_input,
+            repo=repo,
+            snapshots_repo=snap_repo,
+        )
+        if triggered:
+            logger.info("Intraday alert dispatched: %s", triggered)
 
 
 async def daily_capture_loop(
@@ -283,7 +357,8 @@ async def daily_capture_loop(
         )
         await asyncio.sleep(wait)
         if is_intra:
-            await intraday_warm_once(trend_svc)
+            # V0.74.0 N+18：传 snapshot_svc 让日内评估也走 dispatcher(T+N 命中)
+            await intraday_warm_once(trend_svc, snapshot_svc=snapshot_svc)
         else:
             await _capture_and_warm(snapshot_svc, trend_svc)
 

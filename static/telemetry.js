@@ -46,6 +46,8 @@
     alert_email_sent: 1,
     alert_wechat_sent: 1,
     alert_browser_click: 1,
+    // V0.74.0 N+18：异构规则 CRUD 保存
+    notification_rule_save: 1,
     // V0.72.0 P3-b：PWA + Web Push funnel
     pwa_install_prompted: 1,
     pwa_installed: 1,

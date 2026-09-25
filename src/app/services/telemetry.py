@@ -55,6 +55,8 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         "alert_email_sent",
         "alert_wechat_sent",
         "alert_browser_click",
+        # V0.74.0 N+18：异构规则 CRUD 保存(独立 telemetry 事件)
+        "notification_rule_save",
         # V0.72.0 P3-b：PWA + Web Push funnel
         "pwa_install_prompted",
         "pwa_installed",

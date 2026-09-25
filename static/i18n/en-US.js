@@ -666,6 +666,31 @@ window.PM_I18N_en_US = {
   "settings.push_subscribed": "Web Push subscribed",
   "settings.push_unsubscribed": "Web Push unsubscribed",
 
+  /* ── V0.74.0 N+18 · Alert rules CRUD ── */
+  "settings.btn_add_rule": "+ Add rule",
+  "settings.rule_count_hint": "Total: {n}",
+  "settings.modal_title_add": "Add rule",
+  "settings.modal_kind_label": "Rule type",
+  "settings.kind_volatility": "Volatility threshold",
+  "settings.kind_crossing": "Index level crossing",
+  "settings.kind_window": "Custom time window",
+  "settings.kind_t_plus_n": "T+N hit",
+  "settings.label_threshold_pct": "Volatility threshold (%)",
+  "settings.label_axis_levels": "Level granularity",
+  "settings.label_axis_2": "Main axis 2 (BULLISH ↔ BEARISH)",
+  "settings.label_axis_4": "Fine 4 (incl. STRONG_UP/STRONG_DOWN)",
+  "settings.label_window_mode": "Window mode",
+  "settings.label_window_mode_quiet": "Quiet (queue in window)",
+  "settings.label_window_mode_active": "Active (only push in window)",
+  "settings.label_window_time": "Window (BJT)",
+  "settings.label_t_plus_n_days": "Lookback days N",
+  "settings.label_t_plus_n_pct": "Hit threshold (%)",
+  "settings.label_t_plus_n_pct_hint": "Cumulative change in N days must reach this (direction must match prediction)",
+  "settings.label_rule_enabled": "Enabled",
+  "settings.label_rule_note": "Note (optional)",
+  "settings.modal_cancel": "Cancel",
+  "settings.modal_confirm": "Confirm",
+
   /* ── Skip link ── */
   "a11y.skip_to_main": "Skip to main content",
 

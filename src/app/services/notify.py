@@ -1,4 +1,7 @@
-"""通知推送（V0.72.0）：Notifier 协议 + SMTP 邮件 + Server 酱微信。
+"""通知推送（V0.72.0 + V0.74.0 N+18 webpush）：Notifier 协议 + 4 渠道。
+
+V0.72.0：SMTP 邮件 + Server 酱微信
+V0.74.0 N+18：+ Web Push（pywebpush/VAPID）+ 浏览器通知前端埋点
 
 每渠道独立类实现，``NotifierFactory.create(channel)`` 根据配置返回实例。
 失败退避策略：5s / 30s / 5min 三次，全失败返回 False（由 AlertDispatcher 写 telemetry）。
@@ -140,6 +143,78 @@ class ServerChanNotifier:
         return "wechat"
 
 
+# V0.74.0 N+18：Web Push 渠道(包装 services/push.py 的 PushService.deliver)
+
+from typing import Any  # noqa: E402  -- 延迟到 ServerChanNotifier 之后
+
+
+class WebPushNotifier:
+    """Web Push 通知器（V0.74.0 N+18）。
+
+    依赖注入：构造时需要 ``PushService``(用于查订阅 + deliver)与
+    ``SettingRepository``(用于读 VAPID 密钥)。工厂方法见
+    ``NotifierFactory.create_webpush``。
+
+    推送成功条件：deliver 返回 ``sent > 0``。0 订阅视为"无可推送对象"，
+    返回 False（由 send_with_retry 重试无意义,但保持协议一致）。
+    """
+
+    URL_DEFAULT = "/portfolio"
+    TAG_DEFAULT = "gold-alert"
+
+    def __init__(self, *, push_service: Any, settings_repo: Any) -> None:
+        self._push = push_service
+        self._settings_repo = settings_repo
+
+    async def send(self, *, subject: str, body: str, trace_id: str | None = None) -> bool:
+        from app.services.push import get_vapid_keys  # noqa: PLC0415
+
+        try:
+            vapid = await get_vapid_keys(self._settings_repo)
+        except Exception as exc:  # pragma: no cover — DB/读盘异常
+            logger.warning("WebPush vapid lookup failed: %s trace_id=%s", exc, trace_id)
+            return False
+        if vapid is None:
+            logger.warning("WebPush skipped: VAPID keys not configured trace_id=%s", trace_id)
+            return False
+        try:
+            subs = await self._push.repo.list_active()
+        except Exception as exc:  # pragma: no cover
+            logger.warning("WebPush subscription list failed: %s trace_id=%s", exc, trace_id)
+            return False
+        if not subs:
+            logger.info("WebPush skipped: no active subscriptions trace_id=%s", trace_id)
+            return False
+        try:
+            sent, failed = await self._push.deliver(
+                subscriptions=subs,
+                vapid=vapid,
+                subject=subject,
+                body=body,
+                url=self.URL_DEFAULT,
+                tag=self.TAG_DEFAULT,
+                trace_id=trace_id,
+            )
+        except Exception as exc:  # pragma: no cover — 投递异常
+            logger.warning("WebPush deliver exception: %s trace_id=%s", exc, trace_id)
+            return False
+        if sent > 0:
+            logger.info(
+                "WebPush sent: sent=%d failed=%d subject=%s trace_id=%s",
+                sent, failed, subject, trace_id,
+            )
+            return True
+        logger.warning(
+            "WebPush delivered 0 (failed=%d) subject=%s trace_id=%s",
+            failed, subject, trace_id,
+        )
+        return False
+
+    @property
+    def channel(self) -> str:
+        return "webpush"
+
+
 # V0.72.0 P3-b：退避时间表（秒）。三次重试：5s / 30s / 5min。
 _RETRY_BACKOFFS: tuple[float, ...] = (5.0, 30.0, 300.0)
 
@@ -196,14 +271,43 @@ class NotifierFactory:
             if not sendkey:
                 return None
             return ServerChanNotifier(sendkey=sendkey)
+        if channel == "webpush":
+            # webpush 需要 PushService + settings_repo 依赖注入(由 create_webpush 提供)
+            logger.debug("webpush channel requested via create() — use create_webpush() instead")
+            return None
+        if channel == "browser":
+            # browser 是前端 Notification API,在前端自己处理,不走 dispatcher
+            logger.debug("browser channel handled by frontend notification API")
+            return None
         return None
 
     @staticmethod
-    def create_all(channels: list[str]) -> list[Notifier]:
-        """从渠道列表创建所有可用 Notifier（缺配置的渠道跳过）。"""
+    def create_webpush(push_service: Any, settings_repo: Any) -> Notifier | None:
+        """V0.74.0 N+18 · 构造 WebPushNotifier(PushService 注入式)。
+
+        Returns None 当 push_service 不可用 / 无订阅。
+        """
+        if push_service is None:
+            return None
+        return WebPushNotifier(push_service=push_service, settings_repo=settings_repo)
+
+    @staticmethod
+    def create_all(
+        channels: list[str],
+        *,
+        push_service: Any | None = None,
+        settings_repo: Any | None = None,
+    ) -> list[Notifier]:
+        """从渠道列表创建所有可用 Notifier（缺配置的渠道跳过）。
+
+        V0.74.0 N+18:若提供了 push_service + settings_repo,则 webpush 渠道可被创建。
+        """
         out: list[Notifier] = []
         for ch in channels:
-            n = NotifierFactory.create(ch)
+            if ch == "webpush" and push_service is not None:
+                n = NotifierFactory.create_webpush(push_service, settings_repo)
+            else:
+                n = NotifierFactory.create(ch)
             if n is not None:
                 out.append(n)
         return out
@@ -214,5 +318,6 @@ __all__ = [
     "NotifierFactory",
     "SMTPNotifier",
     "ServerChanNotifier",
+    "WebPushNotifier",
     "send_with_retry",
 ]
