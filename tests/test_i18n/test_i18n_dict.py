@@ -9,12 +9,12 @@
   6. zh-CN 至少 100 个 key
   7. en-US 至少覆盖 zh-CN 的 80% 核心 key
 """
+
 from __future__ import annotations
 
 import re
 from pathlib import Path
-
-import pytest
+from typing import Final
 
 ROOT = Path(__file__).resolve().parents[2]
 I18N_DIR = ROOT / "static" / "i18n"
@@ -23,24 +23,37 @@ ZH_CN = "zh-CN"
 ZH_TW = "zh-TW"
 EN_US = "en-US"
 
+# 各 locale 文件中的顶层赋值变量名（必须与 static/i18n/*.js 实际写法一致）
+I18N_VAR: Final[dict[str, str]] = {
+    ZH_CN: "window.PM_I18N_ZH_CN",
+    ZH_TW: "window.PM_I18N_zh_TW",
+    EN_US: "window.PM_I18N_en_US",
+}
+
 
 def _load_dict(lang: str) -> dict[str, str]:
-    """解析字典文件，返回 key→value dict。"""
-    if lang == ZH_CN:
-        path = I18N_DIR / "zh-CN.js"
-        var = "window.PM_I18N_ZH_CN"
-    elif lang == ZH_TW:
-        path = I18N_DIR / "zh-TW.js"
-        var = "window.PM_I18N_zh_TW"
-    elif lang == EN_US:
-        path = I18N_DIR / "en-US.js"
-        var = "window.PM_I18N_en_US"
-    else:
+    """解析字典文件，返回 key→value dict。
+
+    Args:
+        lang: locale 标识，取值 ``zh-CN`` / ``zh-TW`` / ``en-US``。
+
+    Returns:
+        key→value 字典；文件不存在时返回空 dict。
+
+    Raises:
+        ValueError: ``lang`` 不在支持列表内。
+    """
+    var = I18N_VAR.get(lang)
+    if var is None:
         raise ValueError(lang)
+    path = I18N_DIR / f"{lang}.js"
     if not path.exists():
         return {}
     text = path.read_text(encoding="utf-8")
     assert text.startswith("/*") is False or "*/" in text, "文件头应先有注释"
+    # docstring 第 1 条：必须是 `window.PM_I18N_XXX = { ... }` 顶层赋值形式，
+    # 否则 i18n.js 的加载器取不到字典（前端静默回落到 key 字符串）
+    assert re.search(rf"{re.escape(var)}\s*=\s*\{{", text), f"{lang}.js 缺少顶层赋值 `{var} = {{`"
     # 提取顶层赋值后的 { ... } 字面量
     # 简化版：所有 "key": "value" 都视为顶层字典项
     pattern = r'"([^"\\]+)"\s*:\s*"((?:[^"\\]|\\.)*)"'
@@ -82,7 +95,10 @@ def test_no_empty_values() -> None:
 def test_no_duplicate_keys() -> None:
     """三个字典文件无重复 key。"""
     for lang in (ZH_CN, EN_US, ZH_TW):
-        path = I18N_DIR / f"{lang.replace('-', '-').replace('CN', 'CN').replace('US', 'US').replace('TW', 'TW')}.js"
+        path = (
+            I18N_DIR
+            / f"{lang.replace('-', '-').replace('CN', 'CN').replace('US', 'US').replace('TW', 'TW')}.js"
+        )
         # 简化：用 regex 直接搜重复
         text = path.read_text(encoding="utf-8")
         pattern = r'"([^"\\]+)"\s*:'
@@ -104,7 +120,9 @@ def test_en_us_covers_zh_cn_core() -> None:
     en_keys = set(en.keys())
     missing = zh_keys - en_keys
     coverage = (len(zh_keys) - len(missing)) / max(len(zh_keys), 1)
-    assert coverage >= 0.8, f"en-US 覆盖率仅 {coverage:.1%}（≥80%）；缺失 {len(missing)} 个 key（例：{list(missing)[:3]}）"
+    assert coverage >= 0.8, (
+        f"en-US 覆盖率仅 {coverage:.1%}（≥80%）；缺失 {len(missing)} 个 key（例：{list(missing)[:3]}）"
+    )
 
 
 def test_zh_tw_subset_of_zh_cn() -> None:
@@ -126,19 +144,41 @@ def test_required_keys_present_in_zh_cn() -> None:
     zh = _load_dict(ZH_CN)
     required = {
         # nav
-        "nav.trend", "nav.portfolio", "nav.trades", "nav.weights", "nav.news",
-        "nav.review", "nav.central_bank", "nav.silver", "nav.backtest", "nav.settings",
+        "nav.trend",
+        "nav.portfolio",
+        "nav.trades",
+        "nav.weights",
+        "nav.news",
+        "nav.review",
+        "nav.central_bank",
+        "nav.silver",
+        "nav.backtest",
+        "nav.settings",
         # common
-        "common.save", "common.cancel", "common.confirm", "common.loading",
+        "common.save",
+        "common.cancel",
+        "common.confirm",
+        "common.loading",
         # time
-        "time.just_now", "time.minutes_ago", "time.hours_ago", "time.days_ago",
+        "time.just_now",
+        "time.minutes_ago",
+        "time.hours_ago",
+        "time.days_ago",
         # brand
-        "brand.gold", "brand.silver", "brand.backtest",
+        "brand.gold",
+        "brand.silver",
+        "brand.backtest",
         # theme
-        "theme.light", "theme.dark", "theme.auto", "theme.hc",
+        "theme.light",
+        "theme.dark",
+        "theme.auto",
+        "theme.hc",
         # portfolio 关键
-        "portfolio.btn_open", "portfolio.holdings_title", "portfolio.action_buy",
-        "portfolio.action_sell", "portfolio.equity_title",
+        "portfolio.btn_open",
+        "portfolio.holdings_title",
+        "portfolio.action_buy",
+        "portfolio.action_sell",
+        "portfolio.equity_title",
     }
     missing = required - set(zh.keys())
     assert not missing, f"zh-CN 缺少核心 key：{missing}"

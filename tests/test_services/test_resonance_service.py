@@ -129,9 +129,7 @@ def _make_news(score_date: date, slot: int, score: float, notes: str = "") -> Ne
 async def test_history_replays_trend_per_day(db_session: AsyncSession) -> None:
     """history(days)：5 个打分日 → 5 项按日期倒序。"""
     today = date.today()
-    records = [
-        _make_news(today - timedelta(days=i), 1, 60 + i) for i in range(5)
-    ]
+    records = [_make_news(today - timedelta(days=i), 1, 60 + i) for i in range(5)]
     fake_news = FakeNewsRepo(records)
     service = ResonanceService.__new__(ResonanceService)  # 不调 __init__
     service._trend = None

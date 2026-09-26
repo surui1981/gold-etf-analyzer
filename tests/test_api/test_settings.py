@@ -73,7 +73,11 @@ async def test_n18_put_new_schema_rules(client: AsyncClient) -> None:
         "rules": [
             {"kind": "volatility", "threshold_pct": 2.5, "enabled": True, "note": "测试波动"},
             {"kind": "crossing", "axis_levels": 4, "enabled": True},
-            {"kind": "window", "window": {"mode": "quiet", "start": "22:00", "end": "07:00"}, "enabled": True},
+            {
+                "kind": "window",
+                "window": {"mode": "quiet", "start": "22:00", "end": "07:00"},
+                "enabled": True,
+            },
             {"kind": "t_plus_n", "t_plus_n_days": 3, "t_plus_n_pct": 1.5, "enabled": True},
         ],
         "channels": ["email", "wechat"],

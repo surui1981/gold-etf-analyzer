@@ -197,7 +197,10 @@ async def get_alert_rules(repo: SettingRepository) -> AlertRuleOut:
     """读取告警规则（60s 缓存，未配置返回默认 AlertRuleOut）。"""
     global _ALERT_RULES_CACHE
     now = time.time()
-    if _ALERT_RULES_CACHE["config"] is not None and now - _ALERT_RULES_CACHE["ts"] < WEIGHTS_CACHE_TTL:
+    if (
+        _ALERT_RULES_CACHE["config"] is not None
+        and now - _ALERT_RULES_CACHE["ts"] < WEIGHTS_CACHE_TTL
+    ):
         return _ALERT_RULES_CACHE["config"]
     raw = await repo.get(ALERT_RULES_KEY)
     if raw:
@@ -257,7 +260,10 @@ async def get_vapid_keys(repo: SettingRepository) -> VapidKeys | None:
     """返回 VAPID 密钥对（不存在返回 None，启动期会按需生成）。"""
     global _VAPID_KEYS_CACHE
     now = time.time()
-    if _VAPID_KEYS_CACHE["config"] is not None and now - _VAPID_KEYS_CACHE["ts"] < WEIGHTS_CACHE_TTL:
+    if (
+        _VAPID_KEYS_CACHE["config"] is not None
+        and now - _VAPID_KEYS_CACHE["ts"] < WEIGHTS_CACHE_TTL
+    ):
         return _VAPID_KEYS_CACHE["config"]  # type: ignore[no-any-return]
     raw = await repo.get(VAPID_KEYS_KEY)
     if not raw:

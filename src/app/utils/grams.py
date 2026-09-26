@@ -55,9 +55,7 @@ def shares_from_grams(
     if shares <= 0:
         # 折算后不足一手；提示「至少多少克才够一手」
         min_grams = (e * LOT_SIZE / p).quantize(Decimal("0.001"))
-        raise ValueError(
-            f"克数 {g} g 折算后不足一手（{LOT_SIZE} 份）；至少 {min_grams} g"
-        )
+        raise ValueError(f"克数 {g} g 折算后不足一手（{LOT_SIZE} 份）；至少 {min_grams} g")
     return shares
 
 

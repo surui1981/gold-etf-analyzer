@@ -206,6 +206,7 @@ def test_build_data_freshness_covers_all_markets(market: str) -> None:
 def test_freshness_markets_include_silver() -> None:
     """V0.73.x+：_MARKETS 注册表必须包含 silver_ny / silver_etf。"""
     from app.services.freshness import _MARKETS
+
     assert "silver_ny" in _MARKETS, "白银 NY 未注册到 freshness _MARKETS"
     assert "silver_etf" in _MARKETS, "白银 ETF 未注册到 freshness _MARKETS"
     silver_ny_name, _ = _MARKETS["silver_ny"]
@@ -219,15 +220,17 @@ def test_freshness_markets_include_silver() -> None:
 async def test_freshness_service_report_includes_silver(monkeypatch: pytest.MonkeyPatch) -> None:
     """V0.73.x+：FreshnessService.report() 输出 markets 必须含 5 个（3 金 + 2 银）。"""
     from app.services.freshness import _MARKETS, FreshnessService
+
     # 用 FakeMetaRepo 注入采集元信息（避免触网 + 避免请求级仓储）
     meta = {
-        k: {"status": "live", "last_date": date(2026, 9, 2), "fetched_at": _NOW}
-        for k in _MARKETS
+        k: {"status": "live", "last_date": date(2026, 9, 2), "fetched_at": _NOW} for k in _MARKETS
     }
     svc = FreshnessService(FakeMetaRepo(meta=meta))  # type: ignore[arg-type]
+
     # 关闭冷启动 _warm（不需要走真实取数）
     async def _noop_warm(market: str) -> None:
         await asyncio.sleep(0)
+
     monkeypatch.setattr(svc, "_warm", _noop_warm)
     out = await svc.report(now=_NOW)
     assert set(out.markets.keys()) == set(_MARKETS.keys())

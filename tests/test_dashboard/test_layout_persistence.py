@@ -18,11 +18,10 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 from pathlib import Path
-
-import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD_JS = ROOT / "static" / "dashboard.js"
@@ -43,6 +42,21 @@ DASHBOARD_KEYS = [
 ]
 
 CARD_KEYS = ["decision", "open", "positions", "trade", "equity", "perf", "accounts"]
+
+
+def node_env(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """构造 node 子进程环境变量。
+
+    不要传"只有 PATH"的最小环境:Linux/CI 上没问题,但 Windows 上 node 初始化
+    加密随机源需要 SystemRoot,缺省会以 `Assertion failed: ncrypto::CSPRNG`
+    直接崩溃(rc=134),4 个用例全红。这里继承当前进程环境再叠加自定义键,
+    跨平台行为一致。
+    """
+    env = dict(os.environ)
+    env["DASHBOARD_JS_PATH"] = str(DASHBOARD_JS)
+    env.update(extra or {})
+    return env
+
 
 NODE_POLYFILL = r"""
 // Polyfill localStorage / document / window
@@ -159,10 +173,13 @@ window.PM_Dashboard.saveLayout(order);
 const reloaded = window.PM_Dashboard.loadLayout();
 console.log(JSON.stringify(reloaded));
 """
-    env = {"DASHBOARD_JS_PATH": str(DASHBOARD_JS), "PATH": "/usr/bin:/bin"}
+    env = node_env()
     proc = subprocess.run(
         ["node", "-e", runner],
-        capture_output=True, text=True, env=env, timeout=10,
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
     )
     assert proc.returncode == 0, f"node 退出非 0: stderr={proc.stderr}"
     got = json.loads(proc.stdout.strip())
@@ -194,9 +211,13 @@ eval(patched);
 const order = window.PM_Dashboard.loadLayout();
 console.log(JSON.stringify(order));
 """
-    env = {"DASHBOARD_JS_PATH": str(DASHBOARD_JS), "PATH": "/usr/bin:/bin"}
+    env = node_env()
     proc = subprocess.run(
-        ["node", "-e", runner], capture_output=True, text=True, env=env, timeout=10,
+        ["node", "-e", runner],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
     )
     assert proc.returncode == 0, f"node 退出非 0: stderr={proc.stderr}"
     got = json.loads(proc.stdout.strip())
@@ -232,9 +253,13 @@ eval(patched);
 const order = window.PM_Dashboard.loadLayout();
 console.log(JSON.stringify(order));
 """
-    env = {"DASHBOARD_JS_PATH": str(DASHBOARD_JS), "PATH": "/usr/bin:/bin"}
+    env = node_env()
     proc = subprocess.run(
-        ["node", "-e", runner], capture_output=True, text=True, env=env, timeout=10,
+        ["node", "-e", runner],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
     )
     assert proc.returncode == 0, f"node 退出非 0: stderr={proc.stderr}"
     got = json.loads(proc.stdout.strip())
@@ -274,9 +299,13 @@ eval(patched);
 const order = window.PM_Dashboard.loadLayout();
 console.log(JSON.stringify(order));
 """
-    env = {"DASHBOARD_JS_PATH": str(DASHBOARD_JS), "PATH": "/usr/bin:/bin"}
+    env = node_env()
     proc = subprocess.run(
-        ["node", "-e", runner], capture_output=True, text=True, env=env, timeout=10,
+        ["node", "-e", runner],
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
     )
     assert proc.returncode == 0, f"node 退出非 0: stderr={proc.stderr}"
     got = json.loads(proc.stdout.strip())

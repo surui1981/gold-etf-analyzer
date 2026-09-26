@@ -56,7 +56,10 @@ def store(params: dict, result: dict) -> None:
     """写入缓存。超 MAX_CACHE_SIZE 时整体清空（罕见 param grid 场景）。"""
     if len(_CACHE) >= MAX_CACHE_SIZE:
         _CACHE.clear()
-    _CACHE[hash_params(params)] = (datetime.now(), {k: v for k, v in result.items() if k != "cached"})
+    _CACHE[hash_params(params)] = (
+        datetime.now(),
+        {k: v for k, v in result.items() if k != "cached"},
+    )
 
 
 def clear() -> None:

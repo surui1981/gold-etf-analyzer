@@ -79,13 +79,24 @@ async def test_level_crossing_bullish_to_bearish_triggers() -> None:
     dispatcher = AlertDispatcher()
 
     repo = _mock_repo(_rules(vol_pct=10.0))  # 关掉 volatility，只测 level_crossing
-    prev = _SnapshotInput(date(2026, 9, 20), trend_score=80.0, change_1d_pct=1.0,
-                          trend_level=TrendIndexLevel.STRONG_UP)
-    curr = _SnapshotInput(date(2026, 9, 21), trend_score=20.0, change_1d_pct=-5.0,
-                          trend_level=TrendIndexLevel.STRONG_DOWN)
+    prev = _SnapshotInput(
+        date(2026, 9, 20),
+        trend_score=80.0,
+        change_1d_pct=1.0,
+        trend_level=TrendIndexLevel.STRONG_UP,
+    )
+    curr = _SnapshotInput(
+        date(2026, 9, 21),
+        trend_score=20.0,
+        change_1d_pct=-5.0,
+        trend_level=TrendIndexLevel.STRONG_DOWN,
+    )
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" in triggered
     assert len(notifier.sent) == 1
@@ -104,7 +115,10 @@ async def test_level_crossing_bullish_to_bullish_no_trigger() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 60.0, 0.5, TrendIndexLevel.UP)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" not in triggered
     assert notifier.sent == []
@@ -120,7 +134,10 @@ async def test_level_crossing_through_sideways_no_trigger() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 50.0, -2.0, TrendIndexLevel.SIDEWAYS)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" not in triggered
     assert notifier.sent == []
@@ -136,7 +153,10 @@ async def test_level_crossing_disabled_no_trigger() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 20.0, -5.0, TrendIndexLevel.STRONG_DOWN)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" not in triggered
     assert notifier.sent == []
@@ -155,7 +175,10 @@ async def test_volatility_above_threshold_triggers() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 48.0, -3.5, TrendIndexLevel.SIDEWAYS)  # 跌 3.5%
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "volatility" in triggered
     subject, _body = notifier.sent[0]
@@ -172,7 +195,10 @@ async def test_volatility_below_threshold_no_trigger() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 49.5, 2.5, TrendIndexLevel.SIDEWAYS)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "volatility" not in triggered
     assert notifier.sent == []
@@ -188,7 +214,10 @@ async def test_volatility_upward_triggers() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 53.0, 2.5, TrendIndexLevel.UP)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "volatility" in triggered
     assert "上涨" in notifier.sent[0][0]
@@ -209,7 +238,10 @@ async def test_quiet_hours_queues_not_sends() -> None:
     curr = _SnapshotInput(date(2026, 9, 21), 20.0, -5.0, TrendIndexLevel.STRONG_DOWN)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" in triggered
     assert notifier.sent == []  # 未发送
@@ -246,11 +278,17 @@ async def test_same_day_duplicate_dedup() -> None:
 
     # 第一次触发
     triggered1 = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     # 第二次同一天（prev/curr 完全相同），不应重复
     triggered2 = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" in triggered1
     assert "level_crossing" not in triggered2
@@ -287,12 +325,17 @@ async def test_fan_out_multiple_channels() -> None:
     notifier_wechat = _RecordingNotifier(channel="wechat")
     dispatcher = AlertDispatcher()
 
-    repo = _mock_repo(_rules(channels=["email", "wechat"], vol_pct=10.0))  # 关 volatility 只测 fan-out
+    repo = _mock_repo(
+        _rules(channels=["email", "wechat"], vol_pct=10.0)
+    )  # 关 volatility 只测 fan-out
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.STRONG_UP)
     curr = _SnapshotInput(date(2026, 9, 21), 20.0, -5.0, TrendIndexLevel.STRONG_DOWN)
 
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier_email, notifier_wechat],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier_email, notifier_wechat],
     )
     assert "level_crossing" in triggered
     assert len(notifier_email.sent) == 1
@@ -314,7 +357,8 @@ from app.schemas.alert import (  # noqa: E402  -- late import for V0.74.0 N+18 t
 @pytest.fixture(autouse=True)
 def _reset_alert_rules_cache():
     """V0.74.0 N+18 · 清空 settings._ALERT_RULES_CACHE,避免上一个测试的缓存干扰本测试。"""
-    from app.services.settings import _ALERT_RULES_CACHE  # noqa: PLC0415
+    from app.services.settings import _ALERT_RULES_CACHE
+
     _ALERT_RULES_CACHE["config"] = None
     _ALERT_RULES_CACHE["ts"] = 0.0
     yield
@@ -322,7 +366,9 @@ def _reset_alert_rules_cache():
     _ALERT_RULES_CACHE["ts"] = 0.0
 
 
-def _rules_v2(rules: list, channels: list[NotifyChannel] | None = None, quiet: QuietHours | None = None) -> AlertRuleOut:
+def _rules_v2(
+    rules: list, channels: list[NotifyChannel] | None = None, quiet: QuietHours | None = None
+) -> AlertRuleOut:
     """V0.74.0 N+18 helper：直接构造 rules 列表。"""
     return AlertRuleOut(
         rules=rules,
@@ -341,7 +387,10 @@ async def test_n18_crossing_axis_4_strong_to_strong_triggers() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 95.0, 1.0, TrendIndexLevel.STRONG_UP)
     curr = _SnapshotInput(date(2026, 9, 21), 15.0, -5.0, TrendIndexLevel.STRONG_DOWN)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" in triggered
     assert len(notifier.sent) == 1
@@ -356,7 +405,10 @@ async def test_n18_crossing_axis_4_same_level_no_trigger() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 1.0, TrendIndexLevel.UP)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" not in triggered
 
@@ -370,7 +422,10 @@ async def test_n18_crossing_disabled_no_trigger() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.STRONG_UP)
     curr = _SnapshotInput(date(2026, 9, 21), 20.0, -5.0, TrendIndexLevel.STRONG_DOWN)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "level_crossing" not in triggered
     assert notifier.sent == []
@@ -385,7 +440,10 @@ async def test_n18_volatility_disabled_no_trigger() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)  # 大波动
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "volatility" not in triggered
 
@@ -399,7 +457,10 @@ async def test_n18_volatility_threshold_zero_always_trigger() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 0.5, TrendIndexLevel.UP)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     assert "volatility" in triggered
 
@@ -441,7 +502,11 @@ async def test_n18_t_plus_n_buy_hit() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 82.0, 1.0, TrendIndexLevel.UP, close_price=102.0)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        snapshots_repo=snap_repo,
+        notifiers=[notifier],
     )
     assert any(k.startswith("t_plus_n") for k in triggered)
     assert len(notifier.sent) == 1
@@ -460,7 +525,11 @@ async def test_n18_t_plus_n_buy_miss() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.5, 0.5, TrendIndexLevel.UP, close_price=100.5)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        snapshots_repo=snap_repo,
+        notifiers=[notifier],
     )
     assert not any(k.startswith("t_plus_n") for k in triggered)
 
@@ -476,7 +545,11 @@ async def test_n18_t_plus_n_neutral_past_no_trigger() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.SIDEWAYS)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP, close_price=110.0)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, snapshots_repo=snap_repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        snapshots_repo=snap_repo,
+        notifiers=[notifier],
     )
     assert not any(k.startswith("t_plus_n") for k in triggered)
 
@@ -490,7 +563,11 @@ async def test_n18_t_plus_n_no_snapshots_repo_silent() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 82.0, 1.0, TrendIndexLevel.UP, close_price=102.0)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, snapshots_repo=None, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        snapshots_repo=None,
+        notifiers=[notifier],
     )
     assert not any(k.startswith("t_plus_n") for k in triggered)
 
@@ -520,12 +597,17 @@ async def test_n18_window_rule_quiet_in_window_queues() -> None:
     notifier = _RecordingNotifier()
     dispatcher = AlertDispatcher()
     vol = VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=True)
-    win = WindowRule(kind="window", window=WindowSpec(mode="quiet", start="00:00", end="23:59"), enabled=True)
+    win = WindowRule(
+        kind="window", window=WindowSpec(mode="quiet", start="00:00", end="23:59"), enabled=True
+    )
     repo = _mock_repo(_rules_v2([vol, win]))
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     # 静默内:入队不推送
     assert "volatility" in triggered
@@ -539,12 +621,17 @@ async def test_n18_window_rule_active_outside_window_queues() -> None:
     dispatcher = AlertDispatcher()
     vol = VolatilityRule(kind="volatility", threshold_pct=1.0, enabled=True)
     # active mode,start=00:00 end=00:01 → 几乎所有时刻都在窗口外
-    win = WindowRule(kind="window", window=WindowSpec(mode="active", start="00:00", end="00:01"), enabled=True)
+    win = WindowRule(
+        kind="window", window=WindowSpec(mode="active", start="00:00", end="00:01"), enabled=True
+    )
     repo = _mock_repo(_rules_v2([vol, win]))
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 5.0, TrendIndexLevel.UP)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     # 窗口外:入队
     assert "volatility" in triggered
@@ -565,7 +652,10 @@ async def test_n18_multiple_rules_same_day_dedup_isolated() -> None:
     prev = _SnapshotInput(date(2026, 9, 20), 80.0, 1.0, TrendIndexLevel.UP)
     curr = _SnapshotInput(date(2026, 9, 21), 80.0, 3.0, TrendIndexLevel.UP)
     triggered = await dispatcher.evaluate_and_dispatch(
-        prev=prev, curr=curr, repo=repo, notifiers=[notifier],
+        prev=prev,
+        curr=curr,
+        repo=repo,
+        notifiers=[notifier],
     )
     # 3% >= 1.0 触发；3% < 5.0 不触发
     assert "volatility" in triggered

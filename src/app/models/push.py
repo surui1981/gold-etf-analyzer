@@ -36,6 +36,4 @@ class PushSubscription(Base):
         comment="410 Gone 时设此字段；查询时 WHERE archived_at IS NULL",
     )
 
-    __table_args__ = (
-        Index("ix_push_subscriptions_archived_at", "archived_at"),
-    )
+    __table_args__ = (Index("ix_push_subscriptions_archived_at", "archived_at"),)

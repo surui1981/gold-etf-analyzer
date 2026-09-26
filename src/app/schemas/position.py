@@ -16,8 +16,15 @@ class PositionCreate(BaseModel):
     """
 
     symbol: str = Field("518880", description="品种代码，默认 518880 华安黄金ETF")
-    quantity: float | None = Field(None, gt=0, le=1e9, description="买入数量（份），需大于 0；与 grams 二选一")
-    grams: float | None = Field(None, gt=0, le=1e6, description="买入克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）")
+    quantity: float | None = Field(
+        None, gt=0, le=1e9, description="买入数量（份），需大于 0；与 grams 二选一"
+    )
+    grams: float | None = Field(
+        None,
+        gt=0,
+        le=1e6,
+        description="买入克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）",
+    )
     price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
     fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
 
@@ -45,8 +52,12 @@ class TradeRequest(BaseModel):
     """
 
     side: str = Field(..., description="buy 加仓 / sell 减仓")
-    quantity: float | None = Field(None, gt=0, le=1e9, description="数量（份），需大于 0；与 grams 二选一")
-    grams: float | None = Field(None, gt=0, le=1e6, description="克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）")
+    quantity: float | None = Field(
+        None, gt=0, le=1e9, description="数量（份），需大于 0；与 grams 二选一"
+    )
+    grams: float | None = Field(
+        None, gt=0, le=1e6, description="克数（g），需大于 0；与 quantity 二选一（V0.70.0 P2 #8）"
+    )
     price: float = Field(..., gt=0, le=1e6, description="成交价（元/份），需大于 0")
     fee: float = Field(0, ge=0, le=1e6, description="手续费（元），需大于等于 0")
 

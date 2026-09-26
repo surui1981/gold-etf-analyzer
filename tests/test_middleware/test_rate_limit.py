@@ -114,4 +114,4 @@ async def test_options_bypasses_limit(app_limited: FastAPI) -> None:
         for _ in range(10):
             r = await client.options("/ping", headers={"X-Forwarded-For": "1.2.3.4"})
             assert r.status_code != 429  # 限速未拦截
-            assert r.status_code == 405   # FastAPI 不处理 OPTIONS（正常）
+            assert r.status_code == 405  # FastAPI 不处理 OPTIONS（正常）

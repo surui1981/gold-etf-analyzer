@@ -125,14 +125,22 @@ def test_weight_grid_reject_out_of_range() -> None:
 def test_backtest_request_rejects_grid_above_125() -> None:
     """网格组合 > 125 触发 ValueError（前端 UI 性能上限，5×5×5 是边界）。"""
     # 5×5×6 = 150 > 125 触发拒绝
-    big = WeightGrid(tech=[0.1, 0.2, 0.3, 0.4, 0.5], macro=[0.1, 0.2, 0.3, 0.4, 0.5], news=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
+    big = WeightGrid(
+        tech=[0.1, 0.2, 0.3, 0.4, 0.5],
+        macro=[0.1, 0.2, 0.3, 0.4, 0.5],
+        news=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+    )
     with pytest.raises(ValueError, match="超过 UI 性能上限"):
         BacktestRequestIn(days=90, target="etf", weight_grid=big)
 
 
 def test_backtest_request_accepts_125_grid() -> None:
     """网格组合 = 125（5×5×5 边界）合法不抛错。"""
-    grid = WeightGrid(tech=[0.1, 0.2, 0.3, 0.4, 0.5], macro=[0.1, 0.2, 0.3, 0.4, 0.5], news=[0.1, 0.2, 0.3, 0.4, 0.5])
+    grid = WeightGrid(
+        tech=[0.1, 0.2, 0.3, 0.4, 0.5],
+        macro=[0.1, 0.2, 0.3, 0.4, 0.5],
+        news=[0.1, 0.2, 0.3, 0.4, 0.5],
+    )
     req = BacktestRequestIn(days=90, target="etf", weight_grid=grid)
     assert req.weight_grid.tech == [0.1, 0.2, 0.3, 0.4, 0.5]
 

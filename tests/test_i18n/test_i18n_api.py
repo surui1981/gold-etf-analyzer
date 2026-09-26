@@ -3,6 +3,7 @@
 用 Node 22+ 内置 fs/eval 模拟 DOM，加载 static/i18n.js 和字典文件。
 本测试只覆盖**同步 API**：t/fmt；setLang/异步加载跳过（CI 单独验）。
 """
+
 from __future__ import annotations
 
 import json
@@ -17,6 +18,10 @@ NODE = "node"
 
 def _run_i18n_test(js_body: str) -> dict:
     """把 js_body 拼进 IIFE 包装，丢给 Node 执行，返回打印的 JSON。"""
+    # Windows 路径含反斜杠，若直接插进 JS 单引号字符串会被当成转义序列吞掉
+    # （`\U`、`\2`、`\g`… → 路径被破坏），故用 json.dumps 生成 JS 安全字面量。
+    # Linux / Docker 下路径本来就是正斜杠，因此该问题只在 Windows 上暴露。
+    static_js = json.dumps(str(STATIC))
     harness = textwrap.dedent(f"""
         // Mock DOM（最小化）—— body 是 HTMLElement 子类，需要有 querySelectorAll
         function makeMockEl() {{
@@ -63,13 +68,13 @@ def _run_i18n_test(js_body: str) -> dict:
           return eval('(' + match[1] + ')');
         }}
 
-        const zhCN = loadDict('{STATIC}/i18n/zh-CN.js');
-        const enUS = loadDict('{STATIC}/i18n/en-US.js');
+        const zhCN = loadDict({static_js} + '/i18n/zh-CN.js');
+        const enUS = loadDict({static_js} + '/i18n/en-US.js');
         window.PM_I18N_ZH_CN = zhCN;
         window.PM_I18N_en_US = enUS;
 
         // 加载 i18n.js
-        const i18nText = fs.readFileSync('{STATIC}/i18n.js', 'utf8');
+        const i18nText = fs.readFileSync({static_js} + '/i18n.js', 'utf8');
         eval(i18nText);
 
         {js_body}

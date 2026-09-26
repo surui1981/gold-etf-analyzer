@@ -8,6 +8,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.push import PushKeys, PushSubscriptionIn
 from app.services.push import PushService, generate_vapid_keys
@@ -28,7 +29,10 @@ def _mock_repo() -> MagicMock:
 def _sub_in(endpoint: str = "https://fcm.googleapis.com/fcm/send/abc123") -> PushSubscriptionIn:
     return PushSubscriptionIn(
         endpoint=endpoint,
-        keys=PushKeys(p256dh="BNcRdreALRFXTkOOUHK1EtK2wtz5B4PuJUXF4CkX66TYkQbbjBnuCbXn1TnsJwdcUM_6g8LQvb2KkS3exLyu1x8", auth="tBHItJI5svbpez7KI4CCXg"),
+        keys=PushKeys(
+            p256dh="BNcRdreALRFXTkOOUHK1EtK2wtz5B4PuJUXF4CkX66TYkQbbjBnuCbXn1TnsJwdcUM_6g8LQvb2KkS3exLyu1x8",
+            auth="tBHItJI5svbpez7KI4CCXg",
+        ),
         user_agent="Mozilla/5.0 (X11; Linux x86_64) test",
     )
 
@@ -137,7 +141,7 @@ async def test_deliver_handles_exceptions() -> None:
 
 def test_push_subscription_in_rejects_short_p256dh() -> None:
     """PushKeys.p256dh < 10 字符：ValidationError。"""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PushSubscriptionIn(
             endpoint="https://fcm.example/abc",
             keys=PushKeys(p256dh="short", auth="1234567890"),
@@ -146,7 +150,7 @@ def test_push_subscription_in_rejects_short_p256dh() -> None:
 
 def test_push_subscription_in_endpoint_required() -> None:
     """endpoint 缺失 → ValidationError。"""
-    with pytest.raises(Exception):
+    with pytest.raises(ValidationError):
         PushSubscriptionIn(
             endpoint="",
             keys=PushKeys(p256dh="BNcBnuDlXXXXXXXXXXXXXXXXXX", auth="tBHItJI5svbp"),

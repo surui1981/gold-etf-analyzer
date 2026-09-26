@@ -13,6 +13,7 @@ null (setting 'textContent')`）。
 - 多文本节点 → 第一个保留并替换，其余移除
 - [data-i18n-html] / [data-i18n-placeholder] / [data-i18n-title] / [data-i18n-aria] 不受影响
 """
+
 from __future__ import annotations
 
 import json
@@ -116,15 +117,15 @@ HARNESS = textwrap.dedent("""
     const fs = require('fs');
     function loadDict(file) {
       const t = fs.readFileSync(file, 'utf8');
-      const m = t.match(/window\\.PM_I18N_\\w+\\s*=\\s*({[\\s\\S]*?});?\s*$/);
+      const m = t.match(/window\\.PM_I18N_\\w+\\s*=\\s*({[\\s\\S]*?});?\\s*$/);
       if (!m) throw new Error('dict not found in ' + file);
       return eval('(' + m[1] + ')');
     }
-    window.PM_I18N_ZH_CN = loadDict('{STATIC}/i18n/zh-CN.js');
-    window.PM_I18N_en_US = loadDict('{STATIC}/i18n/en-US.js');
+    window.PM_I18N_ZH_CN = loadDict({STATIC} + '/i18n/zh-CN.js');
+    window.PM_I18N_en_US = loadDict({STATIC} + '/i18n/en-US.js');
 
     // 加载 i18n.js
-    eval(fs.readFileSync('{STATIC}/i18n.js', 'utf8'));
+    eval(fs.readFileSync({STATIC} + '/i18n.js', 'utf8'));
 
     {js_body}
 
@@ -133,8 +134,12 @@ HARNESS = textwrap.dedent("""
 
 
 def _run(js_body: str):
+    # Windows 路径含反斜杠，若直接插进 JS 单引号字符串会被当成转义序列吞掉
+    # （`\U`、`\2`、`\g`… → 路径被破坏），故用 json.dumps 生成 JS 安全字面量。
+    # Linux / Docker 下路径本来就是正斜杠，因此该问题只在 Windows 上暴露。
+    harness = HARNESS.replace("{js_body}", js_body).replace("{STATIC}", json.dumps(str(STATIC)))
     proc = subprocess.run(
-        [NODE, "-e", HARNESS.replace("{js_body}", js_body).replace("{STATIC}", str(STATIC))],
+        [NODE, "-e", harness],
         capture_output=True,
         text=True,
         timeout=20,
@@ -152,7 +157,8 @@ def _run(js_body: str):
 def test_apply_preserves_inline_child_with_text_node():
     """data-i18n 元素的 inline 子元素应被保留（修复 V0.73.0 PR-N+8 回归）。"""
     # 在 Node 中构造场景
-    out = _run(textwrap.dedent("""
+    out = _run(
+        textwrap.dedent("""
         const h1 = makeEl("h1");
         h1.attributes["data-i18n"] = "trend.h1";
         h1.dataset["i18n"] = "trend.h1";
@@ -175,7 +181,8 @@ def test_apply_preserves_inline_child_with_text_node():
           textNodeStillFirst: h1.childNodes[0] === t,
           childCount: h1.childNodes.length,
         };
-    """))
+    """)
+    )
     assert out["badgeStillExists"] is True, "inline <span id=badge> 被 apply() 误删"
     assert out["btnStillExists"] is True, "inline <button id=refreshBtn> 被 apply() 误删"
     assert "黄金价格投资辅助工具" in out["textNodeValue"], f"翻译未生效：{out['textNodeValue']!r}"
@@ -185,7 +192,8 @@ def test_apply_preserves_inline_child_with_text_node():
 
 def test_apply_with_only_inline_children_prepends_text():
     """data-i18n 元素只有 inline children（无文本节点）时，应前插新文本节点。"""
-    out = _run(textwrap.dedent("""
+    out = _run(
+        textwrap.dedent("""
         const p = makeEl("p");
         p.attributes["data-i18n"] = "trend.h1";
         p.dataset["i18n"] = "trend.h1";
@@ -201,7 +209,8 @@ def test_apply_with_only_inline_children_prepends_text():
           firstChildIsText: p.childNodes[0].nodeType === 3,
           firstChildValue: p.childNodes[0].nodeValue,
         };
-    """))
+    """)
+    )
     assert out["iconStillExists"] is True, "inline <i id=icon> 被误删"
     assert out["firstChildIsText"] is True, "未前插文本节点"
     assert "黄金价格投资辅助工具" in out["firstChildValue"]
@@ -209,7 +218,8 @@ def test_apply_with_only_inline_children_prepends_text():
 
 def test_apply_collapses_multiple_text_nodes():
     """data-i18n 元素有多个文本节点时，合并为第一个并替换，其余移除。"""
-    out = _run(textwrap.dedent("""
+    out = _run(
+        textwrap.dedent("""
         const div = makeEl("div");
         div.attributes["data-i18n"] = "trend.h1";
         div.dataset["i18n"] = "trend.h1";
@@ -229,7 +239,8 @@ def test_apply_collapses_multiple_text_nodes():
           t2Removed: div.childNodes.indexOf(t2) < 0,
           t3Removed: div.childNodes.indexOf(t3) < 0,
         };
-    """))
+    """)
+    )
     assert out["textNodeCount"] == 1, f"应只保留 1 个文本节点，实际 {out['textNodeCount']}"
     assert "黄金价格投资辅助工具" in out["firstValue"]
     assert out["t2Removed"] is True, "多余文本节点未移除"
@@ -238,7 +249,8 @@ def test_apply_collapses_multiple_text_nodes():
 
 def test_apply_plain_text_element_still_works():
     """data-i18n 元素纯文本（无子元素）应正常翻译。"""
-    out = _run(textwrap.dedent("""
+    out = _run(
+        textwrap.dedent("""
         const span = makeEl("span");
         span.attributes["data-i18n"] = "trend.h1";
         span.dataset["i18n"] = "trend.h1";
@@ -248,13 +260,15 @@ def test_apply_plain_text_element_still_works():
         window.I18n.apply(document.body);
 
         result = span.childNodes[0].nodeValue;
-    """))
+    """)
+    )
     assert "黄金价格投资辅助工具" in out
 
 
 def test_apply_attribute_keys_unaffected():
     """[data-i18n-placeholder] / [data-i18n-title] / [data-i18n-aria] 走 setAttribute，不影响 children。"""
-    out = _run(textwrap.dedent("""
+    out = _run(
+        textwrap.dedent("""
         const input = makeEl("input");
         input.attributes["data-i18n-placeholder"] = "common.search";
         input.dataset["i18nPlaceholder"] = "common.search";
@@ -268,7 +282,10 @@ def test_apply_attribute_keys_unaffected():
           placeholder: input.attributes["placeholder"] || null,
           childStillExists: input.children.indexOf(originalChild) >= 0,
         };
-    """))
+    """)
+    )
     # zh-CN dict has common.search
-    assert out["placeholder"] is not None and out["placeholder"] != "", f"placeholder={out['placeholder']!r}"
+    assert out["placeholder"] is not None and out["placeholder"] != "", (
+        f"placeholder={out['placeholder']!r}"
+    )
     assert out["childStillExists"] is True

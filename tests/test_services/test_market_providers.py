@@ -523,15 +523,21 @@ async def test_silver_gram_falls_back_when_etf_unavailable() -> None:
 
 
 async def test_mock_silver_history_ny_returns_dollar_prices() -> None:
-    """MockSilverHistoryProvider(symbol='SI') 返回 60 根 NY K 线（约 31.5 美元/盎司 起步）。"""
+    """MockSilverHistoryProvider(symbol='SI') 返回 NY K 线，价位锚定 ~64 美元/盎司。
+
+    V0.73.0 N+15 起 mock base 由 31.5 上调到 64.0（贴合 2026-09 现实银价），
+    本断言随之放宽为 55~75 区间——既验证是「美元/盎司」量级，又不会因常量
+    微调而脆断。
+    """
     from app.repositories.market_providers import MockSilverHistoryProvider
 
     provider = MockSilverHistoryProvider()
     klines = await provider.get_silver_history(symbol="SI", days=60)
     assert 40 <= len(klines) <= 60
     assert all(k.close > 0 for k in klines)
-    # NY 价位 ~31.5 美元
-    assert 28.0 <= klines[0].close <= 36.0
+    # NY 价位 ~64 美元/盎司（base=64.0，首根即 base）
+    for k in klines:
+        assert 55.0 <= k.close <= 75.0, f"NY 价位异常: {k.date} close={k.close}"
 
 
 async def test_silver_akshare_provider_is_real_implementation_v0_73_n17() -> None:
@@ -579,15 +585,26 @@ def test_build_provider_bundle_all_modes_have_silver_live() -> None:
     """V0.73.0 N+17：所有 7 种 MARKET_PROVIDER 模式都必须挂 silver_live。
 
     保证默认 ``akshare`` 模式即可拿到 Sina hf_SI 实时报价，不依赖 ``silver_yahoo``。
-    """
-    from app.repositories.market_providers import SilverLiveQuoteProvider
 
-    for mode in ["akshare", "mock", "eastmoney_only", "sina_only",
-                 "silver_mock", "silver_akshare", "silver_yahoo"]:
+    注：``SilverLiveQuoteProvider`` 是纯 typing ``Protocol``（未加 ``@runtime_checkable``），
+    对它做 ``isinstance`` 会抛 ``TypeError``，故改为结构化校验（须有可调用的
+    ``get_silver_spot``）。
+    """
+    for mode in [
+        "akshare",
+        "mock",
+        "eastmoney_only",
+        "sina_only",
+        "silver_mock",
+        "silver_akshare",
+        "silver_yahoo",
+    ]:
         settings = Settings(market_provider=mode)
         bundle = build_provider_bundle(settings)
         assert bundle.silver_live is not None, f"{mode} 缺 silver_live"
-        assert isinstance(bundle.silver_live, SilverLiveQuoteProvider)
+        assert callable(getattr(bundle.silver_live, "get_silver_spot", None)), (
+            f"{mode} 的 silver_live 缺 get_silver_spot 方法"
+        )
 
 
 def test_akshare_silver_live_parses_hf_si_response() -> None:
@@ -625,6 +642,7 @@ def test_akshare_silver_live_parses_hf_si_response() -> None:
     provider = AkshareSilverLiveProvider()
     # monkeypatch 通过闭包替换 urllib.request.urlopen
     import urllib.request
+
     orig = urllib.request.urlopen
     urllib.request.urlopen = _fake_urlopen  # type: ignore[assignment]
     try:
@@ -655,10 +673,11 @@ def test_akshare_silver_live_returns_none_on_garbage() -> None:
             return self._text.encode("utf-8")
 
     def _fake_urlopen(req, timeout=12):
-        return _FakeResp("var hq_str_hf_SI=\"invalid,no,quote,here\";")
+        return _FakeResp('var hq_str_hf_SI="invalid,no,quote,here";')
 
     provider = AkshareSilverLiveProvider()
     import urllib.request
+
     orig = urllib.request.urlopen
     urllib.request.urlopen = _fake_urlopen  # type: ignore[assignment]
     try:
@@ -668,30 +687,28 @@ def test_akshare_silver_live_returns_none_on_garbage() -> None:
     assert price is None
 
 
-async def test_silver_fallback_chain_sina_first_via_settings(monkeypatch) -> None:
+async def test_silver_fallback_chain_sina_first_via_settings() -> None:
     """V0.73.0 N+17：默认 silver_fallback_chain='sina_si,yahoo_spot' 优先 Sina。
 
     验证：sina_si 返回有效价格时直接返回，不再走 yahoo_spot。
+
+    注：``MarketDataRepository`` 在 ``__init__`` 内自建 bundle，**必须改 repo._bundle
+    上的 provider**；改外部临时 bundle 不生效，会真的联网取数（结果随行情漂移）。
     """
     from app.config import Settings
     from app.repositories.market_data import MarketDataRepository
 
-    captured = {"calls": []}
+    captured: dict[str, list[tuple[str, str]]] = {"calls": []}
 
     async def fake_sina_spot(symbol: str = "SI") -> float | None:
         captured["calls"].append(("sina", symbol))
         return 64.5
 
-    async def fake_yahoo_spot(symbol: str = "562800"):
-        captured["calls"].append(("yahoo", symbol))
-        raise AssertionError("sina 已成功，不应触发 yahoo")
-
     settings = Settings(quote_cache_ttl=0, silver_fallback_chain="sina_si,yahoo_spot")
-    bundle = build_provider_bundle(settings)
-    bundle.silver_live.get_silver_spot = fake_sina_spot  # type: ignore[assignment]
-
     repo = MarketDataRepository(settings=settings)
-    # 注：Monkeypatch 不便改 yahoo 私有方法；这里只验证 sina 返回路径
+    assert repo._bundle.silver_live is not None
+    repo._bundle.silver_live.get_silver_spot = fake_sina_spot  # type: ignore[method-assign]
+
     quote = await repo._fetch_silver_ny_by_token("sina_si", "SI")
     assert quote == pytest.approx(64.5, abs=0.001)
     assert captured["calls"] == [("sina", "SI")]
@@ -737,19 +754,23 @@ async def test_yahoo_silver_parses_chart_payload(monkeypatch: pytest.MonkeyPatch
 
     fake_payload = {
         "chart": {
-            "result": [{
-                "meta": {"symbol": "562800.SS", "currency": "CNY"},
-                "timestamp": [1700000000, 1700086400, 1700172800],
-                "indicators": {
-                    "quote": [{
-                        "open": [2.45, 2.46, 2.48],
-                        "high": [2.47, 2.49, 2.50],
-                        "low": [2.44, 2.45, 2.47],
-                        "close": [2.46, 2.48, 2.49],
-                        "volume": [1000.0, 1100.0, 1200.0],
-                    }],
-                },
-            }],
+            "result": [
+                {
+                    "meta": {"symbol": "562800.SS", "currency": "CNY"},
+                    "timestamp": [1700000000, 1700086400, 1700172800],
+                    "indicators": {
+                        "quote": [
+                            {
+                                "open": [2.45, 2.46, 2.48],
+                                "high": [2.47, 2.49, 2.50],
+                                "low": [2.44, 2.45, 2.47],
+                                "close": [2.46, 2.48, 2.49],
+                                "volume": [1000.0, 1100.0, 1200.0],
+                            }
+                        ],
+                    },
+                }
+            ],
             "error": None,
         },
     }
@@ -785,8 +806,16 @@ async def test_yahoo_silver_falls_back_on_http_error(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_yahoo_silver_falls_back_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """网络异常（DNS / 连接拒绝）→ 自动 fallback MockSilverHistoryProvider。"""
-    from app.repositories.market_providers import YahooSilverHistoryProvider
+    """网络异常（DNS / 连接拒绝）→ 自动 fallback MockSilverHistoryProvider。
+
+    断言方式：与 ``MockSilverHistoryProvider`` 的输出**逐根比对**，而不是硬编码
+    价位区间——这样 mock base 常量调整（N+15 已由 31.5 上调到 64.0）不会让测试
+    脆断，同时仍能证明「确实降级到了 mock」。
+    """
+    from app.repositories.market_providers import (
+        MockSilverHistoryProvider,
+        YahooSilverHistoryProvider,
+    )
 
     async def fake_fetch_network_error(self, yahoo_symbol, days):
         raise ConnectionError("DNS lookup failed")
@@ -794,9 +823,13 @@ async def test_yahoo_silver_falls_back_on_network_error(monkeypatch: pytest.Monk
     monkeypatch.setattr(YahooSilverHistoryProvider, "_fetch_yahoo", fake_fetch_network_error)
     provider = YahooSilverHistoryProvider()
     klines = await provider.get_silver_history(symbol="SI", days=60)
-    # SI 走 NY 路径，mock 返回 ~31.5 USD/oz
+
+    mock_klines = await MockSilverHistoryProvider().get_silver_history(symbol="SI", days=60)
     assert len(klines) > 0
-    assert 25 < klines[-1].close < 50  # 美元/盎司应在合理区间
+    assert [(k.date, k.close) for k in klines] == [(k.date, k.close) for k in mock_klines]
+    # 美元/盎司量级（mock base=64.0）
+    for k in klines:
+        assert 55.0 <= k.close <= 75.0
 
 
 @pytest.mark.asyncio
@@ -806,16 +839,32 @@ async def test_yahoo_silver_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> N
 
     call_count = {"n": 0}
     fake_payload = {
-        "chart": {"result": [{
-            "timestamp": [1700000000],
-            "indicators": {"quote": [{"close": [2.46], "open": [2.45], "high": [2.47], "low": [2.44], "volume": [100.0]}]},
-        }], "error": None},
+        "chart": {
+            "result": [
+                {
+                    "timestamp": [1700000000],
+                    "indicators": {
+                        "quote": [
+                            {
+                                "close": [2.46],
+                                "open": [2.45],
+                                "high": [2.47],
+                                "low": [2.44],
+                                "volume": [100.0],
+                            }
+                        ]
+                    },
+                }
+            ],
+            "error": None,
+        },
     }
 
     class FakeResp:
         def __init__(self, code, body):
             self.status_code = code
             self.text = ""
+
         def json(self):
             return fake_payload
 
@@ -826,13 +875,18 @@ async def test_yahoo_silver_retries_on_429(monkeypatch: pytest.MonkeyPatch) -> N
 
     # Patch httpx.AsyncClient.get 方法
     import httpx
+
     monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
     # 把 RETRY_ON_429 设为 2 让测试快一点
     monkeypatch.setattr(YahooSilverHistoryProvider, "RETRY_ON_429", 2)
     monkeypatch.setattr(YahooSilverHistoryProvider, "TIMEOUT_SECONDS", 1.0)
+
     # 跳过 sleep 加速
-    async def no_sleep(*a, **k): return None
+    async def no_sleep(*a, **k):
+        return None
+
     import asyncio as _asyncio
+
     monkeypatch.setattr(_asyncio, "sleep", no_sleep)
 
     provider = YahooSilverHistoryProvider()
@@ -883,13 +937,17 @@ async def test_yahoo_silver_spot_returns_latest_bar(monkeypatch: pytest.MonkeyPa
             "result": [
                 {
                     "timestamp": [yesterday_epoch, today_epoch],
-                    "indicators": {"quote": [{
-                        "open":  [31.5, 32.1],
-                        "high":  [31.7, 32.3],
-                        "low":   [31.4, 32.0],
-                        "close": [31.6, 32.2],
-                        "volume": [0.0, 100.0],
-                    }]},
+                    "indicators": {
+                        "quote": [
+                            {
+                                "open": [31.5, 32.1],
+                                "high": [31.7, 32.3],
+                                "low": [31.4, 32.0],
+                                "close": [31.6, 32.2],
+                                "volume": [0.0, 100.0],
+                            }
+                        ]
+                    },
                 }
             ],
             "error": None,
@@ -903,9 +961,15 @@ async def test_yahoo_silver_spot_returns_latest_bar(monkeypatch: pytest.MonkeyPa
             return payload
 
     class _FakeAsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
         async def get(self, url, params=None, headers=None):
             # 验证 range=2d（不是 60d）以确认是 spot 调用
             assert params.get("range") == "2d", f"spot 应使用 range=2d，实际 {params.get('range')}"
@@ -917,11 +981,14 @@ async def test_yahoo_silver_spot_returns_latest_bar(monkeypatch: pytest.MonkeyPa
     assert spot.close == 32.2, f"spot.close 应为最新 bar close (32.2)，实际 {spot.close}"
     # date 应为今天（datetime.fromtimestamp(today_epoch)）
     import datetime as _dt
+
     expected_date = _dt.datetime.fromtimestamp(today_epoch, tz=_dt.timezone.utc).date()
     assert spot.date == expected_date
 
 
-async def test_yahoo_silver_spot_returns_none_on_http_error(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_yahoo_silver_spot_returns_none_on_http_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """spot 在 HTTP 非 200 时返回 None（不抛异常）。"""
     from app.repositories.market_providers import YahooSilverHistoryProvider
 
@@ -931,9 +998,15 @@ async def test_yahoo_silver_spot_returns_none_on_http_error(monkeypatch: pytest.
         status_code = 429
 
     class _FakeAsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
         async def get(self, url, params=None, headers=None):
             return _FakeResp()
 
@@ -942,16 +1015,24 @@ async def test_yahoo_silver_spot_returns_none_on_http_error(monkeypatch: pytest.
     assert spot is None
 
 
-async def test_yahoo_silver_spot_returns_none_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_yahoo_silver_spot_returns_none_on_network_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """spot 在网络异常时返回 None（不抛异常）。"""
     from app.repositories.market_providers import YahooSilverHistoryProvider
 
     provider = YahooSilverHistoryProvider()
 
     class _FakeAsyncClient:
-        def __init__(self, *args, **kwargs): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): return False
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
         async def get(self, url, params=None, headers=None):
             raise ConnectionError("network down")
 
@@ -971,12 +1052,19 @@ async def test_try_silver_spot_uses_yahoo_when_available(monkeypatch: pytest.Mon
     repo = MarketDataRepository(bundle=bundle, settings=settings)
 
     from datetime import date as _date
+
     fake_spot = GoldKline(
-        date=_date(2026, 9, 24), open=2.65, close=2.68, high=2.70, low=2.63, volume=100.0,
+        date=_date(2026, 9, 24),
+        open=2.65,
+        close=2.68,
+        high=2.70,
+        low=2.63,
+        volume=100.0,
     )
 
     async def fake_spot_getter(symbol="562800"):
         return fake_spot
+
     monkeypatch.setattr(repo._bundle.silver_history, "get_silver_spot", fake_spot_getter)
 
     spot = await repo._try_silver_spot("562800")

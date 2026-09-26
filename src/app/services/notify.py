@@ -167,7 +167,7 @@ class WebPushNotifier:
         self._settings_repo = settings_repo
 
     async def send(self, *, subject: str, body: str, trace_id: str | None = None) -> bool:
-        from app.services.push import get_vapid_keys  # noqa: PLC0415
+        from app.services.push import get_vapid_keys
 
         try:
             vapid = await get_vapid_keys(self._settings_repo)
@@ -201,12 +201,17 @@ class WebPushNotifier:
         if sent > 0:
             logger.info(
                 "WebPush sent: sent=%d failed=%d subject=%s trace_id=%s",
-                sent, failed, subject, trace_id,
+                sent,
+                failed,
+                subject,
+                trace_id,
             )
             return True
         logger.warning(
             "WebPush delivered 0 (failed=%d) subject=%s trace_id=%s",
-            failed, subject, trace_id,
+            failed,
+            subject,
+            trace_id,
         )
         return False
 

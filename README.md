@@ -4,9 +4,9 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.73.0**（2026-09-22）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | 664 通过 / 0 失败（pytest 离线回归） |
-| **页面** | 10 个静态页 · 57 个 REST 端点 |
+| **当前版本** | **V0.74.0**（2026-09-26）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | 728 用例 / 684 通过 / 0 失败（pytest 离线回归，排除 2 个联网 fetcher 文件 44 用例） |
+| **页面** | 12 个静态页 · 61 个 REST 路径（70 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
 > 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
@@ -40,9 +40,10 @@
 - 📈 **共振信号卡** — 趋势页头部三色共振（宏观 × 技术 × 消息面），命中率高亮
 - 🌐 **三语切换** — 简体中文 / 繁體中文 / English，切换器在顶栏
 - 🔒 **数据本地化** — 持仓、账本、消息面打分、推送订阅全部 SQLite 本地存，**不上云**
-- 📲 **推送 + PWA + Web Push** — 主轴翻转 / 单日波动 ≥3% 自动告警，4 渠道：浏览器 / Web Push / 邮件 / 微信
+- 📲 **推送 + PWA + Web Push** — 4 类告警规则（指数跨档 / 单日波动 ≥X% / 自定义时段 / T+N 命中），4 渠道：浏览器 / Web Push / 邮件 / 微信
+- 🧩 **仪表盘自定义** — 持仓页 7 张卡片拖拽排序 + 键盘替代（Space 抓取 / ↑↓ 移动）+ 布局本地持久化 + 一键恢复默认
 
-## 10 个页面导览
+## 11 个页面导览（另含 `offline.html` PWA 离线兜底页，共 12 个静态页）
 
 | 页面 | URL | 一句话功能 | 适用场景 |
 |------|-----|-----------|---------|
@@ -55,6 +56,7 @@
 | **央行购金** | `/static/central-bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
 | **白银行情** | `/static/silver.html` | 白银 ETF / NY 银趋势 + 共振信号（V0.71.0 新） | 配套白银参考 |
 | **参数回测** | `/static/backtest.html` | 权重网格 × 阈值带扫描 + 夏普 / 回撤 / 校准 | 校准参数有效性 |
+| **数据健康** | `/static/data-health.html` | 各行情源实时性 / 覆盖率 / 降级状态一览（V0.73.0 N+16 新） | 排查取数异常 |
 | **设置 / 通知** | `/static/settings.html` | 管理员 Token + 告警规则 + SMTP/Server酱 + PWA + Web Push | 配置推送 + 升级管理 |
 
 ---
@@ -118,7 +120,7 @@
 - **3 语言**：简体中文（默认）/ 繁體中文 / English
 - **切换位置**：顶栏 `<select class="lang-sel">`
 - **持久化**：`localStorage.pm_lang`，刷新保留
-- **覆盖率**：zh-CN 639 key · en-US 640 key · **zh-TW 391 key（61.2%）**
+- **覆盖率**：zh-CN 699 key · en-US 700 key · **zh-TW 451 key（64.5%，阈值 60%）**
 - **格式化**：`Intl.NumberFormat` / `Intl.DateTimeFormat` locale-aware（货币、日期、相对时间）
 
 ## 隐私 & 安全
@@ -142,7 +144,7 @@
 | 缓存 | 服务端 served cache（`quote_cache_ttl`）· SW 双 cache（gold-shell / gold-runtime） |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（1.2GB → 280MB）+ docker-compose + Nginx + Certbot |
-| 测试 | pytest 664 · ruff · check_static_js.py（前端内联 JS 门禁） |
+| 测试 | pytest 728 · ruff · check_static_js.py（前端内联 JS 门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
 ## 快速开始
@@ -174,7 +176,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 664 用例（离线回归）
+python -m pytest -v                                      # 728 用例（离线回归 684 passed）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -186,6 +188,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
+| **V0.74.0** | 2026-09-26 | 仪表盘自定义（7 卡片拖拽排序 + 键盘替代 + localStorage 布局持久化 + 恢复默认）+ 告警规则 CRUD（discriminated union 重构 + UI 模态）+ Web Push 订阅闭环 + i18n 三语补齐；本次一并修复 CI 门禁（ruff lint / format 长期未通过）与版本号单源化 |
 | **V0.73.0** | 2026-09-22 | i18n 三语（zh-CN 626 + zh-TW 391 + en-US 627 key）+ locale 格式化 + 后端国家名解耦 + **Yahoo Silver provider + 自动降级 mock** + i18n.apply() inline 子节点保留修复（目标分 91.0 → 91.5） |
 | V0.72.0 | 2026-09 | 推送 + PWA + Web Push + 公开部署（90.5 → 91.0） |
 | V0.71.0 | 2026-08 | 白银 + 参数回测全链路（90 → 90.5） |

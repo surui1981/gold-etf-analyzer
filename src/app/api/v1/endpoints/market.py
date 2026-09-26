@@ -351,12 +351,16 @@ async def silver_compare(
     ]
 
     etf_series = _silver_series_metrics(
-        "562800", "白银ETF易方达", etf_closes,
+        "562800",
+        "白银ETF易方达",
+        etf_closes,
         [etf_map[d].high for d in common_dates],
         [etf_map[d].low for d in common_dates],
     )
     ny_series = _silver_series_metrics(
-        "SI", "纽约白银COMEX", ny_closes,
+        "SI",
+        "纽约白银COMEX",
+        ny_closes,
         [ny_map[d].high for d in common_dates],
         [ny_map[d].low for d in common_dates],
     )

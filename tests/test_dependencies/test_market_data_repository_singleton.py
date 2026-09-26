@@ -10,6 +10,7 @@
 改用 ``functools.lru_cache`` 进程级单例（保持外层 ``get_market_data_repository``
 以便 ``app.dependency_overrides`` 仍能整体替换）。
 """
+
 from __future__ import annotations
 
 
@@ -19,9 +20,7 @@ def test_get_market_data_repository_is_singleton() -> None:
 
     repo_a = get_market_data_repository()
     repo_b = get_market_data_repository()
-    assert repo_a is repo_b, (
-        "get_market_data_repository 必须返回同一实例，否则 _sources 状态被丢弃"
-    )
+    assert repo_a is repo_b, "get_market_data_repository 必须返回同一实例，否则 _sources 状态被丢弃"
 
 
 def test_singleton_preserves_sources_across_calls() -> None:
@@ -42,13 +41,13 @@ def test_singleton_preserves_sources_across_calls() -> None:
 
 
 def test_singleton_independent_from_dependency_overrides() -> None:
-    """测试可独立覆盖（不影响其他用例）。"""
+    """测试可通过 app.dependency_overrides 整体替换（不影响单例本身）。
+
+    此处只断言单例返回的是真实仓储实例；替换能力由 FastAPI 依赖覆盖机制保证
+    （``app.dependency_overrides[get_market_data_repository]``）。
+    """
     from app.dependencies import get_market_data_repository
     from app.repositories.market_data import MarketDataRepository
 
-    class FakeRepo:
-        _sources: dict = {}
-
-    # 调用一次确认不抛错（真实场景下测试用 app.dependency_overrides 替换）
     repo = get_market_data_repository()
     assert isinstance(repo, MarketDataRepository)

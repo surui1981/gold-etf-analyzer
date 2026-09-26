@@ -83,12 +83,7 @@ def compute_resonance(
         stdev = ((tech - avg) ** 2 + (macro - avg) ** 2 + (news - avg) ** 2) ** 0.5
         confidence = _clip(avg * (1 - stdev / 55))
         signal = "strong_down"
-    elif (
-        (tech >= _THRESH_UP)
-        + (macro >= _THRESH_UP)
-        + (news >= _THRESH_UP)
-        >= 2
-    ):
+    elif (tech >= _THRESH_UP) + (macro >= _THRESH_UP) + (news >= _THRESH_UP) >= 2:
         confidence = 65.0
         signal = "weak_up"
     elif (
@@ -250,13 +245,10 @@ class ResonanceService:
 
         hit_rate = round(hits / resolved * 100, 1) if resolved else None
         sample_warning = resolved < _MIN_SAMPLES
-        note = (
-            f"样本 {resolved} 天（STRONG_UP 信号 {len(strong_up_dates)} 天），"
-            + (
-                f"低于 {_MIN_SAMPLES} 天时统计波动较大，仅供参考"
-                if sample_warning
-                else f"T+{horizon} 命中率 {hit_rate}%"
-            )
+        note = f"样本 {resolved} 天（STRONG_UP 信号 {len(strong_up_dates)} 天），" + (
+            f"低于 {_MIN_SAMPLES} 天时统计波动较大，仅供参考"
+            if sample_warning
+            else f"T+{horizon} 命中率 {hit_rate}%"
         )
 
         return StrengthUpStatsOut(

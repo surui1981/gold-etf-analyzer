@@ -1,6 +1,8 @@
 [project]
 name = "gold-etf-analyzer"
-version = "0.72.0"
+# 版本号须与 src/app/__init__.py 的 __version__ 一致（运行时读那里）；
+# 发版改版本后必须跑一次 `uv lock`，否则 CI 的 `uv sync --frozen` 会因 lock 过期失败。
+version = "0.74.0"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.11"

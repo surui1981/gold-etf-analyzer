@@ -343,9 +343,7 @@ class PositionService:
         """ORM → 输出模型，并补充实时估值。"""
         out = PositionOut.model_validate(position)
         # grams_held 在 Numeric 列上会被 Pydantic 序列化为 float；保持兼容
-        out.grams_held = (
-            float(position.grams_held) if position.grams_held is not None else None
-        )
+        out.grams_held = float(position.grams_held) if position.grams_held is not None else None
         market_price = await self._current_price()
         out.market_price = market_price
         out.market_value = round(position.quantity * market_price, 2)

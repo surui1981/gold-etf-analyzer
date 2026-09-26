@@ -14,7 +14,7 @@ V0.74.0 升级为 ``rules: list[RuleSpec]`` + 4 种 kind：
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -49,17 +49,22 @@ class WindowSpec(BaseModel):
     """
 
     mode: Literal["quiet", "active"] = Field(
-        "quiet", description="quiet=静默 / active=仅窗口内才推送",
+        "quiet",
+        description="quiet=静默 / active=仅窗口内才推送",
     )
     start: str = Field(
-        "22:00", description="窗口起始 HH:MM BJT", pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
+        "22:00",
+        description="窗口起始 HH:MM BJT",
+        pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
     )
     end: str = Field(
-        "07:00", description="窗口结束 HH:MM BJT（跨夜:start > end）",
+        "07:00",
+        description="窗口结束 HH:MM BJT（跨夜:start > end）",
         pattern=r"^([01]\d|2[0-3]):[0-5]\d$",
     )
     weekdays: list[int] | None = Field(
-        None, description="0=周一 ... 6=周日;None=每天;列表内才生效",
+        None,
+        description="0=周一 ... 6=周日;None=每天;列表内才生效",
     )
 
 
@@ -107,7 +112,7 @@ class TPlusNRule(_Base):
 
 
 RuleSpec = Annotated[
-    Union[VolatilityRule, CrossingRule, WindowRule, TPlusNRule],
+    VolatilityRule | CrossingRule | WindowRule | TPlusNRule,
     Field(discriminator="kind"),
 ]
 
@@ -122,14 +127,16 @@ class AlertRuleIn(BaseModel):
     )
     # 旧字段保留（向后兼容 PUT；model_validator 自动迁移到 rules）
     level_crossing_enabled: bool | None = Field(
-        None, description="V0.72.0 旧字段;None 表示未传",
+        None,
+        description="V0.72.0 旧字段;None 表示未传",
     )
     volatility_enabled: bool | None = Field(None, description="V0.72.0 旧字段")
     volatility_pct: float | None = Field(None, ge=0.1, le=20.0, description="V0.72.0 旧字段")
     quiet_hours: QuietHours | None = Field(None, description="V0.72.0 旧字段")
     # 共用
     channels: list[NotifyChannel] = Field(
-        default_factory=lambda: ["browser"], description="推送渠道",
+        default_factory=lambda: ["browser"],
+        description="推送渠道",
     )
 
     @field_validator("channels")
@@ -160,7 +167,12 @@ class AlertRuleIn(BaseModel):
         if not isinstance(data, dict):
             return data
         has_new = "rules" in data and data["rules"] is not None
-        legacy_keys = {"level_crossing_enabled", "volatility_enabled", "volatility_pct", "quiet_hours"}
+        legacy_keys = {
+            "level_crossing_enabled",
+            "volatility_enabled",
+            "volatility_pct",
+            "quiet_hours",
+        }
         has_legacy = any(data.get(k) is not None for k in legacy_keys)
         if has_new or not has_legacy:
             return data  # 新格式或不需迁移,直通
@@ -168,21 +180,25 @@ class AlertRuleIn(BaseModel):
         if data.get("level_crossing_enabled"):
             migrated.append({"kind": "crossing", "axis_levels": 2, "enabled": True})
         if data.get("volatility_enabled"):
-            migrated.append({
-                "kind": "volatility",
-                "threshold_pct": data.get("volatility_pct") or 3.0,
-                "enabled": True,
-            })
+            migrated.append(
+                {
+                    "kind": "volatility",
+                    "threshold_pct": data.get("volatility_pct") or 3.0,
+                    "enabled": True,
+                }
+            )
         qh = data.get("quiet_hours")
         if qh:
             # qh 可能是 dict(PUT 直传)或 QuietHours model(从 DB 回放);都安全取字段
             qh_start = qh["start"] if isinstance(qh, dict) else getattr(qh, "start", "22:00")
             qh_end = qh["end"] if isinstance(qh, dict) else getattr(qh, "end", "07:00")
-            migrated.append({
-                "kind": "window",
-                "window": {"mode": "quiet", "start": qh_start, "end": qh_end},
-                "enabled": True,
-            })
+            migrated.append(
+                {
+                    "kind": "window",
+                    "window": {"mode": "quiet", "start": qh_start, "end": qh_end},
+                    "enabled": True,
+                }
+            )
         data["rules"] = migrated
         return data
 
@@ -207,13 +223,22 @@ class AlertEventIn(BaseModel):
     subject: str = Field(..., min_length=1, max_length=200, description="告警标题")
     body: str = Field("", description="告警正文（可空）")
     channels: list[NotifyChannel] | None = Field(
-        None, description="覆盖默认 channels；为空则用 AlertRule.channels",
+        None,
+        description="覆盖默认 channels；为空则用 AlertRule.channels",
     )
 
 
 __all__ = [
-    "AlertRuleIn", "AlertRuleOut", "AlertTestResult", "AlertEventIn",
-    "QuietHours", "WindowSpec",
-    "RuleKind", "RuleSpec",
-    "VolatilityRule", "CrossingRule", "WindowRule", "TPlusNRule",
+    "AlertEventIn",
+    "AlertRuleIn",
+    "AlertRuleOut",
+    "AlertTestResult",
+    "CrossingRule",
+    "QuietHours",
+    "RuleKind",
+    "RuleSpec",
+    "TPlusNRule",
+    "VolatilityRule",
+    "WindowRule",
+    "WindowSpec",
 ]

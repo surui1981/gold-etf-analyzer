@@ -88,9 +88,7 @@ class BacktestRequestIn(BaseModel):
         """网格组合数 = tech×macro×news；超过 125 警告并截断（前端 UI 性能边界）。"""
         n = len(self.weight_grid.tech) * len(self.weight_grid.macro) * len(self.weight_grid.news)
         if n > 125:
-            raise ValueError(
-                f"权重网格组合 {n} 超过 UI 性能上限 125（5×5×5），请缩减候选数"
-            )
+            raise ValueError(f"权重网格组合 {n} 超过 UI 性能上限 125（5×5×5），请缩减候选数")
         return self
 
 

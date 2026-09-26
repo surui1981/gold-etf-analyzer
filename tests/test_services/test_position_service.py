@@ -146,9 +146,7 @@ async def test_add_trade_grams_increments(db_session: AsyncSession) -> None:
     service = _service(db_session)
     opened = await service.open(PositionCreate(symbol="518880", grams=1000.0, price=10.0))
 
-    out = await service.add_trade(
-        opened.id, TradeRequest(side="buy", grams=500.0, price=10.5)
-    )
+    out = await service.add_trade(opened.id, TradeRequest(side="buy", grams=500.0, price=10.5))
     # shares_from_grams 用当前市场价（FakeMarket ETF=10.0）折算：
     # 500 × 990.5 / 10.0 = 49525 → floor → 495 手 = 49500 份
     assert out.quantity == 99000 + 49500
@@ -160,9 +158,7 @@ async def test_add_trade_sell_grams_decrements(db_session: AsyncSession) -> None
     service = _service(db_session)
     opened = await service.open(PositionCreate(symbol="518880", grams=1000.0, price=10.0))
 
-    out = await service.add_trade(
-        opened.id, TradeRequest(side="sell", grams=300.0, price=10.5)
-    )
+    out = await service.add_trade(opened.id, TradeRequest(side="sell", grams=300.0, price=10.5))
     assert out.grams_held == pytest.approx(700.0, abs=0.001)
     # 300 × 990.5 / 10.0 = 29715 → floor → 297 手 = 29700 份
     assert out.quantity == 99000 - 29700
@@ -174,18 +170,14 @@ async def test_add_trade_sell_more_grams_than_held_rejected(db_session: AsyncSes
     opened = await service.open(PositionCreate(symbol="518880", grams=1000.0, price=10.0))
 
     with pytest.raises(ValueError, match="克数"):
-        await service.add_trade(
-            opened.id, TradeRequest(side="sell", grams=2000.0, price=10.0)
-        )
+        await service.add_trade(opened.id, TradeRequest(side="sell", grams=2000.0, price=10.0))
 
 
 async def test_open_quantity_xor_grams_both_rejected(db_session: AsyncSession) -> None:
     """quantity 与 grams 同时传入 → ValueError。"""
     service = _service(db_session)
     with pytest.raises(ValueError, match="二选一"):
-        await service.open(
-            PositionCreate(symbol="518880", quantity=100, grams=100.0, price=10.0)
-        )
+        await service.open(PositionCreate(symbol="518880", quantity=100, grams=100.0, price=10.0))
 
 
 async def test_open_neither_rejected(db_session: AsyncSession) -> None:
@@ -216,6 +208,7 @@ async def test_zero_gram_price_blocks_conversion(db_session: AsyncSession) -> No
 
 async def test_zero_etf_price_blocks_conversion(db_session: AsyncSession) -> None:
     """ETF 价为 0（数据源异常）→ ValueError。"""
+
     class ZeroEtf(FakeMarket):
         async def get_gold_etf_quote(self, symbol: str = "518880"):
             return type(

@@ -28,9 +28,7 @@ class ResonanceSignalOut(BaseModel):
         default_factory=dict,
         description="三维度分值 components: tech / macro / news",
     )
-    direction_summary: str = Field(
-        ..., description="三维度方向的中文一句话总结（红绿着色用）"
-    )
+    direction_summary: str = Field(..., description="三维度方向的中文一句话总结（红绿着色用）")
 
 
 class ResonanceHistoryOut(BaseModel):

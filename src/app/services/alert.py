@@ -186,7 +186,8 @@ class AlertDispatcher:
             notifiers = NotifierFactory.create_all(rules.channels)
             # 尝试注入 webpush(若全局 _push_service 已设置)
             try:
-                from app.services.push import get_push_service_singleton  # noqa: PLC0415
+                from app.services.push import get_push_service_singleton
+
                 ps = get_push_service_singleton()
                 if ps is not None:
                     webpush_n = _build_webpush_notifier(ps)
@@ -203,7 +204,11 @@ class AlertDispatcher:
 
         for h in subjects:
             await self._fan_out(
-                notifiers, subject=h.subject, body=h.body, key=h.key, trace_id=trace_id,
+                notifiers,
+                subject=h.subject,
+                body=h.body,
+                key=h.key,
+                trace_id=trace_id,
             )
         return triggered
 
@@ -246,7 +251,9 @@ class AlertDispatcher:
 
     @staticmethod
     def _eval_crossing(
-        rule: CrossingRule, prev: _SnapshotInput | None, curr: _SnapshotInput,
+        rule: CrossingRule,
+        prev: _SnapshotInput | None,
+        curr: _SnapshotInput,
     ) -> _Triggered | None:
         """指数跨档(axis_levels=2 主轴 / 4 细粒度)。"""
         if prev is None:
@@ -288,7 +295,9 @@ class AlertDispatcher:
 
     @staticmethod
     async def _eval_t_plus_n(
-        rule: TPlusNRule, curr: _SnapshotInput, snapshots_repo: Any | None,
+        rule: TPlusNRule,
+        curr: _SnapshotInput,
+        snapshots_repo: Any | None,
     ) -> _Triggered | None:
         """T+N 命中：N 天前的非 neutral 信号 → 当前累积涨跌达预测方向 + 阈值。"""
         if snapshots_repo is None:
@@ -326,7 +335,8 @@ class AlertDispatcher:
             )
             return _Triggered(
                 key=f"t_plus_n:{rule.t_plus_n_days}:{rule.t_plus_n_pct}",
-                subject=subject, body=body,
+                subject=subject,
+                body=body,
             )
         if is_sell and change_pct <= -rule.t_plus_n_pct:
             subject = f"卖出信号 T+{rule.t_plus_n_days} 命中 ({change_pct:.2f}%)"
@@ -340,7 +350,8 @@ class AlertDispatcher:
             )
             return _Triggered(
                 key=f"t_plus_n:{rule.t_plus_n_days}:{rule.t_plus_n_pct}",
-                subject=subject, body=body,
+                subject=subject,
+                body=body,
             )
         return None
 
@@ -368,7 +379,10 @@ class AlertDispatcher:
         return False
 
     async def flush_quiet_queue(
-        self, repo: Any, notifiers: list[Notifier] | None = None, trace_id: str | None = None,
+        self,
+        repo: Any,
+        notifiers: list[Notifier] | None = None,
+        trace_id: str | None = None,
     ) -> int:
         """醒后(如 09:30 BJT)调用：一次性推送静默队列累积的告警。"""
         if not self._quiet_queue:
@@ -383,7 +397,11 @@ class AlertDispatcher:
         subject = f"黄金 ETF · 静默时段告警汇总（{n} 条）"
         body = "\n\n".join(f"[{k}] {s}\n{b}" for k, s, b in self._quiet_queue)
         sent = await self._fan_out(
-            notifiers, subject=subject, body=body, key="quiet_summary", trace_id=trace_id,
+            notifiers,
+            subject=subject,
+            body=body,
+            key="quiet_summary",
+            trace_id=trace_id,
         )
         if sent > 0:
             self._quiet_queue.clear()
@@ -391,7 +409,12 @@ class AlertDispatcher:
 
     @staticmethod
     async def _fan_out(
-        notifiers: list[Notifier], *, subject: str, body: str, key: str, trace_id: str | None = None,
+        notifiers: list[Notifier],
+        *,
+        subject: str,
+        body: str,
+        key: str,
+        trace_id: str | None = None,
     ) -> int:
         results = await asyncio.gather(
             *(send_with_retry(n, subject=subject, body=body, trace_id=trace_id) for n in notifiers),
@@ -405,7 +428,9 @@ class AlertDispatcher:
             else:
                 logger.warning(
                     "Alert dispatch failed: key=%s channel=%s result=%s",
-                    key, n.channel, r if isinstance(r, Exception) else "False",
+                    key,
+                    n.channel,
+                    r if isinstance(r, Exception) else "False",
                 )
         return ok
 
@@ -438,9 +463,7 @@ def _is_main_axis_crossing(prev: TrendIndexLevel, curr: TrendIndexLevel) -> bool
 def _is_four_level_crossing(prev: TrendIndexLevel, curr: TrendIndexLevel) -> bool:
     """V0.74.0 N+18 细粒度:任意不同档位即触发(STRONG_UP↔UP 也算)。
     与主轴的区别是不忽略 SIDEWAYS 抖动;但相同档位不触发。"""
-    if prev == curr:
-        return False
-    return True
+    return prev != curr
 
 
 def _level_label_zh(level: TrendIndexLevel) -> str:
@@ -483,7 +506,8 @@ _BJT_TZ = _FixedOffsetTZ(8)
 
 def _build_webpush_notifier(push_service: Any) -> Notifier | None:
     """V0.74.0 N+18 · 构造 WebPushNotifier 包装(PushService 注入)。"""
-    from app.services.notify import WebPushNotifier  # noqa: PLC0415
+    from app.services.notify import WebPushNotifier
+
     return WebPushNotifier(push_service)
 
 

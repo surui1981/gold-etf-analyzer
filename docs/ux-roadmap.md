@@ -148,6 +148,8 @@
 
 ### V0.74.0 · 仪表盘自定义 + 通知偏好
 
+> 🟡 **部分落地（2026-09-26）**：① 卡片拖拽排序 ✅（N+17，`static/dashboard.js`）② 提醒规则面板 ✅（N+18，`settings.html` `#ruleModal` 四种 kind）③ 打印友好 CSS + 一键 PDF 导出 ⏳ **未落地**（仅 `portfolio.html` 有 `@media print` 隐藏拖拽控制条，无 `window.print()` 入口、无 `pdf_export_click` 埋点）—— 因此 M7 验收项「PDF 导出 ≤ 2 页」尚未满足。
+
 - **目标**：个性化首页；通知降噪；月度报告。
 - **关键能力**：
   1. 卡片拖拽排序（纯原生 `dragstart / dragover / drop`，无需 react-dnd）

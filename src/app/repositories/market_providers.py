@@ -964,7 +964,9 @@ class YahooSilverHistoryProvider:
                     high=highs[i] if i < len(highs) and highs[i] is not None else close,
                     low=lows[i] if i < len(lows) and lows[i] is not None else close,
                     close=float(close),
-                    volume=float(volumes[i]) if i < len(volumes) and volumes[i] is not None else 0.0,
+                    volume=float(volumes[i])
+                    if i < len(volumes) and volumes[i] is not None
+                    else 0.0,
                 )
             )
         # 升序（旧→新），截取最后 days 天
@@ -1015,12 +1017,14 @@ class YahooSilverHistoryProvider:
                 return data
             # Yahoo 返回空（罕见）→ 仍降级
             logger.warning(
-                "Yahoo Silver %s 返回空数据，降级到 mock", yahoo_symbol,
+                "Yahoo Silver %s 返回空数据，降级到 mock",
+                yahoo_symbol,
             )
         except Exception as exc:
             logger.warning(
                 "Yahoo Silver %s 拉取失败（%s），降级到 mock",
-                yahoo_symbol, type(exc).__name__,
+                yahoo_symbol,
+                type(exc).__name__,
             )
         # 自动 fallback 到 mock（设计目标：有数据 > 没数据）
         # V0.73.0 N+15：同时设 ``_last_was_fallback=True``，让仓储层知道这是 mock。

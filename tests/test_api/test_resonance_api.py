@@ -118,7 +118,8 @@ async def test_history_empty_when_no_records(client: AsyncClient) -> None:
         async def list_between(self, start: date, end: date) -> list[NewsScore]:
             return []
 
-    saved = app.dependency_overrides.get(get_resonance_service)
+    # 本测试临时替换 resonance service；autouse fixture 的 teardown 会
+    # app.dependency_overrides.clear()，因此无需在此手动保存/恢复原值。
     app.dependency_overrides[get_resonance_service] = lambda: ResonanceService(
         trend=app.dependency_overrides[get_trend_service](),
         news=EmptyNews(),  # type: ignore[arg-type]

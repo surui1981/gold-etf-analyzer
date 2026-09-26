@@ -905,9 +905,7 @@ class MarketDataRepository:
         if token == "history":
             # 直接从 silver_history 拿最后一根（不走缓存层，避免递归）
             try:
-                klines = await self._bundle.silver_history.get_silver_history(
-                    symbol=symbol, days=3
-                )
+                klines = await self._bundle.silver_history.get_silver_history(symbol=symbol, days=3)
                 if klines:
                     return float(klines[-1].close)
             except Exception as exc:
