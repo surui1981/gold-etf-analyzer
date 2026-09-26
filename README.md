@@ -11,7 +11,7 @@
 
 > 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
 > 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
-> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.74.0 → V0.75.0）
+> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.74.0 → V0.77.0）
 > ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
 > 🚀 [docs/deployment.md](docs/deployment.md) · 公开部署 runbook（Nginx + HTTPS + Docker）
 
@@ -207,11 +207,63 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 完整 release notes 见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases)。
 
+---
+
+## 功能拓展路径（V0.74.0 → V0.77.0）
+
+> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🚧 进行中**（分支在跑，部分子项已合）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md) 同步维护；冲突时以路线图为准。
+
+### V0.74.0 · 仪表盘自定义 + 通知偏好（**✅ 已落地**，N+11~N+18）
+
+| 子项 | 状态 | 落地位置 |
+|------|------|----------|
+| **告警规则 CRUD** · discriminated union 重构（`ThresholdRule` / `BandCrossRule` / `WindowRule` / `CustomRule`）+ UI 模态 + i18n 三语 | ✅ 已落地 | `src/app/schemas/alert.py` · `src/app/services/alert.py` · `/static/settings.html` |
+| **portfolio 仪表盘自定义** · 7 张卡片拖拽排序（纯原生 HTML5 drag/drop + Space/↑↓ 键盘替代）+ 布局持久化到 `localStorage.pm_dash_layout` + 一键恢复默认 | ✅ 已落地 | `static/portfolio.html` · `static/dashboard.js` |
+| **数据健康独立页** · 各行情源实时性 / 覆盖率 / 降级状态一览 + trend 页三清理 + 全站 nav 接入 | ✅ 已落地 | `/static/data-health.html` |
+| **CI 门禁 + 版本号单源化** · ruff lint 0 / format 174 files / `src/app/__init__.py` 作版本号唯一真源（根治 V0.63/V0.65/V0.73/V0.74 连续四次漏改） | ✅ 已落地 | `.github/workflows/ci.yml` · `src/app/__init__.py` |
+
+### V0.75.0 · 多用户登录 + 数据隔离（**📋 规划中**）
+
+| 子项 | 预期产出 |
+|------|----------|
+| **认证体系** | bcrypt cost=12 + session cookie（`HttpOnly` + `SameSite=Strict` + `Secure`）+ CSRF token；`AUTH_ENABLED` 兼容开关，默认 `false` 维持单用户体验零回归 |
+| **数据隔离** | 所有业务表（positions / news_scores / alert_rules / portfolios / snapshot_overrides）加 `user_id` 外键；A 用户看不到 B 用户数据；单租户 → 多租户透明迁移 |
+| **登录入口** | `/login` + `/register` + 找回密码（邮件 token，30 分钟过期） |
+| **审计日志** | `audit_log` 表记录登录 / 写操作 / 跨用户访问尝试，admin 后台可查 |
+| **风险** | 🟡 中（数据迁移需脚本兼容单租户 → 多租户；密码重置邮件需要 SMTP 联动） |
+
+### V0.76.0 · 数据导入 / 导出闭环（**📋 规划中**）
+
+| 子项 | 预期产出 |
+|------|----------|
+| **券商对账单 CSV 导入** | 字段映射向导（成交日期 / 标的代码 / 方向 / 数量 / 价额 / 手续费）；dry-run 预览 + 二次确认；映射模板可保存复用 |
+| **月度报告 PDF 导出** | 复用 V0.74.0 的打印 CSS；封面 + 收益曲线 + 业绩归因 + 命中校准 + 关键事件流（自动生成，非手写） |
+| **Excel 多 sheet 导出** | 交易明细 / 持仓快照 / 评估历史 / 央行购金 4 张 sheet，列冻结 + 自适应列宽 |
+| **备份恢复 GUI** | 当前是 `backup-cron` + 手动 scp；V0.76 提供一键导出 sqlite + 上传恢复（保留 `.env` 模板） |
+
+### V0.77.0 · 多标的扩展 + AI 解读（**📋 规划中**）
+
+| 子项 | 预期产出 |
+|------|----------|
+| **铂金 / 钯金 / 原油 ETF** | 沿用白银先例（`static/silver.html` + `silver_yahoo` provider）：新增 `static/platinum.html` / `static/palladium.html` / `static/oil.html`；宏观因子权重可按标的独立配置（黄金重 DXY，原油重 OPEC + 库存） |
+| **跨品种共振** | 在趋势页头部增加「黄金 × 白银 × 铂金 × 原油」四标联动卡：当 ≥3 标的同向时点亮强信号，便于判断贵金属周期阶段 |
+| **AI 消息面解读**（可选） | 用户提交新闻 URL / 摘要 → 调用 LLM（OpenAI-compatible，含本地 Ollama）生成 0-100 分 + 依据标签 + 风险点；与现有 `news_scores` 槽位并列存储，人工可覆盖 |
+| **本地 LLM 优先** | 默认走 `OLLAMA_BASE_URL`（无外网依赖），回退 `OPENAI_API_KEY`；隐私口径与项目「数据本地化」原则一致 |
+
+### 横向可持续主题（持续滚动）
+
+- **i18n 完成度** — zh-TW 当前 64.5%，目标 100%（V0.75.0 同步）
+- **测试覆盖率** — 当前 728 用例 / 684 离线通过（排除 44 个联网 fetcher），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）
+- **无障碍** — axe-core 0 critical 守住；拖拽 / 模态需要键盘可操作版本
+- **数据守门** — `trace_id` 全链路追踪 + schema 校验新增 / 行情源扩展时同步加上
+
+---
+
 ## 文档
 
 - 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
 - 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
-- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（V0.74.0 → V0.75.0：导航 / 主题 / a11y / i18n / 自定义 / 多用户）
+- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（V0.74.0 → V0.77.0：自定义 / 多用户 / 数据导入导出 / 多标的 / AI 解读）
 - ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
 - 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
 
