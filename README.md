@@ -143,7 +143,7 @@
 | 样式 | 原生 CSS 变量（4 主题：light / dark / auto / high-contrast） |
 | 缓存 | 服务端 served cache（`quote_cache_ttl`）· SW 双 cache（gold-shell / gold-runtime） |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
-| 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（CI 镜像构建从未执行过））+ docker-compose + Nginx + Certbot |
+| 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（V0.74.0 已首次真实构建成功并通过 smoke test，镜像体积仍未记录））+ docker-compose + Nginx + Certbot |
 | 测试 | pytest 728 · ruff · check_static_js.py（前端内联 JS 门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
