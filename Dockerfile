@@ -3,7 +3,7 @@
 # 镜像大小：~280 MB（runtime）为早期设计目标值，尚未实测（首次真实构建于 V0.74.0 打通）
 # 安全：runtime 无 gcc、curl 仅用于 healthcheck、非 root 运行
 #
-# 相对初版的三处修正（首次真实构建暴露，此前 docker job 因 CI 触发条件缺 tags 而恒为 skipped）：
+# 相对初版的四处修正（首次真实构建暴露，此前 docker job 因 CI 触发条件缺 tags 而恒为 skipped）：
 #   1. src-layout 构建失败 —— 原 `COPY pyproject.toml README.md ./` + `pip install .` 缺 src/，
 #      构建后端报 "error in 'egg_base' option: 'src' does not exist or is not a directory"。
 #      现改为：builder 只装「依赖」（不装项目本体），业务代码由 runtime 直接以 /app/src 提供。
@@ -13,13 +13,18 @@
 #      alembic.ini、migrations/ 全部指向根目录下的不存在路径。故必须让 app 从 /app/src/app 载入。
 #   3. runtime 依赖缺失 —— httpx 曾是 dev extra，但 services/notify.py 模块级导入它，
 #      生产镜像会因 ImportError 启动失败；已提升为 pyproject 的运行时依赖。
+#   4. **镜像依赖未走锁文件** —— 原 `pip install .` 由 pip 现场解析版本，与 uv.lock 完全脱钩：
+#      实测容器装到 sqlalchemy 2.1.1（锁内为 2.0.52，次版本跃迁）、starlette 1.7.0（锁 1.6.0）、
+#      pandas 3.0.6（锁 3.0.5）等。即镜像里跑的是一套**从未被 CI 测试过**的依赖组合。
+#      现改为 `uv export --frozen` 从 uv.lock 导出精确版本再安装，与 CI 的 `uv sync --frozen`
+#      口径一致，确保「测试通过的依赖集」=「镜像内的依赖集」。
 #
 # ⚠️ 改动本文件后必须实际构建一次验证（不可只跑静态检查）：
 #    docker build --target runtime -t gold-etf-analyzer:local . \
 #      && docker run --rm -d -p 8889:8888 gold-etf-analyzer:local \
 #      && curl -fsS http://localhost:8889/api/v1/health
 
-# Stage 1 · builder：仅装运行时依赖到 /install（target dir 隔离 site-packages）
+# Stage 1 · builder：按 uv.lock 装运行时依赖到 /install（target dir 隔离 site-packages）
 FROM python:3.12-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
@@ -28,20 +33,22 @@ ENV PIP_NO_CACHE_DIR=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends gcc \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
 WORKDIR /build
 
 # 只拷贝依赖清单：业务代码变更不会使这一层失效
-COPY pyproject.toml ./
+# README.md 是 pyproject 的 readme 字段目标，uv export 需要它在场
+COPY pyproject.toml uv.lock README.md ./
 
-# 从 pyproject 抽出 [project].dependencies 后安装。
-# 不执行 `pip install .` —— src-layout 下该命令需要 src/ 在场，而把 src 拷进来会让
-# 依赖层随每次业务代码改动失效；项目本体由 runtime 以 /app/src 形式提供即可
+# uv export 从锁文件导出精确版本（--no-dev 去开发依赖、--no-emit-project 去项目本体），
+# 再由 pip 安装。不执行 `pip install .` —— src-layout 下该命令需要 src/ 在场，而把 src
+# 拷进来会让依赖层随每次业务代码改动失效；项目本体由 runtime 以 /app/src 形式提供即可
 # （代码不读取已安装包的元数据，故无需安装本包）。
-RUN python -c "import pathlib, tomllib; d = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8')); open('/tmp/requirements.txt', 'w').write(chr(10).join(d['project']['dependencies']))" \
-    && echo '--- 待安装的运行时依赖 ---' \
-    && cat /tmp/requirements.txt \
+RUN uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requirements.txt \
+    && echo '--- 按 uv.lock 锁定的运行时依赖 ---' \
+    && grep -c '==' /tmp/requirements.txt \
     && pip install --no-cache-dir --target=/install -r /tmp/requirements.txt
 
 # Stage 2 · runtime：slim 基础 + 拷贝 /install + 非 root + HEALTHCHECK

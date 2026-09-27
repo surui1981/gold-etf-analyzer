@@ -115,9 +115,32 @@ jobs:
 
       - name: Smoke test (boot + healthcheck)
         run: |
-          docker run --rm -d --name gold-smoke -p 8889:8888 \
-            -e APP_ENV=test -e RATE_LIMIT_PER_MIN=0 \
-            gold-etf-analyzer:${{ github.ref_name }}
-          sleep 15
-          curl -fsS http://localhost:8889/api/v1/health || (docker logs gold-smoke; exit 1)
-          docker stop gold-smoke
+          IMG="gold-etf-analyzer:${{ github.ref_name }}"
+          # 不加 --rm：容器若启动即退出，--rm 会连带删除它，docker logs 只会报
+          # "No such container"，失败时拿不到任何日志（初版正是如此，无法定位原因）。
+          docker run -d --name gold-smoke -p 8889:8888 \
+            -e APP_ENV=test -e RATE_LIMIT_PER_MIN=0 "$IMG"
+
+          # 首启要跑 Alembic 迁移建全表 + 服务预热，固定 sleep 15 不够；改为轮询至多 120s，
+          # 且容器提前退出时立即停止等待（不必空等）。
+          ok=0
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8889/api/v1/health > /dev/null 2>&1; then
+              echo "healthcheck OK（第 ${i} 次探测，约 $((i * 2))s）"
+              ok=1
+              break
+            fi
+            if [ "$(docker inspect -f '{{.State.Running}}' gold-smoke 2> /dev/null || echo false)" != "true" ]; then
+              echo "::error::容器提前退出（第 ${i} 次探测）"
+              break
+            fi
+            sleep 2
+          done
+
+          echo "=== 容器状态 ==="
+          docker ps -a --filter name=gold-smoke || true
+          echo "=== 容器日志（失败时的定位依据）==="
+          docker logs gold-smoke 2>&1 || true
+          docker stop gold-smoke > /dev/null 2>&1 || true
+
+          [ "$ok" = "1" ] || exit 1

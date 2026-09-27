@@ -1,0 +1,22 @@
+# 构建上下文瘦身 + 避免把本地运行数据带进构建上下文
+# 采用「排除清单」而非白名单，降低误排除必需文件（src / static / migrations / alembic.ini /
+# pyproject.toml / uv.lock / README.md）的风险。
+.git
+.github
+.venv
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+# 本地运行数据：SQLite 库与日志（镜像内 /app/data 由 Dockerfile 自建）
+data/
+*.log
+# 文档与测试：镜像运行时不需要
+docs/
+tests/
+# 凭据 / 环境文件绝不进入构建上下文
+.env
+.env.*
+.git-credentials
