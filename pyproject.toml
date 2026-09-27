@@ -15,6 +15,10 @@ dependencies = [
     "aiosqlite>=0.20,<1.0",
     "akshare>=1.14,<2.0",
     "alembic>=1.13,<2.0",
+    # httpx 是运行时依赖（非仅测试用）：services/notify.py 模块级导入做 webhook/Server酱 推送，
+    # repositories/market_providers.py 的 YahooSilverHistoryProvider 亦依赖它。
+    # 此前误置于 dev extra，导致生产镜像不含 httpx → notify 导入即 ImportError → 容器启动失败。
+    "httpx>=0.27,<1.0",
     # V0.72.0 P3-b：告警推送（邮件 SMTP + 微信 Server酱 + Web Push 后端）
     "aiosmtplib>=3.0,<4.0",
     "jinja2>=3.1,<4.0",
@@ -27,7 +31,6 @@ dependencies = [
 dev = [
     "pytest>=8.3,<9.0",
     "pytest-asyncio>=0.24,<1.0",
-    "httpx>=0.27,<1.0",
     # 门禁基线锁定 0.16.x：select 使用规则组前缀（RUF/UP/B 等），跨版本升级会引入
     # 新规则导致门禁突增；升级时须重跑 `ruff check src tests` 并复核 ignore 列表。
     "ruff>=0.16,<0.17",
