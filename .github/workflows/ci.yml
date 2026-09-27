@@ -6,6 +6,7 @@
 #   1. ruff 静态检查（lint + format --check）
 #   2. pytest 全量回归（默认排除 2 个联网 fetcher 文件，避免 CI 网络抖动阻塞）
 #   3. check_static_js.py 前端内联 JS 门禁（项目无构建步骤，必须另设关卡）
+#   4. check_docs_claims.py 文档声明门禁（数据表名 / localStorage key / 静态页 / API 端点存在性断言）
 #
 # 设计要点：
 #   - Python matrix 3.11 / 3.12（pyproject 要求 >=3.11）
@@ -21,6 +22,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']   # 必须显式声明：只写 branches 时 tag 推送不会触发 CI，而 docker multi-stage build job 的 if 条件要求 tag ref
   pull_request:
     branches: [main]
 
@@ -73,6 +75,9 @@ jobs:
 
       - name: Frontend inline JS gate
         run: uv run python scripts/check_static_js.py
+
+      - name: Documentation claims gate
+        run: uv run python scripts/check_docs_claims.py
 
       - name: Upload pytest junit (失败时方便定位)
         if: always()
