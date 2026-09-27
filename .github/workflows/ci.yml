@@ -21,6 +21,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']   # 必须显式声明：只写 branches 时 tag 推送不会触发 CI，而 docker multi-stage build job 的 if 条件要求 tag ref
   pull_request:
     branches: [main]
 
