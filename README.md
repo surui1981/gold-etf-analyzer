@@ -53,7 +53,7 @@
 | **消息面评估** | `/static/news.html` | 每日 3 次打分（越晚权重越高）+ 依据标签 | 看新闻后录入当日研判 |
 | **研判复盘** | `/static/review.html` | 历史打分 vs 金价对齐，T+1/T+3/T+5 命中 + 校准曲线 | 看自己过去判断准不准 |
 | **交易历史** | `/static/trades.html` | 多账本多条件筛选 + 已实现盈亏 + CSV 导出 | 回看成交明细 |
-| **央行购金** | `/static/central-bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
+| **央行购金** | `/static/central_bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
 | **白银行情** | `/static/silver.html` | 白银 ETF / NY 银趋势 + 共振信号（V0.71.0 新） | 配套白银参考 |
 | **参数回测** | `/static/backtest.html` | 权重网格 × 阈值带扫描 + 夏普 / 回撤 / 校准 | 校准参数有效性 |
 | **数据健康** | `/static/data-health.html` | 各行情源实时性 / 覆盖率 / 降级状态一览（V0.73.0 N+16 新） | 排查取数异常 |
@@ -143,7 +143,7 @@
 | 样式 | 原生 CSS 变量（4 主题：light / dark / auto / high-contrast） |
 | 缓存 | 服务端 served cache（`quote_cache_ttl`）· SW 双 cache（gold-shell / gold-runtime） |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
-| 部署 | Docker 多阶段（1.2GB → 280MB）+ docker-compose + Nginx + Certbot |
+| 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（CI 镜像构建从未执行过））+ docker-compose + Nginx + Certbot |
 | 测试 | pytest 728 · ruff · check_static_js.py（前端内联 JS 门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
