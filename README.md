@@ -211,23 +211,24 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 ## 功能拓展路径（V0.74.0 → V0.77.0）
 
-> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🚧 进行中**（分支在跑，部分子项已合）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md) 同步维护；冲突时以路线图为准。
+> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节 V0.74.0 / V0.75.0 两版与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.75.0**）同步维护，**冲突时以路线图为准**；**V0.76.0 / V0.77.0 为 README 展望，尚未纳入路线图**。
 
-### V0.74.0 · 仪表盘自定义 + 通知偏好（**✅ 已落地**，N+11~N+18）
+### V0.74.0 · 仪表盘自定义 + 通知偏好（**🟡 部分落地**，N+11~N+18）
 
 | 子项 | 状态 | 落地位置 |
 |------|------|----------|
-| **告警规则 CRUD** · discriminated union 重构（`ThresholdRule` / `BandCrossRule` / `WindowRule` / `CustomRule`）+ UI 模态 + i18n 三语 | ✅ 已落地 | `src/app/schemas/alert.py` · `src/app/services/alert.py` · `/static/settings.html` |
-| **portfolio 仪表盘自定义** · 7 张卡片拖拽排序（纯原生 HTML5 drag/drop + Space/↑↓ 键盘替代）+ 布局持久化到 `localStorage.pm_dash_layout` + 一键恢复默认 | ✅ 已落地 | `static/portfolio.html` · `static/dashboard.js` |
-| **数据健康独立页** · 各行情源实时性 / 覆盖率 / 降级状态一览 + trend 页三清理 + 全站 nav 接入 | ✅ 已落地 | `/static/data-health.html` |
+| **告警规则 CRUD** · discriminated union 重构（`VolatilityRule` / `CrossingRule` / `WindowRule` / `TPlusNRule`，discriminator `RuleKind = Literal["volatility","crossing","window","t_plus_n"]`）+ UI 模态 + i18n 三语 | ✅ 已落地 | `src/app/schemas/alert.py` · `src/app/services/alert.py` · `/static/settings.html` |
+| **portfolio 仪表盘自定义** · 7 张卡片拖拽排序（纯原生 HTML5 drag/drop + Space/↑↓ 键盘替代）+ 布局持久化到 `localStorage.pm_dashboard_layout` + 一键恢复默认 | ✅ 已落地 | `static/portfolio.html` · `static/dashboard.js` |
+| **数据健康独立页** · 各行情源实时性 / 覆盖率 / 降级状态一览 + trend 页三清理 + 全站 nav 接入 | ✅ 已落地（**V0.73.0 N+16**，非本版产出） | `/static/data-health.html` |
 | **CI 门禁 + 版本号单源化** · ruff lint 0 / format 174 files / `src/app/__init__.py` 作版本号唯一真源（根治 V0.63/V0.65/V0.73/V0.74 连续四次漏改） | ✅ 已落地 | `.github/workflows/ci.yml` · `src/app/__init__.py` |
+| **打印友好 CSS + 一键 PDF 导出**（路线图 V0.74.0 子项 ③） | ⏳ **未落地** | 仅 `portfolio.html` 有 `@media print` 隐藏拖拽控制条；无 `window.print()` 入口、无 `pdf_export_click` 埋点 → 路线图 M7 验收项「PDF 导出 ≤ 2 页」**尚未满足** |
 
 ### V0.75.0 · 多用户登录 + 数据隔离（**📋 规划中**）
 
 | 子项 | 预期产出 |
 |------|----------|
 | **认证体系** | bcrypt cost=12 + session cookie（`HttpOnly` + `SameSite=Strict` + `Secure`）+ CSRF token；`AUTH_ENABLED` 兼容开关，默认 `false` 维持单用户体验零回归 |
-| **数据隔离** | 所有业务表（positions / news_scores / alert_rules / portfolios / snapshot_overrides）加 `user_id` 外键；A 用户看不到 B 用户数据；单租户 → 多租户透明迁移 |
+| **数据隔离** | 全部 **11 张**业务表（`positions` / `trade_records` / `daily_snapshots` / `accounts` / `news_scores` / `analysis_records` / `central_bank_purchases` / `gold_price_daily` / `push_subscriptions` / `telemetry_events` / `app_settings`）加 `user_id` 外键。⚠️ 注意 `alert_rules` **不是表**，它是 `app_settings` 表内的 JSON key（`services/settings.py:185` `ALERT_RULES_KEY`）；「账本」的真实表名是 `accounts`；代码中不存在独立的「账本」「快照覆盖」表。A 用户看不到 B 用户数据；单租户 → 多租户透明迁移 |
 | **登录入口** | `/login` + `/register` + 找回密码（邮件 token，30 分钟过期） |
 | **审计日志** | `audit_log` 表记录登录 / 写操作 / 跨用户访问尝试，admin 后台可查 |
 | **风险** | 🟡 中（数据迁移需脚本兼容单租户 → 多租户；密码重置邮件需要 SMTP 联动） |
@@ -237,7 +238,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 | 子项 | 预期产出 |
 |------|----------|
 | **券商对账单 CSV 导入** | 字段映射向导（成交日期 / 标的代码 / 方向 / 数量 / 价额 / 手续费）；dry-run 预览 + 二次确认；映射模板可保存复用 |
-| **月度报告 PDF 导出** | 复用 V0.74.0 的打印 CSS；封面 + 收益曲线 + 业绩归因 + 命中校准 + 关键事件流（自动生成，非手写） |
+| **月度报告 PDF 导出** | 需**先补 V0.74.0 未落地的打印样式**（当前仅 `portfolio.html` 有 `@media print` 隐藏拖拽控制条，无 `window.print()` 入口、无 `pdf_export_click` 埋点）；封面 + 收益曲线 + 业绩归因 + 命中校准 + 关键事件流（自动生成，非手写） |
 | **Excel 多 sheet 导出** | 交易明细 / 持仓快照 / 评估历史 / 央行购金 4 张 sheet，列冻结 + 自适应列宽 |
 | **备份恢复 GUI** | 当前是 `backup-cron` + 手动 scp；V0.76 提供一键导出 sqlite + 上传恢复（保留 `.env` 模板） |
 
@@ -253,8 +254,8 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 ### 横向可持续主题（持续滚动）
 
 - **i18n 完成度** — zh-TW 当前 64.5%，目标 100%（V0.75.0 同步）
-- **测试覆盖率** — 当前 728 用例 / 684 离线通过（排除 44 个联网 fetcher），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）
-- **无障碍** — axe-core 0 critical 守住；拖拽 / 模态需要键盘可操作版本
+- **测试规模与回归** — 当前 **728 收集 / 684 离线通过**（排除 2 个联网 fetcher 文件共 44 用例），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）。⚠️ 这是**测试规模**而非覆盖率：项目当前**无任何覆盖率工具**（`pyproject.toml` 无 pytest-cov、CI 无 `--cov`），真实行覆盖率不可知 —— 建基线属 P1 事项
+- **无障碍** — 拖拽 / 模态已提供键盘替代（Space + ↑↓）；但仓库中**无任何 axe-core 文件/测试**，所谓「0 critical」无自动化守卫，纳入 CI 属 P2 事项
 - **数据守门** — `trace_id` 全链路追踪 + schema 校验新增 / 行情源扩展时同步加上
 
 ---
@@ -263,7 +264,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 - 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
 - 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
-- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（V0.74.0 → V0.77.0：自定义 / 多用户 / 数据导入导出 / 多标的 / AI 解读）
+- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.75.0**：仪表盘自定义 / 通知偏好 / 多用户登录 + 数据隔离，规划**止于 V0.75.0**）
 - ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
 - 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
 
