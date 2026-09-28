@@ -219,6 +219,13 @@
 </div>
 </main>
 
+<!-- 必须在下方内联脚本【之前】同步加载：该内联脚本在解析期就会调用
+     window.PM_Backtest.mount()，而 PM_Backtest 正是由本文件定义。
+     本文件顶层只做变量声明与函数定义（不查 DOM），且 mount() 用到的
+     #runBtn / #paramsPanel / #targetSel / #daysSel 均已在上方解析完毕，故此处加载安全。
+     ⚠ 切勿加 defer：defer 会推迟到 DOM 解析结束后才执行，调用时仍未定义 → TypeError。 -->
+<script src="/static/backtest-chart.js"></script>
+
 <script>
 const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
 
@@ -354,7 +361,6 @@ window.PM_Backtest.mount({ onRun: runBacktest });
 document.getElementById("daysSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
 document.getElementById("targetSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
 </script>
-<script src="/static/backtest-chart.js" defer></script>
 <script src="/static/pwa.js" defer></script>
 </body>
 </html>

@@ -340,8 +340,8 @@ function renderCompareChart(data) {
   if (!canvas || !data.points) return;
   const labels = data.points.map(p => p.date);
   const ctx = canvas.getContext("2d");
-  if (window.silverCmpChart) window.silverCmpChart.destroy();
-  window.silverCmpChart = ChartA11y.wrapChart(canvas, {
+  if (window.silverCmpChart) { window.silverCmpChart.destroy(); window.silverCmpChart = null; }
+  window.silverCmpChart = new Chart(ctx, {
     type: "line",
     data: {
       labels,
@@ -352,6 +352,7 @@ function renderCompareChart(data) {
     },
     options: { responsive: true, plugins: { legend: { position: "top" } }, scales: { y: { beginAtZero: false } } },
   });
+  ChartA11y.wrapChart(canvas, { label: "白银 ETF 与纽约白银归一化对照（近 " + labels.length + " 个交易日）" });
 }
 
 let lastTrend = null;
@@ -448,14 +449,15 @@ function renderMain(data) {
   const area = document.getElementById("chartArea");
   area.innerHTML = '<canvas id="trendCanvas"></canvas>';
   const canvas = document.getElementById("trendCanvas");
+  const ctx = canvas.getContext("2d");
 
   const badge2 = document.createElement("div");
   badge2.className = "data-badge db-" + (data.freshness?.level === "live" ? "ok" : data.freshness?.level === "stale" ? "warn" : "dim");
   badge2.textContent = data.freshness?.label || data.freshness?.level || "live";
   area.appendChild(badge2);
 
-  if (trendChart) trendChart.destroy();
-  trendChart = ChartA11y.wrapChart(canvas, {
+  if (trendChart) { trendChart.destroy(); trendChart = null; }
+  trendChart = new Chart(ctx, {
     type: "line",
     data: {
       labels,
@@ -472,6 +474,7 @@ function renderMain(data) {
       scales: { y: { beginAtZero: false } },
     },
   });
+  ChartA11y.wrapChart(canvas, { label: "白银趋势主图（收盘价 + MA5/MA20/MA40，近 " + labels.length + " 个交易日）" });
 
   document.getElementById("summary").innerHTML = data.metrics?.summary || "";
 }

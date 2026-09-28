@@ -1,9 +1,14 @@
 /*!
  * backtest-chart.js —— 回测结果 3 张 Chart.js 图（V0.71.0 P3-a）
  *
- * 用法（在 backtest.html 末尾）：
- *   <script src="/static/backtest-chart.js" defer></script>
+ * 用法（在 backtest.html 末尾，必须在调用 mount() 的脚本【之前】同步加载）：
+ *   <script src="/static/backtest-chart.js"></script>
  *   <script>window.PM_Backtest.mount({ onRun: runBacktest });</script>
+ *
+ * 注意：本脚本【不可加 defer】。defer 会在 DOM 解析完成后才执行，而调用方是在内联
+ *   脚本的解析期就调用 window.PM_Backtest.mount() → 此刻 PM_Backtest 尚未定义，
+ *   抛 TypeError 并中断整段内联脚本（按钮监听 / 首次回测 / 控件监听全部失绑）。
+ *   脚本位于 </body> 之前，同步加载时 DOM 已就绪，无需等待。
  *
  * 提供：
  *   PM_Backtest.mount(opts) 初始化绑定 3 张 canvas + 控件
@@ -13,7 +18,8 @@
  * 设计：
  * - 自注入 CSS（与 resonance-card.js:37-64 同模式）
  * - 销毁旧 chart 实例再 new Chart()（仿 portfolio.html drawEquityChart 内存管理）
- * - ChartA11y.wrapChart 包裹（无障碍读屏）
+ * - 先 new Chart(ctx, cfg) 创建实例，再调 ChartA11y.wrapChart(canvas, { label })
+ *   补无障碍属性 —— wrapChart 只负责打 aria 属性，本身【不创建图表、也不返回实例】
  * - 命中 5 分钟节流：响应头 X-Backtest-Cached=true 时显示「已用缓存」角标
  */
 (function () {
@@ -115,7 +121,7 @@
     var sCanvas = document.getElementById("sharpeChart");
     if (sCanvas && result.rows && result.rows.length) {
       var labels = result.rows.map(function (r, i) { return "#" + (i + 1); });
-      sharpeChart = ChartA11y.wrapChart(sCanvas, {
+      sharpeChart = new Chart(sCanvas.getContext("2d"), {
         type: "bar",
         data: {
           labels: labels,
@@ -136,13 +142,14 @@
           },
         },
       });
+      ChartA11y.wrapChart(sCanvas, { label: "各组参数的年化 Sharpe 柱状图（共 " + result.rows.length + " 组，绿正红负）" });
     }
 
     // 最大回撤图
     var dCanvas = document.getElementById("drawdownChart");
     if (dCanvas && result.rows && result.rows.length) {
       var labels2 = result.rows.map(function (r, i) { return "#" + (i + 1); });
-      drawdownChart = ChartA11y.wrapChart(dCanvas, {
+      drawdownChart = new Chart(dCanvas.getContext("2d"), {
         type: "line",
         data: {
           labels: labels2,
@@ -165,6 +172,7 @@
           },
         },
       });
+      ChartA11y.wrapChart(dCanvas, { label: "各组参数的最大回撤折线图（越低越好，共 " + result.rows.length + " 组）" });
     }
 
     // 校准曲线：5 桶（0-20/20-40/40-60/60-80/80-100），按 daily_snapshots.tech_index 等分桶
@@ -193,7 +201,7 @@
         actual = [0, 0, 0, 0, 0];
       }
 
-      calibrationChart = ChartA11y.wrapChart(cCanvas, {
+      calibrationChart = new Chart(cCanvas.getContext("2d"), {
         type: "line",
         data: {
           labels: buckets,
@@ -210,6 +218,7 @@
           },
         },
       });
+      ChartA11y.wrapChart(cCanvas, { label: "阈值带命中率校准曲线（理论概率 vs 实际命中率，5 个分数桶）" });
     }
 
     // 警告：样本不足

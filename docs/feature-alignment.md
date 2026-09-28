@@ -1,11 +1,11 @@
 # 功能对账报告 · README ↔ 代码 ↔ 文档
 
-> 生成日期：2026-09-18 ｜ 最近更新：2026-09-26 ｜ 适用版本：**V0.74.0**
+> 生成日期：2026-09-18 ｜ 最近更新：2026-09-29 ｜ 适用版本：**V0.74.1**
 > 目的：定期核对 README 功能清单、实际代码实现、文档声明三方的落地状态，标记 ✅ 已落实 / ⚠️ 半成品 / 📋 待办，避免文档漂移。
 
 ---
 
-## 一、README 功能清单 vs 代码实际（截至 V0.74.0）
+## 一、README 功能清单 vs 代码实际（截至 V0.74.1）
 
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
@@ -157,11 +157,14 @@
 | 43 | **Docker 镜像的 3 处缺陷（首次真实构建才暴露）**：① **构建直接失败** —— builder 仅 `COPY pyproject.toml README.md` 便执行 `pip install . --target=/install`，而项目是 src-layout（`[tool.setuptools.packages.find] where = ["src"]`），构建后端报 `error in 'egg_base' option: 'src' does not exist or is not a directory`；② **容器内 `PROJECT_ROOT` 错位** —— `config.py` 与 `main.py` 均以 `Path(__file__).resolve().parents[2]` 推导项目根，若 `app` 从 `/install/app` 载入则 `parents[2]` 会解析为 `/`，`static/`、`data/`、`alembic.ini`、`migrations/` 全部指向根目录下不存在的路径（非 root 的 `appuser` 亦无法写 `/`）；③ **运行时缺 `httpx`** —— `services/notify.py` 第 17 行是模块级无保护导入，但 `httpx` 仅声明在 dev extra，生产镜像不含它 → `ImportError`（`market_providers.py` 的导入有 `try/except` 兜底，故只有 notify 是硬失败点） | ✅ 2026-09-28 修复（`8c6f8b2`）：① builder 改为只装依赖（`uv export` 导出清单后 `pip -r`），业务代码由 runtime 以 `/app/src` 提供 —— 既修好构建，又保住「业务代码变更不触发依赖重装」的缓存设计；② `src` 落至 `/app/src` + `PYTHONPATH=/app/src:/install`（业务源码优先），**已用两种目录布局对照实证**（`<root>/app` 正确 / `<root>/install/app` 上推一层）；③ `httpx` 提升为运行时依赖并重跑 `uv lock`。**验证**：第二轮构建 `Build (runtime stage)` = success |
 | 44 | **镜像依赖与 `uv.lock` 完全脱钩（容器启动即崩的根因）**：原 Dockerfile 由裸 `pip install` 现场解析版本，实测容器装到 `sqlalchemy 2.1.1`（锁内 `2.0.52`，**次版本跃迁**）、`starlette 1.7.0`（锁 `1.6.0`）、`pandas 3.0.6`（锁 `3.0.5`）、`akshare 1.18.97`（锁 `1.18.94`）、`uvicorn 0.54.0`（锁 `0.52.4`）、`alembic 1.20.0`（锁 `1.19.2`）—— 即镜像内跑的是一套**从未被 CI 测试过**的依赖组合。项目有锁、CI 用 `uv sync --frozen`，唯独镜像绕过了锁。症状：容器启动后立刻退出（`Smoke test` 失败，且因 #45 拿不到日志） | ✅ 2026-09-28 修复（`7c96d82`）：改用 `uv export --frozen --no-dev --no-emit-project --no-hashes` 从 `uv.lock` 导出精确版本再安装，与 CI 的 `uv sync --frozen` 同一口径，确保「CI 测试通过的依赖集」＝「镜像内的依赖集」。**验证**：第三轮构建装到的正是锁内版本（`sqlalchemy-2.0.52` / `starlette-1.6.0` / `pandas-3.0.5` / `akshare-1.18.94`），容器 6s 内健康 |
 | 45 | **smoke test 无诊断能力 + 仓库缺 `.dockerignore`**：① 原 smoke test 用 `docker run --rm -d`，容器启动即退出会被连带删除，`docker logs gold-smoke` 只报 `No such container` → **失败时零信息**（初版失败即因此无从定位，只能靠推断）；固定 `sleep 15` 亦无重试、无「提前退出即停」探测。② 仓库无 `.dockerignore`，整个仓库（含本地 `data/gold_etf.db` 与 `server_v*.log`）都被当作构建上下文上传（实测上下文 2.01MB） | ✅ 2026-09-28 修复（`7c96d82`）：① 去掉 `--rm`、`sleep 15` → 轮询至多 120s、容器提前退出即停止等待、无论成败都打印 `docker ps -a` 与容器日志；② 新增 `.dockerignore`（排除清单式，避免误排除 `src` / `static` / `migrations` / `alembic.ini` 等构建必需文件）。**验证**：第三轮 smoke test 输出 `healthcheck OK（第 3 次探测，约 6s）` 并完整打印容器日志 |
+| 46 | **前端 3 处功能缺陷全部逃过「门禁全绿」（用户直接碰壁级）**：① **图表实例恒 `undefined`** —— `chart-a11y.js` 的 `ChartA11y.wrapChart` 契约是「给 canvas 打无障碍属性」（只设 aria，**既不 `new Chart()` 也无 `return`**），但 5 处调用方把它当**图表工厂**用并接收返回值（`silver.html` 的对比图与趋势主图、`backtest-chart.js` 的 sharpe / drawdown / calibration）→ 实例恒为 `undefined`，**画布永久空白**；连带 `destroyCharts()` 与 `if (trendChart) trendChart.destroy()` 因拿到 `undefined` 而**长期空转**（内存释放逻辑从未生效）。② **脚本加载时序** —— `backtest.html` 的内联脚本在**解析期**即调用 `window.PM_Backtest.mount()`，而定义它的 `backtest-chart.js` 加载位置在其后 → `TypeError` 中断整段内联脚本，**回测按钮 / 首次自动回测 / 参数变更监听全部从未绑定**（整页交互死掉）。③ **SW 预缓存 3 条 404** —— `sw.js` 的 `SHELL_ASSETS` 含 `/central_bank`、`/backtest`、`/silver`，逐条 curl 实测**均为 404**（真实路径是 `/central-bank`、`/static/backtest.html`、`/static/silver.html`）；`cache.addAll` 是**原子操作**，任一失败整批回滚 → **`SHELL_CACHE` 完全为空**，离线能力等于零（连主题 / i18n 字典 / 离线页都没进缓存）。**共同点：三者全部通过 `check_static_js.py` 的「12 页 + 19 脚本全绿」判定** —— 该门禁只验语法 / 引用 / DOM id，验不了**函数返回值语义**与**脚本加载时序**（见 #47） | ✅ 2026-09-29 修复（V0.74.1）：① 改为 `new Chart(ctx, cfg)` 创建实例后**单独**调 `wrapChart(canvas, {label})` 补 a11y —— 全仓 `new Chart` 实际调用由 6 处增至 **11 处**；② 把 `backtest-chart.js` 的 `<script>` **移到内联脚本之前**（该 IIFE 顶层只做变量声明与函数定义、不查 DOM，而 `mount()` 依赖的 `#runBtn` / `#paramsPanel` 均在更早位置解析完毕）—— ⚠️ 首版仅去掉 `defer` 是**无效**修法：加载位置本就在调用点之后，与 `defer` 无关，靠「模拟 HTML 解析器执行顺序」的验证才抓回来；③ SW 三条 URL 改真实路径，**20 条 URL 全部 200**。**四条独立验证**：`check_static_js.py` 全绿无回归；Node + 最小 DOM 桩执行**真实**代码 → 3 张图实例真实创建、`aria-label` 齐全、二次 `render` 累计创建 6 次证明释放逻辑生效、旧写法残留 **0**；模拟解析器顺序 → 定义（第 6 个）早于调用（第 7 个）；服务端 curl → 页面 200 |
+| 47 | **前端「用户可用性」无任何自动化守卫**（#46 的根因面）：`check_static_js.py` 的设计目标是语法 / 引用 / DOM id 校验，故 #46 的三类缺陷 —— **函数返回值语义**、**脚本加载时序**、**SW 预缓存 URL 的有效性** —— **在原理上就不在它的检查范围**：它报「12 页 + 19 脚本全绿」时，用户仍可能点不动按钮、看不到图、离线打不开。另：`sw.js` 的 `SHELL_ASSETS` 是**手工维护的 URL 清单**，无任何断言保证它与服务端真实路由一致（那 3 条 404 正是靠人工失误长期潜伏）；根因之一是**同仓 URL 风格分裂** —— 7 页走 `/portfolio` 这类 RESTful 路由，4 页走 `/static/*.html`，两套并存使手工清单极易写错 | 📋 2026-09-29 登记（**本轮未修**，按「只修 3 个 P0」的范围约定）：建议补 **headless 行为冒烟**（0 未捕获错误 + 关键交互可点 + 图表 canvas 有非空实例）并把 `SHELL_ASSETS` 纳入存在性断言 → 见 §五 待办 |
 
 ## 五、后续待办（按优先级）
 
 | 优先级 | 事项 | 估时 | 备注 |
 |---|---|---|---|
+| 🟡 中 | **补 headless 行为冒烟门禁**（防 #46 同类回归） | 1.5d | #46 的 3 个缺陷全部逃过静态门禁，根因见 #47：门禁只验「代码写对了吗」，不验「用户能用到吗」。需覆盖：① 页面 0 未捕获错误；② 关键交互可点（回测「立即回测」按钮、仪表盘拖拽）；③ 图表 canvas 有**非空**实例（而非只看元素存在）。**若不做，V0.75.0 的三态补齐 / 批量表单改动会以同样方式反复退化** |
 | 🟢 已闭环 | 规划 P1 #3 CI/CD（GitHub Actions） | ✅ V0.67.0 | `.github/workflows/ci.yml` 已落地：pytest + ruff + JS 门禁 + Python 3.11/3.12 matrix + uv 缓存 + concurrency 取消旧 PR；P1 三项（CI/CD / 权重配置页 / 多时间框架）已全部闭环 |
 | 🟡 中 | P3 #15 邮件/微信推送（需外部 SMTP/Server酱密钥） | 1d | V0.56.0 仅前端侧 |
 | 🟡 中 | UX 6.9 Service Worker 离线缓存 | 0.5d | 离线缓存 trend.html + 最近一次行情 |

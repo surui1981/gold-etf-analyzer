@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.74.0**（2026-09-26）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **当前版本** | **V0.74.1**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
 | **测试基线** | 728 用例 / 684 通过 / 0 失败（pytest 离线回归，排除 2 个联网 fetcher 文件 44 用例） |
 | **页面** | 12 个静态页 · 61 个 REST 路径（70 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
@@ -188,6 +188,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
+| **V0.74.1** | 2026-09-29 | **前端功能缺陷修复**（3 处此前被前端门禁「全绿」掩盖、用户直接碰壁的问题）：① `ChartA11y.wrapChart` 是 a11y 包装器（只打 aria 属性、**不创建实例且无返回**），却被 5 处调用方当图表工厂用 → 实例恒 `undefined` → 白银页/回测页画布**永久空白**（已改为 `new Chart()` 创建 + 单独补 a11y）；② `backtest-chart.js` 的加载位置晚于调用点（内联脚本解析期即调 `PM_Backtest.mount()`）→ TypeError 中断整段脚本 → 回测按钮/自动回测/参数监听**全未绑定**（已把该脚本移到内联脚本之前）；③ Service Worker 预缓存含 3 条服务端不存在的 URL（实测 404）→ `cache.addAll` 原子失败 → 离线缓存**全空**（已改为真实路径，20 条 URL 全部 200） |
 | **V0.74.0** | 2026-09-26 | 仪表盘自定义（7 卡片拖拽排序 + 键盘替代 + localStorage 布局持久化 + 恢复默认）+ 告警规则 CRUD（discriminated union 重构 + UI 模态）+ Web Push 订阅闭环 + i18n 三语补齐；本次一并修复 CI 门禁（ruff lint / format 长期未通过）与版本号单源化 |
 | **V0.73.0** | 2026-09-22 | i18n 三语（zh-CN 626 + zh-TW 391 + en-US 627 key）+ locale 格式化 + 后端国家名解耦 + **Yahoo Silver provider + 自动降级 mock** + i18n.apply() inline 子节点保留修复（目标分 91.0 → 91.5） |
 | V0.72.0 | 2026-09 | 推送 + PWA + Web Push + 公开部署（90.5 → 91.0） |

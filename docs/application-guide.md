@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.0**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.1**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer

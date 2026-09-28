@@ -17,15 +17,19 @@ const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
 
+// ⚠ 每条 URL 都必须是服务端真实存在的路径。cache.addAll() 是【原子操作】：任一请求失败
+//   整批回滚 → 整个 SHELL_CACHE 为空，离线能力归零且无任何用户可见提示。
+//   历史上 /central_bank、/backtest、/silver 三条均为 404（服务端只注册了 /central-bank，
+//   白银与回测页走 /static/*.html），导致 precache 从未成功过一次。
 const SHELL_ASSETS = [
     "/",
     "/portfolio",
     "/review",
     "/news",
-    "/central_bank",
+    "/central-bank",
     "/trades",
-    "/backtest",
-    "/silver",
+    "/static/backtest.html",
+    "/static/silver.html",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",
