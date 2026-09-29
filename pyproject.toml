@@ -25,6 +25,11 @@ dependencies = [
     "pywebpush>=2.0,<3.0",
     "py-vapid>=1.9,<2.0",
     "cryptography>=42,<46",
+    # V0.75.0 认证：services/auth.py 模块级 `import bcrypt` 做密码哈希（cost=12）。
+    # 此前漏声明 → CI 的 `uv sync --frozen` 与镜像的 `uv export --frozen` 都不含它 →
+    # pytest 加载 conftest 即 ImportError、容器启动即崩溃（V0.75.0/V0.75.1 CI 全红）。
+    # 锁定 4.x：hashpw/gensalt/checkpw 三个 API 在该系列已验证，避开 5.0 大版本变更。
+    "bcrypt>=4.2,<5.0",
 ]
 
 [project.optional-dependencies]

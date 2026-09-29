@@ -135,7 +135,7 @@
   - 写端点 **CSRF 双提交校验**（`X-CSRF-Token` 头 vs `pm_csrf` cookie，恒定时间比较；`sendBeacon` 埋点豁免）
   - 登录失败**账号 + IP 双维度节流**（默认 15 分钟内 5 次即锁定 15 分钟）
   - `APP_ENV=prod` + 开启认证时自动关闭 `/docs` `/redoc` `/openapi.json`（不暴露接口清单）
-  - ⚠️ **本版为「认证骨架」**：登录后才可访问 API，但多个用户之间**尚未做数据隔离**（数据隔离属 V0.75.1）；单机自用建议保持 `AUTH_ENABLED=false`
+  - ⚠️ **本版为「认证骨架」**：登录后才可访问 API，但多个用户之间**尚未做数据隔离**（数据隔离属 V0.75.2）；单机自用建议保持 `AUTH_ENABLED=false`
 - **管理员守卫** — `X-Admin-Token` 头（`secrets.compare_digest`），写端点全覆盖（无 `ADMIN_TOKEN` env 时 skip，dev 友好）
 - **速率限制** — per-IP 60s sliding window 120 req/min（`app_env!=test` 自动禁用，避免测试 429 误伤）
 - **Web Push** — VAPID EC P-256 密钥对持久化到本地，订阅表 endpoint unique + 退订硬删
