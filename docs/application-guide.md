@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.2**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.3**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
@@ -37,7 +37,7 @@
 | 每日快照 | `POST/GET /snapshots`：每日参数+评估值本地持久化（daily_snapshots 表），指数历史序列 | ✅ |
 | 个人交易跟踪 | `POST/GET /api/v1/positions` 开仓/持仓/加仓/减仓/清仓，实时盈亏 + **软删除/撤销 + CSV 导出** | ✅ |
 | 购买决策引擎 | `GET /api/v1/decision/etf` 参数面×交易面 → 买入/加仓/持有/减仓/卖出 + **仓位推荐 + 决策可解释性红绿对照** | ✅ |
-| ETF vs 克价对照 | `GET /api/v1/market/gold/compare` 518880（元/份）vs 上海金Au99.99（元/克）**双价格序列**，各画一张图 | ✅ |
+| ETF vs 克价对照 | `GET /api/v1/market/gold/compare` 518880（元/份）vs 上海金Au99.99（元/克）**双价格序列**；**V0.74.3 起前端只画 ETF 价格图**——克价走势统一由上方「上海金 Au99.99」面板承载，对照面板保留 `#cmpTable` / `#cmpCards` 指标对照表（图形去重、对比不丢） | ✅ |
 | **央行购金统计** | `GET /api/v1/central-bank/{summary,top-buyers,purchases}` + `/central-bank` 页面：WGC GDT 季度净购金（吨）按国家/季度筛选，Chart.js 堆叠柱 + Top 10 + 明细表 | ✅ V0.57.0 |
 | **自动调度** | 每日 07:00 BJT 捕获快照 + **央行购金月度 1/15/末日 07:30 BJT 自动从 WGC 拉取**（`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关） | ✅ V0.57.0 |
 | 数据时效透明 | `GET /api/v1/market/freshness` + 全站 `freshness.js` 时效条：三市场时段判定 + live/stale/mock 三态 + 60s 自动刷新 | ✅ V0.52.0 |
@@ -390,7 +390,7 @@ CORS_ORIGINS=*         # 逗号分隔，* 表示全部放行（仅开发）
 - 主体用例通过 `FakeRepo` 注入假数据源，**离线可跑**：V0.74.0 实测 `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py`（排除 2 个联网 fetcher 文件 44 用例）**684 passed / 0 failed**
 - **全量回归（含联网 fetcher）**：**727 passed / 1 skipped / 0 failed**（728 collected；= 离线 684 + 联网 fetcher 文件 43 passed / 1 skipped）
 - **例外（既有问题，非本版本引入）**：`tests/test_services/{test_irfcl_fetcher,test_h15_fetcher}.py` 共 44 用例，实测 **43 passed / 1 skipped**——跳过项 `test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（位于 `.gitignore` 内，新克隆不携带）；已加 `skipif` 守卫（文件缺失即跳过，不再误报 failed）
-- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **12 个静态页面**（`trend` / `portfolio` / `trades` / `weights` / `news` / `central_bank` / `review` / `silver` / `backtest` / `data-health` / `settings` / `offline`）的内联 JS + **19 个共享脚本**（`account.js` / `backtest-chart.js` / `chart-a11y.js` / `command-palette.js` / `dashboard.js` / `freshness.js` / `help.js` / `i18n.js` / `nav-drawer.js` / `notifications.js` / `pwa.js` / `resonance-card.js` / `settings.js` / `sw.js` / `telemetry.js` / `theme.js` + `i18n/{zh-CN,zh-TW,en-US}.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题（**V0.74.0 起 `check_static_js.py` 已能覆盖 `dashboard.js`**）
+- **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **12 个静态页面**（`trend` / `portfolio` / `trades` / `weights` / `news` / `central_bank` / `review` / `silver` / `backtest` / `data-health` / `settings` / `offline`）的内联 JS + **20 个共享脚本**（`account.js` / `backtest-chart.js` / `chart-a11y.js` / `command-palette.js` / `dashboard.js` / `freshness.js` / `help.js` / `i18n.js` / `nav-drawer.js` / `notifications.js` / `pwa.js` / `resonance-card.js` / `settings.js` / `sw.js` / `telemetry.js` / `theme.js` + `i18n/{zh-CN,zh-TW,en-US}.js` + `vendor/chart.umd.min.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题（**V0.74.0 起 `check_static_js.py` 已能覆盖 `dashboard.js`**）
 
 ---
 
