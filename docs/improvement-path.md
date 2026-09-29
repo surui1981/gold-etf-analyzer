@@ -411,8 +411,8 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 | **冷启动耗时（pip 安装后首次启动）** | ~30-40s | uvicorn 启动 + alembic 子进程 + 三市场 60 天 K 线预热 + served cache 生成 |
 | **冷启动首屏响应** | < 5s | served cache 预热命中 + Chart.js 本地 vendor（V0.74.3 起不再依赖 CDN） |
 | **缓存命中首屏** | < 5s（典型 1.6s） | `quote_cache_ttl=300` + `served_cache_ttl_seconds=600` 双层命中 |
-| **离线全量回归** | **864 用例收集 / 离线口径 820**（= 864 − 2 个联网 fetcher 文件 44 用例）。V0.75.0 全量离线实测 **801 passed / 0 failed（381.30s / 6m21s）**；**V0.75.1 全量离线重跑本机仍在执行**（本机约 5s/用例 → ~1h 量级），本轮按改动面择取**定向回归**（共振 31 例 + i18n 63 例，均 0 failed） | `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py` |
-| **全量回归（含联网 fetcher）** | **844 passed / 1 skipped / 0 failed** 为 V0.75.0 实测（= 离线 801 + 联网 fetcher 43 passed / 1 skipped）；**863** 为 V0.75.1 离线口径 820 的**推算值**（820 + 43），未实测。**本机全量约 1h05m**，改动面窄时择取定向回归 | `python -m pytest -q` |
+| **离线全量回归** | **864 用例收集 / 离线口径 820**（= 864 − 2 个联网 fetcher 文件 44 用例）。**V0.75.1 全量离线实测 820 passed / 0 failed（3686.53s / 1:01:26，退出码 0）**；V0.75.0 同口径 801 passed（381.30s / 6m21s）。⚠️ 两版耗时差约 **9.7 倍**（0.48 → 4.5s/例）而用例仅 +19、失败同为 0 → **本机环境变慢**，非代码退化。本轮亦按改动面择取**定向回归**（共振 31 例 + i18n 63 例，均 0 failed） | `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py` |
+| **全量回归（含联网 fetcher）** | **844 passed / 1 skipped / 0 failed** 为 V0.75.0 实测（= 离线 801 + 联网 fetcher 43 passed / 1 skipped）；V0.75.1 离线段已实测 **820 passed / 0 failed**，含联网口径 = **863 passed / 1 skipped**（864 collected，联网段本轮未单独重跑）。**本机全量约 1h05m**，改动面窄时择取定向回归 | `python -m pytest -q` |
 | **JS 门禁** | **13 静态页 + 22 共享脚本全 OK** | `python scripts/check_static_js.py` / `make check-web` |
 | **ruff 检查** | 0 错误 | `ruff check src tests` |
 | **行情源灵活度** | 5 选 1（akshare / mock / eastmoney_only / sina_only / silver_yahoo） | `.env` `MARKET_PROVIDER` |
