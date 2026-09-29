@@ -4,8 +4,8 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.74.1**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | 728 用例 / 684 通过 / 0 失败（pytest 离线回归，排除 2 个联网 fetcher 文件 44 用例） |
+| **当前版本** | **V0.74.2**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | 728 用例 · 全量 **727 passed / 1 skipped / 0 failed**（2026-09-29 实测） |
 | **页面** | 12 个静态页 · 61 个 REST 路径（70 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
@@ -176,7 +176,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 728 用例（离线回归 684 passed）
+python -m pytest -v                                      # 728 用例（全量：727 passed / 1 skipped；按文件排除 2 个联网 fetcher = 684 passed）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -188,6 +188,7 @@ python scripts/check_static_js.py                        # 前端内联 JS 门�
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
+| **V0.74.2** | 2026-09-29 | **对照面板改为真实价格 + 2 处轮询期缺陷修复**：① 趋势页「ETF vs 克价 对照」原来是**归一化双线图**（`起点=100`，Y 轴裸数字 96/100/104 极易被误读成价格或评分）→ 改为**两张并列的真实价格图**：左 `黄金ETF华安 518880 · 元/份`、右 `上海金 Au99.99 · 元/克`，各带 `起价 → 现价 涨跌%` 标题行；接口 `points` 新增 `etf_price` / `gram_price`（归一化字段 `etf` / `gram` 保留，向后兼容）。② `#badge` 曾用 `outerHTML` 整体重建（新节点**不带 id**）→ 页面每 60 秒自动刷新，**第二次即抛 `Cannot set properties of null`、主图面板整块消失**；改为就地更新。③ 对照图 / 上海金图未 `destroy()` 即 `new Chart()` 复用画布 → `Canvas is already in use`（每个轮询周期必现）；改为重建前先 `destroy()` 并置 `null`。附带修复 i18n BOM 测试里的**永真断言**（`b"\ufeff"` 是非法转义、实为 6 字节字面量，断言永远通过） |
 | **V0.74.1** | 2026-09-29 | **前端功能缺陷修复**（3 处此前被前端门禁「全绿」掩盖、用户直接碰壁的问题）：① `ChartA11y.wrapChart` 是 a11y 包装器（只打 aria 属性、**不创建实例且无返回**），却被 5 处调用方当图表工厂用 → 实例恒 `undefined` → 白银页/回测页画布**永久空白**（已改为 `new Chart()` 创建 + 单独补 a11y）；② `backtest-chart.js` 的加载位置晚于调用点（内联脚本解析期即调 `PM_Backtest.mount()`）→ TypeError 中断整段脚本 → 回测按钮/自动回测/参数监听**全未绑定**（已把该脚本移到内联脚本之前）；③ Service Worker 预缓存含 3 条服务端不存在的 URL（实测 404）→ `cache.addAll` 原子失败 → 离线缓存**全空**（已改为真实路径，20 条 URL 全部 200） |
 | **V0.74.0** | 2026-09-26 | 仪表盘自定义（7 卡片拖拽排序 + 键盘替代 + localStorage 布局持久化 + 恢复默认）+ 告警规则 CRUD（discriminated union 重构 + UI 模态）+ Web Push 订阅闭环 + i18n 三语补齐；本次一并修复 CI 门禁（ruff lint / format 长期未通过）与版本号单源化 |
 | **V0.73.0** | 2026-09-22 | i18n 三语（zh-CN 626 + zh-TW 391 + en-US 627 key）+ locale 格式化 + 后端国家名解耦 + **Yahoo Silver provider + 自动降级 mock** + i18n.apply() inline 子节点保留修复（目标分 91.0 → 91.5） |

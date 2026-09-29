@@ -1,6 +1,6 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.1**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.74.2**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS)
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
@@ -37,7 +37,7 @@
 | 每日快照 | `POST/GET /snapshots`：每日参数+评估值本地持久化（daily_snapshots 表），指数历史序列 | ✅ |
 | 个人交易跟踪 | `POST/GET /api/v1/positions` 开仓/持仓/加仓/减仓/清仓，实时盈亏 + **软删除/撤销 + CSV 导出** | ✅ |
 | 购买决策引擎 | `GET /api/v1/decision/etf` 参数面×交易面 → 买入/加仓/持有/减仓/卖出 + **仓位推荐 + 决策可解释性红绿对照** | ✅ |
-| ETF vs 克价对照 | `GET /api/v1/market/gold/compare` 518880 vs 上海金Au99.99 归一化对照 | ✅ |
+| ETF vs 克价对照 | `GET /api/v1/market/gold/compare` 518880（元/份）vs 上海金Au99.99（元/克）**双价格序列**，各画一张图 | ✅ |
 | **央行购金统计** | `GET /api/v1/central-bank/{summary,top-buyers,purchases}` + `/central-bank` 页面：WGC GDT 季度净购金（吨）按国家/季度筛选，Chart.js 堆叠柱 + Top 10 + 明细表 | ✅ V0.57.0 |
 | **自动调度** | 每日 07:00 BJT 捕获快照 + **央行购金月度 1/15/末日 07:30 BJT 自动从 WGC 拉取**（`CENTRAL_BANK_AUTO_REFRESH` 环境变量开关） | ✅ V0.57.0 |
 | 数据时效透明 | `GET /api/v1/market/freshness` + 全站 `freshness.js` 时效条：三市场时段判定 + live/stale/mock 三态 + 60s 自动刷新 | ✅ V0.52.0 |
@@ -185,7 +185,7 @@ docker compose up --build     # 同样映射 127.0.0.1:8888
 | GET | `/api/v1/market/gold` | 黄金ETF最新报价 | - |
 | GET | `/api/v1/market/gold/trend` | 趋势追踪 + 评估指数（**默认纽约金 COMEX 为投资指引基准**） | `days`(20-750)、`target`(ny/etf/gram，默认 ny)、`interval`(D/W/M，默认 D) |
 | GET | `/api/v1/market/gold/ny-trend` | 纽约金 60 天趋势曲线（美元/盎司，等价于 `/gold/trend?target=ny`） | `days`(20-750)、`interval`(D/W/M，默认 D) |
-| GET | `/api/v1/market/gold/compare` | ETF vs 黄金克价对照（归一化） | `days`(20-250) |
+| GET | `/api/v1/market/gold/compare` | ETF vs 黄金克价对照（points 含真实价 `etf_price`/`gram_price` + 归一化 `etf`/`gram`） | `days`(20-250) |
 | GET | `/api/v1/market/gold/etf-quote` | **黄金ETF报价（元/份，估值与交易专用口径）** | - |
 | GET | `/api/v1/market/gold/gram-quote` | **上海金 Au99.99 克价（元/克，P2 #8 V0.70.0）** | - |
 | GET | `/api/v1/market/silver/quote` | **纽约白银 SI 报价（美元/盎司，P3-a P2 #11 V0.71.0）** | - |
