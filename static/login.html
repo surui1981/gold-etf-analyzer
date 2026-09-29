@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="login.page_title">登录 · 黄金价格投资辅助工具</title>
+<!-- V0.69.0 FOUC 防护：必须在 <head> 第一行、theme.css 之前 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
+<script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px;
+  }
+  .wrap { width: 100%; max-width: 400px; }
+  .brand { text-align: center; margin-bottom: 18px; }
+  .brand .name { font-size: 17px; font-weight: 700; color: var(--accent); letter-spacing: .5px; }
+  .brand .en { font-size: 10.5px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; margin-top: 4px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.05); }
+  .tabs { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 10px; padding: 3px; margin-bottom: 18px; }
+  .tabs button { flex: 1; padding: 8px 0; font-size: 13.5px; font-family: inherit; cursor: pointer;
+    background: transparent; border: 0; border-radius: 8px; color: var(--muted); font-weight: 600; }
+  .tabs button[aria-selected="true"] { background: var(--card); color: var(--text);
+    box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .tabs button:disabled { opacity: .45; cursor: not-allowed; }
+  h1 { font-size: 19px; margin-bottom: 6px; }
+  .sub { font-size: 12.5px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 12px 0 5px; }
+  input { width: 100%; padding: 11px 13px; font-size: 14.5px; font-family: inherit;
+    border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: inherit; }
+  input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  .submit { width: 100%; margin-top: 18px; padding: 12px; font-size: 14.5px; font-weight: 600;
+    font-family: inherit; border-radius: 9px; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; cursor: pointer; }
+  .submit:hover { filter: brightness(1.08); }
+  .submit[disabled] { opacity: .6; cursor: not-allowed; }
+  .alert { border-radius: 9px; padding: 10px 12px; font-size: 12.5px; line-height: 1.6;
+    margin-top: 14px; border: 1px solid transparent; }
+  .alert-err { background: var(--chip-bad-bg); color: var(--chip-bad-fg); border-color: var(--chip-bad-bd); }
+  .alert-ok { background: var(--chip-ok-bg); color: var(--chip-ok-fg); border-color: var(--chip-ok-bd); }
+  .alert-info { background: var(--chip-delay-bg); color: var(--chip-delay-fg); border-color: var(--chip-delay-bd); }
+  .notice { text-align: center; font-size: 12px; color: var(--muted); margin-top: 14px; line-height: 1.7; }
+  .notice a { color: var(--accent); }
+  .first-admin { margin-top: 14px; }
+  .hidden { display: none !important; }
+  .foot { text-align: center; font-size: 11px; color: var(--muted); margin-top: 16px; line-height: 1.7; }
+  .lang-row { text-align: right; margin-bottom: 8px; }
+  .lang-row select { font-family: inherit; font-size: 12px; padding: 4px 8px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--card); color: var(--text); }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <div class="lang-row">
+    <select id="langSel" aria-label="Language">
+      <option value="zh-CN">简体中文</option>
+      <option value="zh-TW">繁體中文</option>
+      <option value="en-US">English</option>
+    </select>
+  </div>
+
+  <div class="brand">
+    <div class="name" data-i18n="brand.gold">黄金价格投资辅助工具</div>
+    <div class="en" data-i18n="brand.subtitle_en">Gold Price Investment Assistant</div>
+  </div>
+
+  <div class="card">
+    <!-- 未启用认证时的说明（单用户模式） -->
+    <section id="paneDisabled" class="hidden">
+      <h1 data-i18n="login.disabled_title">本站未启用登录</h1>
+      <p class="sub" data-i18n="login.disabled_body">当前为单用户模式，可直接使用全部功能，无需登录。</p>
+      <a class="submit" style="display:block;text-align:center;text-decoration:none"
+         href="/static/trend.html" data-i18n="login.back_home">返回首页</a>
+    </section>
+
+    <!-- 已登录（停在登录页时的提示） -->
+    <section id="paneLoggedIn" class="hidden">
+      <h1 data-i18n="login.h1">登录</h1>
+      <div class="alert alert-ok" id="loggedInInfo"></div>
+      <a class="submit" style="display:block;text-align:center;text-decoration:none"
+         href="/static/trend.html" data-i18n="login.back_home">返回首页</a>
+      <div class="notice">
+        <a href="#" id="switchAccount" data-i18n="login.btn_logout">退出登录</a>
+      </div>
+    </section>
+
+    <!-- 登录 / 注册 -->
+    <section id="paneAuth" class="hidden">
+      <div class="tabs" role="tablist">
+        <button type="button" id="tabLogin" role="tab" aria-selected="true"
+                data-i18n="login.tab_login">登录</button>
+        <button type="button" id="tabRegister" role="tab" aria-selected="false"
+                data-i18n="login.tab_register">注册</button>
+      </div>
+
+      <h1 id="authTitle" data-i18n="login.h1">登录</h1>
+      <p class="sub" id="authSub" data-i18n="login.subtitle">登录后可访问全部功能</p>
+
+      <form id="authForm" autocomplete="on" novalidate>
+        <label for="email" data-i18n="login.email">邮箱</label>
+        <input id="email" name="email" type="email" autocomplete="username"
+               placeholder="you@example.com" required>
+
+        <label for="password" data-i18n="login.password">密码</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        <div class="hint" id="pwdHint" data-i18n="login.password_ph">至少 8 位，不能是纯数字</div>
+
+        <div id="displayNameRow" class="hidden">
+          <label for="displayName" data-i18n="login.display_name">显示名（可选）</label>
+          <input id="displayName" name="displayName" type="text" autocomplete="nickname" maxlength="64">
+        </div>
+
+        <div class="alert alert-info first-admin hidden" id="firstAdminHint"
+             data-i18n="login.first_admin">首次使用：第一个注册的账号将成为管理员。</div>
+        <div class="alert alert-info hidden" id="regClosedHint"
+             data-i18n="login.reg_closed">已关闭自助注册。</div>
+        <div class="alert alert-err hidden" id="formErr" role="alert"></div>
+
+        <button type="submit" class="submit" id="submitBtn" data-i18n="login.btn_login">登录</button>
+      </form>
+
+      <div class="notice" id="regOpenNote" data-i18n="login.reg_open">开放注册中</div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <div data-i18n="brand.disclaimer">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
+  </div>
+</main>
+
+<script>
+/* login.html 专属渲染层：auth.js 完成认证判定后回调本对象渲染。
+ * 必须在 auth.js 之前定义（inline script 先于 defer 脚本执行）。 */
+window.PM_AUTH_PAGE = (function () {
+  "use strict";
+  var mode = "login";           // login | register
+  var status = { allowRegistration: true, userCount: 0 };
+
+  function $(id) { return document.getElementById(id); }
+
+  function show(pane) {
+    ["paneDisabled", "paneLoggedIn", "paneAuth"].forEach(function (id) {
+      $(id).classList.toggle("hidden", id !== pane);
+    });
+  }
+
+  function applyMode(next) {
+    mode = next;
+    var isReg = mode === "register";
+    $("tabLogin").setAttribute("aria-selected", isReg ? "false" : "true");
+    $("tabRegister").setAttribute("aria-selected", isReg ? "true" : "false");
+    $("authTitle").textContent = isReg
+      ? PM_AUTH.t("login.tab_register", "注册")
+      : PM_AUTH.t("login.h1", "登录");
+    $("authSub").textContent = isReg
+      ? PM_AUTH.t("login.subtitle_register", "创建账号后即可访问全部功能")
+      : PM_AUTH.t("login.subtitle", "登录后可访问全部功能");
+    $("displayNameRow").classList.toggle("hidden", !isReg);
+    $("submitBtn").textContent = isReg
+      ? PM_AUTH.t("login.btn_register", "注册并登录")
+      : PM_AUTH.t("login.btn_login", "登录");
+    $("password").setAttribute("autocomplete", isReg ? "new-password" : "current-password");
+    $("firstAdminHint").classList.toggle("hidden", !(isReg && status.userCount === 0));
+    hideError();
+  }
+
+  function showError(msg) {
+    var el = $("formErr");
+    el.textContent = msg;
+    el.classList.remove("hidden");
+  }
+  function hideError() {
+    var el = $("formErr");
+    el.textContent = "";
+    el.classList.add("hidden");
+  }
+
+  function submit(e) {
+    if (e) e.preventDefault();
+    var btn = $("submitBtn");
+    var email = $("email").value.trim();
+    var password = $("password").value;
+    if (!email || !password) {
+      showError(PM_AUTH.t("login.err_email_invalid", "请填写邮箱与密码"));
+      return;
+    }
+    var url = mode === "register" ? PM_AUTH.REGISTER_URL : PM_AUTH.LOGIN_URL;
+    var body = { email: email, password: password };
+    if (mode === "register") body.display_name = $("displayName").value.trim();
+
+    hideError();
+    btn.disabled = true;
+    btn.textContent = PM_AUTH.t("login.busy", "处理中…");
+
+    PM_AUTH.apiJson(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    })
+      .then(function (data) {
+        PM_AUTH.track("login_success", { action: mode, page: "/static/login.html" });
+        var next = new URLSearchParams(location.search).get("next");
+        location.replace(next || "/static/trend.html");
+        return data;
+      })
+      .catch(function (err) {
+        PM_AUTH.track("login_fail", { reason: err.code || "unknown" });
+        showError(PM_AUTH.errMessage(err));
+        btn.disabled = false;
+        btn.textContent = mode === "register"
+          ? PM_AUTH.t("login.btn_register", "注册并登录")
+          : PM_AUTH.t("login.btn_login", "登录");
+      });
+  }
+
+  function initTabs() {
+    $("tabLogin").addEventListener("click", function () { applyMode("login"); });
+    $("tabRegister").addEventListener("click", function () { applyMode("register"); });
+    $("authForm").addEventListener("submit", submit);
+    $("switchAccount").addEventListener("click", function (e) {
+      e.preventDefault();
+      PM_AUTH.logout();
+    });
+  }
+
+  return {
+    /** 认证未启用（单用户模式） */
+    renderDisabled: function () { show("paneDisabled"); },
+    /** 已登录但停在登录页 */
+    renderLoggedIn: function (user) {
+      $("loggedInInfo").textContent = PM_AUTH.t("login.welcome", "欢迎回来，{name}")
+        .replace("{name}", user.display_name || user.email);
+      show("paneLoggedIn");
+    },
+    /** 未登录：显示登录 / 注册表单 */
+    renderLogin: function (s) {
+      status = { allowRegistration: s.allowRegistration !== false, userCount: s.userCount || 0 };
+      initTabs();
+      show("paneAuth");
+      // 已关闭注册时禁用注册 tab；库中无用户时**强制**默认到注册（初始化管理员）
+      var regAllowed = status.allowRegistration || status.userCount === 0;
+      $("tabRegister").disabled = !regAllowed;
+      $("regClosedHint").classList.toggle("hidden", regAllowed);
+      $("regOpenNote").classList.toggle("hidden", !regAllowed);
+      applyMode(status.userCount === 0 ? "register" : "login");
+      $("email").focus();
+    }
+  };
+})();
+</script>
+<script src="/static/auth.js" defer></script>
+<script src="/static/telemetry.js" defer></script>
+<script>
+/* 语言切换器（与其它页面一致的最小实现） */
+document.addEventListener("DOMContentLoaded", function () {
+  var sel = document.getElementById("langSel");
+  if (!sel) return;
+  try {
+    var cur = localStorage.getItem("pm_lang") || "zh-CN";
+    sel.value = cur;
+    sel.addEventListener("change", function () {
+      try { localStorage.setItem("pm_lang", sel.value); } catch (e) {}
+      location.reload();
+    });
+  } catch (e) {}
+});
+</script>
+</body>
+</html>

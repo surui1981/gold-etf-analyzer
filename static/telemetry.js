@@ -60,7 +60,12 @@
     i18n_fallback_hit: 1,
     // V0.74.0 N+17：仪表盘自定义（卡片拖拽 + 布局持久化）
     dashboard_drag_end: 1,
-    dashboard_layout_reset: 1
+    dashboard_layout_reset: 1,
+    // V0.75.0：认证骨架（登录成功率 / 越权事件）
+    login_success: 1,
+    login_fail: 1,
+    logout: 1,
+    authz_violation: 1
   };
 
   var queue = [];

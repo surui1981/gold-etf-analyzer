@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     account,
     analysis,
+    auth,
     backtest,
     central_bank,
     decision,
@@ -24,6 +25,7 @@ from app.api.v1.endpoints import (
 
 api_router = APIRouter()
 api_router.include_router(health.router)
+api_router.include_router(auth.router)  # V0.75.0 认证骨架
 api_router.include_router(analysis.router)
 api_router.include_router(market.router)
 api_router.include_router(position.router)

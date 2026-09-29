@@ -70,6 +70,11 @@ ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
         # V0.74.0 N+17：仪表盘自定义（卡片拖拽 + 布局持久化）
         "dashboard_drag_end",
         "dashboard_layout_reset",
+        # V0.75.0：认证骨架（登录成功率 / 越权事件计数，服务端与前端同源白名单）
+        "login_success",
+        "login_fail",
+        "logout",
+        "authz_violation",
     }
 )
 

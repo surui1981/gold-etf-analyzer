@@ -5,9 +5,10 @@ PR-N+9 新增：
 - zh-TW 必含 chrome 命名空间（country.* 33 + portfolio/trend/backtest/central_bank 关键键）
 - country.* 33 个 key 在三语都存在
 - freshness.js 无残留硬编码中文（10 个 forbidden 字符串）
-- 9 个静态 HTML 各 ≥ 5 个 data-i18n 属性（PR-N+8 落地后回归确认）
+- 9 个静态 HTML 各 ≥ 5 个 data-i18n 属性（PR-N+8 落地后回归确认；V0.75.0 扩到 12 个页面）
 - fresh.* 13 个 key 在三语都存在
 - zh-TW 关键 15 个 key 无残留英文
+- **V0.75.0 新增**：全站 `data-i18n*` 引用的 key 必须都能在 zh-CN 字典解析（防「原文被静默替换成原始 key」）
 """
 
 from __future__ import annotations
@@ -210,13 +211,56 @@ def test_no_hardcoded_chinese_in_freshness_js() -> None:
         "silver.html",
         "backtest.html",
         "settings.html",
+        "data-health.html",
+        "login.html",
     ],
 )
 def test_html_pages_have_data_i18n(html_name: str) -> None:
-    """PR-N+8 落地后所有 10 个静态页面都应 ≥ 5 个 data-i18n 属性。"""
+    """PR-N+8 落地后所有静态页面都应 ≥ 5 个 data-i18n 属性。"""
     html = (STATIC_DIR / html_name).read_text(encoding="utf-8")
     n = len(re.findall(r"data-i18n\s*=", html))
     assert n >= 5, f"{html_name} 仅 {n} 个 data-i18n 属性（≥5）"
+
+
+# ── 6.5 所有 data-i18n* 引用的 key 必须在 zh-CN 字典存在（V0.75.0 新增）──
+
+
+def test_all_data_i18n_keys_resolve_in_zh_cn() -> None:
+    """**反向校验**：HTML 中每一个 `data-i18n*` 引用的 key 都必须能在 zh-CN 字典里找到。
+
+    为什么必须有这条：`I18n.apply()` 对未知 key 的行为是 **`el.textContent = t(key)`**，
+    而 `t()` 找不到时返回 **key 字面量本身** —— 结果是元素里的中文原文被**静默替换成
+    `warn.data_source` 这样的原始 key**，页面上直接露出英文字符串。
+
+    这类缺陷的特征是「语法正确、引用存在、DOM id 一致」：
+    - `check_static_js.py` 只做 JS 语法 / 未定义调用 / DOM id 校验 → **查不出**；
+    - `test_html_pages_have_data_i18n` 只数属性**个数**（≥5）→ **查不出**；
+    - 只有真正在浏览器里渲染出来才看得见（V0.75.0 开发期就是这样被 headless 截图抓到的）。
+
+    V0.75.0 实测：全站 13 个页面 627 处引用，zh-CN 字典 739 个 key。
+    """
+    keys = set(_load_dict(ZH_CN).keys())
+    assert keys, "zh-CN 字典为空，无法校验"
+
+    attr = re.compile(r'data-i18n(?:-[a-z]+)?="([^"]+)"')
+    dangling: list[str] = []
+    refs = 0
+    for page in sorted(STATIC_DIR.glob("*.html")):
+        html = page.read_text(encoding="utf-8")
+        for raw in attr.findall(html):
+            key = raw.strip()
+            # `data-i18n="html"` 是 i18n.js 约定的特殊值（走 innerHTML 分支），非字典 key
+            if not key or key == "html":
+                continue
+            refs += 1
+            if key not in keys:
+                dangling.append(f"{page.name}: {key}")
+
+    assert refs > 0, "未扫描到任何 data-i18n 引用，正则或目录可能有问题"
+    assert not dangling, (
+        "以下 data-i18n key 在 zh-CN 字典中不存在（页面会露出原始 key）：\n  "
+        + "\n  ".join(dangling)
+    )
 
 
 # ── 6. fresh.* 13 个 key 在三语都存在 ──

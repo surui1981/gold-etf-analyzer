@@ -86,6 +86,49 @@ class Settings(BaseSettings):
     # 默认 120 req/min（足够 9 页 SPA + 60s 轮询）；生产调高 240 应对异常峰值。
     rate_limit_per_min: int = 120
 
+    # ===== V0.75.0 · 认证骨架（多用户登录）=====
+    # 总开关。**默认 false = 单用户模式**：不解析会话、不校验 CSRF、
+    # 所有请求以 LEGACY_USER_ID(1) 运行，行为与 V0.74.3 完全一致。
+    # 设为 true 后才启用登录 / 注册 / 会话 cookie / CSRF 校验。
+    auth_enabled: bool = False
+
+    # 是否允许自助注册。单用户（私有部署）建议 false，只由 owner 建号；
+    # 家庭 / 合伙场景设 true。无论取值如何，「库中无任何用户时」首个注册者
+    # 一定被创建为 owner —— 否则会陷入「没人能建号」的死锁。
+    allow_registration: bool = True
+
+    # 会话有效期（小时）。默认 336 = 14 天；绝对过期，不随活跃度顺延
+    # （顺延会让「长期不用的设备」永远在线）。
+    session_ttl_hours: int = 336
+
+    # 会话 cookie 名与安全属性。
+    # secure=True 必须搭配 HTTPS；本地 http://127.0.0.1 下浏览器**不会回传**
+    # Secure cookie，故 dev 默认 false，生产（.env.prod + nginx TLS）务必 true。
+    session_cookie_name: str = "pm_session"
+    session_cookie_secure: bool = False
+
+    # CSRF double-submit cookie 名（非 HttpOnly，前端读取后回填 X-CSRF-Token 头）。
+    csrf_cookie_name: str = "pm_csrf"
+
+    # bcrypt 代价因子。12 ≈ 单次校验 250ms（现代 CPU），是「抗离线爆破」与
+    # 「登录体感」的常用平衡点。调高会线性增加登录延迟。
+    bcrypt_cost: int = 12
+
+    # 登录失败锁定：同一「账号或 IP」在 window 内失败达到 max 次即锁定 lockout 分钟。
+    # 防在线暴力破解；命中后即使密码正确也拒绝（返回同样的错误文案，不泄露状态）。
+    login_max_attempts: int = 5
+    login_attempt_window_minutes: int = 15
+    login_lockout_minutes: int = 15
+
+    # 会话 last_seen_at 落库节流（秒）：避免「每个 API 请求一次 UPDATE」。
+    # 0 = 每次都写。
+    session_touch_seconds: int = 300
+
+    # 信任反向代理的 X-Forwarded-For 首跳作为客户端 IP（nginx / Cloudflare 前置时为真）。
+    # ⚠ XFF 可伪造，仅用于「审计展示 + 登录节流」这类软用途，
+    # 不用于任何安全判定（真正的限流由 rate_limit 中间件按连接 IP 做）。
+    trust_proxy_headers: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         """解析 CORS 来源为列表，* 表示放行全部。"""

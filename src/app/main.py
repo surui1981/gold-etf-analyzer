@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from app import __version__
 from app.api.v1.router import api_router
 from app.config import get_settings
+from app.middleware.auth import AuthMiddleware, CsrfMiddleware  # V0.75.0
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.middleware.trace import TraceIdMiddleware
 from app.models.base import Base
@@ -262,7 +263,25 @@ app = FastAPI(
     description="黄金价格投资辅助工具 API —— 三市场对照（纽约金/上海金/黄金ETF）、趋势评估指数、个人持仓跟踪与ETF购买决策",
     lifespan=lifespan,
     debug=settings.debug,
+    # V0.75.0：启用登录且为生产环境时关闭交互式文档 —— /docs 与 /openapi.json
+    # 会完整暴露 API 面（对公网暴露的实例等于给攻击者一份接口清单）。
+    # dev 下保持开启，方便本地调试与 Swagger 联调。
+    docs_url=None if (settings.auth_enabled and settings.app_env == "prod") else "/docs",
+    redoc_url=None if (settings.auth_enabled and settings.app_env == "prod") else "/redoc",
+    openapi_url=None if (settings.auth_enabled and settings.app_env == "prod") else "/openapi.json",
 )
+
+# V0.75.0：认证 + CSRF 中间件必须在 TraceIdMiddleware **之前**注册。
+# add_middleware 是 LIFO（后加的更靠外），故先注册者成为**内层**，
+# 最终执行顺序为 CORS → RateLimit → TraceId → Auth → Csrf → 路由：
+#   ① Auth 外层 → **未登录先于 CSRF 判定**，匿名写方法稳定得到 401（而非 csrf_failed 403），
+#      前端据此把用户送去登录页；已登录但缺/错 token 才是 403；
+#   ② 401/403 响应仍带 CORS 头（CORS 在最外层）→ 前端能读到错误体（否则只显示 "Failed to fetch"）；
+#   ③ 审计日志带 trace_id（TraceId 在两者之外）；
+#   ④ 登录爆破先被 per-IP 限速拦一道，成本更高。
+# AUTH_ENABLED=false 时两者都是纯透传（零 DB 访问），行为与 V0.74.3 一致。
+app.add_middleware(CsrfMiddleware)
+app.add_middleware(AuthMiddleware)
 
 # V0.67.0：trace_id 注入中间件必须在 CORS 之前注册（LIFO：最后加入的最近路径）。
 # 即使 CORS 预检失败 / OPTIONS 拦截，响应头里也带 X-Request-ID，便于客户端定位。
@@ -327,6 +346,16 @@ async def central_bank_page() -> RedirectResponse:
 async def trades_page() -> RedirectResponse:
     """交易历史查询页（P1 #6：多条件筛选 + 汇总 + CSV 导出）。"""
     return RedirectResponse("/static/trades.html")
+
+
+@app.get("/login", include_in_schema=False)
+async def login_page() -> RedirectResponse:
+    """登录 / 注册页（V0.75.0）。
+
+    未启用认证时也保留该路由：页面自身会读取 ``/auth/status`` 并提示
+    「本站未启用登录」—— 比 404 更能解释现状（用户可能是按内网地址猜的路径）。
+    """
+    return RedirectResponse("/static/login.html")
 
 
 # 静态资源（趋势追踪页面等）

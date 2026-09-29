@@ -3,10 +3,11 @@
 from collections.abc import AsyncIterator
 from functools import lru_cache
 
-from fastapi import Depends
+from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.models.user import User
 from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
@@ -19,9 +20,11 @@ from app.repositories.review import GoldPriceRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.repositories.telemetry import TelemetryRepository
+from app.repositories.user import SessionRepository, UserRepository
 from app.services.account import AccountService
 from app.services.alert import AlertDispatcher  # V0.72.0 P3-b
 from app.services.analysis import AnalysisService
+from app.services.auth import AuthService, LoginThrottle  # V0.75.0
 from app.services.backtest import BacktestService
 from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
@@ -324,3 +327,84 @@ def get_telemetry_service(
 ) -> TelemetryService:
     """埋点业务编排服务依赖。"""
     return TelemetryService(repo=repo)
+
+
+# ══════════════════ V0.75.0 认证骨架 ══════════════════
+
+
+async def get_user_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> UserRepository:
+    """用户仓储依赖。"""
+    return UserRepository(session)
+
+
+async def get_session_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> SessionRepository:
+    """会话仓储依赖。"""
+    return SessionRepository(session)
+
+
+@lru_cache(maxsize=1)
+def _login_throttle_singleton() -> LoginThrottle:
+    """登录节流器**进程级单例**。
+
+    关键：失败计数必须跨请求累积。若每次请求新建 ``LoginThrottle``，
+    计数器会随请求结束一起丢弃 → 锁定永不生效（等价于没做防爆破）。
+    测试可用 ``app.dependency_overrides[get_login_throttle]`` 替换为可控实例。
+    """
+    settings = get_settings()
+    return LoginThrottle(
+        max_attempts=settings.login_max_attempts,
+        window_seconds=settings.login_attempt_window_minutes * 60,
+        lockout_seconds=settings.login_lockout_minutes * 60,
+    )
+
+
+def get_login_throttle() -> LoginThrottle:
+    """登录节流器依赖（进程级单例）。"""
+    return _login_throttle_singleton()
+
+
+def get_auth_service(
+    users: UserRepository = Depends(get_user_repository),
+    sessions: SessionRepository = Depends(get_session_repository),
+    throttle: LoginThrottle = Depends(get_login_throttle),
+) -> AuthService:
+    """认证服务依赖（用户仓储 + 会话仓储 + 进程级节流器）。"""
+    return AuthService(users, sessions, throttle=throttle)
+
+
+def get_current_user(request: Request) -> User | None:
+    """当前登录用户；匿名返回 ``None``（不抛错）。
+
+    由 :class:`app.middleware.auth.AuthMiddleware` 在 ``request.state`` 上预置。
+    需要「必须登录」语义时改用 :func:`require_user`。
+    """
+    return getattr(request.state, "user", None)
+
+
+def get_current_session_id(request: Request) -> str | None:
+    """当前请求所用会话 ID（改密时用于保留当前设备登录）。"""
+    return getattr(request.state, "session_id", None)
+
+
+def require_user(
+    request: Request,
+    user: User | None = Depends(get_current_user),
+) -> User:
+    """要求已登录；匿名则 401。
+
+    单用户模式（``AUTH_ENABLED=false``）下中间件不解析会话，
+    ``request.state.user`` 恒为 None —— 但 ``require_user`` 只被「认证专属端点」
+    （``/auth/me``、``/auth/logout``、``/auth/change-password``）使用，
+    这些端点本身在单用户模式下无意义，故不会误伤既有流程。
+    """
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"code": "unauthenticated", "message": "请先登录"},
+            headers={"X-Auth-Required": "1"},
+        )
+    return user

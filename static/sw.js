@@ -12,7 +12,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.74.3";
+const VERSION = "v0.75.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -46,6 +46,10 @@ const SHELL_ASSETS = [
     // V0.73.0 i18n：默认 locale 同步加载，必须 precache 离线可用
     "/static/i18n.js",
     "/static/i18n/zh-CN.js",
+    // V0.75.0 认证骨架：登录页与认证客户端须离线可打开
+    // （否则离线时任意页面都跳登录页 → 落进 offline.html，无法解释原因）
+    "/static/login.html",
+    "/static/auth.js",
 ];
 
 // ─── install：precache shell + skipWaiting ─────────────────────

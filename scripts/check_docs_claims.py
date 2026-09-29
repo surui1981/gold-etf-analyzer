@@ -52,7 +52,13 @@ ALLOW: dict[str, set[str]] = {
         "palladium.html",  # V0.77.0 规划：钯金页
         "oil.html",  # V0.77.0 规划：原油页
     },
-    "ls_key": set(),
+    "ls_key": {
+        # V0.75.0 认证：pm_session / pm_csrf 是 **cookie 名**（服务端 Set-Cookie 下发），
+        # 不是 localStorage key。localStorage 存不下 HttpOnly cookie 也不该存会话，
+        # 故它们永远不会出现在 static/*.js 的 localStorage 调用里 —— 登记为已知的非 LS 名称。
+        "pm_session",
+        "pm_csrf",
+    },
 }
 
 # 对账报告天然引用错误值，跳过校验
@@ -141,6 +147,36 @@ def expand_endpoint(raw: str) -> list[str]:
     ]
 
 
+def is_file_reference(raw: str) -> bool:
+    """判断匹配到的是「源码文件路径」而非 API 端点。
+
+    背景（2026-09-29 新增）：``RE_ENDPOINT`` 会在任意位置抓取 ``/api/v1/…``，
+    因此文档里写 ``src/app/api/v1/endpoints/auth.py``（模块路径）会被误判成
+    一个端点 ``/api/v1/endpoints/auth.py`` —— 这类**假失败**会逼作者在文档里
+    绕弯写作（把路径拆开或省略），反而降低可读性。
+
+    判据：带源码扩展名（``.py`` / ``.js`` / ``.html`` / ``.md`` …），
+    或首段是目录名而非资源名（``endpoints`` / ``middleware`` / ``models`` /
+    ``services`` / ``schemas`` / ``repositories``）。
+    """
+    tail = raw.rstrip("/}).,;")
+    if re.search(r"\.(py|js|ts|html|md|json|yml|yaml|toml)$", tail):
+        return True
+    segments = tail.split("/")
+    # /api/v1/<segment>/... → segment 是「后端包名」时判为模块路径
+    if len(segments) >= 4 and segments[3] in {
+        "endpoints",
+        "middleware",
+        "models",
+        "services",
+        "schemas",
+        "repositories",
+        "utils",
+    }:
+        return True
+    return False
+
+
 # ---------------------------------------------------------------- 校验
 
 
@@ -210,6 +246,8 @@ def check() -> tuple[list[str], dict[str, int]]:
 
             # ---- 4. API 端点 ----
             for raw in RE_ENDPOINT.findall(line):
+                if is_file_reference(raw):
+                    continue  # 源码模块路径（如 src/app/api/v1/endpoints/auth.py），非端点
                 for ep in expand_endpoint(raw):
                     stats["endpoint"] += 1
                     if ep not in endpoints and ep not in ALLOW["endpoint"]:
