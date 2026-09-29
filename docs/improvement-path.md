@@ -1,7 +1,7 @@
 # 改进路径 · 易用性提升路线图
 
 > 项目：`gold-etf-analyzer`（黄金价格投资辅助工具）
-> 当前版本：**V0.74.3** ｜ 制定日期：2026-08-31 ｜ 最近更新：2026-09-29（V0.74.3 补丁版：趋势页**克价曲线去重** —— 对照面板 `#cmpGramChart` 与上方「上海金 Au99.99」面板 `#sgeChart` 是同一标的、同一 60 交易日窗口，同一根曲线被画两遍（V0.74.2 换成真实价格后两张图 Y 轴同落 880~1020 元/克，重复才显形）；改为**图形只画一次**，克价走势统一由上方面板承载（含 MA20/MA40），对照面板只保留 ETF 单图 + `#cmpTable`/`#cmpCards` 指标对照表，对比信息不丢、接口零改动。上版 V0.74.2 补丁版：趋势页「ETF vs 克价 对照」由**归一化双线图**改为**两张真实价格图**（元/份 与 元/克，接口 `points` 增 `etf_price`/`gram_price`、归一化字段保留向后兼容）；并修复 2 处**只在 60 秒轮询后才暴露**的前端缺陷（`#badge` 被 `outerHTML` 重建致丢 id → 主图 1 分钟后整块消失；对照图/上海金图未 `destroy()` 即复用画布 → `Canvas is already in use`）+ 1 处**永真断言**（i18n BOM 测试的 `b"\ufeff"` 字面量）。上版 V0.74.1 修复 3 个前端功能缺陷 —— 5 处图表实例恒 `undefined` 致画布空白、回测页脚本加载时序致整页交互失效、SW 预缓存 3 条 404 URL 致离线缓存全空。再上版 2026-09-26 V0.74.0 仪表盘自定义（卡片拖拽 + 布局持久化）+ 告警规则 CRUD（discriminated union）+ 推送订阅闭环；V0.74.0 一并修复 CI 门禁（ruff lint 7 项 / ruff format 35 文件长期未通过）、版本号单源化，并补齐 V0.73.0 / V0.74.0 在四份文档中的版本与测试数口径）
+> 当前版本：**V0.75.0** ｜ 制定日期：2026-08-31 ｜ 最近更新：2026-09-29（V0.75.0 **认证骨架 · 多用户登录第 ① 步** —— 新增 `users` / `sessions` 两张表（迁移 `d5f81a3c9b47`）+ `services/auth.py`（bcrypt cost=12 / 密码策略含 72 字节硬上限 / `LoginThrottle` 双维度滑动窗口 / 虚拟哈希抵御计时侧信道）+ `middleware/auth.py`（纯 ASGI `AuthMiddleware` + 双提交 `CsrfMiddleware`，注册于 `TraceIdMiddleware` 之前使 401·403 也带 CORS 头与 trace_id）+ **6 个认证端点** + `/login` 页面 + `static/auth.js`（全局 `fetch` 补丁自动补 `X-CSRF-Token`）；`AUTH_ENABLED=false` 时两中间件**完全短路**，行为与 V0.74.3 逐字节一致；用例 728 → **845**，路由 61 → **67 路径 / 76 端点**，页面 12 → **13**。**能力边界**：业务表尚未加 `user_id`，**本版暂无数据隔离**（V0.75.1），找回密码 + 用户管理在 V0.75.2。上版 V0.74.3 补丁版：趋势页**克价曲线去重** —— 对照面板 `#cmpGramChart` 与上方「上海金 Au99.99」面板 `#sgeChart` 是同一标的、同一 60 交易日窗口，同一根曲线被画两遍（V0.74.2 换成真实价格后两张图 Y 轴同落 880~1020 元/克，重复才显形）；改为**图形只画一次**，克价走势统一由上方面板承载（含 MA20/MA40），对照面板只保留 ETF 单图 + `#cmpTable`/`#cmpCards` 指标对照表，对比信息不丢、接口零改动。上版 V0.74.2 补丁版：趋势页「ETF vs 克价 对照」由**归一化双线图**改为**两张真实价格图**（元/份 与 元/克，接口 `points` 增 `etf_price`/`gram_price`、归一化字段保留向后兼容）；并修复 2 处**只在 60 秒轮询后才暴露**的前端缺陷（`#badge` 被 `outerHTML` 重建致丢 id → 主图 1 分钟后整块消失；对照图/上海金图未 `destroy()` 即复用画布 → `Canvas is already in use`）+ 1 处**永真断言**（i18n BOM 测试的 `b"\ufeff"` 字面量）。上版 V0.74.1 修复 3 个前端功能缺陷 —— 5 处图表实例恒 `undefined` 致画布空白、回测页脚本加载时序致整页交互失效、SW 预缓存 3 条 404 URL 致离线缓存全空。再上版 2026-09-26 V0.74.0 仪表盘自定义（卡片拖拽 + 布局持久化）+ 告警规则 CRUD（discriminated union）+ 推送订阅闭环；V0.74.0 一并修复 CI 门禁（ruff lint 7 项 / ruff format 35 文件长期未通过）、版本号单源化，并补齐 V0.73.0 / V0.74.0 在四份文档中的版本与测试数口径）
 > 状态：**P0-P2 已全部落地 + P1 #3 CI/CD + P1 #5 行情源配置化（V0.59.0）+ P1 #6 单用户多账本与交易历史查询页（V0.62.0，P1 全部闭环）+ V0.60.0 行情实时性增强 + V0.61.0 交易闭环与业绩分析（ETF 报价口径修正 + 加仓/减仓内联面板 + 收益曲线 + 获利分析总结）+ V0.62.1 收益回放口径修复（行情未覆盖的成交归入最后可得交易日）+ V0.63.0 评估指数历史曲线升级（P2 #14 起步，4 条线 + 区间切换 + 极值卡 + 稀疏 UX）+ V0.64.0 多时间框架（周/月线趋势，P2 #9，60D / 52W / 24M 三档区间 + ISO 周界 / 年月聚合 + MA 重算）+ V0.65.0 消息面每日 3 次打分（1:2:3 加权，修复同日静默覆盖）+ V0.66.0 研判复盘与准确率校准（金价日历 + T+1/3/5 对比 + 命中率·校准曲线·标签胜率）+ **V0.67.0 框架基础补齐（CI/CD + X-Request-ID 全链路追踪 + 价格日历 schema 校验，工程评估 81.5 → 84.3）**；6.1 数据时效透明 + 6.2 响应式适配 + 6.3 决策可解释性 + 6.4 操作防错与撤销 + 6.6 主动提醒 + 6.7 业绩可视化 + 6.8 新手引导与帮助体系 + 6.10 央行购金数据化与自动化 + 6.11 研判复盘与准确率校准 + **6.12 框架基础补齐（V0.67.0，非原路线图项）** 已落地**（6.5 主题/偏好记忆、6.9 离线体验 待规划；6.7 权重参数回测 待规划） ｜ 工程性评估 B+（84.3/100），下一阶段路线见 §三·五 ｜ 应用 / UX 视角下一阶段路线见 [docs/ux-roadmap.md](./ux-roadmap.md)
 > 目标：从「能用」走向「好用、可信、随时可用」
 > 投资指引基准：**纽约金（COMEX GC）**——连续交易、夜盘覆盖国内休市时段，对国内金价具领先指示意义；ETF / 上海金作国内对照与交易标的
@@ -190,6 +190,8 @@
 | **P3-a** | P2 #11 多品种白银 + P2 #10 参数回测校准 | V0.71.0 | 90 → 90.5（+0.5） | `silver/silver_gram` 标的接入；`/backtest` 页 + `POST /api/v1/backtest/run` | 6 人天 |
 | **P3-b** | P3 #15 邮件/微信推送 + P3 #16 公开部署 | V0.72.0 | 90.5 → 91（+0.5） | `services/notify.py` 抽象 + SMTP/Server酱；`docker-compose.prod.yml` + Nginx + Let's Encrypt | 5 人天 |
 | **P3-c** | P3 #17 i18n 繁中全量 + 后端国家名解耦 | V0.73.0 | 91 → **91.5**（+0.5） | zh-TW 33→391 key + `country_name` schema Optional + freshness.js 本地化 + escapeHtml | 6 人天 |
+| **P4-a** | 仪表盘自定义 + 告警规则 CRUD（UX 路线 V0.74.0） | V0.74.0 | 91.5 → **92**（+0.5） | `static/dashboard.js`（拖拽 + 布局持久化）；`rules: list[RuleSpec]` discriminated union + `#ruleModal` | 6 人天 |
+| **P4-b** | **多用户登录 + 数据隔离（UX 路线 V0.75.x）** | V0.75.0 → V0.75.2 | 92 → **93**（+1） | ① V0.75.0 `users`/`sessions` 表 + bcrypt + AuthMiddleware/CsrfMiddleware + 6 端点（**本版 = 认证骨架**）② V0.75.1 业务表 `user_id` + 查询隔离 ③ V0.75.2 找回密码 + 用户管理 | 6 人天（分 3 段） |
 
 ### P0 · V0.67.0（1 周）· 框架基础补齐 ✅ 已落地
 
@@ -283,15 +285,37 @@
 |---|---|---|---|---|
 | 17 | **P3 #17 i18n 繁中全量 + 后端解耦** | ① zh-TW 字典扩展 country.* (33) + portfolio/trend/backtest/central_bank 全部 chrome + news/review/weights/silver/settings/trades h1/intros/col_*/footers + fresh.* (13)，覆盖率 10.9% → **61.2%**；② `schemas/central_bank.py` `country_name: str \| None = None`（DB 列保留向后兼容）；`services/central_bank.py` `_resolve_country_name()` 兜底链 `DB → COUNTRY_NAMES[iso] → iso`（永不返回 None）；③ `static/freshness.js` `fmtAge` 改 `I18n.fmt.relative()`，tooltip/警示/错误全部走 `fresh.*` 字典 13 key；新增 `escapeHtml()` helper；④ 前端 `central_bank.html` 渲染链 `I18n.t('country.' + iso) → country_name → iso`；⑤ 新增 `test_i18n_format.py` 15 + `test_i18n_coverage.py` 7，阈值 10%→60% | zh-TW ≥60% 覆盖；freshness.js 无残留硬编码中文（除 `_t()` fallback 字面量）；后端 `_resolve_country_name()` 兜底链永不返回 None | ✅ V0.73.0 已落地（**+23 测试**：format 15 + coverage 7 + 阈值升级，基线 621 → **644**；目标分 91 → **91.5**） |
 
+### P4-a · V0.74.0（2 周）· 仪表盘自定义 + 告警规则 CRUD ✅ 已落地（2026-09-26，🟡 部分）
+
+**目标分**：91.5 → **92**（+0.5）｜ 详见 [ux-roadmap.md](./ux-roadmap.md) V0.74.0 段落
+
+| # | 事项 | 子项 | 状态 |
+|---|---|---|---|
+| 18 | **仪表盘自定义（N+17）** | `static/dashboard.js`：7 张卡片原生 HTML5 拖拽排序 + **键盘替代**（Space 抓取 / ↑↓ 移动 / Space 放下）+ `aria-live` 公告；`localStorage.pm_dashboard_layout` 持久化（损坏 JSON 兜底 / 缺 key 末尾补齐 / 重复 key 去重）；「↺ 恢复默认布局」+ 撤销 toast；`test_layout_persistence.py` 10 例 | ✅ |
+| 19 | **告警规则 CRUD（N+18）** | 扁平 boolean → `rules: list[RuleSpec]` **discriminated union**（`volatility` / `crossing` 主轴 2 档或细粒度 4 档 / `window` / `t_plus_n`）；`PUT` 旧字段由 `_legacy_migrate` 自动转换；`#ruleList` + `#ruleModal`；`test_alert_service.py` 12 → 30 例；Web Push 订阅闭环（模块级 `PushService` 单例注入静态 `AlertDispatcher`） | ✅ |
+| 20 | **打印 CSS + PDF 导出** | 报告 / 仪表盘的打印样式与 PDF 导出 | 📋 未落地（后续版本） |
+
+### P4-b · V0.75.x（3 × 2 周）· 多用户登录 + 数据隔离 🟡 第 ① 步已落地
+
+**目标分**：92 → **93**（+1）｜ 风险：**高**（数据迁移 + 安全审计）｜ 详见 [ux-roadmap.md](./ux-roadmap.md) V0.75.x 段落
+
+> **落地节奏（用户确认）**：① 认证骨架 → ② 数据隔离 → ③ 找回密码 + 用户管理。**会话方案（用户确认）**：服务端 `sessions` 表（可即时撤销、可审计），而非自包含 JWT。
+
+| # | 事项 | 子项 | 状态 |
+|---|---|---|---|
+| 21 | **① 认证骨架（V0.75.0）** | `models/user.py`（`User` / `UserSession`，`LEGACY_USER_ID = 1`）+ 迁移 `d5f81a3c9b47`（建 `users` / `sessions`，**无外键、只增表**，可安全降级）+ `repositories/user.py` + `services/auth.py`（bcrypt cost=12 / 密码策略含 **72 字节硬上限** / `LoginThrottle` 双维度滑动窗口 / `_dummy_hash()` 抵御计时侧信道 / 禁用账号文案与密码错误一致）+ `middleware/auth.py`（纯 ASGI `AuthMiddleware` + 双提交 `CsrfMiddleware`，注册于 `TraceIdMiddleware` **之前**）+ 6 个认证端点 + `/login` 页 + `static/auth.js`（全局 `fetch` 补丁自动补 `X-CSRF-Token`、401 跳登录、顶栏徽章 / 改密弹窗）+ 11 个既有页面幂等注入 + i18n 三语各 +39 个 `login.*` 键 + `sw.js` VERSION → `v0.75.0`；**`AUTH_ENABLED=false` 时两中间件完全短路**，与 V0.74.3 行为逐字节一致 | ✅ 2026-09-29（+117 例，728 → **845**；67 路径 / 76 端点；13 页面） |
+| 22 | **② 数据隔离（V0.75.1）** | 业务表（`positions` / `accounts` / 交易流水 / `news_scores` / `daily_snapshots` / `gold_price_daily` / `push_subscriptions` / `app_settings` / `telemetry_events`）加 `user_id`；**存量数据归入 `LEGACY_USER_ID = 1`**；仓储层统一注入用户上下文；跨用户访问返回 **404 而非 403**（不泄露资源存在性）；登录后路由与导航按角色裁剪；迁移需**先备份 + 幂等补列**（沿用 `ensure_sqlite_columns` 兜底） | 📋 待做（**最高优先**：本版已能登录但**尚无隔离**，属「半成品」状态，不宜对外） |
+| 23 | **③ 找回密码 + 用户管理（V0.75.2）** | 邮箱验证码 / 重置令牌（一次性 + 短 TTL）+ SMTP 投递（复用已有 `SMTPNotifier`）+ `owner` 用户管理页（增删用户 / 改角色 / 禁用 / 强制下线） | 📋 待做（**前置条件：配置 SMTP** —— 当前 `.env` 无 SMTP，本版无法端到端验证，故排最后） |
+
 ### 各维度分提升轨迹
 
 ```
- V0.66.0   V0.67.0   V0.68.0   V0.69.0   V0.70.0   V0.71.0   V0.72.0
-数据       82       84       86        87       87       88       88
-框架       78       84        88        89       89       89       92
-易用性     85       85        87        89       91       91       94
-──────────────────────────────────────────────────────────────────────
-综合       81.5     84.3     87.0      88.3     89.0     90.5     91.5
+ V0.66.0   V0.67.0   V0.68.0   V0.69.0   V0.70.0   V0.71.0   V0.72.0   V0.74.0   V0.75.0
+数据       82       84       86        87       87       88       88        89        90
+框架       78       84        88       89       89       89       92        92        93
+易用性     85       85        87       89       91       91       94        94        94
+──────────────────────────────────────────────────────────────────────────────────────
+综合       81.5     84.3     87.0      88.3     89.0     90.5     91.5      92.0      93.0
 ```
 
 ### 风险与回退
@@ -378,19 +402,20 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 4. **默认账本保障（`_ensure_default_account`）** —— V0.62.0 引入。`accounts` 表为空时显式 seed id=1「默认账户」，使历史持仓在账本视图中可见，避免「无归属」孤儿数据。
 5. **后台预热 + 调度器启动** —— 异步后台 `asyncio.create_task(_warm_cache())` 拉取 ny/etf/gram 三市场 60 天 K 线 + 预生成当日 served cache（首屏秒级命中）；同时启动 `daily_capture_loop`（07:00 BJT 落快照 + 日内 4 时点 09:30/11:30/14:00/15:30 BJT 预热 served cache）+ `monthly_central_bank_loop`（每月 1/15/末日 07:30 BJT 拉 WGC）。
 
-### 5.3 运行时质量（实测，V0.64.0）
+### 5.3 运行时质量（实测，V0.75.0）
 
 | 指标 | 实测值 | 度量方法 |
 |------|------|---------|
 | **冷启动耗时（pip 安装后首次启动）** | ~30-40s | uvicorn 启动 + alembic 子进程 + 三市场 60 天 K 线预热 + served cache 生成 |
 | **冷启动首屏响应** | < 5s | served cache 预热命中 + Chart.js 本地 vendor（V0.74.3 起不再依赖 CDN） |
 | **缓存命中首屏** | < 5s（典型 1.6s） | `quote_cache_ttl=300` + `served_cache_ttl_seconds=600` 双层命中 |
-| **离线全量回归** | **388 passed / 0 failed**（432 用例收集，排除 2 个联网 fetcher 文件 44 用例；本机实测 27m05s，耗时主要在行情源网络超时重试） | `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py` |
-| **全量回归（含联网 fetcher）** | **431 passed / 1 skipped / 0 failed**（432 collected，19m59s；跳过项为 fetcher 依赖 gitignore 数据文件的既有 skipif 守卫） | `python -m pytest -q` |
-| **JS 门禁** | 10 个脚本全 OK（7 静态页 + 3 共享） | `python scripts/check_static_js.py` / `make check-web` |
+| **离线全量回归** | **801 passed / 0 failed**（845 用例收集，排除 2 个联网 fetcher 文件 44 用例；V0.75.0 实测 **381.30s / 6m21s**） | `python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py --ignore=tests/test_services/test_h15_fetcher.py` |
+| **全量回归（含联网 fetcher）** | **844 passed / 1 skipped / 0 failed**（845 collected；= 离线 801 + 联网 fetcher 43 passed / 1 skipped。**本机全量约 1h05m**，改动面窄时择取定向回归） | `python -m pytest -q` |
+| **JS 门禁** | **13 静态页 + 21 共享脚本全 OK** | `python scripts/check_static_js.py` / `make check-web` |
 | **ruff 检查** | 0 错误 | `ruff check src tests` |
 | **行情源灵活度** | 5 选 1（akshare / mock / eastmoney_only / sina_only / silver_yahoo） | `.env` `MARKET_PROVIDER` |
-| **依赖** | 仅 `fastapi + uvicorn + sqlalchemy + aiosqlite + akshare + pydantic-settings + ruff + pytest` | `pyproject.toml` `[project.optional-dependencies]` |
+| **依赖（运行时）** | `fastapi + uvicorn + sqlalchemy + aiosqlite + akshare + pydantic-settings + httpx + aiosmtplib + jinja2 + pywebpush + py-vapid + cryptography + **bcrypt（V0.75.0）**` | `pyproject.toml` `[project.dependencies]` |
+| **REST 接口面** | **67 paths / 76 operations**（V0.75.0；其中 6 个为认证端点：`/api/v1/auth/status` / `register` / `login` / `logout` / `me` / `change-password`） | `app.openapi()["paths"]` |
 
 > **ruff 基线说明（V0.63.0 起）**：`[tool.ruff.lint]` 的 `select` 使用**规则组前缀**（`E/F/I/UP/B/SIM/RUF`），因此**必须配合版本锁定**——ruff 小版本会在组内新增规则，门禁会毫无征兆地从 0 条变成数千条（0.16.5 曾一次报出 3749 条，其中 3494 条为中文全角标点的 `RUF001/002/003` 误报）。现锁 `ruff>=0.16,<0.17`，并显式 ignore：中文全角标点（`RUF001/002/003`）、`B008`（FastAPI `Depends(...)` 默认参数）、`BLE001`（行情源失败降级需捕获宽泛异常）、`UP017`（`timezone.utc`）。**升级 ruff 前请先重跑 `ruff check src tests` 并复核 ignore 列表。**
 

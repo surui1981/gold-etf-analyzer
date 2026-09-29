@@ -1,6 +1,6 @@
 # UX & 应用能力路线（V0.68.0 → V0.75.0）
 
-> 适用版本：**V0.74.3** → V0.75.0 ｜ 制定日期：2026-09-18 ｜ 最近更新：2026-09-29（V0.74.3 趋势页**克价曲线去重**：对照面板 `#cmpGramChart` 与上方「上海金 Au99.99」面板 `#sgeChart` 同标的、同 60 交易日窗口，同一根曲线被画两遍 → 改为**图形只画一次**，克价统一由上方面板承载，对照面板保留 ETF 单图 + `#cmpTable`/`#cmpCards` 指标对照表；V0.74.2 趋势页对照面板由归一化双线图改为**两张真实价格图**（元/份 与 元/克）+ 修复 2 处轮询后暴露的前端缺陷（`#badge` 丢 id、画布复用未 destroy）+ 1 处永真断言；V0.74.1 修复 3 个前端功能缺陷：白银页/回测页图表实例恒 `undefined`、回测页脚本加载时序、SW 预缓存 3 条 404 URL；V0.74.0 标 🟡 部分落地）｜ 视角：应用能力 + 用户体验
+> 适用版本：**V0.75.0** → V0.75.2 ｜ 制定日期：2026-09-18 ｜ 最近更新：2026-09-29（**V0.75.0 认证骨架已落地**：`users` / `sessions` 表 + 6 个认证端点（status / register / login / logout / me / change-password）+ `login.html` + 顶栏账号菜单 + CSRF 双提交 + 登录节流；**默认 `AUTH_ENABLED=false` 单用户模式**，既有 728 用例零破坏。M8「多用户独立数据，零越权事件」**尚未达成** —— 按三步递进拆分，数据隔离顺延 V0.75.1、找回密码顺延 V0.75.2；V0.74.3 趋势页**克价曲线去重**：对照面板 `#cmpGramChart` 与上方「上海金 Au99.99」面板 `#sgeChart` 同标的、同 60 交易日窗口，同一根曲线被画两遍 → 改为**图形只画一次**，克价统一由上方面板承载，对照面板保留 ETF 单图 + `#cmpTable`/`#cmpCards` 指标对照表；V0.74.2 趋势页对照面板由归一化双线图改为**两张真实价格图**（元/份 与 元/克）+ 修复 2 处轮询后暴露的前端缺陷（`#badge` 丢 id、画布复用未 destroy）+ 1 处永真断言；V0.74.1 修复 3 个前端功能缺陷：白银页/回测页图表实例恒 `undefined`、回测页脚本加载时序、SW 预缓存 3 条 404 URL；V0.74.0 标 🟡 部分落地）｜ 视角：应用能力 + 用户体验
 >
 > **工程路线**（CI / 可观测 / 部署）见 [docs/improvement-path.md §三·五](./improvement-path.md#三五下一阶段路线-v0670--v0720--工程化补齐--业务深度--产品化)；
 > **已落地 UX**（6.1 时效 / 6.2 响应式 / 6.3 决策可解释 / 6.4 操作防错 / 6.6 主动提醒 / 6.8 帮助 / 6.10 央行购金 / 6.11 研判复盘 / 6.12 框架基础）见 [docs/improvement-path.md §六](./improvement-path.md)。
@@ -34,6 +34,9 @@
 | **V0.73.0** | i18n 框架 + 英文版 | ① `data-i18n` 属性 + `i18n.js` + 简繁英三语字典<br>② 顶栏语言切换器（zh-CN / en-US / zh-TW）<br>③ 货币 / 日期 / 百分比自动 locale 化 | 海外华人 + 港台 + 英文用户可用 | 🟢 低（已有 `toLocaleString("zh-CN")` 基础） | 4 |
 | **V0.74.0** | 仪表盘自定义 + 通知偏好 | ① 卡片拖拽排序（纯原生）<br>② 提醒规则面板（≥X% 波动 / 指数跨档 / T+N 命中 / 自定义时段）<br>③ 打印友好 CSS + 一键 PDF 导出 | 个性化首页；通知降噪；月度报告 | 🟡 中（拖拽需无障碍实现） | 5 |
 | **V0.75.0** | 多用户登录 + 数据隔离 | ① bcrypt 密码 + session cookie（HttpOnly + SameSite=Strict）+ CSRF token<br>② `user_id` 透传到所有业务表；`AUTH_ENABLED` 兼容开关<br>③ `/login` + `/register` + 找回密码（邮件 token） | 家庭 / 合伙多用户独立数据 | 🔴 高（数据迁移 + 安全审计） | 6 |
+
+**完成度（2026-09-29）**：V0.68.0 ~ V0.74.3 已全部落地（V0.74.0 标 🟡，打印 / PDF 导出未做）；
+**V0.75.0 拆为三步递进**：① 认证骨架 ✅ 已落地（本次）② 数据隔离 📋 V0.75.1 ③ 找回密码 + 用户管理 📋 V0.75.2。
 
 **合计**：~35.5 人天（约 7-8 周全职开发）。
 
@@ -163,6 +166,34 @@
 
 ### V0.75.0 · 多用户登录 + 数据隔离
 
+> 🟡 **第一步（认证骨架）已于 2026-09-29 落地**，本版拆为三步递进：
+>
+> | 步骤 | 范围 | 状态 |
+> |---|---|---|
+> | **① 认证骨架**（本次） | `users` / `sessions` 表（迁移 `d5f81a3c9b47`）· bcrypt cost=12 · 服务端会话 + 撤销 · `HttpOnly`/`SameSite=Strict` cookie · CSRF 双提交 · 登录失败账号+IP 双维度节流 · `/api/v1/auth/{status,register,login,logout,me,change-password}` · `static/login.html` · 12 页顶栏账号菜单 · `AUTH_ENABLED` 开关（默认 false） | ✅ 已落地 |
+> | **② 数据隔离** | `user_id` 透传业务表 + 复合索引 + 仓储层作用域 + `authz_violation` 审计 + 单租户→多租户迁移脚本 | 📋 V0.75.1 |
+> | **③ 找回密码 + 用户管理** | 邮件 token（30 分钟过期，依赖 V0.72.0 SMTP）+ `/forgot-password` `/reset-password` + 管理员用户列表 / 禁用 | 📋 V0.75.2 |
+>
+> ⚠️ **第一步落地后的能力边界（务必知悉）**：开启 `AUTH_ENABLED=true` 后
+> **除健康检查 / 登录注册登出 / 埋点外的全部 API 都要求登录** ——
+> 即「登录才可用」成立，但**用户之间尚未隔离**（所有人看到同一份数据），
+> 故 M8 验收口号「零越权事件」**尚未满足**。单机自用建议保持 `AUTH_ENABLED=false`。
+>
+> 落地细节（实现取舍）：
+>
+> - **服务端会话而非签名 cookie**：cookie 只放不透明随机串（`secrets.token_urlsafe(32)`），
+>   会话事实存 `sessions` 表 → 登出 / 改密 / 禁用可**即时撤销**，并可审计在线设备。
+> - **bcrypt 72 字节上限显式拒绝**：中文密码 24 个汉字即触顶；不静默截断，
+>   避免「用户以为设了长密码、后半段其实无效」。未知账号也跑一次同代价伪哈希，打平耗时侧信道。
+> - **CSRF 用全局 fetch 补丁而非逐个改调用点**：`static/auth.js` 包裹 `window.fetch`
+>   自动回填 `X-CSRF-Token`，既有 11 个页面几十处写请求**一行未改**；
+>   新增写端点也自动受保护（`sendBeacon` 埋点按协议豁免）。
+> - **中间件注册在 `TraceIdMiddleware` 之前**（LIFO → 成为内层）：
+>   401/403 响应仍带 CORS 头、Audit 日志带 trace_id、登录爆破先被 per-IP 限速拦一道。
+> - **`/docs` 在 `APP_ENV=prod` + 开启认证时自动关闭**：否则接口清单对公网裸奔。
+> - **`/auth/logout` 列为公开路径**：已登出后再点退出返回 `200 {revoked:false}` 而非 401
+>   （旧标签页 / 重复点击是常态，报错反而像功能坏了）。
+
 - **目标**：家庭 / 合伙多用户独立数据。
 - **关键能力**：
   1. bcrypt 密码（cost=12）+ session cookie（HttpOnly + SameSite=Strict + Secure）+ CSRF token
@@ -212,7 +243,7 @@
 
 | # | 不变项 |
 |---|---|
-| 1 | **7 页 + 40 端点 + 454 测试基线不破坏**（V0.75.0 时变 8 页 + 多用户 5 端点 + ~530 测试） |
+| 1 | **基线只增不减**：路线图制定时是 7 页 + 40 端点 + 454 测试；**V0.75.0 实测 13 页 + 67 路径（76 端点）+ 845 测试**（每次迭代只许新增，既有的页面 / 端点 / 用例不得因新功能失效） |
 | 2 | **数据表只读扩展**（`gold_price_daily` / `daily_snapshots` / `news_scores` / `accounts` / `positions` / `trades` —— 只加列，不改主键） |
 | 3 | **现有 JS 资产不重写只扩展**（`account.js` / `help.js` / `freshness.js` / `responsive.css` 命名空间稳定；新增资产通过 `window.PM_xxx` IIFE 自注入） |
 | 4 | **`pm_help_seen_version` 升级强制重看行为保留**（V0.58.0 帮助体系不变） |
@@ -233,8 +264,8 @@
 | **M4** | V0.71.0 | "白银 / 回测可独立跑（≥ 3 维参数）" |
 | **M5** | V0.72.0 | "PWA 可装 + 三渠道推送全通" |
 | **M6** | V0.73.0 | "英文版完整可用，切换 ≤ 200ms" |
-| **M7** | V0.74.0 | "首页可个性化，PDF 导出 ≤ 2 页" |
-| **M8** | V0.75.0 | "多用户独立数据，零越权事件" |
+| **M7** | V0.74.0 | "首页可个性化，PDF 导出 ≤ 2 页"（🟡 个性化 ✅ / PDF 导出 ⏳） |
+| **M8** | V0.75.0 | "多用户独立数据，零越权事件"（⏳ **认证骨架 ✅，数据隔离未做 → 口号尚未达成**） |
 
 ---
 
@@ -289,5 +320,21 @@
 | V0.71.0 | `silver_page_view` / `backtest_run` / `backtest_param_change` | 白银用户占比 / 回测使用深度 |
 | V0.72.0 | `pwa_install_prompted` / `pwa_installed` / `push_channel_click` | PWA 安装转化率 / 三渠道点击率 |
 | V0.73.0 | `lang_change` / `i18n_fallback_hit` | 英文用户占比 / 翻译覆盖率 |
-| V0.74.0 | `dashboard_drag_end` / `notification_rule_save` / `pdf_export_click` | 自定义渗透率 / 提醒规则使用深度 |
-| V0.75.0 | `login_success` / `login_fail` / `authz_violation` | 登录成功率 / 越权事件计数（应恒为 0） |
+| V0.74.0 | `dashboard_drag_end` / `notification_rule_save` / `pdf_export_click`(⏳) | 自定义渗透率 / 提醒规则使用深度 |
+| V0.75.0 | `login_success` / `login_fail` / `logout` / `authz_violation` | 登录成功率 / 越权事件计数（应恒为 0；`authz_violation` 待 V0.75.1 数据隔离后才有数据） |
+
+---
+
+## 附录 D · V0.75.0 落地后的配置速查
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `AUTH_ENABLED` | `false` | 总开关。false = 单用户模式（Auth/Csrf 中间件纯透传、不查库、不下发 cookie） |
+| `ALLOW_REGISTRATION` | `true` | 关闭后只有已有用户可登录；**库中无用户时首个注册者始终可建号**（防「没人能建号」死锁） |
+| `SESSION_TTL_HOURS` | `336`（14 天） | 绝对过期，不随活跃度顺延 |
+| `SESSION_COOKIE_NAME` / `CSRF_COOKIE_NAME` | `pm_session` / `pm_csrf` | 会话 cookie 为 HttpOnly；CSRF cookie 必须非 HttpOnly（double-submit 需 JS 读取） |
+| `SESSION_COOKIE_SECURE` | `false` | ⚠️ 生产必须 `true` + HTTPS；本地 http 下设 true 会导致「登录成功却立刻要求再登录」 |
+| `BCRYPT_COST` | `12` | 改值不影响既有哈希（cost 写在哈希串里） |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_ATTEMPT_WINDOW_MINUTES` / `LOGIN_LOCKOUT_MINUTES` | `5` / `15` / `15` | 账号与 IP 双维度计数，任一命中即锁 |
+| `SESSION_TOUCH_SECONDS` | `300` | `last_seen_at` 落库节流（避免每请求一次 UPDATE） |
+| `TRUST_PROXY_HEADERS` | `false` | nginx / CDN 前置时置 `true`（取 XFF 首跳做审计 IP；⚠️ XFF 可伪造，不用于安全判定） |
