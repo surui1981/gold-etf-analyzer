@@ -75,7 +75,10 @@ def test_no_bom_in_files() -> None:
         path = I18N_DIR / name
         text = path.read_bytes()
         assert not text.startswith(b"\xef\xbb\xbf"), f"{name} 含 UTF-8 BOM"
-        assert not text.startswith(b"\ufeff"), f"{name} 含 UTF-16 BOM"
+        # UTF-16 BOM 的字节形态是 FF FE（LE）/ FE FF（BE）。
+        # 注意：bytes 字面量不支持 \u 转义，写 b"\ufeff" 只会得到字面量
+        # 反斜杠+u+f+e+f+f 六个字节，断言将永远为真（形同虚设）。
+        assert not text.startswith((b"\xff\xfe", b"\xfe\xff")), f"{name} 含 UTF-16 BOM"
 
 
 def test_zh_cn_has_at_least_100_keys() -> None:

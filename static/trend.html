@@ -55,6 +55,12 @@
   .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
   .summary b { color: var(--text); }
+  /* ETF vs 克价「双价格图」：真实价格并列展示（替代原单张归一化指数图） */
+  .cmp-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .cmp-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
+    font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
+  .cmp-chart-head b { color: var(--text); font-weight: 600; }
+  .cmp-chart-canvas { position: relative; height: 220px; }
   /* 追踪指数 */
   .index-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
   /* 实时评估摘要（置顶首屏：指数 + 金价卡） */
@@ -283,7 +289,16 @@
     <div style="font-size:15px;font-weight:600;margin-bottom:4px" data-i18n="trend.cmp_title">黄金ETF vs 黄金克价 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
     <div class="cards" id="cmpCards" style="margin-bottom:12px"></div>
     <table id="cmpTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"></table>
-    <canvas id="compareChart" style="max-height:260px"></canvas>
+    <div class="cmp-charts">
+      <div>
+        <div class="cmp-chart-head" id="cmpEtfHead"></div>
+        <div class="cmp-chart-canvas"><canvas id="cmpEtfChart"></canvas></div>
+      </div>
+      <div>
+        <div class="cmp-chart-head" id="cmpGramHead"></div>
+        <div class="cmp-chart-canvas"><canvas id="cmpGramChart"></canvas></div>
+      </div>
+    </div>
     <div class="summary" id="cmpSummary"></div>
   </div>
 
@@ -517,8 +532,15 @@ function render(d) {
   const unit = m.unit || "元";
 
   // 标题与徽章
-  document.getElementById("badge").outerHTML =
-    `<span class="badge" style="background:${isUp ? "var(--up)" : "var(--down)"};vertical-align:middle">${m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡"}</span>`;
+  // ⚠ 必须就地更新：此前用 `#badge`.outerHTML 整体替换，新节点不带 id，
+  //   导致第 2 次 loadTrend（60s 轮询）取到 null 抛错，主图被错误信息替换。
+  const badgeEl = document.getElementById("badge");
+  if (badgeEl) {
+    badgeEl.className = "badge";
+    badgeEl.style.background = isUp ? "var(--up)" : "var(--down)";
+    badgeEl.style.verticalAlign = "middle";
+    badgeEl.textContent = m.direction === "up" ? "↗ 上升" : m.direction === "down" ? "↘ 下降" : "→ 震荡";
+  }
   document.getElementById("subtitle").textContent =
     `${d.name ?? "—"}（${d.symbol ?? "—"}） · 投资指引基准 · ${m.start_date ?? "—"} ~ ${m.end_date ?? "—"} · ${m.trading_days ?? "—"} 个交易日 · ${unit}`;
 
@@ -641,11 +663,50 @@ function render(d) {
   document.getElementById("summary").innerHTML = m.summary || "暂无摘要";
 }
 
+// 双价格图渲染：每个标的独立一张图，Y 轴即真实价格（元/份 / 元/克）
+function renderCmpPriceChart(canvasId, headId, points, cfg) {
+  const canvas = document.getElementById(canvasId);
+  const head = document.getElementById(headId);
+  if (!canvas || !points || !points.length) return;
+  const pct = v => v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
+  if (head) {
+    head.innerHTML = `<span><b>${cfg.name}</b> ${cfg.symbol} · ${cfg.unit}</span>` +
+      `<span>${cfg.startPrice?.toFixed(cfg.dp) ?? "—"} → ${cfg.endPrice?.toFixed(cfg.dp) ?? "—"} ` +
+      `<span class="${(cfg.changePct ?? 0) >= 0 ? "up" : "down"}">${pct(cfg.changePct)}</span></span>`;
+  }
+  // 轮询重绘前必须销毁旧实例，否则 Chart.js 抛 "Canvas is already in use"
+  const prev = window.Chart && Chart.getChart ? Chart.getChart(canvas) : null;
+  if (prev) prev.destroy();
+  new Chart(canvas, {
+    type: "line",
+    data: {
+      labels: points.map(p => p.date),
+      datasets: [{
+        label: cfg.unit,
+        data: points.map(p => p[cfg.key]),
+        borderColor: cfg.color, borderWidth: 2, pointRadius: 0, tension: 0.15,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: it => `${it.parsed.y} ${cfg.unit}` } },
+      },
+      scales: {
+        x: { ticks: { maxTicksLimit: 8, font: { size: 11 } } },
+        y: { ticks: { font: { size: 11 } } },
+      },
+    },
+  });
+}
+
 // ETF vs 克价对照
 async function loadCompare() {
   try {
     const c = await fetchJSON(API_BASE + "/api/v1/market/gold/compare?days=60");
-    document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 起点归一化=100`;
+    document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 双价格走势（元/份 与 元/克）`;
     const e = c.etf, g = c.gram;
     const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
     // 数据对照表：ETF vs 上海金 完整指标
@@ -672,23 +733,16 @@ async function loadCompare() {
         `<td class="${r[3]}" style="text-align:right;padding:7px 8px">${r[1]}</td>` +
         `<td class="${r[4]}" style="text-align:right;padding:7px 8px">${r[2]}</td></tr>`).join("");
 
-    new Chart(document.getElementById("compareChart"), {
-      type: "line",
-      data: {
-        labels: c.points.map(p => p.date),
-        datasets: [
-          { label: e.name, data: c.points.map(p => p.etf), borderColor: "#c9a227", borderWidth: 2, pointRadius: 0, tension: 0.15 },
-          { label: g.name, data: c.points.map(p => p.gram), borderColor: "#1971c2", borderWidth: 2, pointRadius: 0, tension: 0.15 },
-        ],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: "index", intersect: false },
-        plugins: { legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } } },
-        scales: { x: { ticks: { maxTicksLimit: 10, font: { size: 11 } } }, y: { ticks: { font: { size: 11 } } } },
-      },
+    renderCmpPriceChart("cmpEtfChart", "cmpEtfHead", c.points, {
+      name: e.name, symbol: e.symbol, unit: "元/份", color: "#c9a227", key: "etf_price",
+      startPrice: e.start_price, endPrice: e.end_price, changePct: e.change_pct, dp: 3,
     });
-    ChartA11y.wrapChart(document.getElementById("compareChart"), { label: "ETF / 现货对照曲线（近 60 天）", summaryId: "cmpSummary" });
+    renderCmpPriceChart("cmpGramChart", "cmpGramHead", c.points, {
+      name: g.name, symbol: g.symbol, unit: "元/克", color: "#1971c2", key: "gram_price",
+      startPrice: g.start_price, endPrice: g.end_price, changePct: g.change_pct, dp: 2,
+    });
+    ChartA11y.wrapChart(document.getElementById("cmpEtfChart"), { label: `${e.name} ${c.days} 个交易日价格走势（元/份）`, summaryId: "cmpSummary" });
+    ChartA11y.wrapChart(document.getElementById("cmpGramChart"), { label: `${g.name} ${c.days} 个交易日价格走势（元/克）`, summaryId: "cmpSummary" });
     document.getElementById("cmpSummary").textContent = c.summary || "—";
   } catch (e) {
     document.getElementById("cmpSub").textContent = "对照加载失败：" + e.message;
@@ -714,6 +768,9 @@ async function loadSge() {
       { label: "区间最高", value: m.high?.toFixed(2) ?? "—", extra: "元/克" },
       { label: "区间最低", value: m.low?.toFixed(2) ?? "—", extra: "元/克" },
     ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("");
+    // 轮询重绘前先销毁旧实例，否则 Chart.js 抛 "Canvas is already in use"（60s 轮询必现）
+    const sgePrev = (window.Chart && Chart.getChart) ? Chart.getChart(document.getElementById("sgeChart")) : null;
+    if (sgePrev) sgePrev.destroy();
     new Chart(document.getElementById("sgeChart"), {
       type: "line",
       data: {

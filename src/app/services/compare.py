@@ -55,13 +55,13 @@ def _series_metrics(
 
 
 class GoldCompareService:
-    """对照分析：按日期对齐两序列，归一化比较并输出完整指标。"""
+    """对照分析：按日期对齐两序列，输出**真实价格序列** + 归一化序列 + 完整指标。"""
 
     def __init__(self, repo: MarketDataRepository) -> None:
         self._repo = repo
 
     async def compare(self, days: int = 60) -> GoldCompareOut:
-        """生成 ETF 与克价对照（完整指标 + 归一化序列 + 领先判定）。
+        """生成 ETF 与克价对照（真实价格序列 + 归一化序列 + 完整指标 + 领先判定）。
 
         Args:
             days: 请求的交易日数量（实际对齐天数以公共日期为准）
@@ -86,13 +86,15 @@ class GoldCompareService:
         etf_closes = [k.close for k in etf_k]
         gram_closes = [k.close for k in gram_k]
 
-        # 归一化：区间起点 = 100
+        # 归一化：区间起点 = 100；同时输出真实价格（元/份、元/克）供页面直接绘图
         e0, g0 = etf_closes[0], gram_closes[0]
         points = [
             GoldComparePoint(
                 date=d,
                 etf=round(e / e0 * 100, 2),
                 gram=round(g / g0 * 100, 2),
+                etf_price=round(e, 3),
+                gram_price=round(g, 2),
             )
             # common_dates 为 ETF/克价日期交集，三者长度必然一致 → strict=True 作不变量断言
             for d, e, g in zip(common_dates, etf_closes, gram_closes, strict=True)

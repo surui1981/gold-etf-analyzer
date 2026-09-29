@@ -192,7 +192,8 @@ async def gold_compare(
 ) -> GoldCompareOut:
     """黄金ETF（518880）与黄金克价（上海金 Au99.99，元/克）区间表现对照。
 
-    按公共交易日对齐，各自归一化（起点=100），输出涨跌幅与领先判定。
+    按公共交易日对齐，输出**双标的真实价格序列**（``etf_price`` 元/份、
+    ``gram_price`` 元/克，供页面并列绘图）+ 归一化序列（起点=100）+ 涨跌幅与领先判定。
     """
     return await service.compare(days=days)
 

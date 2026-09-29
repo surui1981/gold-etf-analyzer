@@ -251,6 +251,11 @@ async def test_gold_compare(client: AsyncClient) -> None:
     assert len(body["points"]) == 60
     assert body["points"][0]["etf"] == 100.0
     assert body["points"][0]["gram"] == 100.0
+    # 真实价格序列（页面双价格图数据源）：首尾与区间起止价对齐
+    assert body["points"][0]["etf_price"] == body["etf"]["start_price"]
+    assert body["points"][-1]["etf_price"] == body["etf"]["end_price"]
+    assert body["points"][0]["gram_price"] == body["gram"]["start_price"]
+    assert body["points"][-1]["gram_price"] == body["gram"]["end_price"]
     assert "对照" in body["summary"]
 
 

@@ -257,11 +257,18 @@ class GoldCompareSeries(BaseModel):
 
 
 class GoldComparePoint(BaseModel):
-    """对照点：ETF 与克价均归一化（区间起点 = 100）。"""
+    """对照点：同一交易日下 ETF 与克价的真实价格（并保留归一化值）。
+
+    前端**直接展示真实价格**（两个独立价格图，元/份 与 元/克），
+    避免归一化指数被误读为价格或评分；
+    归一化字段 ``etf`` / ``gram`` 保留，供比率型消费方与向后兼容使用。
+    """
 
     date: date
-    etf: float = Field(..., description="ETF 归一化值")
-    gram: float = Field(..., description="黄金克价归一化值")
+    etf: float = Field(..., description="ETF 归一化值（区间起点 = 100）")
+    gram: float = Field(..., description="黄金克价归一化值（区间起点 = 100）")
+    etf_price: float = Field(..., description="ETF 当日收盘价，元/份")
+    gram_price: float = Field(..., description="黄金克价当日收盘价，元/克")
 
 
 class GoldCompareOut(BaseModel):

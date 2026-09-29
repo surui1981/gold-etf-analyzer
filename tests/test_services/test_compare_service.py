@@ -48,6 +48,13 @@ async def test_compare_alignment_and_leader() -> None:
     assert len(out.points) == 60
     assert out.points[0].etf == 100.0
     assert out.points[0].gram == 100.0
+    # 真实价格序列（页面双价格图数据源），与区间起止价一致
+    assert out.points[0].etf_price == pytest.approx(9.0, abs=0.001)
+    assert out.points[0].gram_price == pytest.approx(990.0, abs=0.01)
+    assert out.points[-1].etf_price == pytest.approx(11.95, abs=0.001)
+    assert out.points[-1].gram_price == pytest.approx(1049.0, abs=0.01)
+    assert out.points[0].etf_price == pytest.approx(out.etf.start_price, abs=0.001)
+    assert out.points[-1].gram_price == pytest.approx(out.gram.end_price, abs=0.01)
     assert out.leader == "etf"
     assert out.etf.change_pct == pytest.approx(32.78, abs=0.1)
     assert out.gram.change_pct == pytest.approx(5.96, abs=0.1)
