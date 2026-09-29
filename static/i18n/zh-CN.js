@@ -234,7 +234,7 @@ window.PM_I18N_ZH_CN = {
   "trend.sge_title": "上海金 Au99.99（元/克）· 国内金价对照",
   "trend.dims_title": "趋势参数维度",
   "trend.dims_sub": "加权合成 · 红=利多 绿=利空",
-  "trend.cmp_title": "黄金ETF vs 黄金克价 对照",
+  "trend.cmp_title": "黄金ETF 518880 · 价格走势与克价对照",
   "trend.main_chart_title": "📈 黄金趋势主图",
   "trend.chart_loading": "正在加载行情数据…",
   "trend.loading_hint": "数据加载中…（首次约 10-30 秒，之后走缓存秒开）",

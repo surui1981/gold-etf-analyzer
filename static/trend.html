@@ -13,7 +13,7 @@
     document.documentElement.setAttribute("data-theme",eff);
   } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
 })();</script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/vendor/chart.umd.min.js"></script>
 <!-- V0.69.0：Chart.js a11y 封装必须在所有 new Chart() 调用之前同步加载 -->
 <script src="/static/chart-a11y.js"></script>
 <link rel="stylesheet" href="/static/theme.css">
@@ -55,12 +55,12 @@
   .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
   .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
   .summary b { color: var(--text); }
-  /* ETF vs 克价「双价格图」：真实价格并列展示（替代原单张归一化指数图） */
-  .cmp-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  /* ETF 价格走势单图（V0.74.3 合并去重：克价走势只在「上海金 Au99.99」面板画一次，
+     对照面板仅保留 ETF 价格图 + ETF/克价 指标对照表） */
   .cmp-chart-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
     font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }
   .cmp-chart-head b { color: var(--text); font-weight: 600; }
-  .cmp-chart-canvas { position: relative; height: 220px; }
+  .cmp-chart-canvas { position: relative; height: 260px; }
   /* 追踪指数 */
   .index-panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 18px; margin-bottom: 16px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
   /* 实时评估摘要（置顶首屏：指数 + 金价卡） */
@@ -284,21 +284,13 @@
     <div id="indicators"></div>
   </div>
 
-  <!-- ETF vs 黄金克价 对照 -->
+  <!-- ETF 价格走势 + ETF/克价 指标对照（克价走势图见上方「上海金 Au99.99」面板，此处不再重复绘制） -->
   <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:4px" data-i18n="trend.cmp_title">黄金ETF vs 黄金克价 对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:4px" data-i18n="trend.cmp_title">黄金ETF 518880 · 价格走势与克价对照 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="cmpSub"></span></div>
     <div class="cards" id="cmpCards" style="margin-bottom:12px"></div>
     <table id="cmpTable" style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:12px"></table>
-    <div class="cmp-charts">
-      <div>
-        <div class="cmp-chart-head" id="cmpEtfHead"></div>
-        <div class="cmp-chart-canvas"><canvas id="cmpEtfChart"></canvas></div>
-      </div>
-      <div>
-        <div class="cmp-chart-head" id="cmpGramHead"></div>
-        <div class="cmp-chart-canvas"><canvas id="cmpGramChart"></canvas></div>
-      </div>
-    </div>
+    <div class="cmp-chart-head" id="cmpEtfHead"></div>
+    <div class="cmp-chart-canvas"><canvas id="cmpEtfChart"></canvas></div>
     <div class="summary" id="cmpSummary"></div>
   </div>
 
@@ -663,7 +655,8 @@ function render(d) {
   document.getElementById("summary").innerHTML = m.summary || "暂无摘要";
 }
 
-// 双价格图渲染：每个标的独立一张图，Y 轴即真实价格（元/份 / 元/克）
+// 价格图渲染：Y 轴即真实价格（元/份）。V0.74.3 起只画 ETF 一条序列——克价走势
+// 已在上方「上海金 Au99.99」面板绘制，重复绘图会误导读者以为是两个不同标的。
 function renderCmpPriceChart(canvasId, headId, points, cfg) {
   const canvas = document.getElementById(canvasId);
   const head = document.getElementById(headId);
@@ -706,7 +699,8 @@ function renderCmpPriceChart(canvasId, headId, points, cfg) {
 async function loadCompare() {
   try {
     const c = await fetchJSON(API_BASE + "/api/v1/market/gold/compare?days=60");
-    document.getElementById("cmpSub").textContent = `${c.days} 个交易日 · 双价格走势（元/份 与 元/克）`;
+    document.getElementById("cmpSub").textContent =
+      `${c.days} 个交易日 · 单位 元/份 · 克价走势见上方「上海金 Au99.99」面板`;
     const e = c.etf, g = c.gram;
     const leaderTxt = c.leader === "etf" ? e.name : c.leader === "gram" ? g.name : "持平";
     // 数据对照表：ETF vs 上海金 完整指标
@@ -737,12 +731,9 @@ async function loadCompare() {
       name: e.name, symbol: e.symbol, unit: "元/份", color: "#c9a227", key: "etf_price",
       startPrice: e.start_price, endPrice: e.end_price, changePct: e.change_pct, dp: 3,
     });
-    renderCmpPriceChart("cmpGramChart", "cmpGramHead", c.points, {
-      name: g.name, symbol: g.symbol, unit: "元/克", color: "#1971c2", key: "gram_price",
-      startPrice: g.start_price, endPrice: g.end_price, changePct: g.change_pct, dp: 2,
-    });
+    // 克价图不再重复绘制（同一标的、同一窗口已在上方「上海金 Au99.99」面板呈现），
+    // 仅保留 ETF 价格图 + cmpTable / cmpCards 中 ETF vs 克价 的指标对照。
     ChartA11y.wrapChart(document.getElementById("cmpEtfChart"), { label: `${e.name} ${c.days} 个交易日价格走势（元/份）`, summaryId: "cmpSummary" });
-    ChartA11y.wrapChart(document.getElementById("cmpGramChart"), { label: `${g.name} ${c.days} 个交易日价格走势（元/克）`, summaryId: "cmpSummary" });
     document.getElementById("cmpSummary").textContent = c.summary || "—";
   } catch (e) {
     document.getElementById("cmpSub").textContent = "对照加载失败：" + e.message;

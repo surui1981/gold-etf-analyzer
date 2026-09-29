@@ -12,7 +12,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.73.0";
+const VERSION = "v0.74.3";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -41,6 +41,8 @@ const SHELL_ASSETS = [
     "/static/help.js",
     "/static/telemetry.js",
     "/static/nav-drawer.js",
+    // V0.74.3 依赖本地化：Chart.js 由 CDN 改为随应用分发（离线 / 无外网环境可用）
+    "/static/vendor/chart.umd.min.js",
     // V0.73.0 i18n：默认 locale 同步加载，必须 precache 离线可用
     "/static/i18n.js",
     "/static/i18n/zh-CN.js",

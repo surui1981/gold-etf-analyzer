@@ -234,7 +234,7 @@ window.PM_I18N_en_US = {
   "trend.sge_title": "Shanghai Gold Au99.99 (CNY/g) · Domestic Price Reference",
   "trend.dims_title": "Trend Parameter Dimensions",
   "trend.dims_sub": "Weighted composite · Red=Bullish · Green=Bearish",
-  "trend.cmp_title": "Gold ETF vs Gold Grams Comparison",
+  "trend.cmp_title": "Gold ETF 518880 · Price Trend vs Gold Grams",
   "trend.main_chart_title": "📈 Gold Trend Main Chart",
   "trend.chart_loading": "Loading market data…",
   "trend.loading_hint": "Loading data… (first run ~10-30s, then cache hits)",
