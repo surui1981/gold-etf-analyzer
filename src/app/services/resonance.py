@@ -132,14 +132,22 @@ class ResonanceService:
         self._trend = trend
         self._news = news
 
-    async def signal_today(self) -> ResonanceSignalOut:
-        """今日共振信号：调用 TrendService.analyze() 拿最新 components。"""
-        trend_out = await self._trend.analyze(days=60, target="etf")
+    async def signal_today(self, target: str = "etf") -> ResonanceSignalOut:
+        """今日共振信号：调用 TrendService.analyze() 拿最新 components。
+
+        Args:
+            target: 标的类型（V0.75.1 新增）。默认 ``etf``（黄金 ETF 518880），
+                与 V0.70.0 行为完全一致；白银可传 ``silver_etf`` / ``silver_ny``。
+                取值集合与 ``DecisionService`` 对齐，便于「结论卡」按品种复用
+                同一套三维一致性口径（口径同源，不在前端重算）。
+        """
+        trend_out = await self._trend.analyze(days=60, target=target)
         components = trend_out.index.components or {}
         result = compute_resonance(components, score_date=date.today())
         logger.info(
-            "Resonance signal today: %s (conf=%.1f) components=%s",
+            "Resonance signal today: signal=%s target=%s (conf=%.1f) components=%s",
             result.signal,
+            target,
             result.confidence,
             result.components,
         )

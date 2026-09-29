@@ -490,10 +490,12 @@ document.getElementById("klineRangeBtns").addEventListener("click", (e) => {
   loadTrend(parseInt(btn.dataset.days, 10), btn.dataset.interval);
 });
 
-// 共振卡挂载（V0.70.0）
+// 共振卡挂载（V0.70.0；V0.75.1 起需显式传 target —— 该端点原先写死 etf，
+// 导致白银页的共振卡一直显示的是黄金三维分值）
 const resonanceScript = document.createElement("script");
 resonanceScript.src = "/static/resonance-card.js";
-resonanceScript.onload = () => window.PM_Resonance && window.PM_Resonance.mount("resonanceCard");
+resonanceScript.onload = () => window.PM_Resonance
+  && window.PM_Resonance.mount("resonanceCard", { target: "silver_etf" });
 document.head.appendChild(resonanceScript);
 
 // 时效条挂载

@@ -12,7 +12,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.75.0";
+const VERSION = "v0.75.1";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -50,6 +50,8 @@ const SHELL_ASSETS = [
     // （否则离线时任意页面都跳登录页 → 落进 offline.html，无法解释原因）
     "/static/login.html",
     "/static/auth.js",
+    // V0.75.1 综合研判结论卡：宿在首页顶部，离线打开时必须能渲染
+    "/static/synthesis-card.js",
 ];
 
 // ─── install：precache shell + skipWaiting ─────────────────────

@@ -4,6 +4,7 @@
 - 4 类信号判定（strong_up / strong_down / weak_up / divergent / neutral）
 - strength_up 命中统计（含样本不足警告）
 - history 按日期倒序返回
+- signal_today 的 target 透传（V0.75.1：黄金/白银复用同一口径）
 """
 
 from datetime import date, timedelta
@@ -194,3 +195,54 @@ async def test_strength_up_empty_window_returns_warning() -> None:
     assert out.hit_rate is None
     assert out.sample_warning is True
     assert "无消息面打分记录" in out.note
+
+
+# =========================================================================
+# signal_today —— target 复用口径（V0.75.1）
+# =========================================================================
+
+
+class _RecordingTrend:
+    """记录 analyze 收到的 target，供「口径透传」断言。"""
+
+    def __init__(self, components: dict[str, float]) -> None:
+        self._components = components
+        self.calls: list[tuple[int, str]] = []
+
+    async def analyze(self, days: int = 60, target: str = "etf"):
+        self.calls.append((days, target))
+        return SimpleNamespace(index=SimpleNamespace(components=self._components))
+
+
+def _service_with_trend(trend: _RecordingTrend) -> ResonanceService:
+    service = ResonanceService.__new__(ResonanceService)  # 不调 __init__
+    service._trend = trend  # type: ignore[assignment]
+    service._news = FakeNewsRepo([])  # type: ignore[assignment]
+    return service
+
+
+async def test_signal_today_defaults_to_etf_target() -> None:
+    """不传 target → 仍走 etf（V0.70.0 行为，向后兼容）。"""
+    trend = _RecordingTrend({"tech": 70, "macro": 65, "news": 60})
+    service = _service_with_trend(trend)
+
+    out = await service.signal_today()
+    assert trend.calls == [(60, "etf")]
+    assert out.signal == "strong_up"  # 三面 ≥55 → 强共振
+    assert out.components == {"tech": 70, "macro": 65, "news": 60}
+
+
+@pytest.mark.parametrize("target", ["ny", "gram", "silver_etf", "silver_ny", "silver_gram"])
+async def test_signal_today_passes_target_through(target: str) -> None:
+    """V0.75.1：target 原样透传到 TrendService.analyze。
+
+    黄金/白银必须复用**同一套**三维一致性口径（阈值 55/45 + 标准差折扣），
+    否则结论卡上的分歧提示会与共振卡口径不一致。
+    """
+    trend = _RecordingTrend({"tech": 50, "macro": 50, "news": 50})
+    service = _service_with_trend(trend)
+
+    out = await service.signal_today(target=target)
+    assert trend.calls == [(60, target)]
+    assert out.signal == "neutral"
+    assert out.components == {"tech": 50, "macro": 50, "news": 50}

@@ -9,6 +9,7 @@ PR-N+9 新增：
 - fresh.* 13 个 key 在三语都存在
 - zh-TW 关键 15 个 key 无残留英文
 - **V0.75.0 新增**：全站 `data-i18n*` 引用的 key 必须都能在 zh-CN 字典解析（防「原文被静默替换成原始 key」）
+- **V0.75.1 新增**：synthesis-card.js 引用的 `syn.*` key 三语齐全 + 三语 `syn.*` 键集合严格一致
 """
 
 from __future__ import annotations
@@ -325,3 +326,50 @@ def test_zh_tw_no_unintended_english_in_chrome_keys() -> None:
         v = zh_tw.get(k, "")
         m = re.search(r"[A-Za-z]{3,}", v)
         assert not m, f"zh-TW[{k}] 残留英文 {v!r}（匹配 {m.group() if m else None}）"
+
+
+# ── 8. V0.75.1：synthesis-card.js 引用的 syn.* key 三语齐全 ──
+
+
+def test_syn_card_keys_in_all_3_locales() -> None:
+    """结论卡（synthesis-card.js）引用的每个 syn.* key 都必须在三语字典里存在。
+
+    **为什么从 JS 源码反推、而不是像 fresh.* 那样硬编码清单**：结论卡的 key
+    会随 UI 演进持续增加，硬编码清单一旦忘记同步就完全失去门禁作用。这里直接扫
+    源码里的 `'syn.xxx'` 字面量，漏翻译会立刻失败（新增 key 时自动生效）。
+
+    **失败后果说明**：synthesis-card.js 的 ``T(key, zh)`` 自带中文兜底——字典缺
+    key 时回退中文，**绝不把 key 字面量渲染到页面**（V0.75.0 曾因悬空 key 把页脚
+    中文静默替换成 ``warn.data_source``）。所以本测试失败不会造成线上事故，但必须修：
+    否则该文案会永久停留在中文，en-US / zh-TW 用户看不到翻译。
+
+    （结论卡保留中文兜底是有意的防御设计，与 freshness.js「零硬编码中文」的策略不同：
+    freshness 的 key 是固定 13 个且有完整性门禁，而结论卡 key 更多、还承担
+    「字典加载失败时页面仍可读」的兜底职责。）
+    """
+    js = (STATIC_DIR / "synthesis-card.js").read_text(encoding="utf-8")
+    referenced = set(re.findall(r"'(syn\.[a-z_0-9]+)'", js))
+    assert referenced, "未从 synthesis-card.js 扫到任何 syn.* key，正则或路径可能有问题"
+
+    for lang in (ZH_CN, ZH_TW, EN_US):
+        d = _load_dict(lang)
+        missing = referenced - set(d.keys())
+        assert not missing, f"{lang} 缺少 syn.* keys：{sorted(missing)}"
+
+
+def test_syn_card_key_sets_identical_across_locales() -> None:
+    """三语字典的 syn.* 键集合必须完全一致（防某一语言漏加、造成静默回退）。
+
+    与上一条的区别：上一条以「脚本引用的 key」为准，这条以「三语互相对齐」为准
+    ——能抓到「key 加进了 zh-CN 却忘了 zh-TW」这类只影响单一语言的疏漏。
+    """
+    sets = {
+        lang: {k for k in _load_dict(lang) if k.startswith("syn.")}
+        for lang in (ZH_CN, ZH_TW, EN_US)
+    }
+    all_keys = set().union(*sets.values())
+    assert all_keys, "三份字典都没有 syn.* key"
+    for lang, keys in sets.items():
+        assert keys == all_keys, (
+            f"{lang} 的 syn.* 键集合与其他语言不一致，差异：{sorted(all_keys ^ keys)}"
+        )

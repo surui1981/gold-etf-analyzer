@@ -2,6 +2,7 @@
 
 覆盖：
 - /signal：返回 4 类信号 + 置信度
+- /signal：target 透传（V0.75.1 黄金/白银按品种切换口径）
 - /strength-up：horizon 校验 + 命中统计
 - /history：空表 → empty list
 """
@@ -19,6 +20,10 @@ from app.dependencies import (
 )
 from app.models.news import NewsScore
 from app.services.resonance import ResonanceService
+
+# 记录 TrendService.analyze 收到的 target（V0.75.1 target 透传断言用）。
+# 每个用例前由 autouse fixture 清空，避免用例间串扰。
+TREND_TARGETS: list[str] = []
 
 
 class FakeMarket:
@@ -49,6 +54,7 @@ class FakeTrend:
 
     async def analyze(self, days: int = 60, target: str = "etf"):
         # ResonanceService 只用 index.components，用 SimpleNamespace 足矣
+        TREND_TARGETS.append(target)
         return SimpleNamespace(
             index=SimpleNamespace(components={"tech": 70, "macro": 65, "news": 60}),
         )
@@ -75,6 +81,7 @@ def _override_resonance_deps():
     fake_trend = FakeTrend(fake_market)
     today = date.today()
     records = [_make_news(today - timedelta(days=i), 1, 60) for i in range(30)]
+    TREND_TARGETS.clear()
 
     class FakeNews:
         async def list_between(self, start: date, end: date) -> list[NewsScore]:
@@ -88,6 +95,7 @@ def _override_resonance_deps():
     )
     yield
     app.dependency_overrides.clear()
+    TREND_TARGETS.clear()
 
 
 async def test_signal_endpoint_returns_4_class_signal(client: AsyncClient) -> None:
@@ -99,6 +107,35 @@ async def test_signal_endpoint_returns_4_class_signal(client: AsyncClient) -> No
     assert body["label"]
     assert 0 <= body["confidence"] <= 100
     assert "tech" in body["components"]
+
+
+async def test_signal_default_target_is_etf(client: AsyncClient) -> None:
+    """V0.75.1：不传 target 时仍按 etf（V0.70.0 向后兼容）。"""
+    resp = await client.get("/api/v1/resonance/signal")
+    assert resp.status_code == 200
+    assert len(TREND_TARGETS) == 1, TREND_TARGETS
+    assert TREND_TARGETS[0] == "etf"
+
+
+@pytest.mark.parametrize("target", ["ny", "gram", "silver_etf", "silver_ny", "silver_gram"])
+async def test_signal_target_passthrough(client: AsyncClient, target: str) -> None:
+    """V0.75.1：target 原样透传到 TrendService.analyze（黄金/白银同一套口径）。"""
+    resp = await client.get(f"/api/v1/resonance/signal?target={target}")
+    assert resp.status_code == 200
+    assert len(TREND_TARGETS) == 1, TREND_TARGETS
+    assert TREND_TARGETS[0] == target
+    assert resp.json()["components"]["tech"] == 70
+
+
+@pytest.mark.parametrize("bad", ["gold", "silver", "ETF", "etf2", ""])
+async def test_signal_invalid_target_422(client: AsyncClient, bad: str) -> None:
+    """非法 target 由 pattern 拦下（422），**不静默回退**到别的品种。
+
+    静默回退很危险：用户切到白银却看到黄金的结论，且没有任何提示。
+    """
+    resp = await client.get(f"/api/v1/resonance/signal?target={bad}")
+    assert resp.status_code == 422
+    assert TREND_TARGETS == []
 
 
 async def test_strength_up_invalid_horizon_422(client: AsyncClient) -> None:

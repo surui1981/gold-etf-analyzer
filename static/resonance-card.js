@@ -24,6 +24,15 @@
 
   var REFRESH_MS = 60000;
   var FETCH_TIMEOUT_MS = 15000;
+  var DEFAULT_CONTAINER = 'resonanceCard';
+
+  /* V0.75.1：容器 id 与 target 由内部状态持有，使卡片可挂到任意容器 / 任意品种。
+     修复两个既有缺陷：
+     ① render/renderError/load 硬编码 getElementById('resonanceCard')，而 silver.html
+        调用的是**未导出**的 PM_Resonance.mount()（每次加载抛 TypeError）；
+     ② load() 取 /api/v1/resonance/signal **不带 target**，而该端点原先把 target 写死
+        为 etf（黄金ETF）→ **白银页的共振卡一直在显示黄金的三维分值**。 */
+  var state = { containerId: DEFAULT_CONTAINER, target: 'etf', timer: null };
 
   // 4 类信号 → 视觉映射（颜色全部走 CSS 变量，自适应 4 主题）
   var SIGNAL_META = {
@@ -35,10 +44,10 @@
   };
 
   var CSS = [
-    '#resonanceCard { padding: 14px 16px; min-height: 64px; cursor: pointer;',
+    '.rc-root { padding: 14px 16px; min-height: 64px; cursor: pointer;',
     '  transition: box-shadow 0.15s, transform 0.15s; }',
-    '#resonanceCard:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }',
-    '#resonanceCard:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }',
+    '.rc-root:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.08); transform: translateY(-1px); }',
+    '.rc-root:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }',
     '.rc-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }',
     '.rc-signal { display: inline-flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 700; }',
     '.rc-signal .rc-icon { font-size: 22px; }',
@@ -82,7 +91,7 @@
   }
 
   function render(signal) {
-    var card = document.getElementById('resonanceCard');
+    var card = document.getElementById(state.containerId);
     if (!card) return;
     var meta = SIGNAL_META[signal.signal] || SIGNAL_META.neutral;
     var comps = signal.components || {};
@@ -105,13 +114,19 @@
   }
 
   function renderError(msg) {
-    var card = document.getElementById('resonanceCard');
+    var card = document.getElementById(state.containerId);
     if (!card) return;
     card.innerHTML = '<div class="rc-error">⚠ 共振信号加载失败：' + msg + '（不影响页面其他数据）</div>';
   }
 
-  function load() {
-    var card = document.getElementById('resonanceCard');
+  function signalUrl(target) {
+    var base = location.port === '8888' ? '' : 'http://127.0.0.1:8888';
+    return base + '/api/v1/resonance/signal?target=' + encodeURIComponent(target || state.target);
+  }
+
+  function load(target) {
+    if (target) state.target = target;
+    var card = document.getElementById(state.containerId);
     if (!card) return Promise.resolve();
     if (card.dataset.loaded !== '1') {
       card.dataset.loaded = '1';
@@ -119,26 +134,26 @@
       card.setAttribute('role', 'button');
       card.setAttribute('aria-label', '共振信号详情（点击展开历史与命中统计）');
       // 点击 / 回车 → 弹窗（暂用新窗口打开 strength-up JSON；后续可换 modal）
-      card.addEventListener('click', openModal);
+      card.addEventListener('click', function () { openModal(state.target); });
       card.addEventListener('keydown', function (e) {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openModal(state.target); }
       });
     }
-    var base = location.port === '8888' ? '' : 'http://127.0.0.1:8888';
-    return fetchJSON(base + '/api/v1/resonance/signal')
+    return fetchJSON(signalUrl(state.target))
       .then(render)
       .catch(function (e) { renderError(e.message); });
   }
 
-  function openModal() {
+  /* V0.75.1：target 可显式传入（结论卡在白银态下钻时必须看白银，而非黄金） */
+  function openModal(target) {
     // 埋点：共振卡片点击
     if (window.TL && typeof window.TL.track === 'function') {
-      window.TL.track('resonance_card_click', { url: location.pathname });
+      window.TL.track('resonance_card_click', { url: location.pathname, target: target || state.target });
     }
     // V0.70.0 MVP：弹窗用浏览器原生 confirm，列出 components + 历史链接
     var base = location.port === '8888' ? '' : 'http://127.0.0.1:8888';
     Promise.all([
-      fetchJSON(base + '/api/v1/resonance/signal').catch(function () { return null; }),
+      fetchJSON(signalUrl(target)).catch(function () { return null; }),
       fetchJSON(base + '/api/v1/resonance/strength-up?days=90&horizon=1').catch(function () { return null; })
     ]).then(function (results) {
       var sig = results[0];
@@ -164,10 +179,27 @@
     });
   }
 
+  /* V0.75.1：挂载到指定容器。
+     修正既有缺陷：silver.html 一直在调用本函数，但此前**并未导出** →
+     每次加载抛 `window.PM_Resonance.mount is not a function`。
+     opts.target 让白银页拿到白银的共振信号（此前恒为黄金 ETF）。 */
+  function mount(containerId, opts) {
+    state.containerId = containerId || DEFAULT_CONTAINER;
+    var card = document.getElementById(state.containerId);
+    if (!card) return;
+    card.classList.add('rc-root');
+    if (opts && opts.target) state.target = opts.target;
+    return load(state.target).then(function () {
+      if (!state.timer) state.timer = setInterval(function () { load(); }, REFRESH_MS);
+    });
+  }
+
   function boot() {
     ensureStyle();
-    load();
-    setInterval(load, REFRESH_MS);
+    // 仅当页面自带默认容器时才自动挂载（trend.html 的容器已并入结论卡，故不再命中）
+    if (document.getElementById(DEFAULT_CONTAINER)) {
+      mount(DEFAULT_CONTAINER);
+    }
   }
 
   if (document.readyState === 'loading') {
@@ -176,5 +208,5 @@
     boot();
   }
 
-  window.PM_Resonance = { load: load, openModal: openModal };
+  window.PM_Resonance = { mount: mount, load: load, openModal: openModal };
 })();

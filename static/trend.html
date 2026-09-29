@@ -138,17 +138,8 @@
   .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
   .source-warn { background: #fff4e5; color: #b26a00; border: 1px solid #ffd8a8; }
   .source-bad { background: #ffe9e9; color: #c92a2a; border: 1px solid #ffc9c9; }
-  /* 今日操作清单 */
-  .cl-item { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed #eceef1; }
-  .cl-item:last-child { border-bottom: none; }
-  .cl-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
-  .cl-dot.done { background: var(--down); }
-  .cl-dot.todo { background: #f59f00; }
-  .cl-main { flex: 1; }
-  .cl-title { font-size: 13.5px; font-weight: 600; }
-  .cl-value { font-size: 12px; color: var(--muted); margin-top: 1px; }
-  .cl-btn { font-size: 12px; padding: 4px 13px; border-radius: 999px; background: #1f2329; color: #fff; text-decoration: none; white-space: nowrap; }
-  .cl-btn.warn { background: #946300; }  /* WCAG: white text 6.25:1 */
+  /* V0.75.1：原「今日操作清单」的 .cl-* 样式已随面板并入综合研判结论卡而移除
+     （结论卡的待办按钮样式由 synthesis-card.js 自注入的 .syn-btn 承担） */
 /* V0.63.0：评估指数曲线区间切换按钮 */
 .range-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s; }
 .range-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -216,7 +207,14 @@
   <!-- 阈值提醒（指数跨档 / 价格异动） -->
   <div id="alertBar"></div>
 
-  <!-- 实时评估摘要（置顶：指数 + 金价） -->
+  <!-- V0.75.1 综合研判结论卡（置顶：一屏定调）
+       把原先散落在「实时评估摘要 / 共振信号卡 / 今日操作清单」三处的判断原料
+       收敛为一张结论卡：指数+行动 → 三维分值 → 一致性 → 仓位对照 → 依据 → 待办。
+       由 /static/synthesis-card.js 渲染（黄金/白银可切换，60s 随行情刷新）。 -->
+  <section class="panel" id="synthesisCard" style="margin-bottom:16px"
+           aria-label="综合研判结论"></section>
+
+  <!-- 实时评估摘要（指数 + 金价明细） -->
   <section class="headline" aria-label="实时评估摘要">
     <div class="headline-title" data-i18n="trend.headline_title">📊 实时评估摘要 · 趋势指数 × 金价</div>
     <div class="index-panel">
@@ -241,16 +239,14 @@
     <div class="cards" id="cards"></div>
   </section>
 
-  <!-- V0.70.0 P2 #7 共振信号卡：宏观 / 技术 / 消息面 三维同台 -->
-  <section class="panel" id="resonanceCard" role="status" aria-live="polite" aria-label="共振信号">
-    <div class="rc-loading" data-i18n="trend.resonance_loading">🔄 共振信号加载中…</div>
-  </section>
+  <!-- V0.70.0 共振信号卡已并入上方「综合研判结论卡」（V0.75.1 收敛去重）：
+       三维同台 + 置信度现在由结论卡承载；原卡片的历史/强信号胜率下钻通过
+       结论卡页脚的「共振详情」入口调用 PM_Resonance.openModal() 保留。
+       本页不再需要 #resonanceCard 容器（silver.html 仍在使用该共享脚本）。 -->
 
-  <!-- 今日操作清单 -->
-  <div class="panel" style="margin-bottom:16px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:2px" data-i18n="trend.checklist_title">📋 今日操作清单 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="clSum" data-i18n="common.loading">加载中…</span></div>
-    <div id="checklistItems"><div class="loading" style="padding:12px 0" data-i18n="common.loading">加载中…</div></div>
-  </div>
+  <!-- 今日操作清单已并入「综合研判结论卡」的「下一步」（V0.75.1 收敛去重）：
+       原清单 ① 查看综合指数、③ 决策与建议仓位 两项已被结论卡本身承载，
+       仅保留真正需要用户动作的 ② 消息面打分、④ 记录交易。 -->
 
   <!-- 每日评估历史（本地快照） · V0.63.0 升级：区间切换 + 极值卡 -->
   <div class="panel" style="margin-bottom:16px">
@@ -363,70 +359,6 @@ async function loadTrend(days = 60, interval = "D") {
 async function init() {
   // V0.64.0：init 改为默认加载 60D（保持现状体验）
   await loadTrend(60, "D");
-}
-
-// 今日操作清单：看指数 → 打消息面分 → 看决策仓位 → 记录交易
-async function loadChecklist() {
-  try {
-    const [t, dec, pos] = await Promise.all([
-      fetchJSON(API),
-      fetchJSON(API_BASE + "/api/v1/decision/etf"),
-      fetchJSON(API_BASE + "/api/v1/positions"),
-    ]);
-    const list = Array.isArray(pos) ? pos : (pos.positions || []);
-    const scored = !!(t.news && t.news.scored);
-    const levelTxt = {
-      strong_up: "强势上升", up: "上升", sideways: "震荡整理",
-      down: "下降", strong_down: "弱势下降",
-    }[t.index.level] || t.index.level;
-
-    const items = [
-      {
-        done: true,
-        title: "① 查看综合趋势指数",
-        value: `${t.index?.score?.toFixed(1) ?? "—"} / 100（${levelTxt}）`,
-        btn: null,
-      },
-      {
-        done: scored,
-        title: "② 消息面打分（占 30% 权重）",
-        value: scored
-          ? `已打分 ${t.news.score}（${t.news.direction === "bullish" ? "看多" : t.news.direction === "bearish" ? "看空" : "中性"}）`
-          : "待完成 · 当前按中性 50 计入评估",
-        btn: { label: scored ? "去调整" : "去打分", href: "/news", warn: !scored },
-      },
-      {
-        done: false,
-        title: "③ 查看决策与建议仓位",
-        value: `${dec.action_label || "—"} · 建议黄金仓位 ${dec.suggested_position ?? 0}%（${dec.position_level || "—"}）`,
-        btn: { label: "去查看", href: "/portfolio", warn: false },
-      },
-      {
-        done: list.length > 0,
-        title: "④ 记录 / 管理交易",
-        value: list.length > 0
-          ? `当前 ${list.length} 笔持仓${dec.position && dec.position.pnl_pct != null ? `（浮盈 ${dec.position.pnl_pct >= 0 ? "+" : ""}${dec.position.pnl_pct.toFixed(2)}%）` : ""}`
-          : "当前空仓 · 可按建议仓位建仓",
-        btn: { label: list.length > 0 ? "去管理" : "去开仓", href: "/portfolio", warn: false },
-      },
-    ];
-
-    document.getElementById("checklistItems").innerHTML = items.map(i => `
-      <div class="cl-item">
-        <span class="cl-dot ${i.done ? "done" : "todo"}"></span>
-        <div class="cl-main">
-          <div class="cl-title">${i.title}</div>
-          <div class="cl-value">${i.value}</div>
-        </div>
-        ${i.btn ? `<a class="cl-btn ${i.btn.warn ? "warn" : ""}" href="${i.btn.href}">${i.btn.label}</a>` : '<span style="font-size:12px;color:var(--down)">已完成</span>'}
-      </div>`).join("");
-
-    const todo = items.filter(i => !i.done).length;
-    document.getElementById("clSum").textContent = todo === 0 ? "今日事项已全部完成" : `${todo} 项待处理`;
-  } catch (e) {
-    document.getElementById("checklistItems").innerHTML =
-      `<div class="error" style="padding:10px 0">清单加载失败：${e.message}</div>`;
-  }
 }
 
 const LEVEL_LABEL = {
@@ -915,7 +847,7 @@ document.getElementById("klineRangeBtns")?.addEventListener("click", (ev) => {
 // 统一启动：并行加载各区块，全部结束后隐藏进度提示
 (async function boot() {
   const bar = document.getElementById("loadBar");
-  await Promise.allSettled([init(), loadChecklist(), loadCompare(), loadSge(), loadSnapshots()]);
+  await Promise.allSettled([init(), loadCompare(), loadSge(), loadSnapshots()]);
   bar.style.display = "none";
   startTrendPolling();  // V0.60.0：60s 轮询 + visibilitychange 切回前台自动刷新
 })();
@@ -934,7 +866,7 @@ async function refreshTrendQuotes() {
     // 命中后端 cache 时 ms 级返回；超 TTL 时重算 ~200ms
     // V0.64.0：始终刷新日 K（避免 W/M 主图每分钟重画，浪费带宽 + 用户感知跳动）；
     // 若当前是 W/M 模式，则补一次对应区间刷新。
-    await Promise.allSettled([loadTrend(60, "D"), loadChecklist(), loadCompare(), loadSge()]);
+    await Promise.allSettled([loadTrend(60, "D"), loadCompare(), loadSge()]);
     if (currentKlineInterval !== "D") {
       const active = document.querySelector("#klineRangeBtns .range-btn.active");
       const days = active ? parseInt(active.dataset.days, 10) : 365;
@@ -967,7 +899,10 @@ function startTrendPolling() {
   <script src="/static/telemetry.js" defer></script>
   <script src="/static/nav-drawer.js" defer></script>
   <script src="/static/command-palette.js" defer></script>
-  <!-- V0.70.0 P2 #7 共振信号卡 -->
+  <!-- V0.70.0 P2 #7 共振信号卡（V0.75.1 起其容器已并入结论卡；
+       本脚本保留以提供结论卡页脚「共振详情」下钻所需的 PM_Resonance.openModal） -->
   <script src="/static/resonance-card.js" defer></script>
+  <!-- V0.75.1 综合研判结论卡（置顶，黄金/白银可切换） -->
+  <script src="/static/synthesis-card.js" defer></script>
 </body>
 </html>

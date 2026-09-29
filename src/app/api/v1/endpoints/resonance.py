@@ -25,10 +25,22 @@ router = APIRouter(prefix="/resonance", tags=["resonance"])
     summary="今日共振信号",
 )
 async def get_resonance_signal(
+    target: str = Query(
+        "etf",
+        pattern="^(ny|etf|gram|silver_etf|silver_ny|silver_gram)$",
+        description="标的类型（V0.75.1 新增）：etf=黄金ETF 518880（默认，兼容 V0.70.0）/ "
+        "ny=纽约金COMEX / gram=上海金Au99.99 / silver_etf=白银ETF 562800 / "
+        "silver_ny=纽约白银COMEX SI / silver_gram=白银克价",
+    ),
     service: ResonanceService = Depends(get_resonance_service),
 ) -> ResonanceSignalOut:
-    """今日宏观/技术/消息面三维共振信号（4 类 + 置信度 0-100）。"""
-    return await service.signal_today()
+    """今日宏观/技术/消息面三维共振信号（4 类 + 置信度 0-100）。
+
+    V0.75.1：``target`` 参数让黄金/白银复用同一套三维一致性口径
+    （阈值 55/45 + 标准差折扣），供「综合研判结论卡」按品种切换；
+    不传 target 仍走黄金 ETF 默认路径，完全向后兼容。
+    """
+    return await service.signal_today(target=target)
 
 
 @router.get(
