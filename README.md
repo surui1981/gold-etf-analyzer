@@ -4,14 +4,14 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.75.0**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | **845 用例**（62 个测试模块）· 离线口径 **801 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 845 collected |
+| **当前版本** | **V0.75.1**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | **864 用例**（62 个测试模块）· 离线口径 **820 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 864 collected |
 | **页面** | 13 个静态页 · 67 个 REST 路径（76 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
 > 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
 > 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
-> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.75.0）
+> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.75.3）
 > ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
 > 🚀 [docs/deployment.md](docs/deployment.md) · 公开部署 runbook（Nginx + HTTPS + Docker）
 
@@ -37,7 +37,8 @@
 - 💼 **个人持仓闭环** — 多账本 / 开仓·加仓·减仓·清仓 / **克数模式** / 收益曲线 / 业绩分析
 - 🧪 **参数回测校准** — 历史日线扫描权重网格 × 阈值带，输出夏普 + 最大回撤 + 5 区间校准
 - 📜 **每日评估快照** — 参数 + 指数值每日 07:00 BJT 自动落库，指数历史曲线随时回看
-- 📈 **共振信号卡** — 趋势页头部三色共振（宏观 × 技术 × 消息面），命中率高亮
+- 📈 **共振信号卡** — 趋势页三色共振（宏观 × 技术 × 消息面），命中率高亮
+- 🧭 **综合研判结论卡**（V0.75.1 新）— **首页置顶**：一行结论（观望/买入/加仓…）+ 三维分值条（带权重）+ **一致性判定**（同向/分歧）+ **建议仓位 vs 当前持仓** + 决策依据 + **数据质量提示**（静态参考值 / Mock 降级如实标注）；**黄金 ↔ 白银一键切换**
 - 🌐 **三语切换** — 简体中文 / 繁體中文 / English，切换器在顶栏
 - 🔒 **数据本地化** — 持仓、账本、消息面打分、推送订阅全部 SQLite 本地存，**不上云**
 - 📲 **推送 + PWA + Web Push** — 4 类告警规则（指数跨档 / 单日波动 ≥X% / 自定义时段 / T+N 命中），4 渠道：浏览器 / Web Push / 邮件 / 微信
@@ -48,14 +49,14 @@
 
 | 页面 | URL | 一句话功能 | 适用场景 |
 |------|-----|-----------|---------|
-| **趋势追踪** | `/static/trend.html` | 综合指数 + 三大维度拆解 + K 线主图 + 宏观因子 + 共振信号卡 | **打开就用**的主入口，看当日多空 |
+| **趋势追踪** | `/static/trend.html` | **综合研判结论卡（置顶）** + 综合指数 + 三大维度拆解 + K 线主图 + 宏观因子 | **打开就用**的主入口，看当日多空 |
 | **持仓决策** | `/static/portfolio.html` | 当前持仓 + 实时盈亏 + 买卖决策（带理由） | 看现在该不该动 |
 | **权重配置** | `/static/weights.html` | 调整技术 / 宏观 / 合成比权重 | 想自定义评分口径时 |
 | **消息面评估** | `/static/news.html` | 每日 3 次打分（越晚权重越高）+ 依据标签 | 看新闻后录入当日研判 |
 | **研判复盘** | `/static/review.html` | 历史打分 vs 金价对齐，T+1/T+3/T+5 命中 + 校准曲线 | 看自己过去判断准不准 |
 | **交易历史** | `/static/trades.html` | 多账本多条件筛选 + 已实现盈亏 + CSV 导出 | 回看成交明细 |
 | **央行购金** | `/static/central_bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
-| **白银行情** | `/static/silver.html` | 白银 ETF / NY 银趋势 + 共振信号（V0.71.0 新） | 配套白银参考 |
+| **白银行情** | `/static/silver.html` | 白银 ETF / NY 银趋势 + 共振信号（V0.71.0 新；共振卡 V0.75.1 起可用 `silver_etf` 口径） | 配套白银参考 |
 | **参数回测** | `/static/backtest.html` | 权重网格 × 阈值带扫描 + 夏普 / 回撤 / 校准 | 校准参数有效性 |
 | **数据健康** | `/static/data-health.html` | 各行情源实时性 / 覆盖率 / 降级状态一览（V0.73.0 N+16 新） | 排查取数异常 |
 | **设置 / 通知** | `/static/settings.html` | 管理员 Token + 告警规则 + SMTP/Server酱 + PWA + Web Push | 配置推送 + 升级管理 |
@@ -154,7 +155,7 @@
 | 认证 | 服务端 sessions 表 + HttpOnly cookie + CSRF 双提交（V0.75.0）· 兼容开关 `AUTH_ENABLED` |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（V0.74.0 已首次真实构建成功并通过 smoke test，镜像体积仍未记录））+ docker-compose + Nginx + Certbot |
-| 测试 | pytest 845 · ruff · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁） |
+| 测试 | pytest 864 · ruff · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
 ## 快速开始
@@ -186,7 +187,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 全量 845 用例；离线口径 801（按文件名排除 2 个联网 fetcher）
+python -m pytest -v                                      # 全量 864 用例；离线口径 820（按文件名排除 2 个联网 fetcher）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -201,7 +202,8 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
-| **V0.75.0** | 2026-09-29 | **认证骨架（多用户登录第一步）**：新增 `users` / `sessions` 两张表（迁移 `d5f81a3c9b47`）+ 6 个认证端点（status / register / login / logout / me / change-password）+ `static/login.html` 登录注册页 + 12 个页面顶栏账号菜单（含改密弹窗）。**密码 bcrypt cost=12**（未知账号也跑一次同代价哈希，防账号枚举）；**服务端 sessions 表**存储会话，登出 / 改密 / 禁用**即时撤销**；cookie `HttpOnly` + `SameSite=Strict`；写端点 **CSRF 双提交校验**（中间件自动下发 `pm_csrf`，`auth.js` 给全局 `fetch` 打补丁自动回填 `X-CSRF-Token`，故既有 11 个页面的几十处写请求**一行未改**）；登录失败**账号 + IP 双维度节流**。**默认 `AUTH_ENABLED=false` 为单用户模式**：Auth / Csrf 两个中间件完全透传（不读 cookie、不查库、不下发 cookie），既有 728 用例零破坏。业务数据隔离（`user_id` 透传）留给 V0.75.1 |
+| **V0.75.1** | 2026-09-29 | **首页综合研判结论卡（面向「一眼决策」）**：首页此前把判断原料（综合指数 / 三维分值 / 共振类别 / 决策建议 / 建议仓位 / 理由明细）**平铺在 6 个面板里**，用户要自己扫一遍再心算「到底该不该动」。本版把原料**收敛成一张置顶结论卡**：① **一行结论**（观望 / 买入 / 加仓 / 持有 / 减仓 / 卖出 + 综合指数 + 等级 + 置信度）；② **三维分值条**（技术 30% / 宏观 40% / 消息面 30%，带权重与 ↑↓→ 方向）；③ **一致性判定**（三维同向看多/看空、弱同向、**技术 vs 宏观分歧**、中性 —— 口径**复用后端 `compute_resonance()`**，阈值 55/45 与置信度折扣同源，前端**不重算**）；④ **建议仓位 vs 当前持仓**对照；⑤ 决策依据（逐条方向着色）；⑥ **数据质量提示**（宏观静态参考值项数、行情源 Mock 降级如实标注）→ 便于用户自己折可信度。**黄金 ↔ 白银一键切换**（localStorage 记忆）。为支持白银口径，`GET /api/v1/resonance/signal` 新增 `target` 参数（`ny/etf/gram/silver_etf/silver_ny/silver_gram`，默认 `etf`，非法值 422）——此前白银页共振卡**写死 `etf`、一直显示黄金的三维分值**。同步收敛首页重复面板（删除 `#resonanceCard` 与「今日操作清单」两块，能力并入结论卡）、修复 `PM_Resonance.mount()` **未导出却被 `silver.html` 调用**（该页共振卡实际从未挂载成功）。测试 845 → **864** 用例（离线 820） |
+| **V0.75.0** | 2026-09-29 | **认证骨架（多用户登录第一步）**：新增 `users` / `sessions` 两张表（迁移 `d5f81a3c9b47`）+ 6 个认证端点（status / register / login / logout / me / change-password）+ `static/login.html` 登录注册页 + 12 个页面顶栏账号菜单（含改密弹窗）。**密码 bcrypt cost=12**（未知账号也跑一次同代价哈希，防账号枚举）；**服务端 sessions 表**存储会话，登出 / 改密 / 禁用**即时撤销**；cookie `HttpOnly` + `SameSite=Strict`；写端点 **CSRF 双提交校验**（中间件自动下发 `pm_csrf`，`auth.js` 给全局 `fetch` 打补丁自动回填 `X-CSRF-Token`，故既有 11 个页面的几十处写请求**一行未改**）；登录失败**账号 + IP 双维度节流**。**默认 `AUTH_ENABLED=false` 为单用户模式**：Auth / Csrf 两个中间件完全透传（不读 cookie、不查库、不下发 cookie），既有 728 用例零破坏。业务数据隔离（`user_id` 透传）留给 V0.75.2 |
 | **V0.74.3** | 2026-09-29 | **趋势页克价图去重（面板合并）**：对照面板的 `#cmpGramChart`（上海金 Au99.99 · 元/克）与页面上方「上海金 Au99.99（元/克）· 国内金价对照」面板的 `#sgeChart` 是**同一标的、同一 60 交易日窗口** → 同一根曲线画两遍，读者误以为是两个不同品种。改为**图形只画一次**：克价走势统一由上方面板承载（含 MA20/MA40），对照面板只保留 `黄金ETF 518880 · 元/份` 单图 + `#cmpTable`/`#cmpCards` 的 **ETF vs 克价指标对照表**（对比信息不丢，只是不再重复绘图）。同步调整 `trend.cmp_title` 文案（zh-CN / en-US，zh-TW 走简中 fallback）、移除 `.cmp-charts` 双列栅格、单图高度 220 → 260px 与上方面板对齐。**同批依赖本地化**：5 个页面（trend / portfolio / silver / backtest / central_bank）的 Chart.js 由 `cdn.jsdelivr.net` 改为随应用分发 —— `static/vendor/chart.umd.min.js`（4.4.3）+ 纳入 Service Worker 预缓存清单，消除「公网不可达 / 离线时**所有图表静默空白**」的隐患（此前 `SHELL_ASSETS` 里根本没有它，PWA 宣称的离线能力对图表无效） |
 | **V0.74.2** | 2026-09-29 | **对照面板改为真实价格 + 2 处轮询期缺陷修复**：① 趋势页「ETF vs 克价 对照」原来是**归一化双线图**（`起点=100`，Y 轴裸数字 96/100/104 极易被误读成价格或评分）→ 改为**两张并列的真实价格图**：左 `黄金ETF华安 518880 · 元/份`、右 `上海金 Au99.99 · 元/克`，各带 `起价 → 现价 涨跌%` 标题行；接口 `points` 新增 `etf_price` / `gram_price`（归一化字段 `etf` / `gram` 保留，向后兼容）。② `#badge` 曾用 `outerHTML` 整体重建（新节点**不带 id**）→ 页面每 60 秒自动刷新，**第二次即抛 `Cannot set properties of null`、主图面板整块消失**；改为就地更新。③ 对照图 / 上海金图未 `destroy()` 即 `new Chart()` 复用画布 → `Canvas is already in use`（每个轮询周期必现）；改为重建前先 `destroy()` 并置 `null`。附带修复 i18n BOM 测试里的**永真断言**（`b"\ufeff"` 是非法转义、实为 6 字节字面量，断言永远通过） |
 | **V0.74.1** | 2026-09-29 | **前端功能缺陷修复**（3 处此前被前端门禁「全绿」掩盖、用户直接碰壁的问题）：① `ChartA11y.wrapChart` 是 a11y 包装器（只打 aria 属性、**不创建实例且无返回**），却被 5 处调用方当图表工厂用 → 实例恒 `undefined` → 白银页/回测页画布**永久空白**（已改为 `new Chart()` 创建 + 单独补 a11y）；② `backtest-chart.js` 的加载位置晚于调用点（内联脚本解析期即调 `PM_Backtest.mount()`）→ TypeError 中断整段脚本 → 回测按钮/自动回测/参数监听**全未绑定**（已把该脚本移到内联脚本之前）；③ Service Worker 预缓存含 3 条服务端不存在的 URL（实测 404）→ `cache.addAll` 原子失败 → 离线缓存**全空**（已改为真实路径，20 条 URL 全部 200） |
@@ -226,9 +228,9 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 ---
 
-## 功能拓展路径（V0.75.0 → V0.77.0）
+## 功能拓展路径（V0.75.1 → V0.77.0）
 
-> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.75.0**，已全部走完）同步维护，**冲突时以路线图为准**；**V0.76.0 / V0.77.0 为 README 展望，尚未纳入路线图**。
+> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.75.3**）同步维护，**冲突时以路线图为准**；**V0.76.0 / V0.77.0 为 README 展望，尚未纳入路线图**。
 
 ### V0.74.0 · 仪表盘自定义 + 通知偏好（**🟡 部分落地**，N+11~N+18）
 
@@ -242,18 +244,31 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 ### V0.75.0 · 多用户登录 + 数据隔离（**🟡 部分落地** —— 认证骨架已上岸，数据隔离待续）
 
-已按「认证骨架 → 数据隔离 → 找回密码」三步递进拆分（对应 `0.75.0 / 0.75.1 / 0.75.2`），本次交付第一步：
+已按「认证骨架 → 数据隔离 → 找回密码」三步递进拆分（对应 `0.75.0 / 0.75.2 / 0.75.3`，中间 `0.75.1` 让位给首页综合研判结论卡），本次交付第一步：
 
 | 子项 | 状态 | 落地位置 |
 |------|------|----------|
 | **认证体系** · bcrypt cost=12（未知账号跑同代价伪哈希防枚举）+ 服务端 `sessions` 表 + cookie `HttpOnly`/`SameSite=Strict`/`Secure`(可配) + CSRF 双提交 + 登录失败账号/IP 双维度节流 + `AUTH_ENABLED` 兼容开关（默认 `false`，单用户模式零回归） | ✅ 已落地 | `src/app/services/auth.py` · `src/app/middleware/auth.py` · `src/app/models/user.py` |
 | **登录入口** · `/static/login.html`（登录/注册双 Tab + 初始化管理员引导 + 三语错误码映射）+ 12 个页面顶栏账号菜单（改密 / 登出，`window.PM_AUTH`） | ✅ 已落地 | `static/login.html` · `static/auth.js` |
 | **API 面** · `GET /api/v1/auth/status`（匿名可访问）· `POST /api/v1/auth/register` · `POST /api/v1/auth/login` · `POST /api/v1/auth/logout` · `GET /api/v1/auth/me` · `POST /api/v1/auth/change-password` | ✅ 已落地 | `src/app/api/v1/endpoints/auth.py` |
-| **数据隔离**（`user_id` 透传业务表 + 越权审计） | 📋 **规划中（V0.75.1）** | ⚠️ 本版仅「登录后才能用」，**用户之间尚未隔离数据**；`accounts.user_id` 字段 V0.62.0 起已预留（恒为 1） |
-| **找回密码**（邮件 token，30 分钟过期） | 📋 **规划中（V0.75.2）** | 依赖 V0.72.0 SMTP；本版改密需已知当前密码 |
-| **审计日志** | 🟡 部分落地 | 登录成功/失败已入 `telemetry_events`（`login_success` / `login_fail`）；独立的 `audit_log` 表（含跨用户访问尝试）随 V0.75.1 数据隔离一起做 —— 没有隔离就没有「越权」，此时建表只会收空数据 |
+| **数据隔离**（`user_id` 透传业务表 + 越权审计） | 📋 **规划中（V0.75.2）** | ⚠️ 本版仅「登录后才能用」，**用户之间尚未隔离数据**；`accounts.user_id` 字段 V0.62.0 起已预留（恒为 1） |
+| **找回密码**（邮件 token，30 分钟过期） | 📋 **规划中（V0.75.3）** | 依赖 V0.72.0 SMTP；本版改密需已知当前密码 |
+| **审计日志** | 🟡 部分落地 | 登录成功/失败已入 `telemetry_events`（`login_success` / `login_fail`）；独立的 `audit_log` 表（含跨用户访问尝试）随 V0.75.2 数据隔离一起做 —— 没有隔离就没有「越权」，此时建表只会收空数据 |
 
 > ⚠️ **开启认证前请注意**：`AUTH_ENABLED=true` 会让**除健康检查 / 登录注册登出 / 埋点外的全部 API 都要求登录**。单机自用（只有自己访问 `127.0.0.1`）建议保持 `false`；仅在**对公网 / 局域网开放**时才需要打开。
+
+### V0.75.1 · 首页综合研判结论卡（**✅ 已落地**）
+
+> 起因：首页已有全部判断原料，但**散在 6 个面板**（评估摘要 / 共振卡 / 今日操作清单 / 每日评估历史 / 趋势维度 / ETF 对照），用户要自己横着扫一遍再心算结论 —— 缺的不是数据，是**收敛**。
+
+| 子项 | 状态 | 落地位置 |
+|------|------|----------|
+| **置顶结论卡** · 一行结论 + 三维分值条（权重可见）+ 一致性判定 + 建议仓位 vs 当前持仓 + 决策依据 + 数据质量提示 | ✅ 已落地 | `static/synthesis-card.js` · `static/trend.html` `#synthesisCard` |
+| **黄金 ↔ 白银切换** · 切换即换整套取数口径（trend target / decision target / resonance target 三接口同步），选择记忆在 `localStorage.pm_synthesis_asset` | ✅ 已落地 | `static/synthesis-card.js` |
+| **`/api/v1/resonance/signal` 支持 `target`** · `ny` / `etf` / `gram` / `silver_etf` / `silver_ny` / `silver_gram`，默认 `etf`（与 V0.70.0 行为一致），非法值 422 | ✅ 已落地 | `src/app/api/v1/endpoints/resonance.py` · `src/app/services/resonance.py` |
+| **一致性口径同源** · 5 类（强同向看多/看空、弱同向、分歧、中性）不在前端重算，一律取后端 `compute_resonance()`（阈值 55/45、`confidence = avg × (1 - stdev/55)`）→ 后端调阈值不会出现两处口径打架 | ✅ 已落地 | 复用 `src/app/services/resonance.py` |
+| **首页去重收敛** · 删除 `#resonanceCard` 与「今日操作清单」两块重复面板（能力并入结论卡），「共振详情」模态与「历史 + STRONG_UP 胜率」下钻保留 | ✅ 已落地 | `static/trend.html` |
+| **如实标注可信度** · `position_ratio` 后端恒为 0（账户本金未知）→ **不臆造「当前仓位 X%」**，只显示「空仓 / 持有 N 份 · 浮盈浮亏」；宏观静态参考值项数、行情源 Mock 降级逐条列出 | ✅ 已落地 | `static/synthesis-card.js` `qualityNotes()` |
 
 ### V0.76.0 · 数据导入 / 导出闭环（**📋 规划中**）
 
@@ -275,8 +290,8 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 ### 横向可持续主题（持续滚动）
 
-- **i18n 完成度** — zh-TW 当前 66.4%（V0.75.0 新增 39 个 `login.*` key 三语齐备），目标 100%
-- **测试规模与回归** — 当前 **845 收集 / 801 离线**（排除 2 个联网 fetcher 文件共 44 用例），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）。⚠️ 这是**测试规模**而非覆盖率：项目当前**无任何覆盖率工具**（`pyproject.toml` 无 pytest-cov、CI 无 `--cov`），真实行覆盖率不可知 —— 建基线属 P1 事项
+- **i18n 完成度** — zh-TW 当前 66.4%（V0.75.0 新增 39 个 `login.*` key、V0.75.1 新增 42 个 `syn.*` key，均三语齐备），目标 100%
+- **测试规模与回归** — 当前 **864 收集 / 820 离线**（排除 2 个联网 fetcher 文件共 44 用例），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）。⚠️ 这是**测试规模**而非覆盖率：项目当前**无任何覆盖率工具**（`pyproject.toml` 无 pytest-cov、CI 无 `--cov`），真实行覆盖率不可知 —— 建基线属 P1 事项
 - **无障碍** — 拖拽 / 模态 / 账号菜单已提供键盘与 ARIA（`aria-haspopup` / `aria-expanded` / `role="menu"` / Esc 关闭）；但仓库中**无任何 axe-core 文件/测试**，所谓「0 critical」无自动化守卫，纳入 CI 属 P2 事项
 - **数据守门** — `trace_id` 全链路追踪 + schema 校验新增 / 行情源扩展时同步加上
 
@@ -286,7 +301,7 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 - 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
 - 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
-- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.75.0**：仪表盘自定义 / 通知偏好 / 多用户登录 + 数据隔离，规划**止于 V0.75.0**）
+- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.75.3**：仪表盘自定义 / 通知偏好 / 首页综合研判结论卡 / 多用户登录 + 数据隔离）
 - ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
 - 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
 
