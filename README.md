@@ -4,14 +4,14 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.75.1**（2026-09-29）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | **864 用例**（62 个测试模块）· 离线口径 **820 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 864 collected |
+| **当前版本** | **V0.76.0**（2026-09-30）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | **866 用例**（62 个测试模块）· 离线口径 **822 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 866 collected |
 | **页面** | 13 个静态页 · 67 个 REST 路径（76 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
 > 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
 > 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
-> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.75.3）
+> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.76.0）
 > ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
 > 🚀 [docs/deployment.md](docs/deployment.md) · 公开部署 runbook（Nginx + HTTPS + Docker）
 
@@ -32,7 +32,7 @@
 - 📊 **三大市场一屏对比** — 纽约金（COMEX）/ 上海金（Au99.99）/ 黄金 ETF（518880），实时报价 + 趋势曲线 + 价差对照
 - 🎯 **综合趋势评估指数** — 技术 30% × 宏观 40% × 消息面 30% 加权，0-100 量化多空，等级红绿着色
 - 🔬 **5 维技术 + 5 因子宏观** — 结构 / 动量 / 支撑 / 动能 / 回撤 + 美元 / 美债10Y·30Y / VIX / 央行购金，**权重可调**
-- 📰 **消息面每日 3 次打分** — 越晚权重越高（1:2:3 加权），12 个依据标签 + 自由备注
+- 📰 **消息面每日 3 次打分** — 越晚权重越高（1:2:3 加权），12 个依据标签 + 自由备注；**V0.76.0 起首页即可直接打分**（见下条）
 - 🏦 **央行购金监控** — WGC 季度数据 2014Q1–2026Q2，52 季度 + 23 国家，Top 10 买家榜 + 完整明细
 - 💼 **个人持仓闭环** — 多账本 / 开仓·加仓·减仓·清仓 / **克数模式** / 收益曲线 / 业绩分析
 - 🧪 **参数回测校准** — 历史日线扫描权重网格 × 阈值带，输出夏普 + 最大回撤 + 5 区间校准
@@ -44,15 +44,16 @@
 - 📲 **推送 + PWA + Web Push** — 4 类告警规则（指数跨档 / 单日波动 ≥X% / 自定义时段 / T+N 命中），4 渠道：浏览器 / Web Push / 邮件 / 微信
 - 🧩 **仪表盘自定义** — 持仓页 7 张卡片拖拽排序 + 键盘替代（Space 抓取 / ↑↓ 移动）+ 布局本地持久化 + 一键恢复默认
 - 🔑 **登录与账号体系**（V0.75.0 新）— 会话式登录（bcrypt cost=12 + HttpOnly/SameSite=Strict cookie + CSRF 双提交校验），**默认关闭**（单用户模式零影响），公网部署一键开启
+- ✍️ **首页内嵌消息面打分器**（V0.76.0 新）— 把「客户评价」直接搬到趋势追踪页：3 槽位状态 + 有效分值 + 滑杆/快捷档位 + 研判依据 + 备注，**保存后即时刷新上方结论卡与消息面评估行**，全程不跳页；`/news` 仍保留为完整详情页（投行参考来源 + 历史记录）
 
 ## 12 个页面导览（另含 `login.html` 登录页 + `offline.html` PWA 离线兜底页，共 13 个静态页）
 
 | 页面 | URL | 一句话功能 | 适用场景 |
 |------|-----|-----------|---------|
-| **趋势追踪** | `/static/trend.html` | **综合研判结论卡（置顶）** + 综合指数 + 三大维度拆解 + K 线主图 + 宏观因子 | **打开就用**的主入口，看当日多空 |
+| **趋势追踪** | `/static/trend.html` | **综合研判结论卡（置顶）** + **内嵌消息面打分器（V0.76.0，可直接打分）** + 综合指数 + 三大维度拆解 + K 线主图 + 宏观因子 | **打开就用**的主入口，看当日多空并录判断 |
 | **持仓决策** | `/static/portfolio.html` | 当前持仓 + 实时盈亏 + 买卖决策（带理由） | 看现在该不该动 |
 | **权重配置** | `/static/weights.html` | 调整技术 / 宏观 / 合成比权重 | 想自定义评分口径时 |
-| **消息面评估** | `/static/news.html` | 每日 3 次打分（越晚权重越高）+ 依据标签 | 看新闻后录入当日研判 |
+| **消息面评估** | `/static/news.html` | 每日 3 次打分（越晚权重越高）+ 投行参考来源 + 跨日历史记录 | 系统查阅依据与回看历史（打分已可在首页完成） |
 | **研判复盘** | `/static/review.html` | 历史打分 vs 金价对齐，T+1/T+3/T+5 命中 + 校准曲线 | 看自己过去判断准不准 |
 | **交易历史** | `/static/trades.html` | 多账本多条件筛选 + 已实现盈亏 + CSV 导出 | 回看成交明细 |
 | **央行购金** | `/static/central_bank.html` | 全球央行季度净购金（吨）+ Top 榜 + 完整明细 | 看结构性买盘 |
@@ -155,7 +156,7 @@
 | 认证 | 服务端 sessions 表 + HttpOnly cookie + CSRF 双提交（V0.75.0）· 兼容开关 `AUTH_ENABLED` |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（V0.74.0 已首次真实构建成功并通过 smoke test，镜像体积仍未记录））+ docker-compose + Nginx + Certbot |
-| 测试 | pytest 864 · ruff · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁） |
+| 测试 | pytest 866 · ruff · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁） |
 | CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
 
 ## 快速开始
@@ -187,7 +188,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 全量 864 用例；离线口径 820（按文件名排除 2 个联网 fetcher）
+python -m pytest -v                                      # 全量 866 用例；离线口径 822（按文件名排除 2 个联网 fetcher）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -202,6 +203,7 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
+| **V0.76.0** | 2026-09-30 | **首页内嵌消息面打分器（客户评价上首页）**：消息面占综合评估指数 30%，但 V0.75.1 收敛「今日操作清单」后，首页只剩 `#newsFactor` **一行只读**展示 —— 想记一次判断必须整页跳到 `/news`。本版把打分能力**内联到趋势追踪页**（`static/news-score-widget.js`，IIFE + `window.PM_NewsScore`，自注入 CSS 适配 4 主题）：① **3 槽位状态一览**（分值 / 权重 / 方向 / 提交时刻 / 备注 / 补录标记）；② **当日有效分值** + 后端返回的**加权算式原样展示**（`(1×45 + 2×70) ÷ 3 = 61.7`，**前端不重算**，口径与 `/news`、复盘页同源）；③ **编辑器**：滑杆 + 快捷档位 + 「沿用上次」+ 方向判定 + 研判备注 + 12 个研判依据标签（取 `/api/v1/review/meta`）+ 复盘批注；④ **保存后即时刷新**上方「综合研判结论卡」与「消息面评估」行（组件派发 `news-score-changed`，首页监听后重算），全程不跳页。**`/news` 保留为完整详情页**（投行参考来源 + 历史记录），首页为其轻量通道。**刻意不轮询**：打分器含可拖拽滑杆与文本框，定时重渲染会打断输入（滑杆跳回、光标丢失），故只在提交后自渲染。i18n 三语各 +64 个 `nsw.*` 键并新增 2 条门禁（脚本引用键三语齐全 + 三语键集合严格一致）；`sw.js` VERSION → `v0.76.0` 并把新脚本纳入 `SHELL_ASSETS`。用例 864 → **866**（+2 = i18n `nsw.*` 门禁 2） |
 | **V0.75.1** | 2026-09-29 | **首页综合研判结论卡（面向「一眼决策」）**：首页此前把判断原料（综合指数 / 三维分值 / 共振类别 / 决策建议 / 建议仓位 / 理由明细）**平铺在 6 个面板里**，用户要自己扫一遍再心算「到底该不该动」。本版把原料**收敛成一张置顶结论卡**：① **一行结论**（观望 / 买入 / 加仓 / 持有 / 减仓 / 卖出 + 综合指数 + 等级 + 置信度）；② **三维分值条**（技术 30% / 宏观 40% / 消息面 30%，带权重与 ↑↓→ 方向）；③ **一致性判定**（三维同向看多/看空、弱同向、**技术 vs 宏观分歧**、中性 —— 口径**复用后端 `compute_resonance()`**，阈值 55/45 与置信度折扣同源，前端**不重算**）；④ **建议仓位 vs 当前持仓**对照；⑤ 决策依据（逐条方向着色）；⑥ **数据质量提示**（宏观静态参考值项数、行情源 Mock 降级如实标注）→ 便于用户自己折可信度。**黄金 ↔ 白银一键切换**（localStorage 记忆）。为支持白银口径，`GET /api/v1/resonance/signal` 新增 `target` 参数（`ny/etf/gram/silver_etf/silver_ny/silver_gram`，默认 `etf`，非法值 422）——此前白银页共振卡**写死 `etf`、一直显示黄金的三维分值**。同步收敛首页重复面板（删除 `#resonanceCard` 与「今日操作清单」两块，能力并入结论卡）、修复 `PM_Resonance.mount()` **未导出却被 `silver.html` 调用**（该页共振卡实际从未挂载成功）。测试 845 → **864** 用例（离线 820） |
 | **V0.75.0** | 2026-09-29 | **认证骨架（多用户登录第一步）**：新增 `users` / `sessions` 两张表（迁移 `d5f81a3c9b47`）+ 6 个认证端点（status / register / login / logout / me / change-password）+ `static/login.html` 登录注册页 + 12 个页面顶栏账号菜单（含改密弹窗）。**密码 bcrypt cost=12**（未知账号也跑一次同代价哈希，防账号枚举）；**服务端 sessions 表**存储会话，登出 / 改密 / 禁用**即时撤销**；cookie `HttpOnly` + `SameSite=Strict`；写端点 **CSRF 双提交校验**（中间件自动下发 `pm_csrf`，`auth.js` 给全局 `fetch` 打补丁自动回填 `X-CSRF-Token`，故既有 11 个页面的几十处写请求**一行未改**）；登录失败**账号 + IP 双维度节流**。**默认 `AUTH_ENABLED=false` 为单用户模式**：Auth / Csrf 两个中间件完全透传（不读 cookie、不查库、不下发 cookie），既有 728 用例零破坏。业务数据隔离（`user_id` 透传）留给 V0.75.2 |
 | **V0.74.3** | 2026-09-29 | **趋势页克价图去重（面板合并）**：对照面板的 `#cmpGramChart`（上海金 Au99.99 · 元/克）与页面上方「上海金 Au99.99（元/克）· 国内金价对照」面板的 `#sgeChart` 是**同一标的、同一 60 交易日窗口** → 同一根曲线画两遍，读者误以为是两个不同品种。改为**图形只画一次**：克价走势统一由上方面板承载（含 MA20/MA40），对照面板只保留 `黄金ETF 518880 · 元/份` 单图 + `#cmpTable`/`#cmpCards` 的 **ETF vs 克价指标对照表**（对比信息不丢，只是不再重复绘图）。同步调整 `trend.cmp_title` 文案（zh-CN / en-US，zh-TW 走简中 fallback）、移除 `.cmp-charts` 双列栅格、单图高度 220 → 260px 与上方面板对齐。**同批依赖本地化**：5 个页面（trend / portfolio / silver / backtest / central_bank）的 Chart.js 由 `cdn.jsdelivr.net` 改为随应用分发 —— `static/vendor/chart.umd.min.js`（4.4.3）+ 纳入 Service Worker 预缓存清单，消除「公网不可达 / 离线时**所有图表静默空白**」的隐患（此前 `SHELL_ASSETS` 里根本没有它，PWA 宣称的离线能力对图表无效） |
@@ -228,9 +230,9 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 ---
 
-## 功能拓展路径（V0.75.1 → V0.77.0）
+## 功能拓展路径（V0.76.0 → V0.77.0）
 
-> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.75.3**）同步维护，**冲突时以路线图为准**；**V0.76.0 / V0.77.0 为 README 展望，尚未纳入路线图**。
+> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.76.0**）同步维护，**冲突时以路线图为准**；**V0.76.1 / V0.77.0 为 README 展望，尚未纳入路线图**。
 
 ### V0.74.0 · 仪表盘自定义 + 通知偏好（**🟡 部分落地**，N+11~N+18）
 
@@ -270,7 +272,20 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 | **首页去重收敛** · 删除 `#resonanceCard` 与「今日操作清单」两块重复面板（能力并入结论卡），「共振详情」模态与「历史 + STRONG_UP 胜率」下钻保留 | ✅ 已落地 | `static/trend.html` |
 | **如实标注可信度** · `position_ratio` 后端恒为 0（账户本金未知）→ **不臆造「当前仓位 X%」**，只显示「空仓 / 持有 N 份 · 浮盈浮亏」；宏观静态参考值项数、行情源 Mock 降级逐条列出 | ✅ 已落地 | `static/synthesis-card.js` `qualityNotes()` |
 
-### V0.76.0 · 数据导入 / 导出闭环（**📋 规划中**）
+### V0.76.0 · 首页内嵌消息面打分器（**✅ 已落地**）
+
+> 起因：消息面占综合评估指数 **30%**，是三维里唯一**由用户自己产出**的维度。但 V0.75.1 收敛「今日操作清单」后，首页只剩 `#newsFactor` **一行只读**展示（其注释还写着"仅保留真正需要用户动作的 ② 消息面打分"，入口却没补上）—— 想记一次判断必须整页跳到 `/news`。**首页是每日必看的落地页，为打一次分而整页跳转，是本页最大的易用性缺口。**
+
+| 子项 | 状态 | 落地位置 |
+|------|------|----------|
+| **3 槽位状态一览** · 每槽显示分值 / 权重（1:2:3）/ 方向 / 提交时刻 / 备注 / 补录标记，并可直接对某槽「修改」「撤销」 | ✅ 已落地 | `static/news-score-widget.js` · `static/trend.html` `#newsScoreCard` |
+| **当日有效分值 + 算式原样展示** · 直接显示后端返回的 `formula`（如 `(1×45 + 2×70) ÷ 3 = 61.7`），**前端不重算加权**，与 `/news`、复盘页同源（`services.news.aggregate_slots`） | ✅ 已落地 | 同上（`GET/PUT/DELETE /api/v1/news-score`） |
+| **内嵌编辑器** · 滑杆（0-100）+ 快捷档位（看空 30 / 中性 50 / 看多 70）+「沿用上次」+ 实时方向判定 + 研判备注 + 12 个研判依据标签（取 `/api/v1/review/meta`）+ 复盘批注 | ✅ 已落地 | 同上 |
+| **保存后即时刷新** · 组件派发 `news-score-changed`，首页监听后重算评估口径；同时直接刷新置顶「综合研判结论卡」，**全程不跳页** | ✅ 已落地 | `static/news-score-widget.js` `afterWrite()` · `static/trend.html` |
+| **`/news` 保留为完整详情页** · 投行参考来源链接 + 跨日历史记录仍在该页；首页为其轻量通道，两处共用同一接口与口径 | ✅ 已落地 | `static/news.html`（本版**未改动**） |
+| **刻意不轮询** · 打分器含可拖拽滑杆与文本框，定时重渲染会打断输入（滑杆跳回、光标丢失）→ 只在提交后自渲染；只读的 `#newsFactor` 仍由首页既有 60s 轮询保持新鲜 | ✅ 已落地（设计取舍） | `static/news-score-widget.js` |
+
+### V0.76.1 · 数据导入 / 导出闭环（**📋 规划中**）
 
 | 子项 | 预期产出 |
 |------|----------|
@@ -290,8 +305,8 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 ### 横向可持续主题（持续滚动）
 
-- **i18n 完成度** — zh-TW 当前 66.4%（V0.75.0 新增 39 个 `login.*` key、V0.75.1 新增 42 个 `syn.*` key，均三语齐备），目标 100%
-- **测试规模与回归** — 当前 **864 收集 / 820 离线**（排除 2 个联网 fetcher 文件共 44 用例），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）。⚠️ 这是**测试规模**而非覆盖率：项目当前**无任何覆盖率工具**（`pyproject.toml` 无 pytest-cov、CI 无 `--cov`），真实行覆盖率不可知 —— 建基线属 P1 事项
+- **i18n 完成度** — zh-TW 当前 **70.7%**（597/845；V0.75.0 新增 39 个 `login.*`、V0.75.1 新增 42 个 `syn.*`、V0.76.0 新增 64 个 `nsw.*`，**均三语齐备**），目标 100%
+- **测试规模与回归** — 当前 **866 收集 / 822 离线**（排除 2 个联网 fetcher 文件共 44 用例），新功能 PR 必须带测试（守住「离线回归 0 失败」红线）。⚠️ 这是**测试规模**而非覆盖率：项目当前**无任何覆盖率工具**（`pyproject.toml` 无 pytest-cov、CI 无 `--cov`），真实行覆盖率不可知 —— 建基线属 P1 事项
 - **无障碍** — 拖拽 / 模态 / 账号菜单已提供键盘与 ARIA（`aria-haspopup` / `aria-expanded` / `role="menu"` / Esc 关闭）；但仓库中**无任何 axe-core 文件/测试**，所谓「0 critical」无自动化守卫，纳入 CI 属 P2 事项
 - **数据守门** — `trace_id` 全链路追踪 + schema 校验新增 / 行情源扩展时同步加上
 
@@ -301,7 +316,7 @@ python scripts/check_docs_claims.py                      # 文档声明门禁（
 
 - 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
 - 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
-- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.75.3**：仪表盘自定义 / 通知偏好 / 首页综合研判结论卡 / 多用户登录 + 数据隔离）
+- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.76.0**：仪表盘自定义 / 通知偏好 / 首页综合研判结论卡 / 首页内嵌消息面打分器 / 多用户登录 + 数据隔离）
 - ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
 - 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
 
