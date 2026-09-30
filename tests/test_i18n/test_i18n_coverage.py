@@ -10,6 +10,7 @@ PR-N+9 新增：
 - zh-TW 关键 15 个 key 无残留英文
 - **V0.75.0 新增**：全站 `data-i18n*` 引用的 key 必须都能在 zh-CN 字典解析（防「原文被静默替换成原始 key」）
 - **V0.75.1 新增**：synthesis-card.js 引用的 `syn.*` key 三语齐全 + 三语 `syn.*` 键集合严格一致
+- **V0.76.0 新增**：news-score-widget.js 引用的 `nsw.*` key 三语齐全 + 三语 `nsw.*` 键集合严格一致
 """
 
 from __future__ import annotations
@@ -372,4 +373,44 @@ def test_syn_card_key_sets_identical_across_locales() -> None:
     for lang, keys in sets.items():
         assert keys == all_keys, (
             f"{lang} 的 syn.* 键集合与其他语言不一致，差异：{sorted(all_keys ^ keys)}"
+        )
+
+
+# ── 9. V0.76.0：news-score-widget.js 引用的 nsw.* key 三语齐全 ──
+
+
+def test_nsw_widget_keys_in_all_3_locales() -> None:
+    """首页内嵌消息面打分器（news-score-widget.js）引用的每个 nsw.* key 都必须在三语字典里存在。
+
+    **为什么从 JS 源码反推、而不是硬编码清单**：与 `syn.*` 同理——打分器的文案会随
+    UI 演进持续增加，硬编码清单一旦忘记同步就完全失去门禁作用。这里直接扫源码里的
+    `'nsw.xxx'` 字面量（注意：组件里一律用**单引号**写 key，双引号会漏扫），
+    漏翻译会立刻失败（新增 key 时自动生效）。
+
+    **失败后果说明**：组件的 ``T(key, zh)`` 自带中文兜底——字典缺 key 时回退中文，
+    **绝不把 key 字面量渲染到页面**（V0.75.0 曾因悬空 key 把页脚中文静默替换成
+    ``warn.data_source``）。所以本测试失败不会造成线上事故，但必须修：否则该文案
+    会永久停留在中文，en-US / zh-TW 用户看不到翻译。
+    """
+    js = (STATIC_DIR / "news-score-widget.js").read_text(encoding="utf-8")
+    referenced = set(re.findall(r"'(nsw\.[a-z_0-9]+)'", js))
+    assert referenced, "未从 news-score-widget.js 扫到任何 nsw.* key，正则或路径可能有问题"
+
+    for lang in (ZH_CN, ZH_TW, EN_US):
+        d = _load_dict(lang)
+        missing = referenced - set(d.keys())
+        assert not missing, f"{lang} 缺少 nsw.* keys：{sorted(missing)}"
+
+
+def test_nsw_widget_key_sets_identical_across_locales() -> None:
+    """三语字典的 nsw.* 键集合必须完全一致（防某一语言漏加、造成静默回退）。"""
+    sets = {
+        lang: {k for k in _load_dict(lang) if k.startswith("nsw.")}
+        for lang in (ZH_CN, ZH_TW, EN_US)
+    }
+    all_keys = set().union(*sets.values())
+    assert all_keys, "三份字典都没有 nsw.* key"
+    for lang, keys in sets.items():
+        assert keys == all_keys, (
+            f"{lang} 的 nsw.* 键集合与其他语言不一致，差异：{sorted(all_keys ^ keys)}"
         )

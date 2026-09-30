@@ -12,7 +12,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.75.1";
+const VERSION = "v0.76.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -52,6 +52,8 @@ const SHELL_ASSETS = [
     "/static/auth.js",
     // V0.75.1 综合研判结论卡：宿在首页顶部，离线打开时必须能渲染
     "/static/synthesis-card.js",
+    // V0.76.0 首页内嵌消息面打分器：宿在首页顶部，离线打开时必须能渲染
+    "/static/news-score-widget.js",
 ];
 
 // ─── install：precache shell + skipWaiting ─────────────────────

@@ -214,6 +214,12 @@
   <section class="panel" id="synthesisCard" style="margin-bottom:16px"
            aria-label="综合研判结论"></section>
 
+  <!-- V0.76.0 消息面打分 · 客户评价（内嵌：首页直接打分，保存后即时刷新上方结论卡）
+       由 /static/news-score-widget.js 渲染并自动挂载；口径与 /news 完全同源
+       （写接口 /api/v1/news-score，加权由后端 aggregate_slots 统一计算）。 -->
+  <section class="panel" id="newsScoreCard" style="margin-bottom:16px"
+           aria-label="今日消息面打分"></section>
+
   <!-- 实时评估摘要（指数 + 金价明细） -->
   <section class="headline" aria-label="实时评估摘要">
     <div class="headline-title" data-i18n="trend.headline_title">📊 实时评估摘要 · 趋势指数 × 金价</div>
@@ -531,7 +537,7 @@ function render(d) {
     `消息面指数 ${news.score?.toFixed(1) ?? "—"}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
   document.getElementById("newsFactor").innerHTML = `
     <div class="macro-row">
-      <span class="nm"><a href="/news" style="color:var(--accent);text-decoration:none">投行展望打分</a></span>
+      <span class="nm"><a href="#newsScoreCard" style="color:var(--accent);text-decoration:none">消息面打分</a></span>
       <span class="val" style="color:${nc}">${news.score?.toFixed(0) ?? "—"}</span>
       <span class="bar"><i style="width:${news.score ?? 0}%;background:${nc}"></i></span>
       <span class="dt">${news.direction ?? "—"}</span>
@@ -890,6 +896,13 @@ function startTrendPolling() {
   // 手动按钮
   document.getElementById("refreshBtn")?.addEventListener("click", refreshTrendQuotes);
 }
+
+// V0.76.0：首页内嵌消息面打分器（#newsScoreCard）保存/撤销后主动重算评估口径。
+// 消息面占综合指数 30%，后端在写成功时已失效 served cache；此处立即拉一次，
+// 否则用户打完分要等最长 60s 轮询才看到指数与「消息面评估」行变化，会误判为没生效。
+window.addEventListener("news-score-changed", () => {
+  refreshTrendQuotes();
+});
 </script>
   <script src="/static/freshness.js"></script>
   <script src="/static/pwa.js" defer></script>
@@ -904,5 +917,7 @@ function startTrendPolling() {
   <script src="/static/resonance-card.js" defer></script>
   <!-- V0.75.1 综合研判结论卡（置顶，黄金/白银可切换） -->
   <script src="/static/synthesis-card.js" defer></script>
+  <!-- V0.76.0 首页内嵌消息面打分器（客户评价） -->
+  <script src="/static/news-score-widget.js" defer></script>
 </body>
 </html>
