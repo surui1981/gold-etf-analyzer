@@ -427,3 +427,76 @@ body { background: var(--bg); color: var(--text); }
 [data-theme="dark"] .rule-card .rule-desc { color: #d1d5db; }
 [data-theme="dark"] .modal-card { background: #1f2937; }
 [data-theme="dark"] .modal-card header, [data-theme="dark"] .modal-card footer { border-color: #374151; }
+
+/* =========================================================================
+ * V0.77.0 聚类分组（Cluster）—— 把平铺的同类项按语义聚成有标题的簇
+ *
+ * 动机：多页存在「同类项平铺」——6 张 KPI 卡、9 个筛选字段、3 组同构横条
+ *       平摊在一个容器里，用户得一条条读完再自己心算归类。本组样式给出
+ *       全站统一的聚类语汇，取代各页各写一套 padding/margin。
+ *
+ * 三个基元：
+ *   .pmc-cluster  纵向簇（簇 = 一组同类项 + 一个簇标题）
+ *   .pmc-tabs     簇间切换（同源分面，一次只看一面）
+ *   .pmc-group    簇内子组（比簇更轻，用于簇里再分类）
+ *
+ * 约束：① 只用 theme 变量，light/dark/hc 自动适配；
+ *       ② 前缀 pmc- 避免与页面私有类名（.card/.panel/.section/.kpi）冲突；
+ *       ③ 簇标题可挂计数徽标与右侧动作，移植 portfolio「同簇操作收敛到簇标题」。
+ * ========================================================================= */
+.pmc-cluster + .pmc-cluster { margin-top: 16px; }
+
+.pmc-cluster-head {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 600; color: var(--text);
+  margin: 0 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.pmc-cluster-head .pmc-note { font-weight: 400; font-size: 11px; color: var(--muted); }
+.pmc-cluster-head .pmc-actions {
+  margin-left: auto; display: inline-flex; gap: 6px; align-items: center;
+}
+
+/* 计数徽标：簇标题旁的「N 项」 */
+.pmc-count {
+  font-size: 11px; font-weight: 600; line-height: 1.7;
+  padding: 1px 8px; border-radius: 999px;
+  color: var(--muted); background: var(--bg); border: 1px solid var(--border);
+}
+/* 直接挂在簇标题下时自动靠右，与 .pmc-actions 同一视觉位 */
+.pmc-cluster-head > .pmc-count { margin-left: auto; }
+
+/* 簇间切换：语义同源、但一次只想看一面的分面（如「按方向/按窗口/按档位」） */
+.pmc-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.pmc-tab {
+  appearance: none; cursor: pointer; font: inherit;
+  font-size: 12px; line-height: 1.8;
+  padding: 3px 12px; border-radius: 999px;
+  color: var(--muted); background: var(--card); border: 1px solid var(--border);
+  transition: color .15s, background .15s, border-color .15s;
+}
+.pmc-tab:hover { color: var(--text); border-color: var(--accent); }
+/* 选中态前景用 var(--card)：light=白 / dark=深 / hc=黑，三种底色下都够对比 */
+.pmc-tab[aria-selected="true"] {
+  color: var(--card); background: var(--accent); border-color: var(--accent);
+  font-weight: 600;
+}
+[data-theme="hc"] .pmc-tab[aria-selected="true"] { color: #000; }
+.pmc-tabpanel[hidden] { display: none; }
+
+/* 簇内子组 */
+.pmc-group + .pmc-group { margin-top: 12px; }
+.pmc-group-title {
+  font-size: 11px; font-weight: 600; letter-spacing: .3px;
+  color: var(--muted); margin: 0 0 6px;
+}
+
+/* grid 容器内的跨列子分组标题（如 trend.html 的 .cards：8 张 KPI 磁贴按语义分 3 组） */
+.pmc-grid-title {
+  grid-column: 1 / -1;
+  font-size: 11px; font-weight: 600; letter-spacing: .3px;
+  color: var(--muted); margin: 0;
+}
+
+/* 高对比模式下加强簇标题的分隔线（1px 白线在纯黑底上已足够，仅补标题色） */
+[data-theme="hc"] .pmc-cluster-head { border-bottom-width: 2px; }

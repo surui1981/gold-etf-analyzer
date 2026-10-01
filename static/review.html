@@ -180,27 +180,34 @@
     <h2 data-i18n="review.stats_title">🎯 命中率总览 <span id="statScope" class="desc"></span></h2>
     <div class="kpis" id="kpis"></div>
     <div id="statBanner"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:14px" id="statGrid">
-      <div>
-        <div class="desc" style="font-weight:600;color:var(--text)" data-i18n="review.by_direction">按研判方向</div>
+    <!-- V0.77.0 聚类：三组横条同由 barRow() 渲染、同用 .bars 样式、同取 stats 数据，
+         原先被拆到「命中率总览」（两列 grid）与「分值校准」（独立卡）两处，
+         用户要纵向扫三块才知道「同一批研判的三种切法」。现聚为一个「统计分面」簇，
+         用 Tab 切换 —— 一次只看一个切面，三分面共用同一份样本口径。 -->
+    <section class="pmc-cluster" style="margin-top:14px">
+      <h3 class="pmc-cluster-head">统计分面
+        <span class="pmc-note">同一批研判的三种切法</span>
+      </h3>
+      <div class="pmc-tabs" role="tablist" aria-label="统计分面">
+        <button class="pmc-tab" type="button" role="tab" id="tabDir" aria-selected="true" aria-controls="panelDir" data-i18n="review.by_direction">按研判方向</button>
+        <button class="pmc-tab" type="button" role="tab" id="tabHz" aria-selected="false" aria-controls="panelHz" data-i18n="review.by_horizon">按判定窗口</button>
+        <button class="pmc-tab" type="button" role="tab" id="tabCal" aria-selected="false" aria-controls="panelCal" data-i18n="review.tab_calibration">📐 分值档位</button>
+      </div>
+      <div class="pmc-tabpanel" id="panelDir" role="tabpanel" aria-labelledby="tabDir">
         <div class="bars" id="dirBars"></div>
       </div>
-      <div>
-        <div class="desc" style="font-weight:600;color:var(--text)" data-i18n="review.by_horizon">按判定窗口</div>
+      <div class="pmc-tabpanel" id="panelHz" role="tabpanel" aria-labelledby="tabHz" hidden>
         <div class="bars" id="hzBars"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- 校准曲线 -->
-  <div class="card">
-    <h2 data-i18n="review.calibration_title">📐 分值校准（打多少分时，实际上涨概率多大）</h2>
-    <div class="desc" data-i18n-html="review.calibration_desc">
-      把当日有效分值分成 5 档，统计每档之后窗口中<b>实际上涨的比例</b>。
-      理想的打分应当<b>单调递增</b>——分数越高，上涨概率越大。若高分档并不比低分档更高，说明打分存在高估。
-    </div>
-    <div class="bars" id="calBars"></div>
-    <div id="calInsight"></div>
+      <div class="pmc-tabpanel" id="panelCal" role="tabpanel" aria-labelledby="tabCal" hidden>
+        <div class="desc" data-i18n-html="review.calibration_desc">
+          把当日有效分值分成 5 档，统计每档之后窗口中<b>实际上涨的比例</b>。
+          理想的打分应当<b>单调递增</b>——分数越高，上涨概率越大。若高分档并不比低分档更高，说明打分存在高估。
+        </div>
+        <div class="bars" id="calBars"></div>
+        <div id="calInsight"></div>
+      </div>
+    </section>
   </div>
 
   <!-- 依据标签胜率 -->
@@ -460,6 +467,41 @@ async function reload() {
 ["selTarget", "selHorizon", "selDays"].forEach(id => {
   document.getElementById(id).addEventListener("change", reload);
 });
+
+/* V0.77.0 聚类：统计分面 Tab。三个分面共用同一份 stats（loadStats() 已一次性把数据
+   渲染进各自容器），所以切换只改可见性、不重新拉数据；支持 ←/→ 在 tablist 内移动。 */
+function initFacetTabs() {
+  const IDS = ["tabDir", "tabHz", "tabCal"];
+  const PANEL = { tabDir: "panelDir", tabHz: "panelHz", tabCal: "panelCal" };
+  function select(id) {
+    IDS.forEach(t => {
+      const b = document.getElementById(t);
+      const p = document.getElementById(PANEL[t]);
+      const on = t === id;
+      if (b) { b.setAttribute("aria-selected", on ? "true" : "false"); b.tabIndex = on ? 0 : -1; }
+      if (p) p.hidden = !on;
+    });
+  }
+  IDS.forEach((id, i) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.tabIndex = btn.getAttribute("aria-selected") === "true" ? 0 : -1;
+    btn.addEventListener("click", () => {
+      select(id);
+      if (window.TL) window.TL.track("facet_tab", { facet: id });
+    });
+    btn.addEventListener("keydown", e => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      e.preventDefault();
+      const step = e.key === "ArrowRight" ? 1 : IDS.length - 1;
+      const next = IDS[(i + step) % IDS.length];
+      select(next);
+      const nb = document.getElementById(next);
+      if (nb) nb.focus();
+    });
+  });
+}
+initFacetTabs();
 
 (async function init() {
   try {

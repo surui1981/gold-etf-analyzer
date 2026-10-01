@@ -264,11 +264,14 @@
         <button class="range-btn" data-days="90" type="button">90D</button>
       </div>
     </div>
+    <!-- V0.77.0 修复：这 4 张卡的数值原用 class="val"，但样式表中只有 .card .value
+         （第 52 行）与 .macro-row .val（第 105 行，宏因子行专用）—— 于是本组数值
+         一直没有任何字号/字重样式，与同页 #cards 的 8 张卡视觉不一致。 -->
     <div class="cards" id="snapStatCards" style="margin-bottom:10px">
-      <div class="card"><div class="label" data-i18n="trend.snap_latest">最新</div><div class="val" id="snapLatest">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_max">区间最高</div><div class="val" id="snapMax">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_min">区间最低</div><div class="val" id="snapMin">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_delta">日变</div><div class="val" id="snapDelta">—</div></div>
+      <div class="card"><div class="label" data-i18n="trend.snap_latest">最新</div><div class="value" id="snapLatest">—</div></div>
+      <div class="card"><div class="label" data-i18n="trend.snap_max">区间最高</div><div class="value" id="snapMax">—</div></div>
+      <div class="card"><div class="label" data-i18n="trend.snap_min">区间最低</div><div class="value" id="snapMin">—</div></div>
+      <div class="card"><div class="label" data-i18n="trend.snap_delta">日变</div><div class="value" id="snapDelta">—</div></div>
     </div>
     <canvas id="snapChart" style="max-height:260px"></canvas>
     <div class="summary" id="snapSummary" style="font-size:12px;margin-top:6px"></div>
@@ -477,20 +480,31 @@ function render(d) {
     `${d.name ?? "—"}（${d.symbol ?? "—"}） · 投资指引基准 · ${m.start_date ?? "—"} ~ ${m.end_date ?? "—"} · ${m.trading_days ?? "—"} 个交易日 · ${unit}`;
 
   // 指标卡（计价单位随指引标的切换：美元/盎司 / 元 / 元/克）
-  const cards = [
-    { label: "最新价", value: m.end_price?.toFixed(3) ?? "—", extra: unit },
-    { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + (m.change_pct_1d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
-    { label: "5日涨跌", value: (m.change_pct_5d >= 0 ? "+" : "") + (m.change_pct_5d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_5d >= 0 ? "up" : "down", extra: "近 5 个交易日" },
-    { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + (m.change_pct?.toFixed(2) ?? "—") + "%", cls: isUp ? "up" : "down" },
-    { label: "区间最高", value: m.high?.toFixed(3) ?? "—", extra: unit },
-    { label: "区间最低", value: m.low?.toFixed(3) ?? "—", extra: unit },
-    { label: "MA20", value: m.ma20 ? m.ma20.toFixed(3) : "—" },
-    { label: "MA40", value: m.ma40 ? m.ma40.toFixed(3) : "—" },
+  // V0.77.0 聚类：8 张卡原为一条平铺（价格 / 涨跌 / 均线三种语义混排，用户要自己归类），
+  // 现按语义聚成 3 组，用跨列小标题（.pmc-grid-title）分组。
+  const cardGroups = [
+    { title: "价格", items: [
+      { label: "最新价", value: m.end_price?.toFixed(3) ?? "—", extra: unit },
+      { label: "区间最高", value: m.high?.toFixed(3) ?? "—", extra: unit },
+      { label: "区间最低", value: m.low?.toFixed(3) ?? "—", extra: unit },
+    ] },
+    { title: "涨跌", items: [
+      { label: "昨日涨跌", value: (m.change_pct_1d >= 0 ? "+" : "") + (m.change_pct_1d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_1d >= 0 ? "up" : "down", extra: "最近 1 个交易日" },
+      { label: "5日涨跌", value: (m.change_pct_5d >= 0 ? "+" : "") + (m.change_pct_5d?.toFixed(2) ?? "—") + "%", cls: m.change_pct_5d >= 0 ? "up" : "down", extra: "近 5 个交易日" },
+      { label: "区间涨跌", value: (m.change_pct >= 0 ? "+" : "") + (m.change_pct?.toFixed(2) ?? "—") + "%", cls: isUp ? "up" : "down" },
+    ] },
+    { title: "均线", items: [
+      { label: "MA20", value: m.ma20 ? m.ma20.toFixed(3) : "—" },
+      { label: "MA40", value: m.ma40 ? m.ma40.toFixed(3) : "—" },
+    ] },
   ];
-  document.getElementById("cards").innerHTML = cards.map(c =>
-    `<div class="card"><div class="label">${c.label}</div>
+  document.getElementById("cards").innerHTML = cardGroups.map(g =>
+    `<div class="pmc-grid-title">${g.title}</div>` +
+    g.items.map(c =>
+      `<div class="card"><div class="label">${c.label}</div>
      <div class="value ${c.cls || ""}">${c.value}</div>
-     <div class="extra">${c.extra || ""}</div></div>`).join("");
+     <div class="extra">${c.extra || ""}</div></div>`).join("")
+  ).join("");
 
   // 追踪指数
   const idx = d.index;
@@ -691,14 +705,22 @@ async function loadSge() {
     const d1 = m.change_pct_1d ?? 0;
     const d5 = m.change_pct_5d ?? 0;
     document.getElementById("sgeSub").textContent = `${m.start_date ?? "—"} ~ ${m.end_date ?? "—"} · ${m.trading_days ?? "—"} 个交易日 · 元/克`;
+    // V0.77.0 聚类：6 张卡原为一条平铺，现按「价格 / 涨跌」两组展示（与上方 #cards 同规则）
     document.getElementById("sgeCards").innerHTML = [
-      { label: "最新价", value: m.end_price?.toFixed(2) ?? "—", extra: "元/克" },
-      { label: "昨日涨跌", value: pct(d1), cls: cls(d1), extra: "最近 1 个交易日" },
-      { label: "5日涨跌", value: pct(d5), cls: cls(d5), extra: "近 5 个交易日" },
-      { label: "区间涨跌", value: pct(m.change_pct), cls: isUp ? "up" : "down", extra: "60 天累计" },
-      { label: "区间最高", value: m.high?.toFixed(2) ?? "—", extra: "元/克" },
-      { label: "区间最低", value: m.low?.toFixed(2) ?? "—", extra: "元/克" },
-    ].map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("");
+      { title: "价格", items: [
+        { label: "最新价", value: m.end_price?.toFixed(2) ?? "—", extra: "元/克" },
+        { label: "区间最高", value: m.high?.toFixed(2) ?? "—", extra: "元/克" },
+        { label: "区间最低", value: m.low?.toFixed(2) ?? "—", extra: "元/克" },
+      ] },
+      { title: "涨跌", items: [
+        { label: "昨日涨跌", value: pct(d1), cls: cls(d1), extra: "最近 1 个交易日" },
+        { label: "5日涨跌", value: pct(d5), cls: cls(d5), extra: "近 5 个交易日" },
+        { label: "区间涨跌", value: pct(m.change_pct), cls: isUp ? "up" : "down", extra: "60 天累计" },
+      ] },
+    ].map(g =>
+      `<div class="pmc-grid-title">${g.title}</div>` +
+      g.items.map(x => `<div class="card"><div class="label">${x.label}</div><div class="value ${x.cls || ""}">${x.value}</div><div class="extra">${x.extra || ""}</div></div>`).join("")
+    ).join("");
     // 轮询重绘前先销毁旧实例，否则 Chart.js 抛 "Canvas is already in use"（60s 轮询必现）
     const sgePrev = (window.Chart && Chart.getChart) ? Chart.getChart(document.getElementById("sgeChart")) : null;
     if (sgePrev) sgePrev.destroy();

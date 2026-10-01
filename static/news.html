@@ -235,7 +235,10 @@
     <div class="desc">跨日回看，便于对比不同日期与不同次序的研判变化。</div>
     <div class="hist-wrap">
       <table class="hist" id="histTable">
-        <thead><tr><th>日期</th><th>第几次</th><th>权重</th><th>分值</th><th>方向</th><th>打分时刻</th><th>备注</th></tr></thead>
+        <!-- V0.77.0 修复：表头原为 7 列，但数据行渲染 8 列（第 7 列是依据标签、
+             第 8 列才是备注）→ 表头「备注」实际对着依据列、最后一列无表头。
+             现补上「依据」表头，8 列表头与 8 列数据一一对齐。 -->
+        <thead><tr><th>日期</th><th>第几次</th><th>权重</th><th>分值</th><th>方向</th><th>打分时刻</th><th>依据</th><th>备注</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -517,7 +520,7 @@ async function loadHistory() {
     const d = await r.json();
     const tb = document.querySelector("#histTable tbody");
     if (!d.items.length) {
-      tb.innerHTML = '<tr><td colspan="7" style="color:var(--muted)">暂无打分记录</td></tr>';
+      tb.innerHTML = '<tr><td colspan="8" style="color:var(--muted)">暂无打分记录</td></tr>';
       return;
     }
     tb.innerHTML = d.items.map(it => `<tr>

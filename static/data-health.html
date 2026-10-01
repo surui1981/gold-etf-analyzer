@@ -156,29 +156,16 @@
     <div class="overall" id="overallCards"></div>
   </div>
 
-  <!-- 数据源实时状态 -->
+  <!-- 数据源实时状态 · V0.77.0 聚类
+       原先「数据源实时状态」（6 张卡，只有状态）与「时效详情」（6 行表，只有时效）
+       是同一批 6 个数据源的两种视图：同一份数据渲染两遍、字段互补，用户得横向对照
+       两处才知道「哪个源既有问题、又差多久」。现合并为一处，并按品种聚成
+       「黄金 / 白银」两组（SOURCE_LABELS 的键天然分这两组，此前从未据此分组）——
+       每个数据源只出现一次，状态与时效同卡展示。 -->
   <div class="section">
     <h2 data-i18n="health.section_sources">📡 数据源实时状态</h2>
     <div class="hint" data-i18n="health.section_sources_hint">6 个数据源的实时运行状态。绿 = 真实（live），橙 = 缓存（stale），红 = 演示（mock），灰 = 未知。</div>
-    <div class="market-grid" id="sourceGrid"></div>
-  </div>
-
-  <!-- 时效详情 -->
-  <div class="section">
-    <h2 data-i18n="health.section_freshness">⏱ 时效详情</h2>
-    <div class="hint" data-i18n="health.section_freshness_hint">各市场的时效分级、交易时段、数据截止与采集时间戳。</div>
-    <table class="freshness-table" id="freshnessTable">
-      <thead>
-        <tr>
-          <th data-i18n="health.col_market">市场</th>
-          <th data-i18n="health.col_session">交易时段</th>
-          <th data-i18n="health.col_freshness">时效</th>
-          <th data-i18n="health.col_data_date">数据截止</th>
-          <th data-i18n="health.col_age">相对时长</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div id="sourceGroups"></div>
   </div>
 
   <!-- 健康说明 -->
@@ -276,47 +263,50 @@
            '</div>';
   }
 
-  function renderSourceGrid(healthData) {
-    var grid = document.getElementById("sourceGrid");
-    if (!grid) return;
-    var sources = healthData.sources || {};
-    var keys = Object.keys(SOURCE_LABELS);
-    var html = keys.map(function (k) {
-      var status = sources[k] || "unknown";
-      var meta = STATUS_LABELS[status] || STATUS_LABELS.unknown;
-      var label = SOURCE_LABELS[k];
-      return '<div class="market-card ' + meta.cls + '">' +
-               '<div class="nm">' + safeText(label) + '</div>' +
-               '<div class="badge ' + meta.badge + '">' + safeText(meta.txt) + '</div>' +
-               '<div class="meta">键: <b>' + safeText(k) + '</b></div>' +
-             '</div>';
+  /* V0.77.0 聚类：把 health.sources（状态）与 freshness.markets（时效）按品种聚成两组。
+     此前同一批 6 个数据源渲染两遍 —— 「数据源实时状态」出 6 张只有状态的卡、
+     「时效详情」出 6 行只有时效的表，字段互补却要人肉横向对照。
+     现在每个数据源只渲染一次、状态与时效同卡，并按 SOURCE_LABELS 的天然分组（黄金/白银）聚类。 */
+  var SOURCE_GROUPS = [
+    { key: "gold", keys: ["ny", "sge", "etf"] },
+    { key: "silver", keys: ["silver_ny", "silver_etf", "silver_gram"] }
+  ];
+
+  function renderSourceGroups(healthData, freshData) {
+    var box = document.getElementById("sourceGroups");
+    if (!box) return;
+    var sources = (healthData && healthData.sources) || {};
+    var markets = (freshData && freshData.markets) || {};
+
+    var html = SOURCE_GROUPS.map(function (g) {
+      var rows = g.keys.filter(function (k) { return !!SOURCE_LABELS[k]; }).map(function (k) {
+        var m = markets[k] || {};
+        var status = sources[k] || m.status || "unknown";
+        var meta = STATUS_LABELS[status] || STATUS_LABELS.unknown;
+        // 时效摘要：把原先「时效详情」表里的交易时段 / 数据截止 / 相对时长压成一行
+        var bits = [];
+        if (m.session && m.session.state_label) bits.push(safeText(m.session.state_label));
+        if (m.data_date) bits.push(_t("health.meta_until", "截止") + " " + safeText(m.data_date));
+        bits.push(safeText(m.freshness_label || meta.txt) + " · " + fmtAge(m.age_minutes));
+        return '<div class="market-card ' + meta.cls + '">' +
+                 '<div class="nm">' + safeText(SOURCE_LABELS[k]) + '</div>' +
+                 '<div class="badge ' + meta.badge + '">' + safeText(meta.txt) + '</div>' +
+                 '<div class="meta">' + bits.join(" · ") + '</div>' +
+               '</div>';
+      }).join("");
+      return '<section class="pmc-cluster">' +
+               '<h3 class="pmc-cluster-head">' +
+                 safeText(_t("health.group_" + g.key, g.key === "gold" ? "黄金" : "白银")) +
+                 '<span class="pmc-count">' + g.keys.length + '</span>' +
+               '</h3>' +
+               '<div class="market-grid">' + rows + '</div>' +
+             '</section>';
     }).join("");
-    grid.innerHTML = html || '<div class="hint">—</div>';
+    box.innerHTML = html || '<div class="hint">—</div>';
   }
 
-  function renderFreshnessTable(freshData) {
-    var tbody = document.querySelector("#freshnessTable tbody");
-    if (!tbody) return;
-    var markets = freshData.markets || {};
-    var order = ["ny", "sge", "etf", "silver_ny", "silver_etf", "silver_gram"];
-    var keys = order.filter(function (k) { return markets[k]; });
-    Object.keys(markets).forEach(function (k) { if (keys.indexOf(k) < 0) keys.push(k); });
-
-    tbody.innerHTML = keys.map(function (k) {
-      var m = markets[k];
-      var status = m.status || "unknown";
-      var sm = STATUS_LABELS[status] || STATUS_LABELS.unknown;
-      var ageTxt = fmtAge(m.age_minutes);
-      var ageCls = status === "live" ? "ok" : (status === "mock" ? "bad" : "warn");
-      return '<tr>' +
-               '<td class="nm">' + safeText(SOURCE_LABELS[k] || m.name || k) + '</td>' +
-               '<td>' + safeText(m.session && m.session.state_label || "—") + '</td>' +
-               '<td class="' + sm.cls + '">' + safeText(m.freshness_label || sm.txt) + '</td>' +
-               '<td>' + safeText(m.data_date || "—") + '</td>' +
-               '<td class="' + ageCls + '">' + ageTxt + '</td>' +
-             '</tr>';
-    }).join("");
-  }
+  /* renderFreshnessTable 已于 V0.77.0 移除：其时效三列（交易时段 / 数据截止 /
+     相对时长）已并入 renderSourceGroups 的卡片摘要行，不再单列一张表。 */
 
   function renderNote(healthData) {
     var el = document.getElementById("apiNote");
@@ -345,8 +335,7 @@
     ]).then(function (arr) {
       var h = arr[0], f = arr[1];
       renderOverall(h);
-      renderSourceGrid(h);
-      renderFreshnessTable(f);
+      renderSourceGroups(h, f);
       renderNote(h);
       showLoading(false, "");
     }).catch(function (e) {

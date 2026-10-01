@@ -51,8 +51,12 @@
   .hero { margin-bottom: 16px; }
   .hero .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .notice { display: inline-block; margin-top: 8px; font-size: 11.5px; color: #92400e; background: #fff7e6; border: 1px solid #f0e2b6; border-radius: 6px; padding: 3px 10px; }
-  /* 筛选器 */
-  .filters { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+  /* 筛选器 · V0.77.0 聚类：9 个字段原为一条平铺（靠 3 个 &nbsp; label 手工对齐），
+     现按「查询条件 / 输出动作」聚成两组，组间用虚线分隔，组名用统一 .pmc-group-title */
+  .filters { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+  .fgroup { display: flex; flex-direction: column; gap: 6px; }
+  .fgroup + .fgroup { padding-left: 14px; border-left: 1px dashed var(--border); }
+  .fgroup-body { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
   .fld { display: flex; flex-direction: column; gap: 4px; }
   .fld label { font-size: 12px; color: var(--muted); }
   .fld select, .fld input { border: 1px solid var(--border); border-radius: 8px; padding: 6px 9px; font-size: 13px; color: var(--text); background: #fff; font-family: inherit; }
@@ -130,49 +134,62 @@
     <h2 data-i18n="trades.filter_title">筛选条件</h2>
     <div class="acc-hint" id="accHint" data-i18n-html="trades.acc_hint">账本：<b>加载中…</b>（可在右上角切换；「全部账本」为合并视图）</div>
     <div class="filters">
-      <div class="fld">
-        <label for="fSide" data-i18n="trades.filter_side">方向</label>
-        <select id="fSide">
-          <option value="" data-i18n="trades.opt_all">全部</option>
-          <option value="buy" data-i18n="trades.side_buy">买入</option>
-          <option value="sell" data-i18n="trades.side_sell">卖出</option>
-        </select>
+      <!-- 簇 1：查询条件（范围类 6 个字段） -->
+      <div class="fgroup">
+        <div class="pmc-group-title">查询条件</div>
+        <div class="fgroup-body">
+          <div class="fld">
+            <label for="fSide" data-i18n="trades.filter_side">方向</label>
+            <select id="fSide">
+              <option value="" data-i18n="trades.opt_all">全部</option>
+              <option value="buy" data-i18n="trades.side_buy">买入</option>
+              <option value="sell" data-i18n="trades.side_sell">卖出</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label for="fStart" data-i18n="trades.filter_start">起始日期</label>
+            <input type="date" id="fStart">
+          </div>
+          <div class="fld">
+            <label for="fEnd" data-i18n="trades.filter_end">结束日期</label>
+            <input type="date" id="fEnd">
+          </div>
+          <div class="fld">
+            <label for="fPosition" data-i18n="trades.filter_position">持仓</label>
+            <select id="fPosition"><option value="" data-i18n="trades.opt_all_positions">全部持仓</option></select>
+          </div>
+          <div class="fld">
+            <label for="fKeyword" data-i18n="trades.filter_keyword">关键字</label>
+            <input type="text" id="fKeyword" data-i18n-placeholder="trades.filter_keyword_ph" placeholder="名称或代码，如 518880">
+          </div>
+          <div class="fld">
+            <label for="fSize" data-i18n="trades.filter_size">每页</label>
+            <select id="fSize">
+              <option value="20" data-i18n="trades.size_20">20 条</option>
+              <option value="50" selected data-i18n="trades.size_50">50 条</option>
+              <option value="100" data-i18n="trades.size_100">100 条</option>
+            </select>
+          </div>
+        </div><!-- /.fgroup-body -->
       </div>
-      <div class="fld">
-        <label for="fStart" data-i18n="trades.filter_start">起始日期</label>
-        <input type="date" id="fStart">
-      </div>
-      <div class="fld">
-        <label for="fEnd" data-i18n="trades.filter_end">结束日期</label>
-        <input type="date" id="fEnd">
-      </div>
-      <div class="fld">
-        <label for="fPosition" data-i18n="trades.filter_position">持仓</label>
-        <select id="fPosition"><option value="" data-i18n="trades.opt_all_positions">全部持仓</option></select>
-      </div>
-      <div class="fld">
-        <label for="fKeyword" data-i18n="trades.filter_keyword">关键字</label>
-        <input type="text" id="fKeyword" data-i18n-placeholder="trades.filter_keyword_ph" placeholder="名称或代码，如 518880">
-      </div>
-      <div class="fld">
-        <label for="fSize" data-i18n="trades.filter_size">每页</label>
-        <select id="fSize">
-          <option value="20" data-i18n="trades.size_20">20 条</option>
-          <option value="50" selected data-i18n="trades.size_50">50 条</option>
-          <option value="100" data-i18n="trades.size_100">100 条</option>
-        </select>
-      </div>
-      <div class="fld">
-        <label>&nbsp;</label>
-        <button class="btn" id="btnQuery" type="button" data-i18n="trades.btn_query">查询</button>
-      </div>
-      <div class="fld">
-        <label>&nbsp;</label>
-        <button class="btn ghost" id="btnReset" type="button" data-i18n="trades.btn_reset">重置</button>
-      </div>
-      <div class="fld">
-        <label>&nbsp;</label>
-        <button class="btn ghost" id="btnExport" type="button" data-i18n="trades.btn_export">⬇ 导出 CSV</button>
+
+      <!-- 簇 2：输出动作（查询 / 重置 / 导出） -->
+      <div class="fgroup">
+        <div class="pmc-group-title">输出动作</div>
+        <div class="fgroup-body">
+          <div class="fld">
+            <label>&nbsp;</label>
+            <button class="btn" id="btnQuery" type="button" data-i18n="trades.btn_query">查询</button>
+          </div>
+          <div class="fld">
+            <label>&nbsp;</label>
+            <button class="btn ghost" id="btnReset" type="button" data-i18n="trades.btn_reset">重置</button>
+          </div>
+          <div class="fld">
+            <label>&nbsp;</label>
+            <button class="btn ghost" id="btnExport" type="button" data-i18n="trades.btn_export">⬇ 导出 CSV</button>
+          </div>
+        </div><!-- /.fgroup-body -->
       </div>
     </div>
     <div class="chips">
@@ -188,7 +205,8 @@
   <!-- 汇总 -->
   <div class="card">
     <h2 data-i18n="trades.summary_title">汇总 <span class="sub" id="summaryScope" data-i18n="trades.summary_scope">（覆盖全部筛选结果，非当前页）</span></h2>
-    <div class="kpi-grid" id="kpiArea"></div>
+    <!-- V0.77.0 聚类：原为 6 张卡一条平铺，现由 renderSummary() 渲染成两簇 -->
+    <div id="kpiArea"></div>
   </div>
 
   <!-- 明细 -->
@@ -318,18 +336,38 @@
   function renderSummary(s) {
     var pnlCls = signCls(s.realized_pnl);
     var netCls = (s.net_amount ?? 0) > 0 ? "" : "";
-    var cards = [
-      { label: "成交笔数", value: (s.count ?? 0) + " 笔", sub: "买入 " + (s.buy_count ?? 0) + " / 卖出 " + (s.sell_count ?? 0) },
-      { label: "买入金额", value: "¥" + fmtMoney(s.buy_amount), sub: "不含手续费" },
-      { label: "卖出金额", value: "¥" + fmtMoney(s.sell_amount), sub: "不含手续费" },
-      { label: "净流出", value: "¥" + fmtMoney(s.net_amount), sub: "买入 − 卖出", cls: netCls },
-      { label: "手续费合计", value: "¥" + fmtMoney(s.total_fee), sub: "所有成交" },
-      { label: "已实现盈亏", value: signText(s.realized_pnl), sub: "均价法，已扣卖出手续费", cls: pnlCls }
+    // V0.77.0 聚类：6 张卡原为一条平铺（「量」与「钱」混排，用户要自己归类），
+    // 现按语义聚成两簇 —— 成交规模（交易量与水位的来源）/ 成本与收益（付出的钱与落袋盈亏）。
+    var clusters = [
+      {
+        title: "成交规模", note: "交易量与水位的来源",
+        items: [
+          { label: "成交笔数", value: (s.count ?? 0) + " 笔", sub: "买入 " + (s.buy_count ?? 0) + " / 卖出 " + (s.sell_count ?? 0) },
+          { label: "买入金额", value: "¥" + fmtMoney(s.buy_amount), sub: "不含手续费" },
+          { label: "卖出金额", value: "¥" + fmtMoney(s.sell_amount), sub: "不含手续费" },
+          { label: "净流出", value: "¥" + fmtMoney(s.net_amount), sub: "买入 − 卖出", cls: netCls }
+        ]
+      },
+      {
+        title: "成本与收益", note: "实际付出的钱与已落袋盈亏",
+        items: [
+          { label: "手续费合计", value: "¥" + fmtMoney(s.total_fee), sub: "所有成交" },
+          { label: "已实现盈亏", value: signText(s.realized_pnl), sub: "均价法，已扣卖出手续费", cls: pnlCls }
+        ]
+      }
     ];
-    $("kpiArea").innerHTML = cards.map(function (c) {
-      return '<div class="kpi"><div class="k-label">' + esc(c.label) + '</div>' +
-        '<div class="k-value ' + (c.cls || "") + '">' + esc(c.value) + '</div>' +
-        '<div class="k-sub">' + esc(c.sub) + '</div></div>';
+    $("kpiArea").innerHTML = clusters.map(function (g) {
+      return '<section class="pmc-cluster">' +
+        '<h3 class="pmc-cluster-head">' + esc(g.title) +
+        '<span class="pmc-note">' + esc(g.note) + '</span>' +
+        '<span class="pmc-count">' + g.items.length + ' 项</span>' +
+        '</h3>' +
+        '<div class="kpi-grid">' + g.items.map(function (c) {
+          return '<div class="kpi"><div class="k-label">' + esc(c.label) + '</div>' +
+            '<div class="k-value ' + (c.cls || "") + '">' + esc(c.value) + '</div>' +
+            '<div class="k-sub">' + esc(c.sub) + '</div></div>';
+        }).join("") + '</div>' +
+        '</section>';
     }).join("");
   }
 

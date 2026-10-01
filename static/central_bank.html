@@ -118,6 +118,7 @@
       <a href="/trades" data-i18n="nav.trades">交易历史</a>
       <a href="/weights" data-i18n="nav.weights">权重配置</a>
       <a href="/news" data-i18n="nav.news">消息面评估</a>
+      <a href="/review" data-i18n="nav.review">研判复盘</a>
       <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
       <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
       <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
@@ -395,10 +396,16 @@
     });
     ChartA11y.describeBy(document.getElementById("stackedChart"), "detailTable");
 
-    // 自定义图例
+    // 自定义图例 · V0.77.0：此前只显示 ISO 代码（如 UZB），与下方「Top10 买家」表格的
+    // 中文国名对不上，用户得自己拿代码去对照。现走与表格**同一条渲染链**
+    // I18n.t('country.' + iso) → iso；title 保留 ISO 便于核对原始代码。
     const legendEl = document.getElementById("chartLegend");
+    const countryLabel = (iso) => {
+      const nm = (window.I18n && window.I18n.t) ? window.I18n.t("country." + iso) : iso;
+      return nm && nm !== "country." + iso ? nm : iso;
+    };
     legendEl.innerHTML = [...topCountries.map((iso, i) =>
-      `<span><span class="sw" style="background:${palette[i]}"></span>${iso}</span>`
+      `<span title="${iso}"><span class="sw" style="background:${palette[i]}"></span>${countryLabel(iso)}</span>`
     ), `<span><span class="sw" style="background:${otherColor}"></span>Other</span>`].join("");
   }
 
