@@ -97,6 +97,13 @@ window.PM_I18N_ZH_CN = {
   "health.card_live": "实时 (live)",
   "health.card_stale": "缓存 (stale)",
   "health.card_mock": "演示 (mock)",
+  /* V0.77.1 A1：取数失败时的失败态文案（此前失败会被静默兜底成「4 张全绿」） */
+  "health.err_failed": "⚠️ 取数失败：",
+  "health.src_health": "数据源健康度",
+  "health.src_freshness": "数据时效",
+  "health.list_sep": "、",
+  "health.err_meaning": "接口不可用。本页无法判断数据源是否正常 —— 显示「—」不代表正常，请勿据此认为数据源健康。",
+  "health.err_advice": "点右上角 🔄 可重试。",
 
   /* ── Portfolio 页面（持仓与决策）── */
   "portfolio.page_title": "黄金价格投资辅助工具 · 持仓与决策",
@@ -530,7 +537,7 @@ window.PM_I18N_ZH_CN = {
   "backtest.cached_badge": "⏱ 已用 5 分钟内缓存",
   "backtest.sharpe_title": "🎯 Sharpe（年化）— 125 个组合分布",
   "backtest.drawdown_title": "📉 最大回撤 % — 越低越好",
-  "backtest.calibration_chart_title": "🎓 校准曲线 — 实际命中率 vs 理论概率（5 桶）",
+  "backtest.calibration_chart_title": "🎓 校准曲线 — 实际命中率 vs 完美校准基准线（5 桶）",
   "backtest.detail_table_title": "📋 命中详情表",
   "backtest.detail_table_sub": "（按 Sharpe 降序，前 30 行）",
   "backtest.run_prompt": "点「立即回测」开始计算",
@@ -743,6 +750,8 @@ window.PM_I18N_ZH_CN = {
   "fresh.tip_data_date": "数据截止：",
   "fresh.sep": "；",
   "fresh.refresh_hint": "（每 {secs} 秒自动刷新）",
+  /* V0.77.1 A4：SW 网络失败回退离线缓存时，时效条要显式说明数据来自缓存 */
+  "fresh.offline_cached": "⚠ 本页数据来自离线缓存（{at}），可能已过期",
   "fresh.alert_mock": "为<b>演示数据（非真实行情）</b>",
   "fresh.alert_cached": "为<b>缓存数据（可能过期）</b>",
   "fresh.alert_suffix": "，请勿据此决策",

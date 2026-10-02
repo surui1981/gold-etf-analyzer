@@ -180,13 +180,15 @@
     var cCanvas = document.getElementById("calibrationChart");
     if (cCanvas) {
       var buckets = ["0-20", "20-40", "40-60", "60-80", "80-100"];
-      var ideal = [10, 30, 50, 70, 90];  // 理论概率
-      // 实际：基于首组 score 序列 + 命中 → 分桶统计
+      // V0.77.1 A5：这条线是「完美校准」的参照，取值就是每桶的分数中值，不由任何模型算出。
+      // 原先注释与图例都只写「理论概率」，客户会把它当成模型输出的概率来评估可靠性。
+      var baseline = [10, 30, 50, 70, 90];
       var first = (result.rows || [])[0];
-      var actual = [0, 0, 0, 0, 0].map(function () { return 0; });
+      var bucketData = result._bucket_data;
+      var hasBuckets = !!(first && bucketData && bucketData.scores && bucketData.scores.length);
+      var actual = [0, 0, 0, 0, 0];
       var total = [0, 0, 0, 0, 0];
-      if (first && result._bucket_data) {
-        var bucketData = result._bucket_data;  // {scores: [], hits: []}
+      if (hasBuckets) {
         for (var i = 0; i < bucketData.scores.length; i++) {
           var sc = bucketData.scores[i];
           var idx = Math.min(4, Math.floor(sc / 20));
@@ -194,22 +196,34 @@
           if (bucketData.hits[i]) actual[idx]++;
         }
         for (var k = 0; k < 5; k++) {
-          actual[k] = total[k] ? Math.round(actual[k] / total[k] * 100) : 0;
+          // 桶内无样本时留 null（折线断开）而不是 0 —— 0% 是一个结论，「无样本」不是
+          actual[k] = total[k] ? Math.round(actual[k] / total[k] * 100) : null;
         }
-      } else {
-        // 没有 _bucket_data：用 first.win_rate 兜底（不展示 actual，全为 0）
-        actual = [0, 0, 0, 0, 0];
+      }
+
+      // V0.77.1 A5：没有分桶数据时【整条】实际命中率曲线都不加进图表。
+      // 原实现把 actual 全置 0 后照样画 —— 一条贴在 0 上的实线，客户读到的结论是
+      // 「模型的命中率是 0」，而事实是「这次没返回分桶数据」。缺数据 ≠ 命中率 0%。
+      //
+      // ⚠ 实测（V0.77.1 复核）：`_bucket_data` 在后端【从未存在过】——
+      //   `src/app/services/backtest.py:44` 定义了 _CALIBRATION_BUCKETS 五桶常量
+      //   （注释写「与 review._calibration 共享形状」）但全仓无任何调用点，
+      //   `BacktestResultOut` 也没有分桶字段。也就是说这条「实际命中率」自 V0.71.0 起
+      //   一直是恒为 0 的假线，不是「偶尔缺数据」。本改动因此会让图上只剩基准线 ——
+      //   这是有意为之：缺失要看得见，假线比缺线更危险。
+      //   前端判断已按「后端补上字段即自动生效」写好，补后端分桶输出是后续独立事项。
+      var datasets = [
+        { label: "完美校准基准线 %", data: baseline, borderColor: "#946300", borderDash: [5, 5], pointRadius: 4, tension: 0 },
+      ];
+      if (hasBuckets) {
+        datasets.push(
+          { label: "实际命中率 %", data: actual, borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", pointRadius: 5, tension: 0, fill: false },
+        );
       }
 
       calibrationChart = new Chart(cCanvas.getContext("2d"), {
         type: "line",
-        data: {
-          labels: buckets,
-          datasets: [
-            { label: "理论概率 %", data: ideal, borderColor: "#946300", borderDash: [5, 5], pointRadius: 4, tension: 0 },
-            { label: "实际命中率 %", data: actual, borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", pointRadius: 5, tension: 0, fill: false },
-          ],
-        },
+        data: { labels: buckets, datasets: datasets },
         options: {
           responsive: true,
           plugins: { legend: { position: "top" } },
@@ -218,7 +232,21 @@
           },
         },
       });
-      ChartA11y.wrapChart(cCanvas, { label: "阈值带命中率校准曲线（理论概率 vs 实际命中率，5 个分数桶）" });
+      var calLabel = hasBuckets
+        ? "阈值带命中率校准曲线（完美校准基准线 vs 实际命中率，5 个分数桶）"
+        : "阈值带校准基准线（5 个分数桶）；回测接口未提供分桶命中率数据，无法绘制实际命中率曲线";
+      ChartA11y.wrapChart(cCanvas, { label: calLabel });
+      // wrapChart 对已标记过的画布会早退，重跑回测时 label 不会刷新 —— 这里强制覆盖语义
+      cCanvas.setAttribute("aria-label", calLabel);
+
+      // V0.77.1 A5：把两条线的含义写在图下（原图只有图例，没有一句解释）
+      var calNote = document.getElementById("calibrationNote");
+      if (calNote) {
+        calNote.textContent = hasBuckets
+          ? "金色虚线是「完美校准基准线」—— 5 个桶的分数中值（10 / 30 / 50 / 70 / 90），是理想参照，并非模型算出的概率；蓝色实线才是实际命中率。两线越贴合，说明分值越有区分度。"
+          : "金色虚线是「完美校准基准线」—— 5 个桶的分数中值（10 / 30 / 50 / 70 / 90），是理想参照，并非模型算出的概率。本图当前没有「实际命中率」曲线：回测接口未提供分桶命中率数据 —— 缺数据不等于命中率为 0%。";
+        calNote.style.display = "block";
+      }
     }
 
     // 警告：样本不足

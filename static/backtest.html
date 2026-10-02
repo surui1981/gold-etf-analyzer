@@ -206,8 +206,12 @@
     <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.drawdown_title">📉 最大回撤 % — 越低越好</div>
     <canvas id="drawdownChart"></canvas>
 
-    <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.calibration_chart_title">🎓 校准曲线 — 实际命中率 vs 理论概率（5 桶）</div>
+    <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.calibration_chart_title">🎓 校准曲线 — 实际命中率 vs 完美校准基准线（5 桶）</div>
     <canvas id="calibrationChart"></canvas>
+    <!-- V0.77.1 A5：曲线语义说明。原先既没说明金色虚线是「理想校准的参照值」而非模型输出，
+         也没在缺分桶数据时说明「没有实线」代表缺数据而不是命中率 0% ——
+         客户会把它当成模型无效的证据，或把参照线当成模型的可靠性输出。 -->
+    <div id="calibrationNote" style="display:none;font-size:12px;color:var(--muted);line-height:1.7;margin:6px 0 0"></div>
 
     <div style="font-size:13px;font-weight:600;margin:16px 0 6px" data-i18n="backtest.detail_table_title">📋 命中详情表 <span style="font-weight:400;font-size:11px;color:var(--muted)" data-i18n="backtest.detail_table_sub">（按 Sharpe 降序，前 30 行）</span></div>
     <div style="max-height:400px;overflow:auto;border:1px solid var(--border);border-radius:8px">

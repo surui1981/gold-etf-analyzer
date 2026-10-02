@@ -97,6 +97,14 @@ window.PM_I18N_en_US = {
   "health.card_live": "Live",
   "health.card_stale": "Stale",
   "health.card_mock": "Mock",
+  /* V0.77.1 A1: failure-state copy (previously a failed fetch was silently
+     backfilled into an all-green overview of four cards) */
+  "health.err_failed": "⚠️ Fetch failed: ",
+  "health.src_health": "source health",
+  "health.src_freshness": "data freshness",
+  "health.list_sep": " and ",
+  "health.err_meaning": " endpoint unavailable. This page cannot tell whether any data source is healthy — a dash means unknown, not OK. Do not read this page as confirmation that sources are fine.",
+  "health.err_advice": "Use the 🔄 button at the top right to retry.",
 
   /* ── Portfolio page ── */
   "portfolio.page_title": "Gold ETF Assistant · Portfolio & Decision",
@@ -527,7 +535,7 @@ window.PM_I18N_en_US = {
   "backtest.cached_badge": "⏱ Used 5-min cache",
   "backtest.sharpe_title": "🎯 Sharpe (annualized) — 125 combos distribution",
   "backtest.drawdown_title": "📉 Max Drawdown % — lower is better",
-  "backtest.calibration_chart_title": "🎓 Calibration Curve — actual hit rate vs theoretical (5 buckets)",
+  "backtest.calibration_chart_title": "🎓 Calibration Curve — actual hit rate vs perfectly-calibrated baseline (5 buckets)",
   "backtest.detail_table_title": "📋 Hit Detail Table",
   "backtest.detail_table_sub": "(sorted by Sharpe desc, top 30 rows)",
   "backtest.run_prompt": "Click \"Run Backtest\" to start computation",
@@ -741,6 +749,9 @@ window.PM_I18N_en_US = {
   "fresh.tip_data_date": "Data Cutoff: ",
   "fresh.sep": " · ",
   "fresh.refresh_hint": " (auto-refresh every {secs}s)",
+  /* V0.77.1 A4: when the SW falls back to an offline-cached response the
+     freshness bar must say so explicitly */
+  "fresh.offline_cached": "⚠ This page is showing offline-cached data ({at}); it may be out of date",
   "fresh.alert_mock": "<b>demo data (not real quotes)</b>",
   "fresh.alert_cached": "<b>cached (may be stale)</b>",
   "fresh.alert_suffix": " — do not trade on this",

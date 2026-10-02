@@ -109,6 +109,13 @@ window.PM_I18N_zh_TW = {
   "health.card_live": "即時 (live)",
   "health.card_stale": "快取 (stale)",
   "health.card_mock": "示範 (mock)",
+  /* V0.77.1 A1：取數失敗時的失敗態文案（此前失敗會被靜默兜底成「4 張全綠」） */
+  "health.err_failed": "⚠️ 取數失敗：",
+  "health.src_health": "資料來源健康度",
+  "health.src_freshness": "資料時效",
+  "health.list_sep": "、",
+  "health.err_meaning": "介面無法使用。本頁無法判斷資料來源是否正常 —— 顯示「—」不代表正常，請勿據此認為資料來源健康。",
+  "health.err_advice": "點右上角 🔄 可重試。",
 
   /* ── 品牌補充 ── */
   "brand.subtitle_en": "黃金價格投資輔助工具",
@@ -492,6 +499,10 @@ window.PM_I18N_zh_TW = {
   "fresh.tip_data_date": "資料截止：",
   "fresh.sep": "；",
   "fresh.refresh_hint": "（每 {secs} 秒自動重新整理）",
+  /* V0.77.1 A4：SW 網路失敗回退離線快取時，時效條要明說資料來自快取 */
+  "fresh.offline_cached": "⚠ 本頁資料來自離線快取（{at}），可能已過期",
+  /* V0.77.1 A5：校準曲線標題（此鍵在 zh-TW 原先缺失 → 繁體使用者會看到簡體） */
+  "backtest.calibration_chart_title": "🎓 校準曲線 — 實際命中率 vs 完美校準基準線（5 桶）",
   "fresh.alert_mock": "為<b>示範資料（非真實行情）</b>",
   "fresh.alert_cached": "為<b>快取資料（可能過期）</b>",
   "fresh.alert_suffix": "，請勿據此決策",

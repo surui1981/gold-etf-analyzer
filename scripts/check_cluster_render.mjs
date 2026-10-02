@@ -1,14 +1,20 @@
 /**
- * 聚类改造行为验证（V0.77.0）—— scripts/check_cluster_render.mjs
+ * 前端渲染行为验证（V0.77.0 聚类分组 + V0.77.1 信任修复）—— scripts/check_cluster_render.mjs
  *
  * 为什么需要它：`check_static_js.py` 只做「语法 / 未定义调用 / DOM id」三类静态检查，
- * 查不出「渲染出来的 HTML 结构对不对」；而聚类改造改的正是渲染逻辑 —— 比如把 8 张卡
+ * 查不出「渲染出来的 HTML 结构对不对」；而这两版改的正是渲染逻辑 —— 比如把 8 张卡
  * 分成 3 组、把 6 个数据源从两处渲染合并到一处。这类改动语法完全正确、DOM id 一个不差，
  * 静态门禁全绿，却可能让分组根本不出现（本次开发中就出现过提取到函数定义却没调用、
  * 结果 innerHTML 为空的假绿）。
  *
- * 做法：从各页源码里**提取真实的聚类代码块**，用最小 DOM 桩 + mock 数据在 Node 里
- * 真实执行，再断言产出的 HTML 结构（簇数量 / 簇标题 / 卡片数 / 分组顺序）。
+ * V0.77.1 追加：失败态渲染验证。信任修复包（A 包）五条改的全是【失败路径】——
+ *   正常请求永远走不到那些分支，人工点页面看不出来，改错了就是「失败被显示成正常」
+ *   这类后果最重的错误。因此这里直接构造「接口挂掉」的输入，执行各页真实的失败分支
+ *   （renderOverall / showTrendError / renderLoadFailure / serveStaleApi 的价格护栏），
+ *   断言其产出的可见结果。sw.js 的价格类正则也在这里被真实执行后逐路径验证。
+ *
+ * 做法：从各页源码里**提取真实的代码块**，用最小 DOM 桩 + mock 数据在 Node 里
+ * 真实执行，再断言产出的 HTML 结构（簇数量 / 簇标题 / 卡片数 / 分组顺序）与失败态结果。
  *
  * 用法：node scripts/check_cluster_render.mjs   （exit 0 = 通过）
  */
@@ -40,12 +46,23 @@ function sliceBetween(src, startMark, endMark) {
   if (j < 0) throw new Error("未找到结束标记：" + endMark);
   return src.slice(i, j + endMark.length);
 }
-/** 最小 DOM 桩：只支持按 id 取元素 + innerHTML 存储（足够验证「渲染出了什么」） */
+/** 最小 DOM 桩：支持按 id 取元素 + innerHTML / textContent / style / classList / disabled
+ *  （足够验证「渲染出了什么」；style 与 classList 供 V0.77.1 的失败态与接线断言使用） */
 function makeDoc() {
   const store = {};
   return {
     getElementById(id) {
-      if (!store[id]) store[id] = { id, innerHTML: "", textContent: "" };
+      if (!store[id]) {
+        store[id] = {
+          id,
+          innerHTML: "",
+          textContent: "",
+          style: {},
+          disabled: false,
+          classList: { add() {}, remove() {}, contains: () => false },
+          addEventListener() {},
+        };
+      }
       return store[id];
     },
     querySelector(sel) {
@@ -56,7 +73,7 @@ function makeDoc() {
 const countOf = (html, re) => (html.match(re) || []).length;
 
 console.log("=".repeat(70));
-console.log("V0.77.0 聚类改造 · 渲染行为验证");
+console.log("V0.77.0 聚类分组 + V0.77.1 信任修复 · 前端渲染行为验证");
 console.log("=".repeat(70));
 
 // ── 1. trend.html：#cards 8 张 KPI 卡 → 3 组（价格 / 涨跌 / 均线） ──
@@ -252,6 +269,337 @@ console.log("=".repeat(70));
   ok("央行页 topnav 共 11 条", countOf(c.slice(c.indexOf('<nav class="topnav">'), c.indexOf("</nav>")), /<a href=/g) === 11, String(countOf(c.slice(c.indexOf('<nav class="topnav">'), c.indexOf("</nav>")), /<a href=/g)));
   ok("图例改走 I18n.t('country.'+iso)", c.includes('I18n.t("country." + iso)') && c.includes("countryLabel"));
 }
+
+// ── 7. V0.77.1 A 包「信任修复」：失败态渲染 ──
+// 这一包五条改的全是【失败路径】—— 正常请求永远走不到那些分支，靠人工点页面看不出来，
+// 而这恰恰是最需要验证的部分（改错了就是「失败被显示成正常」这类后果最重的错误）。
+// 因此这里直接构造「接口挂掉」的输入，执行各页真实的失败分支，断言它产出的可见结果。
+{
+  console.log("\n[7] V0.77.1 A 包 — 失败态渲染（正常路径测不出）");
+
+  // ── A1 data-health：接口全挂时不得判「4 张全绿」 ──
+  {
+    const src = read("data-health.html");
+    const code =
+      sliceBetween(src, "  function overallCard(label, value, klass) {", "\n  }") +
+      "\n" +
+      sliceBetween(src, "  function renderOverall(healthData, ok) {", "\n  }");
+    const _t = (k, fallback) => fallback;
+    const safeText = (v) => String(v == null ? "" : v);
+    const run = (health, okv) => {
+      const fn = new Function(
+        "document", "healthData", "ok", "_t", "safeText",
+        code +
+          "\nrenderOverall(healthData, ok);" +
+          "\nreturn document.getElementById('overallCards').innerHTML;"
+      );
+      return fn(makeDoc(), health, okv, _t, safeText);
+    };
+    const green = (html) => (html.match(/vl ok/g) || []).length;
+    const dash = (html) => (html.match(/>—</g) || []).length;
+
+    // 场景 1：健康度接口失败。原实现 catch 兜底成 {sources:{}}，于是 total=0、live=0，
+    // 而 live === total 在 0 === 0 时成立 → 4 张卡全判 ok（绿）。
+    const hFail = run({ sources: {} }, false);
+    ok("A1 接口失败 → 4 张卡全为「—」占位", dash(hFail) === 4, "实际 " + dash(hFail));
+    ok("A1 接口失败 → 不再出现任何绿色 ok 判定", green(hFail) === 0, "实际 " + green(hFail));
+    ok("A1 接口失败 → 走 unknown 态", (hFail.match(/vl unknown/g) || []).length === 4);
+
+    // 场景 2：接口成功但一个数据源都没返回 —— 同样不能说「正常」
+    const hEmpty = run({ sources: {} }, true);
+    ok("A1 成功但零数据源 → 仍走未知态", green(hEmpty) === 0 && dash(hEmpty) === 4);
+
+    // 场景 3：真实正常数据 —— 保证修复没把正常态一起改坏
+    const hOk = run(
+      { sources: { ny: "live", sge: "live", etf: "live", silver_ny: "live", silver_etf: "live", silver_gram: "live" } },
+      true
+    );
+    ok("A1 6 源全 live → 恢复正常判定（live/stale/mock 三卡为绿）", green(hOk) === 3 && dash(hOk) === 0,
+      "green=" + green(hOk) + " dash=" + dash(hOk));
+
+    // 失败说明文案：要说清「哪个接口 + 这意味着什么 + 怎么办」
+    const ft = new Function("_t", sliceBetween(src, "  function failureText(arr) {", "\n  }") + "\nreturn failureText;")(
+      (k, f) => f
+    );
+    const bothFail = ft([{ ok: false }, { ok: false }]);
+    ok("A1 两接口都失败 → 文案含「取数失败」", bothFail.includes("取数失败"));
+    ok("A1 文案明说「— 不代表正常」", bothFail.includes("不代表正常"));
+    ok("A1 文案给出可执行引导", bothFail.includes("🔄"));
+    const oneFail = ft([{ ok: true }, { ok: false }]);
+    ok("A1 只有时效失败 → 只点名失败的那个", oneFail.includes("数据时效") && !oneFail.includes("数据源健康度"));
+    const noneFail = ft([{ ok: true }, { ok: true }]);
+    ok("A1 全部成功 → 不产生失败提示", noneFail === "", JSON.stringify(noneFail));
+  }
+
+  // ── A2 silver：失败时加载条必须收起 + 错误提到首屏 + 不暴露本机地址 ──
+  {
+    const src = read("silver.html");
+    const lt = sliceBetween(src, "async function loadTrend(", "\n}");
+    ok("A2 加载条改由 finally 收起（失败路径也走到）", lt.includes("finally {") && lt.includes("hideLoadBar();"));
+    ok("A2 失败分支接入 showTrendError", lt.includes("showTrendError(e);"));
+
+    const code =
+      sliceBetween(src, "function hideLoadBar() {", "\n}") +
+      "\n" +
+      sliceBetween(src, "function showTrendError(e) {", "\n}");
+    const doc = makeDoc();
+    // 用参数遮蔽全局 console，否则被测代码的 console.warn 会把堆栈打进门禁输出
+    new Function("document", "window", "console", code + "\nshowTrendError(new Error('Failed to fetch'));")(
+      doc,
+      { console: { warn() {} } },
+      { warn() {} }
+    );
+    ok("A2 失败后加载条被收起", doc.getElementById("loadBar").style.display === "none");
+    ok("A2 错误提到首屏可见位（#alertBar）", doc.getElementById("alertBar").innerHTML.includes("加载失败"));
+    ok("A2 首屏提示不含本机地址与端口", !doc.getElementById("alertBar").innerHTML.includes("127.0.0.1"));
+    ok("A2 图表区不再渲染原始异常文本", !doc.getElementById("chartArea").innerHTML.includes("Failed to fetch"));
+  }
+
+  // ── A3 news：缺值占位 + 失败显式标注 ──
+  {
+    const src = read("news.html");
+    ok("A3 静态默认分不再是 50.0", src.includes('id="effScore">—<') && !src.includes('id="effScore">50.0<'));
+    ok("A3 静态口径文案不再是「按中性 50 参与评估」", src.includes("正在读取当日打分状态…"));
+
+    const fs = new Function("v", sliceBetween(src, "function fmtScore(v) {", "\n}") + "\nreturn fmtScore(v);");
+    ok("A3 fmtScore(null) → 「—」", fs(null) === "—", String(fs(null)));
+    ok("A3 fmtScore(undefined) → 「—」", fs(undefined) === "—", String(fs(undefined)));
+    ok("A3 fmtScore(0) → 0.0（真实的 0 不被吞掉）", fs(0) === "0.0", String(fs(0)));
+    ok("A3 fmtScore(52.34) → 52.3", fs(52.34) === "52.3", String(fs(52.34)));
+
+    const doc = makeDoc();
+    new Function(
+      "document", "esc",
+      sliceBetween(src, "function renderLoadFailure(msg) {", "\n}") + "\nrenderLoadFailure('HTTP 500');"
+    )(doc, (s) => String(s == null ? "" : s));
+    ok("A3 失败后有效分显示「—」", doc.getElementById("effScore").textContent === "—");
+    ok("A3 失败后保存按钮被禁用", doc.getElementById("btnSave").disabled === true);
+    ok("A3 失败后明说「不代表今日中性 50」", doc.getElementById("scoreAlert").innerHTML.includes("不代表「今日中性 50」"));
+    ok("A3 失败后公式位说明「未知」", doc.getElementById("effFormula").textContent.includes("未知"));
+  }
+
+  // ── A4 sw.js：只读 API 改 network-first + 价格类禁缓存 + 缓存时点披露 ──
+  {
+    const sw = read("sw.js");
+    ok("A4 已弃用 stale-while-revalidate 回放", !sw.includes("return cached || fetchPromise"));
+    ok("A4 API 分支改为 network-first", /fetch\(request\)\s*\n?\s*\.then\(\(response\) => \{[\s\S]{0,140}cacheApiResponse/.test(sw));
+    ok("A4 只缓存成功响应（4xx/5xx 不入缓存）", /if \(!response\.ok\) return;/.test(sw));
+    ok("A4 有离线回退的新鲜度上限常量", /const MAX_API_STALE_MS = \d+ \* 60 \* 1000;/.test(sw));
+    ok("A4 回退时注入 X-SW-Cached-At", sw.includes('headers.set("X-SW-Cached-At"'));
+
+    // 真实执行价格类正则：价格端点禁止回退，状态端点允许
+    const re = new Function("return " + sw.match(/const PRICE_API_RE = (\/.*?\/);/)[1])();
+    ok("A4 黄金价格端点禁止缓存回退", re.test("/api/v1/market/gold/trend") && re.test("/api/v1/market/gold/etf-quote"));
+    ok("A4 白银价格端点禁止缓存回退", re.test("/api/v1/market/silver/trend") && re.test("/api/v1/market/silver/ny-trend"));
+    ok("A4 状态端点仍可短时回退（health / freshness）", !re.test("/api/v1/market/health") && !re.test("/api/v1/market/freshness"));
+    ok("A4 非行情端点不受价格规则影响", !re.test("/api/v1/news-score/history") && !re.test("/api/v1/review/meta"));
+
+    const fresh = read("freshness.js");
+    ok("A4 时效条读取缓存时点响应头", fresh.includes('r.headers.get("X-SW-Cached-At")'));
+    ok("A4 时效条披露「离线缓存」", fresh.includes("fresh.offline_cached"));
+    ok("A4 sw.js 版本常量已随版本升位", /const VERSION = "v0\.\d+\.\d+";/.test(sw));
+  }
+
+  // ── A5 backtest：基准线正名 + 缺数据不画 0 曲线 ──
+  {
+    const bt = read("backtest-chart.js");
+    ok("A5 图例/数据不再称其为「理论概率」", !bt.includes('"理论概率 %"'));
+    ok("A5 图例已正名为「完美校准基准线」", bt.includes("完美校准基准线 %"));
+    ok("A5 缺分桶数据时整条曲线不入图（不再画 0 线）", bt.includes("if (hasBuckets) {") && bt.includes("datasets.push("));
+    ok("A5 桶内无样本留 null 而非 0", bt.includes(": null;"));
+    ok("A5 图下给出曲线含义说明", bt.includes("并非模型算出的概率"));
+    ok("A5 明说缺数据不等于 0%", bt.includes("缺数据不等于命中率为 0%"));
+
+    const bth = read("backtest.html");
+    ok("A5 页面标题同步正名", bth.includes("实际命中率 vs 完美校准基准线"));
+    ok("A5 新增图下说明容器", bth.includes('id="calibrationNote"'));
+
+    for (const [loc, file] of [["zh-CN", "i18n/zh-CN.js"], ["zh-TW", "i18n/zh-TW.js"], ["en-US", "i18n/en-US.js"]]) {
+      const dict = read(file);
+      const line = dict.split("\n").find((l) => l.includes('"backtest.calibration_chart_title"')) || "";
+      ok("A5 " + loc + " 标题已正名（zh-TW 不再是缺键）",
+        line.includes("基准线") || line.includes("基準線") || line.includes("calibrated baseline"), line.slice(0, 90));
+    }
+  }
+}
+
+// ── 8. V0.77.1 接线与 SW 护栏：桩 fetch / 桩 caches 全链路真实执行 ──
+// 第 7 节验证的是「渲染函数拿到失败输入后产出什么」，但还差一环：`load()` 到底有没有
+// 把失败标记传下去（第 7 节测不出「接线断了」）。这里用桩 fetch 真正跑一遍 load()，
+// 再用桩 caches + 真实 Response 跑一遍 SW 的缓存护栏 —— 都是真实执行，不是静态断言。
+const pending = [];
+{
+  console.log("\n[8] V0.77.1 接线与 SW 缓存护栏（异步执行，结果在末尾统一汇总）");
+
+  // ── A1 接线：data-health 的 load() 全链路（桩 fetch）──
+  {
+    const src = read("data-health.html");
+    const code =
+      sliceBetween(src, "  function fetchJSON(url) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function overallCard(label, value, klass) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function renderOverall(healthData, ok) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function failureText(arr) {", "\n  }") + "\n" +
+      sliceBetween(src, "  var SOURCE_GROUPS = [", "\n  ];") + "\n" +
+      sliceBetween(src, "  function renderSourceGroups(healthData, freshData) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function renderNote(healthData) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function showLoading(loading, errMsg) {", "\n  }") + "\n" +
+      sliceBetween(src, "  function load() {", "\n  }");
+
+    const _t = (k, f) => f;
+    const fmtAge = (v) => (v == null ? "—" : v + " 分钟");
+    const safeText = (v) => String(v == null ? "" : v);
+    const SOURCE_LABELS = {
+      etf: "黄金 ETF（华安 518880）", sge: "上海金（SGE Au99.99）", ny: "纽约金（COMEX GC）",
+      silver_etf: "白银 ETF（易方达 562800）", silver_gram: "白银克重（上海银）", silver_ny: "纽约白银（COMEX SI）",
+    };
+    const STATUS_LABELS = {
+      live: { txt: "实时", cls: "live", badge: "badge-live" },
+      unknown: { txt: "未知", cls: "unknown", badge: "badge-unknown" },
+    };
+    const HEALTH_OK = {
+      sources: { ny: "live", sge: "live", etf: "live", silver_ny: "live", silver_etf: "live", silver_gram: "live" },
+      note: "进程内累计",
+    };
+    const FRESH_OK = {
+      markets: {
+        ny: { status: "live", data_date: "2026-10-02", age_minutes: 600, session: { state_label: "盘后" }, freshness_label: "实时" },
+        sge: { status: "live", data_date: "2026-10-02", age_minutes: 45, session: { state_label: "盘后" }, freshness_label: "实时" },
+        etf: { status: "live", data_date: "2026-10-02", age_minutes: 12, session: { state_label: "盘中" }, freshness_label: "实时" },
+      },
+    };
+
+    /** 跑一遍真实 load()，返回 doc 与「本轮 errorHint 文本」。
+     *  注意：load() 自身不 return 那句 Promise 链（真实代码就是这样），
+     *  所以不能 await 它的返回值 —— 必须让出事件循环，等 microtask 链跑完再断言。
+     *  第一版这里写成 `await fn(...)`，断言全在渲染前执行 —— 其中「全部正常 → 无失败提示」
+     *  因此还假通过了一次（空的错误文本当然「没有失败提示」）。 */
+    const runLoad = async (healthFails, freshFails) => {
+      const fetchStub = (url) => {
+        const fails = url.includes("/market/health") ? healthFails : freshFails;
+        if (fails) return Promise.reject(new Error("HTTP 500"));
+        const data = url.includes("/market/health") ? HEALTH_OK : FRESH_OK;
+        return Promise.resolve({ ok: true, status: 200, json: async () => data });
+      };
+      const doc = makeDoc();
+      const fn = new Function(
+        "document", "fetch", "API_BASE", "_t", "fmtAge", "safeText", "SOURCE_LABELS", "STATUS_LABELS",
+        code + "\nreturn load();"
+      );
+      fn(doc, fetchStub, "", _t, fmtAge, safeText, SOURCE_LABELS, STATUS_LABELS);
+      await new Promise((r) => setTimeout(r, 20));
+      return doc;
+    };
+
+    pending.push(
+      (async () => {
+        // S1：两个接口都挂 —— 原先会渲染成 4 张全绿卡
+        const d1 = await runLoad(true, true);
+        const cards = d1.getElementById("overallCards").innerHTML;
+        const errEl = d1.getElementById("errorHint");
+        ok("A1接线 两接口全挂 → 概览卡全为「—」", (cards.match(/>—</g) || []).length === 4);
+        ok("A1接线 两接口全挂 → 无任何绿色 ok 判定", (cards.match(/vl ok/g) || []).length === 0);
+        ok("A1接线 两接口全挂 → 失败被传到了提示条", errEl.textContent.includes("取数失败") && errEl.style.display === "block",
+          JSON.stringify(errEl.textContent.slice(0, 60)));
+        ok("A1接线 失败提示含「不代表正常」", errEl.textContent.includes("不代表正常"));
+        ok("A1接线 失败时收起加载提示", d1.getElementById("loadingHint").style.display === "none");
+
+        // S2：只有时效接口挂 —— 概览可用，提示只点名时效
+        const d2 = await runLoad(false, true);
+        const cards2 = d2.getElementById("overallCards").innerHTML;
+        const err2 = d2.getElementById("errorHint").textContent;
+        ok("A1接线 仅时效失败 → 概览仍正常（6 源 live）", (cards2.match(/vl ok/g) || []).length === 3);
+        ok("A1接线 仅时效失败 → 只点名时效", err2.includes("数据时效") && !err2.includes("数据源健康度"), JSON.stringify(err2.slice(0, 60)));
+
+        // S3：都正常 —— 不得产生任何失败提示（防止把正常态改坏）
+        const d3 = await runLoad(false, false);
+        ok("A1接线 全部正常 → 无失败提示", d3.getElementById("errorHint").textContent === "",
+          JSON.stringify(d3.getElementById("errorHint").textContent.slice(0, 60)));
+        ok("A1接线 全部正常 → 概览为 6 源正常判定", (d3.getElementById("overallCards").innerHTML.match(/vl ok/g) || []).length === 3);
+      })()
+    );
+  }
+
+  // ── A4 行为：serveStaleApi / cacheApiResponse 真实执行（桩 caches + 真 Response）──
+  {
+    const sw = read("sw.js");
+    const code =
+      // RUNTIME_CACHE 定义在 sw.js 更前面，切片带不上，这里补一个同名常量
+      'const RUNTIME_CACHE = "gold-runtime-test";\n' +
+      sliceBetween(sw, "const PRICE_API_RE = ", 'const STORED_AT_HEADER = "X-SW-Stored-At";') + "\n" +
+      sliceBetween(sw, "function cacheApiResponse(request, response) {", "\n}") + "\n" +
+      sliceBetween(sw, "async function serveStaleApi(request) {", "\n}");
+
+    const mkCaches = (resp, tracker) => ({
+      open: async () => ({
+        put: async (r, res) => { tracker.put = res; },
+        delete: async () => { tracker.deleted = true; },
+      }),
+      match: async () => resp,
+    });
+    const build = (caches) =>
+      new Function("caches", "console", code + "\nreturn { serveStaleApi, cacheApiResponse };")(caches, { warn() {} });
+    const cachedJson = (storedAtIso) =>
+      new Response('{"ok":true}', {
+        status: 200,
+        headers: { "Content-Type": "application/json", "X-SW-Stored-At": storedAtIso },
+      });
+    const minsAgo = (n) => new Date(Date.now() - n * 60 * 1000).toISOString();
+    const rejects = async (p) => {
+      try { await p; return false; } catch { return true; }
+    };
+
+    pending.push(
+      (async () => {
+        // 1) 价格端点：即使有「刚刚」的缓存也绝不回退
+        const apiPrice = build(mkCaches(cachedJson(minsAgo(1)), {}));
+        ok("A4行为 价格端点即使有新鲜缓存也拒绝回退",
+          await rejects(apiPrice.serveStaleApi({ url: "http://x/api/v1/market/gold/trend" })));
+        ok("A4行为 白银价格端点同样拒绝回退",
+          await rejects(apiPrice.serveStaleApi({ url: "http://x/api/v1/market/silver/ny-trend" })));
+
+        // 2) 非价格端点 + 新鲜缓存 → 回退成功，且带出真实缓存时点
+        const apiFresh = build(mkCaches(cachedJson(minsAgo(5)), {}));
+        const r2 = await apiFresh.serveStaleApi({ url: "http://x/api/v1/market/freshness" });
+        ok("A4行为 新鲜缓存可回退（离线仍可用）", r2.status === 200);
+        ok("A4行为 回退响应带上 X-SW-Cached-At", !!r2.headers.get("X-SW-Cached-At"),
+          String(r2.headers.get("X-SW-Cached-At")));
+        ok("A4行为 回退响应正文可用（JSON 未被破坏）", (await r2.json()).ok === true);
+
+        // 3) 超期缓存（> 30 分钟）→ 抛错并清除，页面走错误态而不是显示旧值
+        const trk = {};
+        const apiOld = build(mkCaches(cachedJson(minsAgo(40)), trk));
+        ok("A4行为 超期缓存拒绝回退（不拿旧快照冒充当前值）",
+          await rejects(apiOld.serveStaleApi({ url: "http://x/api/v1/market/freshness" })));
+        ok("A4行为 超期缓存被清除", trk.deleted === true);
+
+        // 4) 无缓存 → 抛错（页面报错，而不是静默空白）
+        const apiNone = build(mkCaches(undefined, {}));
+        ok("A4行为 无缓存可回退时抛错", await rejects(apiNone.serveStaleApi({ url: "http://x/api/v1/news-score" })));
+
+        // 5) 缓存写入：4xx/5xx 不入缓存（原先会把失败响应回放成「正常」）
+        const tOk = {};
+        build(mkCaches(undefined, tOk)).cacheApiResponse(
+          { url: "http://x/api/v1/news-score" },
+          new Response('{"ok":true}', { status: 200, headers: { "Content-Type": "application/json" } })
+        );
+        await new Promise((r) => setTimeout(r, 30));
+        ok("A4行为 成功响应写入缓存", !!tOk.put);
+        ok("A4行为 写入时打上 X-SW-Stored-At（自记时点，不依赖上游 Date）",
+          !!tOk.put && !!tOk.put.headers.get("X-SW-Stored-At"));
+
+        const tBad = {};
+        build(mkCaches(undefined, tBad)).cacheApiResponse(
+          { url: "http://x/api/v1/news-score" },
+          new Response('{"detail":"boom"}', { status: 500, headers: { "Content-Type": "application/json" } })
+        );
+        await new Promise((r) => setTimeout(r, 30));
+        ok("A4行为 5xx 响应不写入缓存", !tBad.put);
+      })()
+    );
+  }
+}
+
+await Promise.all(pending);
 
 console.log("\n" + "=".repeat(70));
 console.log(`结果：${pass} passed / ${fail} failed`);

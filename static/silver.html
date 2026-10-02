@@ -266,6 +266,29 @@ const INTERVAL_SUB = {
   M: "月 K · 聚合至年月界（24 月 ≈ 2 交易年）",
 };
 
+/* V0.77.1 A2：取数失败要说清楚，并放在首屏看得见的地方。
+   原先的失败分支有两个问题：① 只把错误写进页面下方的图表区，而顶部
+   「数据加载中…（首次约 10-30 秒）」永远留着 —— 客户会一直等那个"首次 10-30 秒"，
+   不知道自己其实已经失败了；② 文案让客户「确认服务已启动（127.0.0.1:8888）」，
+   对投资客户既不可执行、又把部署细节暴露给了不相关的人。 */
+function hideLoadBar() {
+  const bar = document.getElementById("loadBar");
+  if (bar) bar.style.display = "none";
+}
+
+function showTrendError(e) {
+  hideLoadBar();
+  // 主提示：首屏可见（#alertBar 紧随 hero），说清「发生了什么 + 该怎么办」，不带主机名与端口
+  const advice = "白银价格数据加载失败。可能是数据源暂时不可用或网络中断 —— " +
+    "本页其余模块不受影响，请稍后点右上角 🔄 重试。";
+  const alertBar = document.getElementById("alertBar");
+  if (alertBar) alertBar.innerHTML = '<div class="source-bar source-bad">⚠️ ' + advice + "</div>";
+  // 次提示：图表位留一句占位，说明这里本该有什么；原始异常只进控制台供排查
+  const area = document.getElementById("chartArea");
+  if (area) area.innerHTML = '<div class="error">趋势图暂不可用，重试后自动恢复。</div>';
+  if (window.console && console.warn) console.warn("silver trend load failed:", e);
+}
+
 async function loadTrend(days = 60, interval = "D") {
   currentKlineInterval = interval;
   document.getElementById("trendSub").textContent = INTERVAL_SUB[interval] || INTERVAL_SUB.D;
@@ -276,9 +299,11 @@ async function loadTrend(days = 60, interval = "D") {
     renderMain(data);
     loadAlerts();
   } catch (e) {
-    document.getElementById("chartArea").innerHTML =
-      '<div class="error">白银数据加载失败：' + e.message +
-      '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
+    showTrendError(e);
+  } finally {
+    // 加载条的隐藏此前只写在 renderMain（成功分支）里 —— 失败路径永远走不到，
+    // 于是「数据加载中…」在失败后永久停留。改为无论成败都收起。
+    hideLoadBar();
   }
 }
 

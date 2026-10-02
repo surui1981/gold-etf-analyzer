@@ -177,11 +177,15 @@
     <div class="eff-panel">
       <div>
         <div class="desc">当日有效消息面分值</div>
-        <div class="eff-score" id="effScore">50.0</div>
+        <!-- V0.77.1 A3：原先此处静态写着 50.0 —— 接口失败时 renderAll 直接 return，
+             这个静态值就永远留在页面上。而 50 恰好是「中性」，又真实占综合指数 30% 权重，
+             客户会把它当成「今天消息面中性」这一结论来用。改为占位「—」：
+             有数据时由 renderAll 填真值，取数失败时由 renderLoadFailure 显式说明。 -->
+        <div class="eff-score" id="effScore">—</div>
       </div>
       <div class="eff-meta">
         <div id="effDir"></div>
-        <div class="formula" id="effFormula">尚未打分，按中性 50 参与评估</div>
+        <div class="formula" id="effFormula">正在读取当日打分状态…</div>
         <div class="progress" id="effProgress"></div>
         <div class="hint-line" id="hintLine"></div>
       </div>
@@ -273,6 +277,46 @@ function fmtTime(iso) {
 const esc = s => (s || "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 /* ── 渲染 ── */
+/* V0.77.1 A3：分值格式化 —— 缺值一律显示「—」。
+   原先各处把缺失的分值当 0 再保留一位小数，缺值时就会显示 0.0：
+   一个看起来很确定、实际并不存在的值。对打分面板，这种「0.0」比「—」危险得多
+   （0 会被读成极度看空，而它其实只是"没拿到"）。 */
+function fmtScore(v) {
+  return v === null || v === undefined || isNaN(Number(v)) ? "—" : Number(v).toFixed(1);
+}
+
+/* V0.77.1 A3：取数失败时的显式失败态。
+   原实现只在状态标签里塞一句「加载失败」，而下面「当日有效消息面分值」仍显示静态的
+   50.0、「尚未打分，按中性 50 参与评估」也还留着 —— 于是「取数失败」与「确实还没打分」
+   在界面上长得一模一样，而 50 恰好是中性、又真占综合指数 30% 权重，
+   客户会把一个根本没取到的值当成今天的结论使用。 */
+function renderLoadFailure(msg) {
+  state = null;
+  editSlot = 1;
+  const status = document.getElementById("statusTag");
+  if (status) status.innerHTML = '<span style="color:var(--up);font-size:12px">状态未知</span>';
+  const eff = document.getElementById("effScore");
+  if (eff) { eff.textContent = "—"; eff.style.color = "var(--muted)"; }
+  const dir = document.getElementById("effDir");
+  if (dir) dir.innerHTML = "";
+  const formula = document.getElementById("effFormula");
+  if (formula) formula.textContent = "取数失败：当日是否已打分、有效分值是多少均未知（不代表中性 50）";
+  const prog = document.getElementById("effProgress");
+  if (prog) prog.innerHTML = "";
+  const slotGrid = document.getElementById("slotGrid");
+  if (slotGrid) slotGrid.innerHTML = '<div class="slot-empty">打分状态不可用，暂时无法编辑 —— 请刷新页面重试。</div>';
+  // 无 state 时点保存只会发出一次必然失败的请求，直接禁用比让客户白点一次更好
+  const btn = document.getElementById("btnSave");
+  if (btn) btn.disabled = true;
+  const alert = document.getElementById("scoreAlert");
+  if (alert) {
+    alert.style.display = "block";
+    alert.style.background = "#ffe9e9"; alert.style.color = "#c92a2a"; alert.style.border = "1px solid #ffc9c9";
+    alert.innerHTML = "⚠️ " + esc(msg) +
+      "。请刷新页面重试 —— 在取数恢复前，本页显示不代表「今日中性 50」，请勿据此决策。";
+  }
+}
+
 function renderAll() {
   const d = state;
   if (!d) return;
@@ -280,7 +324,7 @@ function renderAll() {
   // 顶部状态
   const status = document.getElementById("statusTag");
   if (d.scored) {
-    status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots ?? 0}/${d.max_slots ?? 3} 次 · 有效 ${Number(d.score ?? 0).toFixed(1)}</span>`;
+    status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots ?? 0}/${d.max_slots ?? 3} 次 · 有效 ${fmtScore(d.score)}</span>`;
   } else {
     status.innerHTML = '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
   }
@@ -300,12 +344,12 @@ function renderAll() {
   }
 
   // 有效分值面板
-  document.getElementById("effScore").textContent = Number(d.score ?? 0).toFixed(1);
+  document.getElementById("effScore").textContent = fmtScore(d.score);
   document.getElementById("effScore").style.color = d.scored ? dirColor(d.direction) : "var(--muted)";
   document.getElementById("effDir").innerHTML =
     `<span class="dir-tag" style="background:${dirColor(d.direction)}">${dirTxt(d.direction) || "中性展望"}</span>`;
   document.getElementById("effFormula").textContent = d.formula
-    ? "加权口径：" + d.formula + " = " + Number(d.score ?? 0).toFixed(1)
+    ? "加权口径：" + d.formula + " = " + fmtScore(d.score)
     : (d.scored ? "仅 1 次打分，直接采用该次分值" : "尚未打分，按中性 50 参与评估");
   document.getElementById("effProgress").innerHTML =
     [1, 2, 3].map(n => `<span class="${n <= (d.used_slots ?? 0) ? "on" : ""}"></span>`).join("");
@@ -550,7 +594,9 @@ async function loadHistory() {
     loadHistory();
     loadBasisOptions();
   } catch (e) {
-    document.getElementById("statusTag").innerHTML = `<span style="color:var(--up);font-size:12px">加载失败：${e.message}</span>`;
+    // V0.77.1 A3：改走统一的失败态渲染（占位「—」+ 禁用保存 + 明说「不代表中性 50」），
+    // 不再只把一句话塞进状态标签、却把静态的 50.0 留在页面上。
+    renderLoadFailure(e.message);
   }
 })();
 </script>

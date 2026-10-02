@@ -11,6 +11,8 @@
 (function () {
   var REFRESH_MS = 60000;
   var FETCH_TIMEOUT_MS = 30000;
+  // V0.77.1 A4：本次 freshness 响应是否来自 SW 的离线缓存（非空即来自缓存，值为缓存时点）
+  var swCachedAt = null;
 
   var LEVEL_META = {
     realtime: { cls: "fsh-ok", dot: "●" },
@@ -126,9 +128,19 @@
       '<span class="fsh-meta">' + _t("fresh.local_time_suffix", "本地时间") + " " + timeStr +
       _t("fresh.refresh_hint", "（每 60 秒自动刷新）").replace("{secs}", "60") + "</span>";
 
+    // V0.77.1 A4：离线缓存披露。置于降级警示之前 —— 它解释的是「这份时效本身从哪来」。
+    if (swCachedAt) {
+      bar.insertAdjacentHTML(
+        "beforeend",
+        '<span class="fsh-chip fsh-bad fsh-alert">' +
+        _t("fresh.offline_cached", "⚠ 本页数据来自离线缓存（{at}），可能已过期")
+          .replace("{at}", fmtCachedAt(swCachedAt)) +
+        "</span>"
+      );
+    }
+
     // 降级绝不静默：缓存 / 演示数据追加持续警示
-    if (d.degraded) {
-      var mock = markets.filter(function (m) { return m.status === "mock"; }).map(function (m) { return shortName(m.name); });
+    if (d.degraded) {      var mock = markets.filter(function (m) { return m.status === "mock"; }).map(function (m) { return shortName(m.name); });
       var cached = markets.filter(function (m) { return m.status === "stale"; }).map(function (m) { return shortName(m.name); });
       var parts = [];
       if (mock.length) parts.push(mock.join("、") + " " + _t("fresh.alert_mock", "为<b>演示数据（非真实行情）</b>"));
@@ -148,9 +160,20 @@
     var timer = ctl ? setTimeout(function () { ctl.abort(); }, FETCH_TIMEOUT_MS) : null;
     return fetch(url, ctl ? { signal: ctl.signal } : undefined).then(function (r) {
       if (timer) clearTimeout(timer);
+      // V0.77.1 A4：SW 网络失败回退缓存时会带 X-SW-Cached-At（真实缓存时点）。
+      // 时效条是十二个页面共用的披露位，正好由它把「这份时效来自离线缓存」说出来 ——
+      // 否则客户会把缓存里的旧时效当成当前时效。无此头时置空，避免上一轮的值残留。
+      swCachedAt = r.headers.get("X-SW-Cached-At") || null;
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
     });
+  }
+
+  function fmtCachedAt(iso) {
+    var d = new Date(iso);
+    if (isNaN(d.getTime())) return String(iso);
+    var p = function (n) { return String(n).padStart(2, "0"); };
+    return p(d.getMonth() + 1) + "-" + p(d.getDate()) + " " + p(d.getHours()) + ":" + p(d.getMinutes());
   }
 
   function load() {

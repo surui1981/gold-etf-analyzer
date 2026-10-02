@@ -89,6 +89,9 @@
   .overall-card .vl.ok { color: #1a7f37; }
   .overall-card .vl.warn { color: #b35309; }
   .overall-card .vl.bad { color: #c92a2a; }
+  /* V0.77.1 A1：取数失败/无数据源时既不能判「ok」（绿）也不能判「bad」（红），
+     用「未知」灰 —— 视觉上明确区别于「已确认正常」。 */
+  .overall-card .vl.unknown { color: var(--muted); }
   .refresh-btn { background: transparent; border: 1px solid var(--border); border-radius: 8px;
     padding: 3px 10px; font-size: 16px; cursor: pointer; margin-left: 8px;
     transition: transform 0.4s, background 0.2s; vertical-align: middle; }
@@ -153,6 +156,11 @@
   <!-- 概览 -->
   <div class="section">
     <h2 data-i18n="health.section_overall">📊 总体概览</h2>
+    <!-- V0.77.1 A1：加载 / 错误提示原先挂在页面最底部（紧贴 footer），而它们要解释的正是
+         本区这四张概览卡 —— 客户在首屏看到「4 张全绿」时，失败原因却要滚动到页面末尾
+         才看得到。现移入概览区、置于卡片之前，与它解释的内容同屏。 -->
+    <div class="loading" id="loadingHint" data-i18n="health.loading">数据加载中…</div>
+    <div class="error" id="errorHint" style="display:none"></div>
     <div class="overall" id="overallCards"></div>
   </div>
 
@@ -173,9 +181,6 @@
     <h2 data-i18n="health.section_note">📝 健康说明</h2>
     <div class="note" id="apiNote"></div>
   </div>
-
-  <div class="loading" id="loadingHint" data-i18n="health.loading">数据加载中…</div>
-  <div class="error" id="errorHint" style="display:none"></div>
 
   <footer data-i18n="brand.footer">gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
 </div>
@@ -237,15 +242,35 @@
     });
   }
 
-  function renderOverall(healthData) {
+  /* V0.77.1 A1：取数失败时不再判「全绿」。
+     原先 load 在 catch 里静默兜底成 { sources: {} }，于是 total = 0、live = 0，
+     而判定式 live === total 在 0 === 0 时【成立】→ 「实时 (live)」判 ok（绿）；
+     stale / mock 因「> 0 才告警」也不成立 → 同样判 ok。四张卡全绿，
+     而真实情况是一个数据源都没取到。客户会得到与事实相反的「一切正常」信号，
+     且本页顶部还写着「降级数据永不静默」。
+     现在：ok === false（接口失败）或 total === 0（接口成功但无数据源）→ 一律「未知」态，
+     数值显示「—」、颜色转灰，并把原因写进概览区顶部的提示条。 */
+  function renderOverall(healthData, ok) {
     var grid = document.getElementById("overallCards");
     if (!grid) return;
-    var sources = healthData.sources || {};
+    var sources = (healthData && healthData.sources) || {};
     var keys = Object.keys(sources);
+    var total = keys.length;
+    var known = ok !== false && total > 0;
+
+    if (!known) {
+      grid.innerHTML = [
+        overallCard(_t("health.card_total", "数据源总数"),     "—", "unknown"),
+        overallCard(_t("health.card_live",  "实时 (live)"),    "—", "unknown"),
+        overallCard(_t("health.card_stale", "缓存 (stale)"),   "—", "unknown"),
+        overallCard(_t("health.card_mock",  "演示 (mock)"),    "—", "unknown")
+      ].join("");
+      return;
+    }
+
     var live = keys.filter(function (k) { return sources[k] === "live"; }).length;
     var stale = keys.filter(function (k) { return sources[k] === "stale"; }).length;
     var mock = keys.filter(function (k) { return sources[k] === "mock"; }).length;
-    var total = keys.length;
     var degraded = mock > 0 || stale > 0;
 
     grid.innerHTML = [
@@ -254,6 +279,19 @@
       overallCard(_t("health.card_stale", "缓存 (stale)"),   stale,        stale > 0 ? "warn" : "ok"),
       overallCard(_t("health.card_mock",  "演示 (mock)"),    mock,         mock > 0 ? "bad" : "ok")
     ].join("");
+  }
+
+  /* V0.77.1 A1：把「哪个接口失败了 + 这意味着什么 + 该做什么」拼成一句给人看的话。
+     失败要明说，否则客户会把「—」理解为「没有问题」。 */
+  function failureText(arr) {
+    var failed = [];
+    if (!arr[0].ok) failed.push(_t("health.src_health", "数据源健康度"));
+    if (!arr[1].ok) failed.push(_t("health.src_freshness", "数据时效"));
+    if (!failed.length) return "";
+    return _t("health.err_failed", "⚠️ 取数失败：") +
+      failed.join(_t("health.list_sep", "、")) +
+      _t("health.err_meaning", " 接口不可用。本页无法判断数据源是否正常 —— 显示「—」不代表正常，请勿据此认为数据源健康。") +
+      _t("health.err_advice", "点右上角 🔄 可重试。");
   }
 
   function overallCard(label, value, klass) {
@@ -287,11 +325,15 @@
         var bits = [];
         if (m.session && m.session.state_label) bits.push(safeText(m.session.state_label));
         if (m.data_date) bits.push(_t("health.meta_until", "截止") + " " + safeText(m.data_date));
-        bits.push(safeText(m.freshness_label || meta.txt) + " · " + fmtAge(m.age_minutes));
+        // V0.77.1 A1：时效接口一并失败时 m 是空对象，此处原先会拼出「未知 · —」
+        // 这种连说两遍「不知道」的串。改为无时效数据时整体显示「—」。
+        if (m.freshness_label || m.age_minutes != null) {
+          bits.push(safeText(m.freshness_label || meta.txt) + " · " + fmtAge(m.age_minutes));
+        }
         return '<div class="market-card ' + meta.cls + '">' +
                  '<div class="nm">' + safeText(SOURCE_LABELS[k]) + '</div>' +
                  '<div class="badge ' + meta.badge + '">' + safeText(meta.txt) + '</div>' +
-                 '<div class="meta">' + bits.join(" · ") + '</div>' +
+                 '<div class="meta">' + (bits.length ? bits.join(" · ") : "—") + '</div>' +
                '</div>';
       }).join("");
       return '<section class="pmc-cluster">' +
@@ -329,17 +371,25 @@
     if (btn) btn.classList.add("refreshing");
     showLoading(true, "");
 
+    /* V0.77.1 A1：不再用「静默兜底成空对象」吞掉失败 —— 那正是「全绿假象」的源头。
+       现在每个请求都保留成败标记，由渲染层决定展示成「未知」还是「正常」。 */
     Promise.all([
-      fetchJSON(API_BASE + "/api/v1/market/health").catch(function () { return { sources: {}, note: "数据源健康度接口不可用" }; }),
-      fetchJSON(API_BASE + "/api/v1/market/freshness").catch(function () { return { markets: {} }; })
+      fetchJSON(API_BASE + "/api/v1/market/health")
+        .then(function (d) { return { ok: true, data: d }; })
+        .catch(function (e) { return { ok: false, data: { sources: {}, note: "" }, err: e }; }),
+      fetchJSON(API_BASE + "/api/v1/market/freshness")
+        .then(function (d) { return { ok: true, data: d }; })
+        .catch(function (e) { return { ok: false, data: { markets: {} }, err: e }; })
     ]).then(function (arr) {
-      var h = arr[0], f = arr[1];
-      renderOverall(h);
+      var h = arr[0].data, f = arr[1].data;
+      renderOverall(h, arr[0].ok);
       renderSourceGroups(h, f);
       renderNote(h);
-      showLoading(false, "");
+      showLoading(false, failureText(arr));
     }).catch(function (e) {
-      showLoading(false, "加载失败：" + e.message);
+      renderOverall({ sources: {} }, false);
+      renderSourceGroups({}, {});
+      showLoading(false, _t("health.err_failed", "⚠️ 取数失败：") + e.message);
     }).then(function () {
       if (btn) setTimeout(function () { btn.classList.remove("refreshing"); }, 400);
     });

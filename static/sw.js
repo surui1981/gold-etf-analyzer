@@ -2,8 +2,9 @@
  * ─────────────────────────────────────────────────────────
  * 缓存策略：
  *   - HTML 页面：network-first（回退到 cache → offline.html）
- *   - 静态资产（/static/）：cache-first（7d 不可变）
- *   - API GET（news-score / review/meta）：stale-while-revalidate
+ *   - 静态资产（/static/）：cache-first（随 VERSION 换代清理）
+ *   - API GET：network-first（V0.77.1 A4 起；网络失败时才按护栏回退缓存，
+ *              价格类端点永不回退，详见 PRICE_API_RE 处注释）
  *   - 写 API：不拦截，pass-through
  *   - push：showNotification + tag
  *   - notificationclick：focus 已有窗口或 openWindow
@@ -12,10 +13,25 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.77.0";
+const VERSION = "v0.77.1";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
+
+/* V0.77.1 A4：只读 API 的新鲜度护栏。
+ * 原策略是「一律 stale-while-revalidate」—— 先返回缓存、后台再更新缓存。
+ * 问题有三层：① 缓存没有 TTL，命中的可能是【上次会话】的响应，且「在线」也会命中；
+ * ② review / news / weights / backtest 这几页只拉一次数据、不自我校正，于是客户看到的
+ *    可能是数天前的行情；③ 上游的 4xx/5xx 也会被写进缓存，之后被当成正常响应反复回放。
+ * 现改为 network-first，并给「网络失败时的缓存回退」加两道闸：
+ *   ① 价格类端点（/market/gold*、/market/silver*）一律不回退 —— 过期价格会直接误导
+ *      买卖判断，宁可让页面明示「取数失败」，也不拿旧价冒充现价；
+ *   ② 其余端点回退的缓存必须足够新（MAX_API_STALE_MS 内），超期即视为不可用并清除。
+ * 回退时会注入 X-SW-Cached-At（真实缓存时点）供页面披露「此数据来自离线缓存」。
+ */
+const PRICE_API_RE = /^\/api\/v1\/market\/(gold|silver)\b/;
+const MAX_API_STALE_MS = 30 * 60 * 1000;
+const STORED_AT_HEADER = "X-SW-Stored-At";
 
 // ⚠ 每条 URL 都必须是服务端真实存在的路径。cache.addAll() 是【原子操作】：任一请求失败
 //   整批回滚 → 整个 SHELL_CACHE 为空，离线能力归零且无任何用户可见提示。
@@ -85,6 +101,51 @@ self.addEventListener("activate", (event) => {
     );
 });
 
+// ─── 只读 API 的缓存写入 / 回退（V0.77.1 A4）──────────────────
+/** 写入缓存：只缓存成功响应（避免把 4xx/5xx 回放成「正常」），并打上存入时刻。
+ *  存入时刻由 SW 自己记，不依赖上游可能被中间层剥掉的 Date 头。 */
+function cacheApiResponse(request, response) {
+    if (!response.ok) return;
+    const copy = response.clone();
+    caches.open(RUNTIME_CACHE).then(async (c) => {
+        try {
+            const buf = await copy.arrayBuffer();
+            const headers = new Headers(copy.headers);
+            headers.set(STORED_AT_HEADER, new Date().toISOString());
+            await c.put(request, new Response(buf, {
+                status: copy.status,
+                statusText: copy.statusText,
+                headers,
+            }));
+        } catch (err) {
+            console.warn("SW: cache api response failed", err);
+        }
+    });
+}
+
+/** 网络不可用时的缓存回退。不满足护栏条件即抛错 —— 让页面走「取数失败」错误态，
+ *  而不是静默拿到一个旧值。抛错比回放旧数据更安全。 */
+async function serveStaleApi(request) {
+    const pathname = new URL(request.url).pathname;
+    if (PRICE_API_RE.test(pathname)) {
+        throw new Error("SW: price endpoints are never served from cache");
+    }
+    const cached = await caches.match(request);
+    if (!cached) throw new Error("SW: no cached response");
+    const storedAt = Date.parse(cached.headers.get(STORED_AT_HEADER) || cached.headers.get("date") || "");
+    const ageMs = Number.isNaN(storedAt) ? Infinity : Date.now() - storedAt;
+    if (ageMs > MAX_API_STALE_MS) {
+        // 超期缓存直接清除：留着只会在下次离线时再被顶上
+        const cache = await caches.open(RUNTIME_CACHE);
+        await cache.delete(request);
+        throw new Error("SW: cached response is too old");
+    }
+    const headers = new Headers(cached.headers);
+    headers.set("X-SW-Cached-At", new Date(storedAt).toISOString());
+    const body = await cached.blob();
+    return new Response(body, { status: cached.status, statusText: cached.statusText, headers });
+}
+
 // ─── fetch：路由分发 ──────────────────────────────────────
 self.addEventListener("fetch", (event) => {
     const request = event.request;
@@ -125,19 +186,16 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    // API GET（只读端点）：stale-while-revalidate
+    // API GET（只读端点）：network-first（V0.77.1 A4 起，原先为 stale-while-revalidate）
+    // 在线必新；仅网络失败时按 serveStaleApi 的护栏回退缓存，护栏不过就抛错让页面报错。
     if (url.pathname.startsWith("/api/") && request.method === "GET") {
         event.respondWith(
-            caches.match(request).then((cached) => {
-                const fetchPromise = fetch(request)
-                    .then((response) => {
-                        const copy = response.clone();
-                        caches.open(RUNTIME_CACHE).then((c) => c.put(request, copy));
-                        return response;
-                    })
-                    .catch(() => cached);
-                return cached || fetchPromise;
-            }),
+            fetch(request)
+                .then((response) => {
+                    cacheApiResponse(request, response);
+                    return response;
+                })
+                .catch(() => serveStaleApi(request)),
         );
     }
 });
