@@ -64,6 +64,16 @@ ALLOW: dict[str, set[str]] = {
 # 对账报告天然引用错误值，跳过校验
 SKIP_FILES = {"feature-alignment.md"}
 
+# 扫描范围 = 权威文档（README + docs/ 直接子文件）。
+# ⚠ ``glob("*.md")`` 是**非递归**的 —— ``docs/reports/`` 下的历史分析报告**刻意不纳入**扫描，
+# 那是必要条件而非疏漏：报告为了记述「当时误判了什么」，必须能原样保留**当时错误或已废弃的
+# 实体名**（实测把 docs/reports/ 的报告放到 docs/ 根会新增 8 处失败：捏造的表 `portfolios` /
+# `snapshot_overrides`、被当成表的 JSON key `alert_rules`、写错的 `pm_dash_layout`、
+# 不存在的页面 `central-bank.html` 与端点 `/api/v1/push/unsubscribe`、`/api/v1/market`）。
+# 这与下列 ``SKIP_FILES`` 的 ``feature-alignment.md`` 是同一条原则：**历史记录应如实保留错误，
+# 而不是为了过门禁去篡改记录**。
+# 若某份报告将来要承担权威声明职责，正确做法是**移入 docs/ 根并修正其中失效的声明**，
+# 而不是把 docs/reports/ 加进扫描范围。详见 docs/reports/README.md。
 DOC_FILES = [ROOT / "README.md", *sorted((ROOT / "docs").glob("*.md"))]
 
 # ---------------------------------------------------------------- 正则
