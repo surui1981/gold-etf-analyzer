@@ -1,0 +1,38 @@
+# 作者身份归一（Author identity normalization）
+#
+# 为什么需要这个文件
+# ------------------
+# 本仓库历史里累计出现 4 个「同一个人」的作者身份，成因是不同时期用了不同的
+# git 配置（本地默认 user.name / GitHub 网页端提交 / 一次性覆盖邮箱）：
+#
+#   surui1981 <surui1981@users.noreply.github.com>   主身份
+#   rui su    <rui@local>                            本地占位邮箱
+#   rui su    <surui1981@users.noreply.github.com>   同名邮箱、名字不同
+#   rui su    <surui_1981@163.com>                   真实邮箱（已进入公开历史）
+#
+# 后果：git shortlog / blame 与 GitHub 的贡献者列表会把同一人算成 4 个，
+# 版本归属与责任人归属都失真。
+#
+# 为什么用 .mailmap 而不是改历史
+# ------------------------------
+# .mailmap 只重写「显示层的身份映射」，**不改写任何提交对象**：
+# 提交 SHA、tree 哈希、已推送的标签全部保持不变。改历史（filter-repo /
+# filter-branch）虽能彻底抹掉 rui@local 与 163 邮箱，但会重写全部提交 SHA，
+# 使既有 39 个标签与所有已发布引用全部失效 —— 代价远大于收益。
+# 因此选择：**历史保持原样，显示层归一。**
+#
+# 需要说明的边界
+# --------------
+# 1. 本文件对 git 侧生效（shortlog / blame / log --use-mailmap）。
+# 2. 它**不能**让 rui@local 与 surui_1981@163.com 从历史中消失 ——
+#    `git log --format=%ae` 仍会原样输出这些地址，公开仓库的提交页也照旧显示。
+#    要彻底抹除必须改历史，已评估为不值得。
+# 3. 格式为 `规范名 <规范邮箱> 提交名 <提交邮箱>`；只给邮箱的三段式会保留
+#    提交名 `rui su`，故此处对「同名不同邮箱」那条显式写全四段。
+#
+# 格式：<规范名> <规范邮箱> <提交邮箱>
+#       <规范名> <规范邮箱> <提交名> <提交邮箱>
+
+surui1981 <surui1981@users.noreply.github.com> <rui@local>
+surui1981 <surui1981@users.noreply.github.com> <surui_1981@163.com>
+surui1981 <surui1981@users.noreply.github.com> rui su <surui1981@users.noreply.github.com>
