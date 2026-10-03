@@ -520,7 +520,25 @@ function updateScore() {
 async function save() {
   const msg = document.getElementById("msg");
   const v = parseInt(document.getElementById("score").value);
-  const body = { score: v, direction: dirOf(v), notes: document.getElementById("notes").value, slot: editSlot };
+  // V0.77.2 B1：原先此处只提交 score / direction / notes / slot —— 客户在下方勾选的
+  // 「研判依据」（最多 12 个标签）与填写的「复盘批注」根本没进请求体。
+  // 两者后果**不同**（仓库层 repositories/news.py::upsert 的 UPDATE 分支是不对称的）：
+  //   · basis 是**硬覆盖**（`existing.basis = basis`）→ 恒为空数组会把已存的依据**静默抹掉**，
+  //     复盘页「依据胜率」永远算不出，客户只会以为是自己没勾；
+  //   · review_note 走 `review_note or existing.review_note`（空值保留旧值）→ 不会被抹，
+  //     但本页填写的批注从一开始就从未落库（对新建槽位尤其如此）——「填了等于没填」。
+  // 该不对称已由 2026-10-03 临时库实测确认（对同一槽位发窄请求体：basis 归零、review_note 保留）。
+  // 对照 static/news-score-widget.js（首页打分器）—— 那里一直是正确提交的，属 V0.76.0
+  // 双实现不一致遗留：同一件事两个入口，一个有损、一个填了等于没填。
+  // 注意 selectedBasis 是 Set，JSON.stringify(Set) 会得到 {} —— 必须显式转数组。
+  const body = {
+    score: v,
+    direction: dirOf(v),
+    notes: document.getElementById("notes").value,
+    slot: editSlot,
+    basis: Array.from(selectedBasis),
+    review_note: document.getElementById("reviewNote").value,
+  };
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error((await r.json()).detail || "HTTP " + r.status);

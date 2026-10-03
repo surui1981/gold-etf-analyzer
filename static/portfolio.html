@@ -577,6 +577,9 @@ document.getElementById("remindToggle").addEventListener("click", () => {
 
 // ---------- 持仓录入简化 ----------
 let suggestRatio = null;
+// V0.77.2 B2：价格框「用户是否已手动编辑过」标记。程序化赋值不会触发 input 事件，
+// 因此只有真实人工输入才会把它置位 —— 用于阻止轮询反复覆盖客户填写的成交价。
+let priceTouched = false;
 
 async function fillPrice() {
   try {
@@ -747,8 +750,14 @@ async function loadDecision() {
     // 简报 + 主动提醒（指数档位/纽约金波动）
     renderBriefing(d, lastNy);
     checkAlerts(d, lastNy);
-    // 预填开仓价格
-    document.getElementById("price").value = d.trend_index ? "" : "";
+    // V0.77.2 B2：原先此处写 `document.getElementById("price").value = d.trend_index ? "" : "";`
+    // —— 两个分支同值（恒为空串），注释却写「预填开仓价格」：它既没有预填（决策接口返回的
+    // trend_index 是指数取值，不是价格），还把 fillPrice() 在初始化时填好的 ETF 最新价抹掉。
+    // 而本函数由轮询反复调用 → 客户每轮询一次，刚自动填入或刚手改的成交价就被清空一次，
+    // 同时 priceHint 还写着「已自动填入，可修改」，前后自相矛盾、且可能让人按空价提交。
+    // 改为：仅在价格框为空、且客户尚未手动编辑过时才补一次预填（价格预填由 fillPrice 负责）。
+    const priceEl = document.getElementById("price");
+    if (priceEl && !priceEl.value && !priceTouched) fillPrice();
   } catch (e) {
     // 失败时同时清掉标题右侧残留的旧 signalInfo（避免下次 fetch 成功前显示 undefined）
     const si = document.getElementById("signalInfo");
@@ -1013,6 +1022,10 @@ async function deletePosition(id) {
     });
   } catch (e) { alert("删除失败：" + e.message); }
 }
+
+// V0.77.2 B2：标记客户是否已手动编辑过价格框（程序化赋值不触发 input 事件，
+// 故只有真实人工输入才会置位），供 renderDecision 判断是否可以安全补预填。
+document.getElementById("price").addEventListener("input", function () { priceTouched = true; });
 
 fillPrice();
 

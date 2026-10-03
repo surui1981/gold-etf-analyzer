@@ -73,7 +73,7 @@ function makeDoc() {
 const countOf = (html, re) => (html.match(re) || []).length;
 
 console.log("=".repeat(70));
-console.log("V0.77.0 聚类分组 + V0.77.1 信任修复 · 前端渲染行为验证");
+console.log("V0.77.0 聚类分组 + V0.77.1 信任修复 + V0.77.2 数据不丢 · 前端渲染行为验证");
 console.log("=".repeat(70));
 
 // ── 1. trend.html：#cards 8 张 KPI 卡 → 3 组（价格 / 涨跌 / 均线） ──
@@ -600,6 +600,183 @@ const pending = [];
 }
 
 await Promise.all(pending);
+
+// ── 9. V0.77.2 四条「静默错误」修复：真实执行 + 反向断言 ──
+// 这四条都不是「界面报错」，而是「悄无声息地做错事」：丢依据、清输入、指错路、误覆盖。
+// 正常路径下页面看起来完全正常（这正是它们能存活至今的原因），所以必须构造输入、
+// 真实执行源码片段，断言「实际发生的后果」—— 而不是断言「代码里有某句话」。
+{
+  console.log("\n[9] V0.77.2 数据不丢与交互安全（B1 / B2 / B5 / C2）");
+
+  // ── B1：/news 保存时 basis 与 review_note 是否真的进了请求体 ──
+  {
+    const src = read("news.html");
+    const code = sliceBetween(src, "async function save() {", "\n}");
+
+    /** 真实跑一遍 save()，返回它实际发出去的请求体。 */
+    const runSave = async (basisArr, reviewNote) => {
+      const doc = makeDoc();
+      doc.getElementById("score").value = "78";
+      doc.getElementById("notes").value = "高盛上调目标价";
+      doc.getElementById("reviewNote").value = reviewNote;
+      let captured = null;
+      const fetchStub = (url, init) => {
+        captured = JSON.parse(init.body);
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ score: 61.7, next_slot: 2 }) });
+      };
+      const fn = new Function(
+        "document", "fetch", "API", "selectedBasis", "dirOf",
+        "state", "forceReload", "editSlot", "renderAll", "loadHistory",
+        code + "\nreturn save();"
+      );
+      await fn(doc, fetchStub, "/api/v1/news-score", new Set(basisArr), () => "bullish",
+        {}, false, 1, () => {}, () => {});
+      return captured;
+    };
+
+    const c1 = await runSave(["美元指数", "央行购金"], "事后回看：低估了美元反弹");
+    ok("B1 保存请求体带上 basis（原先被静默丢弃）",
+      Array.isArray(c1.basis) && c1.basis.length === 2 && c1.basis[0] === "美元指数",
+      JSON.stringify(c1.basis));
+    ok("B1 保存请求体带上 review_note",
+      c1.review_note === "事后回看：低估了美元反弹", JSON.stringify(c1.review_note));
+    ok("B1 原有字段未被破坏（score / direction / notes / slot）",
+      c1.score === 78 && c1.direction === "bullish" && c1.notes === "高盛上调目标价" && c1.slot === 1,
+      JSON.stringify({ score: c1.score, direction: c1.direction, notes: c1.notes, slot: c1.slot }));
+
+    const c2 = await runSave([], "");
+    ok("B1 未选依据时提交空数组（避开 Set 被序列化成 {} 的陷阱）",
+      Array.isArray(c2.basis) && c2.basis.length === 0, JSON.stringify(c2.basis));
+    ok("B1 旧的窄 payload 写法已消失",
+      !src.includes('{ score: v, direction: dirOf(v), notes: document.getElementById("notes").value, slot: editSlot }'));
+  }
+
+  // ── B2：轮询不再抹掉客户填写的成交价 ──
+  {
+    const src = read("portfolio.html");
+    const code = sliceBetween(
+      src,
+      'const priceEl = document.getElementById("price");',
+      "if (priceEl && !priceEl.value && !priceTouched) fillPrice();"
+    );
+
+    /** 真实执行 renderDecision 里那段价格逻辑（轮询每次都会走到）。 */
+    const runTick = (value, touched) => {
+      const doc = makeDoc();
+      doc.getElementById("price").value = value;
+      let calls = 0;
+      const fn = new Function("document", "priceTouched", "fillPrice", code);
+      fn(doc, touched, () => { calls++; });
+      return { calls, value: doc.getElementById("price").value };
+    };
+
+    ok("B2 价格框为空且未编辑过 → 仍会补预填（没把预填功能一起改坏）", runTick("", false).calls === 1);
+    ok("B2 客户已手动输入过 → 轮询不再清空/覆盖", runTick("", true).calls === 0);
+    const filled = runTick("7.123", false);
+    ok("B2 价格框已有值 → 一律不动", filled.calls === 0 && filled.value === "7.123");
+    // 注意：这条不能对全文做 includes —— 修复处的注释里有意保留了旧写法作为历史说明，
+    // 全文搜索会把注释本身判成「旧写法仍在」。用行首锚定区分注释行与真实代码行。
+    ok("B2 旧的恒清空写法已消失（只看真实代码行）",
+      !/^[ \t]*document\.getElementById\("price"\)\.value\s*=\s*d\.trend_index/m.test(src));
+    ok("B2 已接线 input 监听以记录人工编辑",
+      src.includes('addEventListener("input"') && src.includes("priceTouched = true"));
+  }
+
+  // ── B5：复盘页空态不再指路到不存在的能力 ──
+  {
+    const src = read("review.html");
+    const i = src.indexOf("暂无研判记录。");
+    const line = src.slice(i, src.indexOf("</div>`;", i) + 8);
+    ok("B5 断死指引（「可在该页填写并指定日期」）已移除", !line.includes("指定日期"));
+    ok("B5 保留真实存在的路径 /news", line.includes('href="/news"'));
+    ok("B5 明确交代补录入口尚未开放（不再承诺不存在的功能）", line.includes("补录入口尚未开放"));
+    ok("B5 给出的替代动作确有对应按钮",
+      line.includes("回填历史金价") && src.includes('id="btnBackfill"'));
+  }
+
+  // ── C2-a：确认弹窗本体真实执行（weights.html 此前无任何确认机制）──
+  {
+    const src = read("weights.html");
+    const code = sliceBetween(src, "function confirmDialog(text) {", "\n}");
+    const runDialog = () => {
+      const created = [];
+      let keydown = null;
+      const doc = {
+        createElement() {
+          const el = {
+            className: "", innerHTML: "", _h: {},
+            querySelector: () => ({ textContent: "" }),
+            addEventListener(t, fn) { this._h[t] = fn; },
+            getAttribute: () => null,
+          };
+          created.push(el);
+          return el;
+        },
+        body: { appendChild() {}, removeChild() {} },
+        addEventListener(t, fn) { if (t === "keydown") keydown = fn; },
+        removeEventListener() {},
+      };
+      const p = new Function("document", code + "\nreturn confirmDialog('测试文案');")(doc);
+      return { mask: created[0], p, getKeydown: () => keydown };
+    };
+    const clickWith = (mask, act) =>
+      mask._h.click({ target: { getAttribute: (n) => (n === "data-act" ? act : null) } });
+
+    const a = runDialog();
+    clickWith(a.mask, "no");
+    ok("C2 确认弹窗：点「取消」→ false", (await a.p) === false);
+
+    const b = runDialog();
+    clickWith(b.mask, "yes");
+    ok("C2 确认弹窗：点「确定」→ true", (await b.p) === true);
+
+    const c = runDialog();
+    const kd = c.getKeydown();
+    if (kd) kd({ key: "Escape" });
+    ok("C2 确认弹窗：按 Esc → false（键盘可安全取消）", !!kd && (await c.p) === false);
+  }
+
+  // ── C2-b：resetAll 真实执行 —— 取消不发请求、失败必有提示 ──
+  {
+    const src = read("weights.html");
+    const code = sliceBetween(src, "async function resetAll() {", "\n}");
+    const runReset = async (confirmed, response) => {
+      const doc = makeDoc();
+      let fetched = null, fetchCount = 0, rendered = 0;
+      const fetchStub = (url, init) => {
+        fetchCount++;
+        fetched = JSON.parse(init.body);
+        return Promise.resolve(response);
+      };
+      const fn = new Function(
+        "document", "fetch", "API", "confirmDialog", "state", "render",
+        code + "\nreturn resetAll();"
+      );
+      await fn(doc, fetchStub, "/api/v1/settings/weights", async () => confirmed, {},
+        () => { rendered++; });
+      return { doc, fetched, fetchCount, rendered };
+    };
+
+    const r1 = await runReset(false, { ok: true, status: 200, json: async () => null });
+    ok("C2 取消确认时 → 一个保存请求都不发（原先会直接覆盖）", r1.fetchCount === 0);
+
+    const r2 = await runReset(true, { ok: true, status: 200, json: async () => null });
+    ok("C2 确认后 → 提交的确实是内置默认权重",
+      r2.fetchCount === 1 && r2.fetched.trend.structure === 0.3 && r2.fetched.combine.news === 0.3);
+    const sums = [r2.fetched.trend, r2.fetched.macro, r2.fetched.combine]
+      .map((o) => Object.values(o).reduce((x, y) => x + y, 0));
+    ok("C2 默认值三组各自归一（各组和 = 1）", sums.every((s) => Math.abs(s - 1) < 1e-9), JSON.stringify(sums));
+    ok("C2 成功后 → 提示成功并重渲染",
+      r2.doc.getElementById("msg").textContent.includes("已恢复默认") && r2.rendered === 1);
+
+    const r3 = await runReset(true, { ok: false, status: 500, json: async () => ({ detail: "内部错误" }) });
+    const m3 = r3.doc.getElementById("msg");
+    ok("C2 失败 → 明确报错（原先 if (r.ok) 无 else，静默无反应）",
+      m3.className.includes("err") && m3.textContent.includes("失败"), JSON.stringify(m3.textContent));
+    ok("C2 失败 → 告知权重未被改动并带出后端原因",
+      m3.textContent.includes("未被改动") && m3.textContent.includes("内部错误"), JSON.stringify(m3.textContent));
+  }
+}
 
 console.log("\n" + "=".repeat(70));
 console.log(`结果：${pass} passed / ${fail} failed`);

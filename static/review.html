@@ -366,7 +366,7 @@ async function loadJournal() {
     `近 ${journal.days ?? cfg.days} 天共 <b>${journal.total ?? 0}</b> 天有研判，其中 <b>${journal.pending ?? 0}</b> 天待验证（T+${journal.horizon ?? cfg.horizon} 尚未到期）。`;
 
   if (!journal.items.length) {
-    box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news" data-i18n="nav.news">消息面评估</a> 页完成打分；若想补录历史研判，可在该页填写并指定日期。</div>`;
+    box.innerHTML = `<div class="empty">暂无研判记录。<br>请先到 <a href="/news" data-i18n="nav.news">消息面评估</a> 页完成打分 —— 每笔打分会在 T+N 到期后自动出现在本页做命中验证。<br>打完分后可点上方「📥 回填历史金价」补齐验证所需的金价数据；历史研判的补录入口尚未开放。</div>`;
     return;
   }
   box.innerHTML = journal.items.map(renderDay).join("");

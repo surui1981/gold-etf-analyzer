@@ -61,6 +61,13 @@
   .btn-reset { background: #eef0f3; color: var(--text); }
   .msg { margin-top: 10px; font-size: 13px; min-height: 18px; }
   .msg.ok { color: var(--down); } .msg.err { color: var(--up); }
+  /* V0.77.2 C2：二次确认弹窗。与 /news 的动态创建范式一致（自包含，不依赖预置 DOM），
+     但改用 var(--card)/var(--border) 以适配本页主题。此前本页无任何确认机制，
+     而「恢复默认」是不可逆的整体覆盖 —— 一次误点即改写综合指数与决策。 */
+  .cd-mask { position:fixed; inset:0; background:rgba(31,35,41,.45); display:flex; align-items:center; justify-content:center; z-index:999; }
+  .cd-box { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:20px 22px; max-width:440px; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .cd-text { font-size:13.5px; line-height:1.8; color:var(--text); }
+  .cd-ops { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
   /* 顶部导航（统一） */
   .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
@@ -312,10 +319,64 @@ async function save() {
   } catch (e) { msg.className = "msg err"; msg.textContent = "保存失败：" + e.message; }
 }
 
+/* V0.77.2 C2：二次确认弹窗（动态创建、自包含，与 /news 范式一致） */
+function confirmDialog(text) {
+  return new Promise(resolve => {
+    const mask = document.createElement("div");
+    mask.className = "cd-mask";
+    mask.innerHTML = '<div class="cd-box"><div class="cd-text"></div><div class="cd-ops">' +
+      '<button class="btn-reset" data-act="no">取消</button>' +
+      '<button class="btn-save" data-act="yes" style="padding:8px 20px;font-size:13px">确定恢复</button>' +
+      "</div></div>";
+    // 文案用 textContent 写入（不拼进 innerHTML）—— 本页没有 esc 工具函数，这样既不需要新增依赖也避免注入
+    mask.querySelector(".cd-text").textContent = text;
+    let settled = false;
+    function done(val) {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKey);
+      document.body.removeChild(mask);
+      resolve(val);
+    }
+    function onKey(e) { if (e.key === "Escape") done(false); }
+    mask.addEventListener("click", (e) => {
+      const act = e.target.getAttribute && e.target.getAttribute("data-act");
+      if (act) done(act === "yes");
+    });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(mask);
+  });
+}
+
 async function resetAll() {
+  // V0.77.2 C2：原先此函数无二次确认、无 try/catch、且 `if (r.ok)` 无 else ——
+  // 「恢复默认」是用一份内置常量整体覆盖客户的自定义权重，保存后立即影响综合指数与决策。
+  // 客户此前既得不到确认提示（一次误点即不可逆），也看不到失败反馈（失败时页面毫无动静，
+  // 会误以为已经恢复成功，而实际权重没变）。
+  const ok = await confirmDialog(
+    "确定恢复默认权重？这会把「技术面 / 宏观面 / 消息面」的全部自定义权重整体覆盖为内置默认值" +
+    "并立即保存，综合指数与决策会随之改变；原有自定义值无法撤销。"
+  );
+  if (!ok) return;
+  const msg = document.getElementById("msg");
   const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 } };
-  const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (r.ok) { state = body; render(); document.getElementById("msg").className = "msg ok"; document.getElementById("msg").textContent = "✅ 已恢复默认权重并保存。"; }
+  msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
+  try {
+    const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) {
+      let detail = "HTTP " + r.status;
+      try { detail = (await r.json()).detail || detail; } catch (e2) { /* 非 JSON 响应：保留 HTTP 状态码 */ }
+      throw new Error(detail);
+    }
+    const saved = await r.json().catch(() => null);
+    state = saved || body;
+    render();
+    msg.className = "msg ok";
+    msg.textContent = "✅ 已恢复默认权重并保存，趋势页与决策将立即按默认权重计算。";
+  } catch (e) {
+    msg.className = "msg err";
+    msg.textContent = "恢复默认失败：" + e.message + "（权重未被改动，可稍后重试）";
+  }
 }
 
 (async function init() {
