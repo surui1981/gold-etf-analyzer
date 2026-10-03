@@ -1,10 +1,10 @@
 # 黄金价格投资辅助工具 · 说明文档
 
-> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.77.1**
+> 项目名：`gold-etf-analyzer` ｜ 当前版本：**V0.77.2**
 > 命题：面向个人黄金投资者（中短期 ETF 波段），三市场对照（纽约金/上海金/黄金ETF）+ 综合趋势评估指数（技术/宏观/消息面）+ 持仓跟踪 + ETF购买决策 + 世界央行购金统计 + 消息面研判复盘 + 多用户账号体系
 > 技术栈：FastAPI + Pydantic v2 + SQLAlchemy 2.0 (async) + AKShare + WGC Gold Demand Trends (HTML chart JS) + bcrypt（V0.75.0）
 > 仓库：https://github.com/surui1981/gold-etf-analyzer
-> 相关文档：[README](../README.md) · [improvement-path（工程路线）](./improvement-path.md) · **[ux-roadmap（应用 / UX 路线，V0.68.0 → V0.77.1）](./ux-roadmap.md)** · [feature-alignment（对账）](./feature-alignment.md)
+> 相关文档：[README](../README.md) · [improvement-path（工程路线）](./improvement-path.md) · **[ux-roadmap（应用 / UX 路线，V0.68.0 → V0.77.2）](./ux-roadmap.md)** · [feature-alignment（对账）](./feature-alignment.md)
 
 ---
 
@@ -499,8 +499,8 @@ TRUST_PROXY_HEADERS=false       # 反代后取 X-Forwarded-For 作为真实 IP
 - ⚠️ **`-m "not network"` 在本仓是无效过滤**：`pyproject.toml` 未注册 `markers`、`tests/` 下也无任何 `@pytest.mark.network`（全仓 grep 0 命中）→ 该 `-m` 不排除任何用例。真正的离线口径是**文件名** `--ignore=`（见上）。
 - **例外（既有问题，非本版本引入）**：`tests/test_services/{test_irfcl_fetcher,test_h15_fetcher}.py` 共 44 用例，实测 **43 passed / 1 skipped**——跳过项 `test_load_manual_overrides_returns_uZB_and_irn` 依赖本地数据文件 `data/central_bank_manual_overrides.json`（位于 `.gitignore` 内，新克隆不携带）；已加 `skipif` 守卫（文件缺失即跳过，不再误报 failed）
 - **前端**：`python scripts/check_static_js.py`（或 `make check-web`）对 **13 个静态页面**（`trend` / `portfolio` / `trades` / `weights` / `news` / `central_bank` / `review` / `silver` / `backtest` / `data-health` / `settings` / `offline` / **`login`（V0.75.0）**）的内联 JS + **23 个共享脚本**（`account.js` / **`auth.js`（V0.75.0）** / `backtest-chart.js` / `chart-a11y.js` / `command-palette.js` / `dashboard.js` / `freshness.js` / `help.js` / `i18n.js` / `nav-drawer.js` / **`news-score-widget.js`（V0.76.0）** / `notifications.js` / `pwa.js` / `resonance-card.js` / `settings.js` / **`synthesis-card.js`（V0.75.1）** / `sw.js` / `telemetry.js` / `theme.js` + `i18n/{zh-CN,zh-TW,en-US}.js` + `vendor/chart.umd.min.js`）做语法 / 未定义调用 / DOM id 一致性校验——前端无构建步骤，这道门禁用于拦下「JS 写错导致整页脚本失效」的问题（**V0.74.0 起 `check_static_js.py` 已能覆盖 `dashboard.js`**）
-- **前端渲染行为门禁**（V0.77.0 新增、V0.77.1 扩展）：`node scripts/check_cluster_render.mjs` —— 从各页源码里**提取真实的代码块**、用最小 DOM 桩在 Node 里**真实执行**，再断言产出的 HTML 结构与失败态结果（V0.77.0：33 条聚类断言；V0.77.1：**102 条**，新增第 7 节「失败态渲染」与第 8 节「接线与 SW 缓存护栏」—— 后者用桩 `fetch` 端到端跑通 `load()` 接线、用桩 `caches` + 真实 `Response` 真实执行 `sw.js` 的 `serveStaleApi` / `cacheApiResponse`）。补上「静态门禁全绿 ≠ 渲染正确」的盲区 —— `check_static_js.py` 只查语法 / 未定义调用 / DOM id，查不出「8 张卡到底分没分成 3 组」「接口挂掉时页面渲染成什么样」。同一脚本由 `tests/test_ui_cluster_render.py` 包进 pytest（探测不到 node 时 skip，不阻塞 CI 的纯 Python 矩阵）。
-- **文档声明门禁**：`python scripts/check_docs_claims.py` 校验五份文档中的**表名 / localStorage key / 页面 / 端点**是否都能在代码中找到对应实体（V0.76.0 实测 **380 处引用全部命中**——表名 40 / localStorage key 42 / 页面 61 / 端点 237；**V0.77.1 实测 384 处全部命中**——页面 61 → 65，共 384 处；脚本内 `is_file_reference()` 用于把 `src/app/api/v1/endpoints/auth.py` 这类**文件路径**与真实端点区分开）。
+- **前端渲染行为门禁**（V0.77.0 新增，V0.77.1 / V0.77.2 两次扩展）：`node scripts/check_cluster_render.mjs` —— 从各页源码里**提取真实的代码块**、用最小 DOM 桩在 Node 里**真实执行**，再断言产出的 HTML 结构与失败态结果（V0.77.0：33 条聚类断言；V0.77.1：**102 条**，新增第 7 节「失败态渲染」与第 8 节「接线与 SW 缓存护栏」；**V0.77.2：125 条**，新增第 9 节「数据不丢与交互安全」：四条全是静默错误（页面看起来完全正常），故**真实执行源码片段**并配反向断言 —— B1 真实跑 `save()` 抓它实际发出的请求体、B2 真实跑轮询那段价格逻辑、C2 真实执行确认弹窗与 `resetAll`（取消时一个请求都不发）—— 后者用桩 `fetch` 端到端跑通 `load()` 接线、用桩 `caches` + 真实 `Response` 真实执行 `sw.js` 的 `serveStaleApi` / `cacheApiResponse`）。补上「静态门禁全绿 ≠ 渲染正确」的盲区 —— `check_static_js.py` 只查语法 / 未定义调用 / DOM id，查不出「8 张卡到底分没分成 3 组」「接口挂掉时页面渲染成什么样」。同一脚本由 `tests/test_ui_cluster_render.py` 包进 pytest（探测不到 node 时 skip，不阻塞 CI 的纯 Python 矩阵）。
+- **文档声明门禁**：`python scripts/check_docs_claims.py` 校验五份文档中的**表名 / localStorage key / 页面 / 端点**是否都能在代码中找到对应实体（V0.76.0 实测 **380 处引用全部命中**——表名 40 / localStorage key 42 / 页面 61 / 端点 237；**V0.77.1 实测 384 处全部命中**——页面 61 → 65，共 384 处；**V0.77.2 实测 388 处全部命中**——页面 65 → 69，共 388 处（本版新增四条静默错误修复的说明，涉及消息面、持仓、复盘、权重四个页面与后续门禁节次）；脚本内 `is_file_reference()` 用于把 `src/app/api/v1/endpoints/auth.py` 这类**文件路径**与真实端点区分开）。
 
 ---
 
