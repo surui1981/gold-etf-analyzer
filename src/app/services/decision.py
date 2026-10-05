@@ -2,9 +2,17 @@
 
 规则为典型经验（rule-based），集中在 ``DecisionService`` 内，可按策略调整；
 后续 P2 将叠加宏观机会评分形成「宏观 × 技术」双维度共振。
+
+V0.78.0 决策矩阵档位补全（Step B）：
+- BUY 拆 3 档：``BUY_HEAVY``（≥75, 80%）/ ``BUY``（≥65, 60%）/ ``BUY_LIGHT``（≥55, 30%）
+- 新增 ``HOLD_CAUTIOUS``（idx [40, 45)，观望持有缓冲档）
+- 消除 idx [60, 70) × pnl [-10%, +15%] 卡死区
+- 决策行动统一为 ``DecisionAction`` 枚举（``schemas/decision.py``）
 """
 
+from app.schemas.decision import DecisionAction
 from app.schemas.position import DecisionOut, ReasonItem
+from app.schemas.thresholds import DecisionThreshold
 from app.services.position import PositionService
 from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
@@ -12,12 +20,15 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 _ACTION_LABELS = {
-    "BUY": "买入",
-    "ADD": "加仓",
-    "HOLD": "持有",
-    "REDUCE": "减仓",
-    "SELL": "卖出",
-    "WAIT": "观望",
+    DecisionAction.BUY_HEAVY: "重仓买入",
+    DecisionAction.BUY: "买入",
+    DecisionAction.BUY_LIGHT: "轻仓试仓",
+    DecisionAction.ADD: "加仓",
+    DecisionAction.HOLD: "持有",
+    DecisionAction.HOLD_CAUTIOUS: "观望持有",
+    DecisionAction.REDUCE: "减仓",
+    DecisionAction.SELL: "卖出",
+    DecisionAction.WAIT: "观望",
 }
 
 _LEVEL_LABELS = {
@@ -134,33 +145,46 @@ class DecisionService:
     # ---------------- 规则判定 ----------------
 
     @staticmethod
-    def _decide(idx: float, pnl_pct: float, has_position: bool) -> tuple[str, str]:
-        """核心规则：指数 + 持仓盈亏 → (行动, 置信度)。"""
+    def _decide(
+        idx: float, pnl_pct: float, has_position: bool
+    ) -> tuple[DecisionAction, str]:
+        """核心规则：指数 + 持仓盈亏 → (行动, 置信度)。
+
+        V0.78.0 重写（Step B）：
+        - BUY 拆 3 档（BUY_HEAVY / BUY / BUY_LIGHT），与仓位推荐档位对齐
+        - 新增 HOLD_CAUTIOUS（idx [40, 45)）缓冲档，避免直接 REDUCE 过激
+        - 消除 idx [60, 70) × pnl [-10%, +15%] 卡死区（落入 HOLD / HOLD_CAUTIOUS）
+        - 阈值统一读 DecisionThreshold
+        """
         if not has_position:
-            if idx >= 70:
-                return "BUY", "high"
-            if idx >= 55:
-                return "BUY", "medium"
-            if idx >= 45:
-                return "WAIT", "low"
-            return "WAIT", "medium"
+            # 无持仓：BUY 拆 3 档（与仓位推荐档位对齐：80% / 60% / 30%）
+            if idx >= DecisionThreshold.BUY_HEAVY:    # ≥ 75
+                return DecisionAction.BUY_HEAVY, "high"
+            if idx >= DecisionThreshold.BUY:          # ≥ 65
+                return DecisionAction.BUY, "high"
+            if idx >= DecisionThreshold.BUY_LIGHT:    # ≥ 55
+                return DecisionAction.BUY_LIGHT, "medium"
+            if idx >= DecisionThreshold.HOLD:         # ≥ 50
+                return DecisionAction.WAIT, "low"
+            return DecisionAction.WAIT, "medium"
 
         # 有持仓：先处理止盈/止损，再按趋势决策
+        assert pnl_pct is not None
         if pnl_pct >= 15 and idx < 60:
-            return "SELL", "high"  # 浮盈显著且趋势转弱 → 止盈
+            return DecisionAction.SELL, "high"   # 浮盈显著且趋势转弱 → 止盈
         if pnl_pct <= -10 and idx < 40:
-            return "REDUCE", "high"  # 浮亏显著且趋势弱势 → 止损减仓
-        if idx >= 70:
-            return "ADD", "high"
-        if idx >= 55:
-            return "HOLD", "medium"
-        if idx >= 45:
-            return "HOLD", "low"
-        return "REDUCE", "medium"
+            return DecisionAction.REDUCE, "high"  # 浮亏显著且趋势弱势 → 止损减仓
+        if idx >= DecisionThreshold.BUY_HEAVY:    # ≥ 75
+            return DecisionAction.ADD, "high"
+        if idx >= DecisionThreshold.BUY_LIGHT:    # ≥ 55
+            return DecisionAction.HOLD, "medium"
+        if idx >= DecisionThreshold.HOLD_LOW:     # ≥ 40  ← 新增缓冲档
+            return DecisionAction.HOLD_CAUTIOUS, "low"
+        return DecisionAction.REDUCE, "medium"
 
     def _build_reason_items(
         self,
-        action: str,
+        action: DecisionAction,
         trend: object,
         pos: object,
         suggested_position: float,
@@ -211,20 +235,26 @@ class DecisionService:
             items.append(ReasonItem(text="交易面：当前无持仓", direction="neutral"))
 
         rule_hint = {
-            "BUY": "趋势走强且无持仓，具备建仓条件",
-            "ADD": "趋势强劲且已有盈利/仓位，可顺势加仓",
-            "HOLD": "趋势方向未破坏，继续持有观察",
-            "REDUCE": "趋势转弱或亏损扩大，建议逢高减仓控制风险",
-            "SELL": "浮盈可观且趋势动能衰减，建议止盈兑现",
-            "WAIT": "信号不明或趋势偏弱，观望等待更优时机",
+            DecisionAction.BUY_HEAVY: "趋势走强且无持仓，具备重仓建仓条件",
+            DecisionAction.BUY: "趋势走强且无持仓，具备建仓条件",
+            DecisionAction.BUY_LIGHT: "趋势温和偏多，建议轻仓试仓",
+            DecisionAction.ADD: "趋势强劲且已有盈利/仓位，可顺势加仓",
+            DecisionAction.HOLD: "趋势方向未破坏，继续持有观察",
+            DecisionAction.HOLD_CAUTIOUS: "趋势转弱但未破位，观望持有等待方向确认",
+            DecisionAction.REDUCE: "趋势转弱或亏损扩大，建议逢高减仓控制风险",
+            DecisionAction.SELL: "浮盈可观且趋势动能衰减，建议止盈兑现",
+            DecisionAction.WAIT: "信号不明或趋势偏弱，观望等待更优时机",
         }[action]
         action_dir = {
-            "BUY": "bullish",
-            "ADD": "bullish",
-            "SELL": "bearish",
-            "REDUCE": "bearish",
-            "HOLD": "neutral",
-            "WAIT": "neutral",
+            DecisionAction.BUY_HEAVY: "bullish",
+            DecisionAction.BUY: "bullish",
+            DecisionAction.BUY_LIGHT: "bullish",
+            DecisionAction.ADD: "bullish",
+            DecisionAction.SELL: "bearish",
+            DecisionAction.REDUCE: "bearish",
+            DecisionAction.HOLD: "neutral",
+            DecisionAction.HOLD_CAUTIOUS: "neutral",
+            DecisionAction.WAIT: "neutral",
         }[action]
         items.append(ReasonItem(text=f"决策依据：{rule_hint}", direction=action_dir))
 
@@ -241,7 +271,7 @@ class DecisionService:
 
     @staticmethod
     def _summarize(
-        action: str,
+        action: DecisionAction,
         confidence: str,
         trend: object,
         pos: object,
