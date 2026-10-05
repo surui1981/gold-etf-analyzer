@@ -394,14 +394,20 @@ function _actionTxt(key) {
   return _ACTION_FALLBACK[key] || key;
 }
 const _ACTION_FALLBACK = {
+  "portfolio.action_buy_heavy": "重仓买入",
   "portfolio.action_buy": "买入", "portfolio.action_add": "加仓",
-  "portfolio.action_hold": "持有", "portfolio.action_reduce": "减仓",
-  "portfolio.action_sell": "卖出", "portfolio.action_wait": "观望",
+  "portfolio.action_buy_light": "轻仓试仓",
+  "portfolio.action_hold": "持有", "portfolio.action_hold_cautious": "观望持有",
+  "portfolio.action_reduce": "减仓", "portfolio.action_sell": "卖出",
+  "portfolio.action_wait": "观望",
 };
 const ACTION_STYLE = {
+  BUY_HEAVY: { key: "portfolio.action_buy_heavy", color: "var(--up)" },
   BUY: { key: "portfolio.action_buy", color: "var(--up)" },
+  BUY_LIGHT: { key: "portfolio.action_buy_light", color: "var(--up)" },
   ADD: { key: "portfolio.action_add", color: "var(--up)" },
   HOLD: { key: "portfolio.action_hold", color: "#997417" },
+  HOLD_CAUTIOUS: { key: "portfolio.action_hold_cautious", color: "#997417" },
   REDUCE: { key: "portfolio.action_reduce", color: "var(--down)" },
   SELL: { key: "portfolio.action_sell", color: "var(--down)" },
   WAIT: { key: "portfolio.action_wait", color: "#5b6470" },

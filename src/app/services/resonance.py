@@ -26,6 +26,7 @@ from app.schemas.resonance import (
     ResonanceSignalOut,
     StrengthUpStatsOut,
 )
+from app.schemas.thresholds import DirectionThreshold
 from app.services.news import aggregate_slots, direction_of
 from app.utils.logger import get_logger
 
@@ -34,9 +35,10 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-# 4 类信号阈值（与 DirectionSignal 一致；55/45 是 BULLISH/BEARISH 的临界分）
-_THRESH_UP = 55
-_THRESH_DOWN = 45
+# 4 类信号阈值（与 DirectionSignal 一致；BULLISH/BEARISH 的临界分）
+# V0.78.0：统一引用 DirectionThreshold
+_THRESH_UP = int(DirectionThreshold.BULLISH)     # 55
+_THRESH_DOWN = int(DirectionThreshold.BEARISH)   # 45
 _MIN_SAMPLES = 20
 
 # 中文信号名
@@ -229,7 +231,8 @@ class ResonanceService:
         strong_up_dates: list[date] = []
         for score_date, rows in grouped.items():
             effective, _, _ = aggregate_slots(rows)
-            if effective >= 55 and direction_of(effective) is DirectionSignal.BULLISH:
+            # V0.78.0：用 direction_of 单一判定（与消息面方向口径一致：> 55 看多）
+            if direction_of(effective) is DirectionSignal.BULLISH:
                 strong_up_dates.append(score_date)
 
         # 计算 T+H 命中

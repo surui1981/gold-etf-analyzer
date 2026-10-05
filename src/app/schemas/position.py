@@ -4,6 +4,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.schemas.decision import DecisionAction
 from app.schemas.market import TrendIndexOut
 
 
@@ -154,7 +155,13 @@ class ReasonItem(BaseModel):
 class DecisionOut(BaseModel):
     """购买决策输出：行动 + 置信度 + 仓位推荐 + 理由明细。"""
 
-    action: str = Field(..., description="BUY/ADD/HOLD/REDUCE/SELL/WAIT")
+    action: DecisionAction = Field(
+        ...,
+        description=(
+            "决策行动枚举（V0.78.0）：buy_heavy / buy / buy_light / "
+            "add / hold / hold_cautious / reduce / sell / wait"
+        ),
+    )
     action_label: str = Field(..., description="中文行动名")
     confidence: str = Field(..., description="high/medium/low")
     signal_summary: str = Field(..., description="参数面信号摘要")

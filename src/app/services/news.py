@@ -28,6 +28,7 @@ from app.schemas.news import (
     NewsScoreOut,
     NewsSlotOut,
 )
+from app.schemas.thresholds import DirectionThreshold
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -37,12 +38,16 @@ NEUTRAL_SCORE = 50.0  # 未打分时的中性参考
 # 槽位权重：越晚权重越高（第 1/2/3 次 → 1/2/3）
 SLOT_WEIGHTS: dict[int, int] = {n: n for n in range(1, MAX_DAILY_SLOTS + 1)}
 
-BULLISH_THRESHOLD = 55.0
-BEARISH_THRESHOLD = 45.0
+# V0.78.0：消息面方向阈值统一引用 DirectionThreshold（保持严格不等号语义）
+BULLISH_THRESHOLD = float(DirectionThreshold.BULLISH)   # 55.0
+BEARISH_THRESHOLD = float(DirectionThreshold.BEARISH)   # 45.0
 
 
 def direction_of(score: float) -> DirectionSignal:
-    """按分值判定方向：>55 看多、<45 看空、其余中性。"""
+    """按分值判定方向：>55 看多、<45 看空、其余中性。
+
+    V0.78.0：阈值改读 DirectionThreshold（行为零变化——仍是严格不等号）。
+    """
     if score > BULLISH_THRESHOLD:
         return DirectionSignal.BULLISH
     if score < BEARISH_THRESHOLD:
