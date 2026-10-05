@@ -29,9 +29,15 @@
 #   - uv 缓存（~/.cache/uv + .venv）跨 job 复用
 #   - ruff 版本由 pyproject.lock 决定，不在 CI 硬锁
 #   - Action 运行时（V0.78.2）：五个 action 全部升到 Node 24 ——
-#     checkout@v7 / upload-artifact@v7 / setup-uv@v10 / setup-buildx-action@v4 /
+#     checkout@v7 / upload-artifact@v7 / setup-uv@v7 / setup-buildx-action@v4 /
 #     build-push-action@v7，消除 GitHub 的 Node 20 弃用提示。
-#     ⚠ 升级前逐个核对过目标版本的 breaking 与本项目用到的参数（详见提交说明）。
+#     ⚠ setup-uv 用 **@v7 而非 @v10**：该作者**只维护到 v7 的移动标签**
+#       （`git ls-remote --tags` 实测 refs/tags/v1..v7 存在；v8/v9/v10 只有精确标签）。
+#       写成 `@v10` 会让 job 在**第一个 step 之前**就 "Set up job" 失败 ——
+#       界面上只显示一个失败、日志里没有任何可诊断信息。
+#     ⚠ **核对 breaking 时用的 ref，必须与写进 workflow 的 ref 是同一个**：
+#       本轮先用 v10.2.0（精确标签）读了 action.yml 与 release notes，
+#       却把 @v10（移动标签）写进了 workflow —— 而后者根本不存在。
 #   - pytest 加 -p no:cacheprovider（CI 不需要 .pytest_cache）
 #   - 不跑联网 fetcher 文件（irfcl / h15），由 main 分支 nightly job 单独跑（TODO V0.67.x）
 #
@@ -65,7 +71,7 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v10
+        uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
