@@ -5,7 +5,8 @@ V0.78.0 新增：消除 5 个模块（消息面 / 单维度 / 综合指数等级
 
 使用场景：
 - ``DirectionThreshold`` —— 方向判定（消息面 > 55 看多、共振 ≥ 55 BULLISH、单维度 ≥ 60 BULLISH）
-- ``LevelThreshold`` —— 综合指数 → 等级映射（含端点）
+- ``LevelThreshold`` —— 综合指数 → 等级映射（含端点），并被 decision 的仓位档位复用
+- ``OpportunityWindowThreshold`` —— 宏观机会评分 → 投资窗口分级（独立语义）
 - ``DecisionThreshold`` —— 决策矩阵档位（BUY 拆 3 档 + HOLD 缓冲档）
 
 修改此文件的常量前，请用 parameter-evaluation.md §6.2 的三维交叉验证方法
@@ -50,6 +51,21 @@ class LevelThreshold(IntEnum):
     # < 25 弱势下降（STRONG_DOWN）
 
 
+class OpportunityWindowThreshold(IntEnum):
+    """宏观机会评分 → 投资窗口分级阈值（``services/scoring.py``）。
+
+    与 ``LevelThreshold`` **不是同一套**：本枚举服务于「宏观机会评分 →
+    强/中/弱机会窗口」这一投资机会分级（70/55/40），而 ``LevelThreshold``
+    服务于「技术面综合指数 → 上升/震荡/下降」等级（75/55/45/25）。
+    两者数值相近纯属巧合，改动其一不影响其二。
+    """
+
+    STRONG = 70  # ≥ 70 强机会窗口（积极布局）
+    MEDIUM = 55  # ≥ 55 中等机会窗口（逢低分批）
+    WEAK = 40  # ≥ 40 弱机会窗口（观望或轻仓试探）
+    # < 40 无机会（STANDBY 观望）
+
+
 class DecisionThreshold(IntEnum):
     """决策矩阵档位阈值。
 
@@ -57,6 +73,12 @@ class DecisionThreshold(IntEnum):
     - BUY 拆 3 档：HEAVY (≥75, 80%) / 普通 (≥65, 60%) / LIGHT (≥55, 30%)
     - HOLD 拆 2 档：HOLD (≥55, medium) / HOLD_LOW 缓冲 (≥40, low, 新增)
     - REDUCE < 40
+
+    已知不对称（V0.78.0 Step A 收口时确认，**有意保留**）：
+    ``decision._build_reason_items`` 给「参数面」着色时用 55/40，其中 40
+    与本文件 ``DirectionThreshold.BEARISH``(45) 不同 —— 因该处是**显示层方向
+    着色**（偏空区更早翻转以示警），不是判定层阈值。改它属产品语义决策，
+    不在代码收口范围。现状由 ``tests/test_services/test_thresholds.py`` 锁死。
     """
 
     BUY_HEAVY = 75  # ≥ 75 重仓买入（80%）

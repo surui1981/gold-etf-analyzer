@@ -272,3 +272,26 @@
 | 已知边界 | 保存会触发后端 `TrendService.invalidate_for_news()` 让评估缓存失效 → 首页随即重算。**数据源不可达时该重算较慢**（本机 DNS 故障环境下实测 `GET /market/gold/trend` 首次重算 **23.26s**，缓存命中仅 0.017s），正常联网时应为亚秒级 |
 
 ---
+
+### 6.8 阈值常量（V0.78.0）
+
+`src/app/schemas/thresholds.py` 集中管理全部分数阈值，取代原先散落在 6 个服务模块里的裸字面量。四组枚举**语义互不相同，不可互相套用**：
+
+| 枚举 | 取值 | 判定方式 | 服务于 |
+|------|------|----------|--------|
+| `DirectionThreshold` | `STRONG_BULLISH` 70 / `BULLISH` 55 / `NEUTRAL_HIGH` 60 / `NEUTRAL_LOW` 40 / `BEARISH` 45 / `STRONG_BEARISH` 25 | 消息面与共振用**严格**不等号；单维度方向用 60/40 | 消息面打分 / 共振信号 / 单维度方向 |
+| `LevelThreshold` | `STRONG_UP` 75 / `UP` 55 / `SIDEWAYS` 45 / `DOWN` 25 | **含端点**（≥55 即 UP） | 综合指数等级；决策页仓位档位复用同一套分界点 |
+| `OpportunityWindowThreshold` | `STRONG` 70 / `MEDIUM` 55 / `WEAK` 40 | 含端点 | 宏观机会评分 → 强 / 中 / 弱投资窗口 |
+| `DecisionThreshold` | `BUY_HEAVY` 75 / `BUY` 65 / `BUY_LIGHT` 55 / `HOLD` 50 / `HOLD_LOW` 40 | 含端点 | 决策矩阵档位（BUY 拆 3 档 + HOLD 缓冲档） |
+
+**三套方向口径并存是有意设计，不是冲突** —— 它们回答的是不同问题：
+
+| 口径 | 分值恰好 55 时 | 用在哪 | 为何不同 |
+|------|----------------|--------|----------|
+| 消息面 | 中性（须严格 `> 55` 才算看多） | `services/news.py` | 消息面是**客户主观打分**，跨过中线即算表态 |
+| 综合指数等级 | 上升（`≥ 55` 即 UP） | `services/trend.py` | 等级是**分档展示**，含端点更符合直觉 |
+| 单维度方向 | 看多（`≥ 60` 才算，比消息面更严） | `services/scoring.py` / `services/macro.py` | 单维度的中性区更宽，避免噪声因子频繁翻转 |
+
+**唯一已知不对称**：`decision._build_reason_items` 为结论卡「参数面」着色时用 `55 / 40`，其中 40 故意不同于 `DirectionThreshold.BEARISH`(45) —— 显示层需要更早示警。改动它属产品语义决策，不由本次口径收口处理；现状由测试显式锁死而非默默保留。
+
+改任何阈值前，请按 `docs/parameter-evaluation.md` §6.2 的三维交叉验证（Sharpe + 最大回撤 + 命中率 / 校准）评估新值效果，而非直接拍数。全部阈值边界由 `tests/test_services/test_thresholds.py` 锁住，该文件还以 AST 机械保证「服务层判定逻辑不再出现裸阈值字面量」。

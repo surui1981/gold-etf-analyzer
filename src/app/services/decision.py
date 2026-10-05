@@ -12,7 +12,7 @@ V0.78.0 决策矩阵档位补全（Step B）：
 
 from app.schemas.decision import DecisionAction
 from app.schemas.position import DecisionOut, ReasonItem
-from app.schemas.thresholds import DecisionThreshold
+from app.schemas.thresholds import DecisionThreshold, DirectionThreshold, LevelThreshold
 from app.services.position import PositionService
 from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
@@ -131,14 +131,17 @@ class DecisionService:
         """由综合评估指数映射建议黄金仓位（0-100%）与等级。
 
         分段：≥75 重仓 80% ｜ ≥55 中高 60% ｜ ≥45 中性 40% ｜ ≥25 轻仓 20% ｜ <25 观望 10%。
+
+        V0.78.0 Step A 收口：分界点读 ``LevelThreshold`` —— 与 ``trend._to_level``
+        的等级阈值是同一套（等级 → 仓位 是合理映射），此前是裸字面量。
         """
-        if idx >= 75:
+        if idx >= int(LevelThreshold.STRONG_UP):
             return 80.0, "重仓"
-        if idx >= 55:
+        if idx >= int(LevelThreshold.UP):
             return 60.0, "中高仓位"
-        if idx >= 45:
+        if idx >= int(LevelThreshold.SIDEWAYS):
             return 40.0, "中性仓位"
-        if idx >= 25:
+        if idx >= int(LevelThreshold.DOWN):
             return 20.0, "轻仓"
         return 10.0, "观望空仓"
 
@@ -152,7 +155,7 @@ class DecisionService:
         - BUY 拆 3 档（BUY_HEAVY / BUY / BUY_LIGHT），与仓位推荐档位对齐
         - 新增 HOLD_CAUTIOUS（idx [40, 45)）缓冲档，避免直接 REDUCE 过激
         - 消除 idx [60, 70) × pnl [-10%, +15%] 卡死区（落入 HOLD / HOLD_CAUTIOUS）
-        - 阈值统一读 DecisionThreshold
+        - 阈值统一读 DecisionThreshold；止盈/止损的趋势前提读 DirectionThreshold
         """
         if not has_position:
             # 无持仓：BUY 拆 3 档（与仓位推荐档位对齐：80% / 60% / 30%）
@@ -168,9 +171,9 @@ class DecisionService:
 
         # 有持仓：先处理止盈/止损，再按趋势决策
         assert pnl_pct is not None
-        if pnl_pct >= 15 and idx < 60:
+        if pnl_pct >= 15 and idx < int(DirectionThreshold.NEUTRAL_HIGH):
             return DecisionAction.SELL, "high"  # 浮盈显著且趋势转弱 → 止盈
-        if pnl_pct <= -10 and idx < 40:
+        if pnl_pct <= -10 and idx < int(DirectionThreshold.NEUTRAL_LOW):
             return DecisionAction.REDUCE, "high"  # 浮亏显著且趋势弱势 → 止损减仓
         if idx >= DecisionThreshold.BUY_HEAVY:  # ≥ 75
             return DecisionAction.ADD, "high"

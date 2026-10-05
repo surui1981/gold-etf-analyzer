@@ -153,9 +153,9 @@ class MacroFactorService:
             total += contribution
             direction = (
                 DirectionSignal.BULLISH
-                if score >= 60
+                if score >= int(DirectionThreshold.NEUTRAL_HIGH)
                 else DirectionSignal.BEARISH
-                if score <= 40
+                if score <= int(DirectionThreshold.NEUTRAL_LOW)
                 else DirectionSignal.NEUTRAL
             )
             factors.append(

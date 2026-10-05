@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from app.schemas.analysis import FactorSignal, OpportunityResponse
 from app.schemas.common import DirectionSignal, OpportunityWindow
 from app.schemas.factors import MacroFactorInput
+from app.schemas.thresholds import DirectionThreshold, OpportunityWindowThreshold
 
 
 @dataclass(frozen=True)
@@ -126,21 +127,21 @@ class OpportunityScoringService:
 
     @staticmethod
     def _to_window(score: float) -> OpportunityWindow:
-        """综合评分 → 投资窗口分级。"""
-        if score >= 70:
+        """综合评分 → 投资窗口分级（阈值读 OpportunityWindowThreshold）。"""
+        if score >= int(OpportunityWindowThreshold.STRONG):
             return OpportunityWindow.STRONG
-        if score >= 55:
+        if score >= int(OpportunityWindowThreshold.MEDIUM):
             return OpportunityWindow.MEDIUM
-        if score >= 40:
+        if score >= int(OpportunityWindowThreshold.WEAK):
             return OpportunityWindow.WEAK
         return OpportunityWindow.STANDBY
 
     @staticmethod
     def _to_signal(score: float) -> DirectionSignal:
-        """综合评分 → 总体方向信号。"""
-        if score >= 60:
+        """综合评分 → 总体方向信号（单维度口径，与 macro.py 同源）。"""
+        if score >= int(DirectionThreshold.NEUTRAL_HIGH):
             return DirectionSignal.BULLISH
-        if score <= 40:
+        if score <= int(DirectionThreshold.NEUTRAL_LOW):
             return DirectionSignal.BEARISH
         return DirectionSignal.NEUTRAL
 
@@ -155,13 +156,13 @@ class OpportunityScoringService:
 
     @staticmethod
     def _summarize(score: float) -> str:
-        """生成一句话结论。"""
-        if score >= 70:
+        """生成一句话结论（分支阈值与 :meth:`_to_window` 保持一致）。"""
+        if score >= int(OpportunityWindowThreshold.STRONG):
             return (
                 f"综合评分 {score:.1f}/100：宏观环境显著利多黄金，处于强机会窗口，可积极布局黄金ETF"
             )
-        if score >= 55:
+        if score >= int(OpportunityWindowThreshold.MEDIUM):
             return f"综合评分 {score:.1f}/100：中等机会窗口，建议逢低分批配置黄金ETF"
-        if score >= 40:
+        if score >= int(OpportunityWindowThreshold.WEAK):
             return f"综合评分 {score:.1f}/100：弱机会窗口，观望或轻仓试探为宜"
         return f"综合评分 {score:.1f}/100：宏观环境压制黄金，建议观望等待信号反转"
