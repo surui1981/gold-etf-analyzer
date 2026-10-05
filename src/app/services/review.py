@@ -43,6 +43,7 @@ from app.schemas.review import (
     TagStatsOut,
 )
 from app.services.news import aggregate_slots, direction_of, parse_basis
+from app.services.price_source import resolve_price_source
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -133,7 +134,11 @@ class ReviewService:
 
         trend = await self._trend.analyze(days=days, target=target)
         bars = [(p.date, float(p.close)) for p in trend.points]
-        source = (trend.data_sources or {}).get(target, "") or "live"
+        # ⚠ V0.79.0：原为 `or "live"` —— **方向危险**。来源缺失时把「未知」
+        # 标成 ``live`` 等于静默宣称数据真实；而 ``mock``（降级产物）恰为真值
+        # 会原样透传、被仓储白名单拒绝 —— 两种情形结果相反且都不可解释。
+        # 现统一走 ``services.price_source``：缺失返回空串，交由仓储校验拒绝。
+        source = resolve_price_source(trend.data_sources, target)
         written = await self._gold.upsert_many(target=target, bars=bars, source=source)
 
         logger.info(

@@ -22,7 +22,10 @@ logger = get_logger(__name__)
 # - ``manual``：人工导入（CSV / WGC 等）
 # - ``import``：脚本批量导入（`import_central_bank`）
 # - ``test``：单测 fixture 专用（V0.66.0 测试已固定使用该标记，保留以免破坏回归）
-_VALID_SOURCES: frozenset[str] = frozenset({"live", "manual", "import", "test"})
+# V0.79.0 增 `stale`：TrendService 会在缓存未过期但未刷新时标记 `stale`
+# （数据仍来自真实行情，只是未实时更新）⇒ 属可入库的真实数据，与 `mock` 性质不同。
+# ⚠ 两个白名单必须相容：回填层放行而仓储层拒绝 ⇒ 抛 400 打断回测。
+_VALID_SOURCES: frozenset[str] = frozenset({"live", "stale", "manual", "import", "test"})
 _CHANGE_PCT_LIMIT: float = 50.0  # 单日涨跌幅边界（±50%）
 
 

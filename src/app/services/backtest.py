@@ -30,8 +30,13 @@ from app.schemas.backtest import (
 )
 from app.schemas.common import DirectionSignal
 from app.services import backtest_throttle as throttle
+from app.services.price_source import (
+    TRUSTED_PRICE_SOURCES as _TRUSTED_PRICE_SOURCES,
+)
+from app.services.price_source import resolve_price_source
 from app.services.review import judge_hit
 from app.services.settings import WeightService
+from app.services.trend import TrendService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +44,11 @@ logger = get_logger(__name__)
 
 # 样本不足阈值（与 review 对齐）
 _MIN_SAMPLES = 20
+
+# V0.79.0：行情来源判定（可否写入价格日历 / target→市场 key 映射）已抽到
+# ``services.price_source`` —— 回测与复盘共用，而 ``backtest`` 已 import ``review``，
+# 逻辑留在本模块会让 review 反向依赖 backtest ⇒ 循环导入。
+# 上面的 ``_TRUSTED_PRICE_SOURCES`` / ``_TARGET_TO_MARKET_KEY`` 是为兼容既有引用的别名。
 
 # 5 桶分箱（与 review._calibration 共享形状）
 _CALIBRATION_BUCKETS: tuple[tuple[float, float], ...] = (
@@ -108,17 +118,28 @@ class _SimDay:
 
 
 class BacktestService:
-    """回测编排服务：覆盖期报告 + 参数扫描 + 节流。"""
+    """回测编排服务：覆盖期报告 + 参数扫描 + 节流。
+
+    V0.79.0：新增 ``ensure_price_calendar()`` —— 回测**按需自动回填**价格日历。
+    动机：价格日历原先只有一条写入路径（``/review`` 页用户手工点复盘），
+    而回测 / 复盘 / 校准曲线**都依赖它** ⇒ 未回填时三者静默返回假结果
+    （见 ``coverage()`` 的 ``usable`` 字段）。回测是按需动作，故在
+    ``run()`` 里惰性回填而非塞进 07:00 调度器 —— 少一次无谓取数。
+    """
 
     def __init__(
         self,
         session: AsyncSession,
         gold: GoldPriceRepository,
         weights: WeightService,
+        trend: TrendService | None = None,
     ) -> None:
         self._session = session
         self._gold = gold
         self._weights = weights
+        # ⚠ 可选注入：未注入时 ``ensure_price_calendar`` 直接返回「不可用」，
+        # 回测照常跑（只是拿不到价格数据）⇒ **不因缺依赖而 500**。
+        self._trend = trend
 
     # ───────────────────── 覆盖期报告 ─────────────────────
 
@@ -221,6 +242,21 @@ class BacktestService:
             return BacktestResultOut(**cached)
 
         cov = await self.coverage(target=target, days=params.days)
+
+        # V0.79.0：价格日历为空时**先尝试按需回填**，再重新评估覆盖期。
+        # 放在 coverage 之后、网格展开之前 —— 顺序有讲究：
+        #   ① 先看现状（多数请求有数据，不做无谓的取数）；
+        #   ② 回填失败不抛异常（增强而非前置），此时 cov 仍是「不可用」，
+        #      后面的 rows/summary 会如实带上 usable=False；
+        #   ③ 回填成功才重算 coverage，否则用户拿到的还是回填前的口径。
+        if not cov.usable:
+            wrote, why = await self.ensure_price_calendar(target=target, days=params.days)
+            logger.info(
+                "Backtest lazy price-calendar backfill: target=%s wrote=%s (%s)", target, wrote, why
+            )
+            if wrote:
+                cov = await self.coverage(target=target, days=params.days)
+
         snapshots = await self._load_snapshots(target=target)
         if len(snapshots) < 2:
             out = BacktestResultOut(
@@ -294,6 +330,84 @@ class BacktestService:
             cov.available_days,
         )
         return out
+
+    # ───────────────────── 价格日历按需回填（V0.79.0）─────────────────────
+
+    async def ensure_price_calendar(
+        self,
+        target: str,
+        *,
+        days: int = 90,
+        force: bool = False,
+    ) -> tuple[bool, str]:
+        """价格日历为空时按需回填。返回 ``(是否写入, 说明)``。
+
+        ⚠⚠ **三条不可退让的约束**（都源于本次修复的教训）：
+
+        1. **只接受真实数据源**。``TrendService`` 在取数失败时会**静默降级为
+           mock**，而 mock 价格若写进 ``gold_price_daily``，回测就会基于
+           **编造的收盘价**给出看似正常的 Sharpe —— 比「无数据」危险得多。
+           故此处**先判 ``data_sources[target] == 'live'/'stale'``，否则直接放弃**，
+           不让 ``upsert_many`` 的白名单校验去兜底（那会抛 400 打断回测）。
+        2. **失败不抛异常**。回填是**增强**而非前置条件，失败只记录并如实反映在
+           ``coverage.usable`` 上；抛异常会把「增强失败」变成「回测不可用」。
+        3. **不覆盖已有数据**。``upsert_many`` 本身幂等，但 ``force=False`` 时
+           仅在**区间内完全无数据**时才回填，避免每次回测都打数据源。
+        """
+        if self._trend is None:
+            return False, "未注入趋势服务，无法自动回填"
+
+        start, end = await self._existing_calendar_span(target=target)
+        if not force and start is not None and end is not None:
+            return False, f"价格日历已有数据（{start} ~ {end}），跳过回填"
+
+        try:
+            trend = await self._trend.analyze(days=days, target=target)
+        except Exception as exc:
+            logger.warning(
+                "Price calendar backfill aborted: analyze failed target=%s: %s", target, exc
+            )
+            return False, f"取数失败：{exc}"
+
+        source = self._resolve_price_source(trend.data_sources, target)
+        # ⚠ 约束 1：只认真实数据源。`mock` 是降级产物，写库即污染。
+        if source not in _TRUSTED_PRICE_SOURCES:
+            logger.warning(
+                "Price calendar backfill skipped: target=%s source=%r not in %s",
+                target,
+                source,
+                sorted(_TRUSTED_PRICE_SOURCES),
+            )
+            return False, f"数据源为 {source or '未知'}（非真实行情），已跳过回填以免写入假价格"
+
+        bars = [(p.date, float(p.close)) for p in trend.points]
+        if not bars:
+            return False, "取数结果为空"
+
+        written = await self._gold.upsert_many(target=target, bars=bars, source=source)
+        logger.info(
+            "Price calendar backfilled by backtest: target=%s written=%d source=%s",
+            target,
+            written,
+            source,
+        )
+        return written > 0, f"已回填 {written} 条（{bars[0][0]} ~ {bars[-1][0]}，来源 {source}）"
+
+    @staticmethod
+    def _resolve_price_source(data_sources: dict | None, target: str) -> str:
+        """委托 :mod:`app.services.price_source`（回测与复盘共用的唯一实现）。
+
+        ⚠ 保留此方法仅供既有测试/调用方；**新代码请直接用**
+        ``services.price_source.resolve_price_source``，避免同一逻辑两处维护。
+        """
+        return resolve_price_source(data_sources, target)
+
+    async def _existing_calendar_span(self, target: str) -> tuple[date | None, date | None]:
+        """返回价格日历在库中的最早 / 最晚日期（空表返回 ``(None, None)``）。"""
+        bars = await self._gold.list_range(target, start=date(1990, 1, 1), end=date(2099, 12, 31))
+        if not bars:
+            return None, None
+        return bars[0].price_date, bars[-1].price_date
 
     # ───────────────────── 内部辅助 ─────────────────────
 

@@ -232,13 +232,18 @@ def get_backtest_service(
     session: AsyncSession = Depends(get_db_session),
     gold: GoldPriceRepository = Depends(get_gold_price_repository),
     weights: WeightService = Depends(get_weight_service),
+    trend: TrendService = Depends(get_trend_service),
 ) -> BacktestService:
-    """回测编排服务依赖（DB 会话 + 价格仓储 + 权重配置）。
+    """回测编排服务依赖（DB 会话 + 价格仓储 + 权重配置 + 趋势服务）。
 
     复用 daily_snapshots（参数面 + 评估值的历史「金标准」）做参数扫描；
     节流由 :mod:`app.services.backtest_throttle` 模块级维护。
+
+    V0.79.0：注入 ``trend`` 以支持价格日历**按需自动回填** —— 此前价格日历
+    只有「用户在 /review 页手工点复盘」一条写入路径，而回测依赖它，
+    导致未回填时回测静默返回假结果（Sharpe 恒 0、命中率虚高）。
     """
-    return BacktestService(session=session, gold=gold, weights=weights)
+    return BacktestService(session=session, gold=gold, weights=weights, trend=trend)
 
 
 async def get_position_repository(
