@@ -22,8 +22,24 @@ class FakeMacro:
         )
 
 
-def _service(klines: list[GoldKline]) -> TrendService:
-    return TrendService(FakeRepo(klines), macro=FakeMacro())
+class FakeMacroFixed:
+    """假宏观服务：固定分数（用于验证「面被剔除后综合指数按有效面归一化」）。"""
+
+    def __init__(self, score: float) -> None:
+        self._score = score
+
+    async def evaluate(self) -> MacroIndexOut:
+        return MacroIndexOut(
+            score=self._score,
+            direction=DirectionSignal.NEUTRAL,
+            factors=[],
+            summary="测试宏观",
+        )
+
+
+def _service(klines: list[GoldKline], macro_score: float | None = None) -> TrendService:
+    macro = FakeMacro() if macro_score is None else FakeMacroFixed(macro_score)
+    return TrendService(FakeRepo(klines), macro=macro)
 
 
 class FakeRepo:
@@ -327,3 +343,157 @@ async def test_load_klines_silver_ny_dispatches_to_repo() -> None:
     assert repo.called
     assert symbol == "SI"
     assert name == "纽约白银COMEX"
+
+
+# ───────────── V0.78.0 Step D：兜底差异化（数据不足不再伪装中性 50）─────────────
+
+
+def test_dim_min_bars_covers_all_weights() -> None:
+    """DIM_MIN_BARS 的键集合必须与 TREND_WEIGHTS 完全一致。
+
+    否则将来新增维度时会漏给门槛 —— 那会让新维度在所有数据长度下都「有效」或
+    直接 KeyError，两者都不易在评审时看出来。
+    """
+    from app.services.trend import DIM_MIN_BARS
+
+    assert set(DIM_MIN_BARS) == set(TREND_WEIGHTS)
+    assert all(isinstance(v, int) and v > 1 for v in DIM_MIN_BARS.values())
+
+
+def test_rsi_returns_none_when_insufficient() -> None:
+    """RSI 数据不足返回 None（不再是 50）；**恰好 15 根时不得越界**。
+
+    ⚠ 本用例立项时抓到既有崩溃：守卫原写 ``len(closes) <= period``，而循环最低要读
+    ``closes[-(period + 2)]`` ⇒ 传给 15 根时 IndexError 冒泡成 HTTP 500（动能维度本该
+    判「数据不足」）。故把 15 这个曾经的崩溃点写成断言。
+    """
+    from app.services.trend import _rsi
+
+    assert _rsi([100.0] * 14) is None
+    assert _rsi([100.0] * 15) is None, "15 根曾触发 IndexError，必须归入数据不足"
+    assert isinstance(_rsi([100.0 + i for i in range(16)]), float)
+
+
+def test_rsi_ignores_latest_bar_is_known_not_accidental() -> None:
+    """把 RSI「不看最新一根」的偏差写成断言（既有行为，本版只锁不修）。
+
+    循环 ``range(-period - 1, -1)`` 到 -2 为止、不含 -1 ⇒ 最新一根的涨跌不参与计算，
+    RSI 实为「截至前一根」的值。修它会让所有 RSI 值变化并传导到动能分、综合指数、
+    决策与历史快照 —— 属口径变更，须先按 ``parameter-evaluation.md`` §6.2 做三维
+    （Sharpe / 最大回撤 / 命中率）回测交叉验证。若将来修好，本断言会失败 —— 那是预期
+    行为：应同时更新本用例与 ``services/trend.py::_rsi`` 的注释，而不是悄悄改动。
+    """
+    from app.services.trend import _rsi
+
+    base = [100.0, 101.0] * 8  # 16 根，交替 +1
+    spiked = [100.0, 101.0] * 7 + [100.0, 999.0]  # 只把**末根**改成暴涨
+    assert _rsi(base) == _rsi(spiked), "末根已被计入 RSI —— 请同步更新本用例与代码注释"
+
+
+async def test_trend_dim_insufficient_returns_none() -> None:
+    """20 根 K 线：结构（需 40）与动量（需 21）数据不足 → score/contribution 均 None。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(20)]
+    result = await _service(_mk_klines(closes)).analyze(days=20)
+
+    by_name = {i.name: i for i in result.indicators}
+    assert len(by_name) == 5
+    for name in ("结构", "动量"):
+        assert by_name[name].score is None, f"{name} 应因数据不足为 None"
+        assert by_name[name].contribution is None
+        assert by_name[name].value == "—"
+        assert by_name[name].direction == DirectionSignal.NEUTRAL
+    for name in ("支撑", "动能", "回撤"):
+        assert by_name[name].score is not None, f"{name} 数据足够，应正常出分"
+        assert by_name[name].contribution is not None
+
+
+async def test_trend_dim_reason_populated() -> None:
+    """数据不足的维度必须给出原因（含所需交易日数）；有效维度 reason 为 None。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(20)]
+    result = await _service(_mk_klines(closes)).analyze(days=20)
+    by_name = {i.name: i for i in result.indicators}
+
+    assert by_name["结构"].reason is not None and "40" in by_name["结构"].reason
+    assert by_name["动量"].reason is not None and "21" in by_name["动量"].reason
+    assert by_name["动能"].reason is None
+    assert by_name["支撑"].reason is None
+    assert by_name["回撤"].reason is None
+
+
+async def test_trend_combined_re_normalize_when_partial() -> None:
+    """部分维度缺失：权重按 Σ有效配置权重 归一化，且 Σcontribution == 技术面指数。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(20)]
+    result = await _service(_mk_klines(closes)).analyze(days=20)
+
+    valid = [i for i in result.indicators if i.score is not None]
+    assert len(valid) == 3  # 支撑 / 动能 / 回撤
+    tech_sum = sum(i.contribution for i in valid)
+    assert tech_sum == pytest.approx(result.index.components["tech"], abs=0.05)
+
+    cfg_sum = sum(i.weight for i in valid)
+    assert cfg_sum == pytest.approx(0.5, abs=1e-9)  # 0.20 + 0.15 + 0.15
+    for i in valid:
+        assert i.contribution == pytest.approx(i.score * i.weight / cfg_sum, abs=0.05)
+
+
+async def test_combined_summary_notes_excluded_dims() -> None:
+    """综合指数文案须说明「哪几维数据不足、已归一化」——客户不能把它当常态口径。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(20)]
+    result = await _service(_mk_klines(closes)).analyze(days=20)
+
+    summary = result.index.summary
+    assert "结构" in summary and "动量" in summary
+    assert "归一化" in summary
+
+
+async def test_trend_combined_none_when_all_insufficient() -> None:
+    """9 根 K 线：5 维全不足 → 技术面指数 None；综合指数剔除技术面并按剩余面归一化。
+
+    为什么是 9 根而不是 10 根：回撤维度的门槛恰为 10（``< 10`` 才判不足），
+    10 根时它仍然有效、技术面不会整面缺失。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(9)]
+    svc = _service(_mk_klines(closes), macro_score=80.0)
+    result = await svc.analyze(days=9)
+
+    assert all(i.score is None for i in result.indicators)
+    assert all(i.contribution is None for i in result.indicators)
+    # 关键：不给技术面塞一个中性 50 占位，而是整面消失
+    assert "tech" not in result.index.components
+    assert set(result.index.components) == {"macro", "news"}
+    # 归一化：(80×0.4 + 50×0.3) / (0.4+0.3) = 67.14 → 不再被 50×0.3 稀释成 62.0
+    assert result.index.score == pytest.approx((80.0 * 0.4 + 50.0 * 0.3) / 0.7, abs=0.05)
+    assert "技术面" in result.index.summary and "归一化" in result.index.summary
+
+
+async def test_trend_combined_keeps_tech_when_all_dims_valid() -> None:
+    """60 根 K 线：5 维全有效 → 综合指数仍按 技术×30% + 宏观×40% + 消息×30%（回归保护）。"""
+    closes = [round(1 + i * 0.01, 3) for i in range(60)]
+    result = await _service(_mk_klines(closes)).analyze(days=60)
+
+    assert set(result.index.components) == {"tech", "macro", "news"}
+    assert result.index.score == pytest.approx(
+        result.index.components["tech"] * 0.3 + 50.0 * 0.4 + 50.0 * 0.3, abs=0.15
+    )
+    assert all(i.score is not None and i.reason is None for i in result.indicators)
+    assert "归一化" not in result.index.summary, "全维度有效时不应出现任何归一化说明"
+
+
+async def test_w_and_m_interval_discloses_neutral_tech_in_summary() -> None:
+    """W/M 模式技术面旁路仍按中性 50 计，但**必须在对外文案里披露**。
+
+    ⚠ 立项动机（本版发现的既有缺陷）：原先那句「已按中性 50 处理」写在
+    ``tech_index.summary`` 里，而该对象只被读取 ``.score``、summary 从不进入响应
+    ⇒ **从未对外披露**，52W/24M 视图上的中性 50 其实是沉默的假中性。故本用例断言的
+    是**响应里可见的那句话**，不是内部对象的字段。
+
+    保留 50（而非改成 None）的理由：①「口径不适用」与「数据不足」不是同一类问题；
+    ② 整面剔除会让 52W/24M 的指数相对 60D 出现结构性（非市场）落差，破坏跨周期可比性。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(14)]
+    result = await _service(_mk_klines(closes)).analyze(days=14, interval="W")
+
+    assert result.indicators == []
+    assert result.index.components.get("tech") == 50.0
+    assert "不适用" in result.index.summary, "W/M 的技术面旁路必须在对外 summary 中说明"
+    assert "50" in result.index.summary

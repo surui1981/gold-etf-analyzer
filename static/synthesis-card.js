@@ -130,6 +130,7 @@
     '.syn-row .val { text-align: right; font-weight: 600; }',
     '.syn-row .wt { text-align: right; color: var(--muted); font-size: 11.5px; }',
     '.syn-row .dir { text-align: right; }',
+    '.syn-row.syn-row-miss { opacity: .72; }',
     /* 一致性 */
     '.syn-consensus { border-radius: 10px; padding: 10px 12px; font-size: 12.5px;',
     '  line-height: 1.6; margin: 14px 0; border: 1px solid var(--border); }',
@@ -227,7 +228,7 @@
      （见 services/macro.py STATIC_REF / 降级分支），**不能**用「不是 H.15 就算静态」
      这种启发式——宏观因子里还有「世界黄金协会 GDT」这类正当季度源（央行购金），
      用启发式会把真数据误标成兜底值，正好违背本卡「不夸大可信度」的目的。 */
-  function qualityNotes(trend) {
+  function qualityNotes(trend, missDims) {
     var notes = [];
     var factors = (trend.macro && trend.macro.factors) || [];
     var statics = factors.filter(function (f) {
@@ -245,6 +246,13 @@
     if (trend.news && trend.news.scored === false) {
       notes.push(T('syn.q_news_unscored',
         '消息面今日尚未打分，按中性 50 计入评估（占权重 30%）'));
+    }
+    /* 某面数据不足被剔除：结论的「覆盖面」变了，必须显式告知（V0.78.0 Step D）。
+       不能只把那一行画成「—」而不解释 —— 客户看到综合指数却不知少算了一面。 */
+    if (missDims && missDims.length) {
+      notes.push(T('syn.q_face_missing',
+        '「{names}」数据不足，未参与综合指数（其余维度已按有效维度归一化）→ 本次结论的覆盖面低于常态',
+        { names: missDims.map(function (d) { return T(d.i18n, d.fallback); }).join('、') }));
     }
     if (trend.degraded) {
       var srcMap = trend.data_sources || {};
@@ -291,8 +299,29 @@
 
   /* ───────────────── 渲染 ───────────────── */
 
+  /* 缺失面与「中性 50」必须区分（V0.78.0 Step D）：
+     后端在某一面不可用时**不再下发该 key**（原先下发中性 50 会把「没数据」显示成
+     「多空平衡」），故这里以「key 是否存在」判定能否展示，缺则显示「— 未计入」。 */
+  function hasFace(components, key) {
+    return Object.prototype.hasOwnProperty.call(components, key) && components[key] != null;
+  }
+
+  /* 当前缺哪些面（顺序与 DIMS 一致），用于行渲染与数据质量提示 */
+  function missingFaces(components) {
+    return DIMS.filter(function (d) { return !hasFace(components, d.key); });
+  }
+
   function barRow(dim, components) {
-    var score = typeof components[dim.key] === 'number' ? components[dim.key] : 50;
+    if (!hasFace(components, dim.key)) {
+      return '<div class="syn-row syn-row-miss">'
+        + '<span class="nm">' + esc(T(dim.i18n, dim.fallback)) + '</span>'
+        + '<span class="track"><i style="width:0%;background:var(--muted)"></i></span>'
+        + '<span class="val" style="color:var(--muted)">—</span>'
+        + '<span class="wt">' + dim.weight + '%</span>'
+        + '<span class="dir" style="color:var(--muted)">' + esc(T('syn.row_excluded', '未计入')) + '</span>'
+        + '</div>';
+    }
+    var score = components[dim.key];
     var m = dirMeta(score >= 55 ? 'bullish' : score <= 45 ? 'bearish' : 'neutral');
     return '<div class="syn-row">'
       + '<span class="nm">' + esc(T(dim.i18n, dim.fallback)) + '</span>'
@@ -404,7 +433,8 @@
       : '';
 
     /* ⑥ 数据质量 + 下钻入口 */
-    var notes = qualityNotes(trend);
+    var missDims = missingFaces(components);
+    var notes = qualityNotes(trend, missDims);
     var deg = [];
     if (!dec) deg.push(T('syn.deg_decision', '决策接口暂不可用，以上不含行动建议与仓位参考'));
     if (!res) deg.push(T('syn.deg_resonance', '共振接口暂不可用，缺三维一致性判定'));
@@ -453,6 +483,12 @@
       + '<div class="syn-bars">'
       + '<div class="syn-bars-head">'
       + esc(T('syn.dims_head', '三维构成 · 加权 技术 30% ＋ 宏观 40% ＋ 消息 30%（红=利多 绿=利空）'))
+      + (missDims.length
+        ? ' · <span style="color:var(--chip-warn-fg)">'
+          + esc(T('syn.dims_head_miss', '本次有效维度：{names}（其余数据不足未计入）',
+            { names: missDims.map(function (d) { return T(d.i18n, d.fallback); }).join('、') }))
+          + '</span>'
+        : '')
       + '</div>'
       + DIMS.map(function (d) { return barRow(d, components); }).join('')
       + '</div>'

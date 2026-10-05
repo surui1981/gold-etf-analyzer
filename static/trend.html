@@ -525,9 +525,14 @@ function render(d) {
     snapEl.textContent = `📸 快照于 ${pad(servedAt.getHours())}:${pad(servedAt.getMinutes())}`;
     snapEl.title = `生成时刻 ${servedAt.toLocaleString("zh-CN")}；每日 07:00（北京时间）自动重算`;
   }
+  // V0.78.0 Step D：W/M 视图 indicators 为空 —— 不能输出「技术面 = 。」这种半句话，
+  // 需明说「该视图不做 5 维度分解、按中性 50 计入」（与 index.summary 的披露一致）。
+  const dimFormula = (d.indicators || []).map(i => `${i.name ?? "—"}×${((i.weight ?? 0) * 100).toFixed(0)}%`).join("+");
+  const techFormula = dimFormula ||
+    `不分解（${d.interval === "W" ? "周" : d.interval === "M" ? "月" : "本"} K 视图按中性 50 计入）`;
   document.getElementById("idxMethod").innerHTML =
     "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
-    (d.indicators || []).map(i => `${i.name ?? "—"}×${((i.weight ?? 0) * 100).toFixed(0)}%`).join("+") +
+    techFormula +
     "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
 
   // 宏观参考因子明细
@@ -559,16 +564,26 @@ function render(d) {
     ${news.note ? `<div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">💬 ${news.note}</div>` : ""}`;
 
   // 趋势参数维度
+  // V0.78.0 Step D：score 为 null = 该维度数据不足、未参与合成 → 显示「— 未计入」
+  // 并说明原因；绝不用 0 或中性色把它伪装成一个已计算出的分数（进度条同样留空）。
   document.getElementById("indicators").innerHTML = (d.indicators || []).map(ind => {
-    const c = ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "var(--muted)";
-    return `<div class="ind-row">
+    const miss = ind.score == null;
+    const c = miss ? "var(--muted)" : ind.direction === "bullish" ? "var(--up)" : ind.direction === "bearish" ? "var(--down)" : "var(--muted)";
+    const scTxt = miss
+      ? `<span style="color:var(--muted);font-weight:600">—</span><span style="font-weight:400;color:var(--muted);font-size:11px"> 未计入</span>`
+      : `<span style="color:${c}">${ind.score.toFixed(0)}</span><span style="font-weight:400;color:var(--muted);font-size:11px"> / 贡献${ind.contribution != null ? ind.contribution.toFixed(1) : "—"}</span>`;
+    const weightTxt = `权重 ${((ind.weight ?? 0) * 100).toFixed(0)}%`;
+    const subTxt = miss
+      ? `${weightTxt} · ${ind.reason || "数据不足"}（其余维度已按有效权重归一化）`
+      : `${weightTxt} · ${ind.detail ?? "—"}`;
+    return `<div class="ind-row"${miss ? ' data-insufficient="1" style="opacity:.75"' : ""}>
       <div class="ind-head">
         <span class="nm">${ind.name ?? "—"}</span>
         <span class="vl">${ind.value ?? "—"}</span>
-        <span class="sc" style="color:${c}">${ind.score?.toFixed(0) ?? "—"}<span style="font-weight:400;color:var(--muted);font-size:11px"> / 贡献${ind.contribution?.toFixed(1) ?? "—"}</span></span>
+        <span class="sc">${scTxt}</span>
       </div>
-      <div class="bar"><i style="width:${ind.score ?? 0}%;background:${c}"></i></div>
-      <div class="ind-sub">权重 ${((ind.weight ?? 0) * 100).toFixed(0)}% · ${ind.detail ?? "—"}</div>
+      <div class="bar"><i style="width:${miss ? 0 : ind.score}%;background:${c}"></i></div>
+      <div class="ind-sub">${subTxt}</div>
     </div>`;
   }).join("");
 

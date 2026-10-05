@@ -257,7 +257,23 @@ function renderPreview() {
 
   const w = combineValues();
   const sum = w.tech + w.macro + w.news;
-  const preview = (baseComponents.tech ?? 0) * w.tech + (baseComponents.macro ?? 0) * w.macro + (baseComponents.news ?? 0) * w.news;
+  // V0.78.0 Step D：某面数据不足时后端不再下发该 key。预览必须与页面口径一致 ——
+  // 缺失面按「剔除 + 剩余面权重归一化」计算，而不是用 0 充当分值。
+  const faceNum = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const previewFaces = [
+    { label: "技术面", v: faceNum(baseComponents.tech), w: w.tech },
+    { label: "宏观参考", v: faceNum(baseComponents.macro), w: w.macro },
+    { label: "消息面", v: faceNum(baseComponents.news), w: w.news },
+  ];
+  const missFaces = previewFaces.filter(f => f.v === null);
+  const availFaces = previewFaces.filter(f => f.v !== null && f.w > 0);
+  const faceSum = availFaces.reduce((a, f) => a + f.w, 0);
+  const preview = missFaces.length && faceSum > 0
+    ? availFaces.reduce((a, f) => a + f.v * f.w / faceSum, 0)
+    : (baseComponents.tech ?? 0) * w.tech + (baseComponents.macro ?? 0) * w.macro + (baseComponents.news ?? 0) * w.news;
+  const missFaceTxt = missFaces.length
+    ? `<br><b style="color:#946300">${missFaces.map(f => f.label).join("、")} 数据不足，未参与综合指数（以上按剩余面权重归一化）</b>`
+    : "";
   const safePreview = Number.isFinite(preview) ? preview : 0;
   const lv = levelOf(safePreview);
   const safeBaseIndex = baseIndex != null && Number.isFinite(baseIndex) ? baseIndex : null;
@@ -279,9 +295,10 @@ function renderPreview() {
       </div>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-top:8px">
-      = 技术面 ${(baseComponents.tech ?? 0).toFixed(1)}×${(w.tech * 100).toFixed(0)}%
-      + 宏观参考 ${(baseComponents.macro ?? 0).toFixed(1)}×${(w.macro * 100).toFixed(0)}%
-      + 消息面 ${(baseComponents.news ?? 0).toFixed(1)}×${(w.news * 100).toFixed(0)}%
+      = 技术面 ${faceNum(baseComponents.tech) !== null ? baseComponents.tech.toFixed(1) : "—"}×${(w.tech * 100).toFixed(0)}%
+      + 宏观参考 ${faceNum(baseComponents.macro) !== null ? baseComponents.macro.toFixed(1) : "—"}×${(w.macro * 100).toFixed(0)}%
+      + 消息面 ${faceNum(baseComponents.news) !== null ? baseComponents.news.toFixed(1) : "—"}×${(w.news * 100).toFixed(0)}%
+      ${missFaceTxt}
       ${valid ? "" : '<br><b style="color:#c92a2a">合成合计须为 100% 才可保存（当前 ' + (sum * 100).toFixed(0) + '%）</b>'}
     </div>`;
 }

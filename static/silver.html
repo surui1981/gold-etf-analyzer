@@ -450,17 +450,24 @@ function renderMain(data) {
   document.getElementById("newsInfo").textContent = news.score != null ? `综合 ${news.score?.toFixed(1)} / 100` : "";
   document.getElementById("newsFactor").innerHTML = news.summary || (news.scored ? `已打分 ${news.score}` : "未打分 · 按 50 中性");
 
-  document.getElementById("indicators").innerHTML = (data.indicators || []).map(i => `
-    <div class="ind-row">
+  // V0.78.0 Step D：score 为 null = 数据不足、未参与合成 → 「—」+ 原因说明。
+  // 同时修掉一处既有缺陷：判定依据字段名是 detail（旧代码写 i.desc，恒为空）。
+  document.getElementById("indicators").innerHTML = (data.indicators || []).map(i => {
+    const miss = i.score == null;
+    const col = miss ? "var(--muted)" : i.score >= 55 ? "var(--up)" : i.score <= 45 ? "var(--down)" : "#946300";
+    const sub = miss ? (i.reason || "数据不足") + "（其余维度已按有效权重归一化）" : (i.detail || "");
+    return `
+    <div class="ind-row"${miss ? ' data-insufficient="1" style="opacity:.75"' : ""}>
       <div class="ind-head">
         <span class="nm">${i.name}</span>
         <span class="vl">${i.value ?? "—"}</span>
-        <span class="sc" style="color:${(i.score || 0) >= 55 ? "var(--up)" : (i.score || 0) <= 45 ? "var(--down)" : "#946300"}">${i.score?.toFixed(0) ?? "--"}</span>
+        <span class="sc" style="color:${col}">${miss ? "—" : i.score.toFixed(0)}</span>
       </div>
-      <div class="ind-sub">${i.desc || ""}</div>
-      <div class="bar"><i style="width:${Math.max(0, Math.min(100, i.score || 0))}%; background:${(i.score || 0) >= 55 ? "var(--up)" : (i.score || 0) <= 45 ? "var(--down)" : "#946300"}"></i></div>
+      <div class="ind-sub">${sub}</div>
+      <div class="bar"><i style="width:${miss ? 0 : Math.max(0, Math.min(100, i.score))}%; background:${col}"></i></div>
     </div>
-  `).join("");
+  `;
+  }).join("");
 
   document.getElementById("subtitle").textContent = `区间 ${data.metrics?.start_date} ~ ${data.metrics?.end_date}（${data.metrics?.trading_days ?? "—"} 个交易日）`;
 

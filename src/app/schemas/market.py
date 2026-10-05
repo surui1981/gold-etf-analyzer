@@ -100,21 +100,44 @@ class TrendIndexLevel(StrEnum):
 
 
 class TrendIndicatorOut(BaseModel):
-    """单维度趋势参数：分数 + 方向 + 贡献，供页面红绿着色。"""
+    """单维度趋势参数：分数 + 方向 + 贡献，供页面红绿着色。
+
+    V0.78.0 Step D「兜底差异化」：数据不足的维度 ``score`` / ``contribution``
+    为 ``None``，表示该维度**未参与加权合成** —— 不再用中性 50 冒充一个从未
+    算出来的分数。此时 ``reason`` 给出不足的原因、``value`` 为占位符「—」。
+
+    有效维度（``score`` 非 None）的 ``contribution`` = score × **有效权重**，
+    有效权重 = 配置权重 ÷ Σ(有效维度的配置权重) ⇒ ``Σcontribution`` 恒等于
+    上级指数分值。故出现数据不足时，``contribution`` 与 ``weight`` 的比值不再
+    等于 ``weight`` —— 这是有意的：配置权重不变，本次参与权重被归一化。
+    """
 
     name: str = Field(..., description="参数名，如 均线排列")
-    value: str = Field(..., description="参数当前值（文本）")
-    score: float = Field(..., ge=0, le=100, description="该维度 0-100 评分")
+    value: str = Field(..., description="参数当前值（文本）；数据不足时为「—」")
+    score: float | None = Field(
+        None, ge=0, le=100, description="该维度 0-100 评分；None=数据不足，未参与合成"
+    )
     direction: DirectionSignal = Field(..., description="利多/利空/中性")
-    weight: float = Field(..., ge=0, le=1, description="权重")
-    contribution: float = Field(..., ge=0, le=100, description="对指数的贡献 = score×weight")
+    weight: float = Field(..., ge=0, le=1, description="配置权重")
+    contribution: float | None = Field(
+        None, ge=0, le=100, description="对指数的贡献 = score×有效权重；None=未参与合成"
+    )
     detail: str = Field(..., description="判定依据")
+    reason: str | None = Field(None, description="数据不足的原因；仅 score 为 None 时填充")
 
 
 class TrendIndexOut(BaseModel):
-    """市场趋势评估追踪指数（加权合成）。"""
+    """市场趋势评估追踪指数（加权合成）。
 
-    score: float = Field(..., ge=0, le=100, description="趋势指数 0-100")
+    V0.78.0 Step D：``score`` 可为 ``None`` —— 技术面 5 个维度**全部**数据不足时
+    技术面指数不可用（原先写死 50，会把「没有数据」伪装成「多空平衡」）。
+    对外返回的综合指数在可达路径上恒为数值：技术面不可用时剔除该面、按剩余面
+    权重归一化（见 ``TrendService._analyze_uncached``）。
+    """
+
+    score: float | None = Field(
+        ..., ge=0, le=100, description="趋势指数 0-100；None=该面数据不可用"
+    )
     level: TrendIndexLevel
     direction: DirectionSignal
     summary: str
