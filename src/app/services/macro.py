@@ -19,6 +19,7 @@ import time
 
 from app.schemas.common import DirectionSignal
 from app.schemas.market import MacroFactorOut, MacroIndexOut
+from app.schemas.thresholds import DirectionThreshold
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -174,11 +175,12 @@ class MacroFactorService:
             )
 
         total = round(total, 1)
+        # V0.78.0：宏观总分方向阈值统一引用 DirectionThreshold
         direction = (
             DirectionSignal.BULLISH
-            if total >= 55
+            if total >= int(DirectionThreshold.BULLISH)
             else DirectionSignal.BEARISH
-            if total <= 45
+            if total <= int(DirectionThreshold.BEARISH)
             else DirectionSignal.NEUTRAL
         )
         logger.info("Macro index: %.1f (%s), %d factors", total, direction.value, len(factors))

@@ -49,6 +49,7 @@ from app.schemas.market import (
     TrendIndexOut,
     TrendIndicatorOut,
 )
+from app.schemas.thresholds import DirectionThreshold, LevelThreshold
 from app.services import cache as served_cache
 from app.services.freshness import build_data_freshness
 from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
@@ -643,23 +644,29 @@ class TrendService:
 
     @staticmethod
     def _to_direction(score: float) -> DirectionSignal:
-        """分数 → 多空信号（供页面红绿着色）。"""
-        if score >= 60:
+        """分数 → 多空信号（供页面红绿着色）。
+
+        V0.78.0：阈值改读 DirectionThreshold.NEUTRAL_HIGH/LOW（行为零变化——60/40 含端点）。
+        """
+        if score >= int(DirectionThreshold.NEUTRAL_HIGH):
             return DirectionSignal.BULLISH
-        if score <= 40:
+        if score <= int(DirectionThreshold.NEUTRAL_LOW):
             return DirectionSignal.BEARISH
         return DirectionSignal.NEUTRAL
 
     @staticmethod
     def _to_level(score: float) -> tuple[TrendIndexLevel, DirectionSignal]:
-        """指数分数 → 等级与方向。"""
-        if score >= 75:
+        """指数分数 → 等级与方向。
+
+        V0.78.0：阈值改读 LevelThreshold（行为零变化——75/55/45/25 含端点）。
+        """
+        if score >= int(LevelThreshold.STRONG_UP):
             return TrendIndexLevel.STRONG_UP, DirectionSignal.BULLISH
-        if score >= 55:
+        if score >= int(LevelThreshold.UP):
             return TrendIndexLevel.UP, DirectionSignal.BULLISH
-        if score >= 45:
+        if score >= int(LevelThreshold.SIDEWAYS):
             return TrendIndexLevel.SIDEWAYS, DirectionSignal.NEUTRAL
-        if score >= 25:
+        if score >= int(LevelThreshold.DOWN):
             return TrendIndexLevel.DOWN, DirectionSignal.BEARISH
         return TrendIndexLevel.STRONG_DOWN, DirectionSignal.BEARISH
 
@@ -685,7 +692,7 @@ class TrendService:
         return (
             f"市场趋势评估指数 {score:.1f}/100，等级【{labels[level]}】{emoji[level]}，"
             f"最新价 {end_price:.3f} {unit}。"
-            f"{'趋势结构健康，多头动能占优' if score >= 55 else '趋势偏弱，注意风险控制' if score <= 45 else '多空胶着，等待方向选择'}"
+            f"{'趋势结构健康，多头动能占优' if score >= int(LevelThreshold.UP) else '趋势偏弱，注意风险控制' if score <= int(LevelThreshold.SIDEWAYS) else '多空胶着，等待方向选择'}"
         )
 
     # ---------------- 方向与摘要（沿用） ----------------
