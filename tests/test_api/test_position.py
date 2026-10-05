@@ -212,8 +212,15 @@ async def test_decision_etf(client: AsyncClient) -> None:
     body = resp.json()
     # V0.78.0：决策行动扩到 9 档（含 BUY_HEAVY / BUY_LIGHT / HOLD_CAUTIOUS）
     assert body["action"] in {
-        "BUY_HEAVY", "BUY", "BUY_LIGHT", "ADD", "HOLD", "HOLD_CAUTIOUS",
-        "REDUCE", "SELL", "WAIT",
+        "BUY_HEAVY",
+        "BUY",
+        "BUY_LIGHT",
+        "ADD",
+        "HOLD",
+        "HOLD_CAUTIOUS",
+        "REDUCE",
+        "SELL",
+        "WAIT",
     }
     assert body["action_label"]
     assert body["confidence"] in {"high", "medium", "low"}
@@ -290,8 +297,15 @@ async def test_decision_etf_accepts_silver_target(client: AsyncClient) -> None:
     body = resp.json()
     # V0.78.0：决策行动扩到 9 档（含 BUY_HEAVY / BUY_LIGHT / HOLD_CAUTIOUS）
     assert body["action"] in {
-        "BUY_HEAVY", "BUY", "BUY_LIGHT", "ADD", "HOLD", "HOLD_CAUTIOUS",
-        "REDUCE", "SELL", "WAIT",
+        "BUY_HEAVY",
+        "BUY",
+        "BUY_LIGHT",
+        "ADD",
+        "HOLD",
+        "HOLD_CAUTIOUS",
+        "REDUCE",
+        "SELL",
+        "WAIT",
     }
     # 文案切换：建议{target_label('silver_etf')}仓位 = 建议白银ETF仓位
     last_reason = body["reason_items"][-1]["text"]

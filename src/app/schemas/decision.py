@@ -18,6 +18,7 @@ V0.78.0 起统一为 ``DecisionAction`` 枚举（``str, Enum`` 混合）：
 - ``BUY_LIGHT`` ≥ 55 分 → 轻仓试仓（30%，用于消除 [60,70)×[-10%,+15%] 卡死区）
 - ``HOLD_CAUTIOUS`` ≥ 40 分 → 观望持有（新增缓冲档，替代原 idx [40,45) 直接 REDUCE）
 """
+
 from enum import StrEnum
 
 
@@ -33,14 +34,14 @@ class DecisionAction(StrEnum):
     """
 
     # 无持仓分支（按综合指数分档）
-    BUY_HEAVY = "BUY_HEAVY"   # ≥ 75 重仓买入（80%）
-    BUY = "BUY"               # ≥ 65 普通买入（60%）
-    BUY_LIGHT = "BUY_LIGHT"   # ≥ 55 轻仓试仓（30%）
-    WAIT = "WAIT"             # < 55 观望
+    BUY_HEAVY = "BUY_HEAVY"  # ≥ 75 重仓买入（80%）
+    BUY = "BUY"  # ≥ 65 普通买入（60%）
+    BUY_LIGHT = "BUY_LIGHT"  # ≥ 55 轻仓试仓（30%）
+    WAIT = "WAIT"  # < 55 观望
 
     # 有持仓分支（按 pnl + idx 组合）
-    ADD = "ADD"               # ≥ 75 加仓
-    HOLD = "HOLD"             # ≥ 55 持有
-    HOLD_CAUTIOUS = "HOLD_CAUTIOUS"   # ≥ 40 观望持有（新增缓冲档）
-    REDUCE = "REDUCE"         # < 40 或止损条件
-    SELL = "SELL"             # 止盈条件
+    ADD = "ADD"  # ≥ 75 加仓
+    HOLD = "HOLD"  # ≥ 55 持有
+    HOLD_CAUTIOUS = "HOLD_CAUTIOUS"  # ≥ 40 观望持有（新增缓冲档）
+    REDUCE = "REDUCE"  # < 40 或止损条件
+    SELL = "SELL"  # 止盈条件

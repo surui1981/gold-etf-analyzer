@@ -145,9 +145,7 @@ class DecisionService:
     # ---------------- 规则判定 ----------------
 
     @staticmethod
-    def _decide(
-        idx: float, pnl_pct: float, has_position: bool
-    ) -> tuple[DecisionAction, str]:
+    def _decide(idx: float, pnl_pct: float, has_position: bool) -> tuple[DecisionAction, str]:
         """核心规则：指数 + 持仓盈亏 → (行动, 置信度)。
 
         V0.78.0 重写（Step B）：
@@ -158,27 +156,27 @@ class DecisionService:
         """
         if not has_position:
             # 无持仓：BUY 拆 3 档（与仓位推荐档位对齐：80% / 60% / 30%）
-            if idx >= DecisionThreshold.BUY_HEAVY:    # ≥ 75
+            if idx >= DecisionThreshold.BUY_HEAVY:  # ≥ 75
                 return DecisionAction.BUY_HEAVY, "high"
-            if idx >= DecisionThreshold.BUY:          # ≥ 65
+            if idx >= DecisionThreshold.BUY:  # ≥ 65
                 return DecisionAction.BUY, "high"
-            if idx >= DecisionThreshold.BUY_LIGHT:    # ≥ 55
+            if idx >= DecisionThreshold.BUY_LIGHT:  # ≥ 55
                 return DecisionAction.BUY_LIGHT, "medium"
-            if idx >= DecisionThreshold.HOLD:         # ≥ 50
+            if idx >= DecisionThreshold.HOLD:  # ≥ 50
                 return DecisionAction.WAIT, "low"
             return DecisionAction.WAIT, "medium"
 
         # 有持仓：先处理止盈/止损，再按趋势决策
         assert pnl_pct is not None
         if pnl_pct >= 15 and idx < 60:
-            return DecisionAction.SELL, "high"   # 浮盈显著且趋势转弱 → 止盈
+            return DecisionAction.SELL, "high"  # 浮盈显著且趋势转弱 → 止盈
         if pnl_pct <= -10 and idx < 40:
             return DecisionAction.REDUCE, "high"  # 浮亏显著且趋势弱势 → 止损减仓
-        if idx >= DecisionThreshold.BUY_HEAVY:    # ≥ 75
+        if idx >= DecisionThreshold.BUY_HEAVY:  # ≥ 75
             return DecisionAction.ADD, "high"
-        if idx >= DecisionThreshold.BUY_LIGHT:    # ≥ 55
+        if idx >= DecisionThreshold.BUY_LIGHT:  # ≥ 55
             return DecisionAction.HOLD, "medium"
-        if idx >= DecisionThreshold.HOLD_LOW:     # ≥ 40  ← 新增缓冲档
+        if idx >= DecisionThreshold.HOLD_LOW:  # ≥ 40  ← 新增缓冲档
             return DecisionAction.HOLD_CAUTIOUS, "low"
         return DecisionAction.REDUCE, "medium"
 

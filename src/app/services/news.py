@@ -39,8 +39,8 @@ NEUTRAL_SCORE = 50.0  # 未打分时的中性参考
 SLOT_WEIGHTS: dict[int, int] = {n: n for n in range(1, MAX_DAILY_SLOTS + 1)}
 
 # V0.78.0：消息面方向阈值统一引用 DirectionThreshold（保持严格不等号语义）
-BULLISH_THRESHOLD = float(DirectionThreshold.BULLISH)   # 55.0
-BEARISH_THRESHOLD = float(DirectionThreshold.BEARISH)   # 45.0
+BULLISH_THRESHOLD = float(DirectionThreshold.BULLISH)  # 55.0
+BEARISH_THRESHOLD = float(DirectionThreshold.BEARISH)  # 45.0
 
 
 def direction_of(score: float) -> DirectionSignal:

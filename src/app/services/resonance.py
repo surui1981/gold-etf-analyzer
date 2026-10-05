@@ -37,8 +37,8 @@ logger = get_logger(__name__)
 
 # 4 类信号阈值（与 DirectionSignal 一致；BULLISH/BEARISH 的临界分）
 # V0.78.0：统一引用 DirectionThreshold
-_THRESH_UP = int(DirectionThreshold.BULLISH)     # 55
-_THRESH_DOWN = int(DirectionThreshold.BEARISH)   # 45
+_THRESH_UP = int(DirectionThreshold.BULLISH)  # 55
+_THRESH_DOWN = int(DirectionThreshold.BEARISH)  # 45
 _MIN_SAMPLES = 20
 
 # 中文信号名

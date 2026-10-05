@@ -11,6 +11,7 @@ V0.78.0 新增：消除 5 个模块（消息面 / 单维度 / 综合指数等级
 修改此文件的常量前，请用 parameter-evaluation.md §6.2 的三维交叉验证方法
 （Sharpe + 最大回撤 + 命中率/校准）评估新值的实际效果。
 """
+
 from enum import IntEnum
 
 
@@ -26,12 +27,12 @@ class DirectionThreshold(IntEnum):
     - ``STRONG_BEARISH`` < 此值 → 综合指数 STRONG_DOWN 触发
     """
 
-    STRONG_BULLISH = 70   # 强多（决策 BUY_HEAVY 触发）
-    BULLISH = 55          # 看多（消息面 > 55、共振 ≥ 55）
-    NEUTRAL_HIGH = 60     # 中性偏上（单维度方向判定）
-    NEUTRAL_LOW = 40      # 中性偏下（单维度方向判定）
-    BEARISH = 45          # 看空（消息面 < 45、共振 ≤ 45）
-    STRONG_BEARISH = 25   # 弱势下降（综合指数 STRONG_DOWN 触发）
+    STRONG_BULLISH = 70  # 强多（决策 BUY_HEAVY 触发）
+    BULLISH = 55  # 看多（消息面 > 55、共振 ≥ 55）
+    NEUTRAL_HIGH = 60  # 中性偏上（单维度方向判定）
+    NEUTRAL_LOW = 40  # 中性偏下（单维度方向判定）
+    BEARISH = 45  # 看空（消息面 < 45、共振 ≤ 45）
+    STRONG_BEARISH = 25  # 弱势下降（综合指数 STRONG_DOWN 触发）
 
 
 class LevelThreshold(IntEnum):
@@ -42,10 +43,10 @@ class LevelThreshold(IntEnum):
     这不是冲突：UP 是综合指数等级，BULLISH 是单次打分方向，两者口径不同。
     """
 
-    STRONG_UP = 75   # ≥ 75 强势上升
-    UP = 55          # ≥ 55 上升
-    SIDEWAYS = 45    # ≥ 45 震荡整理
-    DOWN = 25        # ≥ 25 下降
+    STRONG_UP = 75  # ≥ 75 强势上升
+    UP = 55  # ≥ 55 上升
+    SIDEWAYS = 45  # ≥ 45 震荡整理
+    DOWN = 25  # ≥ 25 下降
     # < 25 弱势下降（STRONG_DOWN）
 
 
@@ -58,9 +59,9 @@ class DecisionThreshold(IntEnum):
     - REDUCE < 40
     """
 
-    BUY_HEAVY = 75        # ≥ 75 重仓买入（80%）
-    BUY = 65              # ≥ 65 普通买入（60%）
-    BUY_LIGHT = 55        # ≥ 55 轻仓试仓（30%）
-    HOLD = 50             # ≥ 50 持有观望
-    HOLD_LOW = 40         # ≥ 40 观望持有（新增缓冲档）
+    BUY_HEAVY = 75  # ≥ 75 重仓买入（80%）
+    BUY = 65  # ≥ 65 普通买入（60%）
+    BUY_LIGHT = 55  # ≥ 55 轻仓试仓（30%）
+    HOLD = 50  # ≥ 50 持有观望
+    HOLD_LOW = 40  # ≥ 40 观望持有（新增缓冲档）
     # < 40 减仓
