@@ -98,6 +98,34 @@ class GoldPriceRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def count(self, target: str) -> int:
+        """某标的的价格日历总条数。"""
+        stmt = (
+            select(func.count()).select_from(GoldPriceDaily).where(GoldPriceDaily.target == target)
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
+
+    async def count_in_range(
+        self,
+        target: str,
+        *,
+        start: date,
+        end: date,
+    ) -> int:
+        """区间内的价格日历条数（V0.79.0：coverage 披露用）。
+
+        ⚠ **必须真的查表**，不能用快照天数代替 —— 两者是独立的数据源，
+        「快照有 24 条」不等于「价格日历有 24 条」。
+        """
+        stmt = (
+            select(func.count())
+            .select_from(GoldPriceDaily)
+            .where(
+                GoldPriceDaily.target == target,
+                GoldPriceDaily.price_date >= start,
+                GoldPriceDaily.price_date <= end,
+            )
+        )
+        return int((await self._session.execute(stmt)).scalar_one())
         """该标的已积累的交易日数量。"""
         stmt = (
             select(func.count()).select_from(GoldPriceDaily).where(GoldPriceDaily.target == target)

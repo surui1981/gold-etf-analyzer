@@ -107,7 +107,13 @@ class BacktestGridRow(BaseModel):
 
 
 class BacktestSummary(BaseModel):
-    """回测整体汇总。"""
+    """回测整体汇总。
+
+    ⚠ ``usable=False`` 表示本汇总是**填充值而非回测结论**（继承
+    ``coverage.usable``）。此时 ``best_sharpe=0.0`` 与偏高的 ``avg_win_rate``
+    都源于「T+1 收益全为 0」，**不可解读为「策略表现差」**。
+    取保守侧默认 ``False``：``_aggregate()`` 单独调用时无从判断数据是否可用。
+    """
 
     total_rows: int
     best_sharpe: float
@@ -115,6 +121,7 @@ class BacktestSummary(BaseModel):
     avg_sharpe: float
     best_max_drawdown: float = Field(..., description="最小最大回撤 %（越低越好）")
     avg_win_rate: float
+    usable: bool = Field(False, description="继承 coverage.usable；False = 填充值非结论")
 
 
 class BacktestResultOut(BaseModel):
@@ -130,7 +137,18 @@ class BacktestResultOut(BaseModel):
 
 
 class BacktestCoverageOut(BaseModel):
-    """回测数据覆盖期（V0.71.0 必填：明示样本窗口与可用天数）。"""
+    """回测数据覆盖期（V0.71.0 必填：明示样本窗口与可用天数）。
+
+    V0.79.0（Step G 前置修复）：增价格日历维度。
+    ⚠ **回测需要两类数据，缺一不可**：
+      ① ``daily_snapshots`` —— 每日评估分（决定「有哪些日子可评」）；
+      ② ``gold_price_daily`` —— 收盘价日历（决定「每日的对错如何判定」）。
+    此前只披露 ①，而 ② 由 ``/review`` 页手工复盘才写入 ⇒ ② 为空时回测照常返回
+    ``best_sharpe=0.0`` 与虚高命中率，且 ``sample_warning`` 为 ``False``（因为它只看
+    快照天数）。**这是静默假结果** —— 用户无法从返回值分辨「回测无效」与「回测有效但
+    表现差」。故新增 ``price_calendar_days`` / ``returns_available_days`` /
+    ``returns_missing_days`` / ``usable`` 四个字段显式披露。
+    """
 
     target: BacktestTarget
     start_date: date | None
@@ -143,6 +161,30 @@ class BacktestCoverageOut(BaseModel):
     )
     note: str = Field("", description="数据覆盖期备注（不足时提示）")
     sample_warning: bool = Field(False, description="样本 < 20 时为 True")
+    price_calendar_days: int = Field(
+        0,
+        ge=0,
+        description="价格日历覆盖天数（gold_price_daily 落在覆盖期内的交易日数）",
+    )
+    returns_available_days: int = Field(
+        0,
+        ge=0,
+        description="可算出 T+1 涨跌幅的样本天数（真正参与 Sharpe / 命中率计算）",
+    )
+    returns_missing_days: int = Field(
+        0,
+        ge=0,
+        description="因缺后继交易日价格而无法判定对错的天数",
+    )
+    usable: bool = Field(
+        False,
+        description=(
+            "回测结果是否可用于决策。为 False 时 rows 里的 sharpe / win_rate 是"
+            "**填充值而非实测值**，页面必须显式提示，不得当作回测结论展示。"
+            "⚠ **默认 False（保守侧）**：拿不到数据时不能宣称结果可用 —— "
+            "默认 True 会让任何遗漏该字段的旧构造方式静默变成「假结果可用」"
+        ),
+    )
 
 
 class BacktestConfigIn(BaseModel):

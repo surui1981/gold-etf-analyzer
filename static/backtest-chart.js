@@ -84,11 +84,17 @@
     var cov = result.coverage || {};
     var sumEl = document.getElementById("btSummary");
     if (sumEl) {
+      // V0.79.0：usable=False 时指标是填充值，卡片必须**在标题里就说清**，
+      // 否则「最佳 Sharpe 0.00」配上绿色 up 样式会被当成「策略表现差」而非
+      // 「根本没算出来」—— 这正是原缺陷的伤害路径。
+      var notMeasured = (s.usable === false || cov.usable === false);
+      var suffix = notMeasured ? "（填充值）" : "";
+      var upCls = notMeasured ? "" : " up";
       sumEl.innerHTML = [
         '<div class="card"><div class="label">总组合数</div><div class="value">' + (s.total_rows || 0) + '</div><div class="extra">tech × macro × news × bullish × bearish</div></div>',
-        '<div class="card"><div class="label">最佳 Sharpe</div><div class="value up">' + (s.best_sharpe || 0).toFixed(2) + '</div><div class="extra">越高越好</div></div>',
-        '<div class="card"><div class="label">最小最大回撤</div><div class="value">' + (s.best_max_drawdown || 0).toFixed(2) + '%</div><div class="extra">越低越好</div></div>',
-        '<div class="card"><div class="label">平均命中率</div><div class="value">' + (((s.avg_win_rate || 0) * 100).toFixed(1)) + '%</div><div class="extra">阈值带命中率</div></div>',
+        '<div class="card"><div class="label">最佳 Sharpe' + suffix + '</div><div class="value' + upCls + '">' + (s.best_sharpe || 0).toFixed(2) + '</div><div class="extra">' + (notMeasured ? "缺少价格数据，未计算" : "越高越好") + '</div></div>',
+        '<div class="card"><div class="label">最小最大回撤' + suffix + '</div><div class="value">' + (s.best_max_drawdown || 0).toFixed(2) + '%</div><div class="extra">' + (notMeasured ? "缺少价格数据，未计算" : "越低越好") + '</div></div>',
+        '<div class="card"><div class="label">平均命中率' + suffix + '</div><div class="value">' + (((s.avg_win_rate || 0) * 100).toFixed(1)) + '%</div><div class="extra">' + (notMeasured ? "中性行在零收益下全部命中，非真实命中率" : "阈值带命中率") + '</div></div>',
         '<div class="card"><div class="label">覆盖期样本</div><div class="value">' + (cov.available_days || 0) + '</div><div class="extra">' + (cov.start_date || "-") + " ~ " + (cov.end_date || "-") + '</div></div>',
       ].join("");
     }
@@ -249,11 +255,26 @@
       }
     }
 
-    // 警告：样本不足
-    if (cov.sample_warning && (cov.available_days || 0) < 20) {
-      var warn = document.getElementById("btWarn");
-      if (warn) {
-        warn.innerHTML = '<div class="source-bar source-warn">⚠️ 样本仅 ' + cov.available_days + ' 天（&lt;20），回测结果仅供参考</div>';
+    // 警告：结果不可用 / 样本不足
+    // V0.79.0：此前条件写死 `available_days < 20`，于是「快照充足但价格日历为空」
+    // 这类**静默假结果**（Sharpe 恒 0、命中率虚高）完全不告警 —— 而它恰恰是
+    // 最需要告警的一类：数字看着正常，实际不是回测结论。
+    // 故改为：usable=False 走「结果不可用」红色警示（说明根因），
+    // 否则才按样本天数提示「仅供参考」。
+    var warnEl = document.getElementById("btWarn");
+    if (warnEl) {
+      if (cov.usable === false) {
+        warnEl.innerHTML = '<div class="source-bar source-warn">⚠️ <strong>回测结果不可用</strong>：'
+          + (cov.note || "缺少判定对错所需的价格数据")
+          + '<br>下列 Sharpe / 命中率是<b>填充值而非实测值</b>，请勿据此判断策略优劣。'
+          + '需先在「复盘」页执行价格回填（该页会把收盘价写入价格日历），再重跑回测。</div>';
+        warnEl.style.display = "block";
+      } else if (cov.sample_warning && (cov.available_days || 0) < 20) {
+        warnEl.innerHTML = '<div class="source-bar source-warn">⚠️ 样本仅 ' + cov.available_days + ' 天（&lt;20），回测结果仅供参考</div>';
+        warnEl.style.display = "block";
+      } else {
+        warnEl.innerHTML = "";
+        warnEl.style.display = "none";
       }
     }
   }

@@ -127,7 +127,14 @@ class BacktestService:
         target: str = "etf",
         days: int = 90,
     ) -> BacktestCoverageOut:
-        """报告回测数据覆盖期（tech_index 非空的快照天数）。"""
+        """报告回测数据覆盖期。
+
+        ⚠ **V0.79.0 起同时检查两类数据**（此前只查快照，是静默假结果的根因）：
+          ① ``daily_snapshots``：有哪些日子可评；
+          ② ``gold_price_daily``：每日的对错如何判定。
+        只查 ① 时，价格日历为空会照常返回 ``best_sharpe=0.0`` + 虚高命中率 +
+        ``sample_warning=False``，用户无从分辨「回测无效」与「表现差」。
+        """
         target = self._normalize_target(target)
         stmt = (
             select(DailySnapshot)
@@ -144,21 +151,53 @@ class BacktestService:
                 available_window_trading_days=0,
                 note="daily_snapshots 表为空，无法回测",
                 sample_warning=True,
+                price_calendar_days=0,
+                returns_available_days=0,
+                returns_missing_days=0,
+                usable=False,
             )
         start = rows[0].snapshot_date
         end = rows[-1].snapshot_date
         available = len(rows)
+        snap_dates = [r.snapshot_date for r in rows]
+
+        # ── 价格日历维度（V0.79.0 新增）──
+        # 必须实际查表：T+1 收益只能由「同 target 的相邻两个交易日收盘价」推出，
+        # 最后一个快照日之后没有价格 ⇒ 天然无收益。
+        cal_days = await self._gold.count_in_range(
+            target=target, start=start, end=end + timedelta(days=5)
+        )
+        returns_ok = await self._count_days_with_next_close(
+            target=target, snapshot_dates=snap_dates
+        )
+        returns_missing = available - returns_ok
+        usable = returns_ok > 0
+
+        parts = [f"覆盖期 {start} ~ {end}（{available} 个有效样本）"]
+        if available < _MIN_SAMPLES:
+            parts.append("样本较少，回测结果仅供参考")
+        if cal_days == 0:
+            parts.append(
+                "**价格日历为空，Sharpe 与命中率无法计算**"
+                "（须先在复盘页执行价格回填）；下列指标是填充值而非回测结论"
+            )
+        elif returns_missing:
+            parts.append(f"其中 {returns_missing} 天因缺后继交易日价格而未参与指标计算")
+
         return BacktestCoverageOut(
             target=target,  # type: ignore[arg-type]
             start_date=start,
             end_date=end,
             available_days=available,
             available_window_trading_days=available,
-            note=(
-                f"覆盖期 {start} ~ {end}（{available} 个有效样本）"
-                + ("；样本较少，回测结果仅供参考" if available < _MIN_SAMPLES else "")
-            ),
-            sample_warning=available < _MIN_SAMPLES,
+            note="；".join(parts),
+            # ⚠ 样本告警的判定**不能只看快照天数**：即使快照充足、价格日历为空，
+            # 结果同样不可用（收益全 0 ⇒ Sharpe 恒 0、NEUTRAL 行全命中）。
+            sample_warning=available < _MIN_SAMPLES or not usable,
+            price_calendar_days=cal_days,
+            returns_available_days=returns_ok,
+            returns_missing_days=returns_missing,
+            usable=usable,
         )
 
     # ───────────────────── 回测主入口 ─────────────────────
@@ -196,6 +235,7 @@ class BacktestService:
                     avg_sharpe=0.0,
                     best_max_drawdown=0.0,
                     avg_win_rate=0.0,
+                    usable=cov.usable,
                 ),
                 cached=False,
             )
@@ -229,6 +269,11 @@ class BacktestService:
             rows.append(row)
 
         summary = self._aggregate(rows)
+        # ⚠ V0.79.0：聚合结果的可用性**继承 coverage**。价格日历为空时 rows 里的
+        # sharpe / win_rate 是「收益全 0」推导出的填充值（Sharpe 零方差 → 0.0；
+        # judge_hit 对 NEUTRAL 判 |0| <= band → 全命中），若不标记，调用方无法
+        # 分辨「回测无效」与「回测有效但表现差」。
+        summary.usable = cov.usable
 
         out = BacktestResultOut(
             target=target,  # type: ignore[arg-type]
@@ -240,10 +285,13 @@ class BacktestService:
         )
         throttle.store(cache_key, out.model_dump())
         logger.info(
-            "Backtest run: target=%s rows=%d best_sharpe=%.2f",
+            "Backtest run: target=%s rows=%d best_sharpe=%.2f usable=%s returns_ok=%d/%d",
             target,
             len(rows),
             summary.best_sharpe,
+            cov.usable,
+            cov.returns_available_days,
+            cov.available_days,
         )
         return out
 
@@ -273,6 +321,13 @@ class BacktestService:
 
         实现：读 gold_price_daily（target 维度）按日期升序，对齐后算 close[i+1]/close[i]-1。
         缺失或最后一个返回 0.0（无 T+1 数据）。
+
+        ⚠⚠ V0.79.0：**返回值无法区分「真零收益」与「完全无数据」**——两者都是 0.0。
+        空价格日历时全表返回 0.0，与「价格恰好不动」表现完全一致，而下游
+        ``compute_sharpe`` 对零方差返回 0.0、``judge_hit`` 对 NEUTRAL 判
+        ``|0| <= band`` 全命中 ⇒ 静默产出「Sharpe 恒 0 + 命中率虚高」的假结果。
+        ⇒ 判定可用性**必须看价格日历是否存在**，不可用 ``值 != 0`` 反推；
+        可用天数由 ``_count_days_with_next_close()`` 独立统计。
         """
         if not snapshot_dates:
             return {}
@@ -294,6 +349,30 @@ class BacktestService:
             else:
                 next_close[cur] = 0.0
         return {d: next_close.get(d, 0.0) for d in snapshot_dates}
+
+    async def _count_days_with_next_close(
+        self,
+        target: str,
+        snapshot_dates: list[date],
+    ) -> int:
+        """统计「真正能算出 T+1 涨跌幅」的快照天数（V0.79.0）。
+
+        ⚠ **不能用 ``next_returns[d] != 0.0`` 反推**：真零收益与完全无数据
+        在返回值里不可区分（都是 0.0），而这两种情形的可信度截然不同。
+        正确判据是「该日期在价格日历里**是否存在后继交易日**」。
+        """
+        if not snapshot_dates:
+            return 0
+        start = snapshot_dates[0]
+        end = snapshot_dates[-1] + timedelta(days=5)
+        bars = await self._gold.list_range(target, start=start, end=end)
+        if len(bars) < 2:
+            return 0
+        price_dates = sorted({b.price_date for b in bars})
+        # 「有后继交易日」= 该日期不是价格序列的最后一个；用集合运算而非逐日
+        # 扫后继（O(n²)），且天然与 ``_build_next_returns`` 的取数口径一致。
+        with_successor = set(price_dates[:-1])
+        return len(with_successor & set(snapshot_dates))
 
     def _evaluate_grid(
         self,
@@ -342,6 +421,13 @@ class BacktestService:
 
     @staticmethod
     def _aggregate(rows: list[BacktestGridRow]) -> BacktestSummary:
+        """聚合 N 行结果为 summary。
+
+        ⚠ **不设 ``usable``** —— 聚合只见到 rows，无从判断收益数据是否真实存在。
+        故继承 schema 的保守默认 ``False``，由 ``run()`` 依据 coverage 显式覆盖。
+        这样「单独调用 ``_aggregate``」与「run 未执行 coverage」两条路径都不会
+        宣称结果可用。
+        """
         """聚合 N 行结果为 summary。"""
         if not rows:
             return BacktestSummary(
