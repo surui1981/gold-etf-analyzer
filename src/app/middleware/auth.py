@@ -28,7 +28,6 @@ CSRF 中间件同样完全透传（无「环境凭据」就没有 CSRF 可言）
 
 from __future__ import annotations
 
-import contextvars
 import json
 import secrets
 from http.cookies import SimpleCookie
@@ -42,33 +41,18 @@ from app.repositories.db import async_session_factory
 from app.repositories.user import SessionRepository, UserRepository
 from app.services.auth import AuthService
 from app.utils.logger import get_logger
+from app.utils.user_scope import get_current_user_id, reset_user_id, set_user_id
 
 logger = get_logger(__name__)
 
 # ============================ user_id 上下文 ============================
 
-# 默认 None = 「匿名（未登录）」。单用户模式下由中间件显式置为 LEGACY_USER_ID。
-_user_id_var: contextvars.ContextVar[int | None] = contextvars.ContextVar(
-    "request_user_id", default=None
-)
-
-
-def get_current_user_id() -> int | None:
-    """当前请求的 user_id；``None`` 表示匿名（仅在 AUTH_ENABLED=true 下会出现）。"""
-    return _user_id_var.get()
-
-
-def set_user_id(value: int | None) -> contextvars.Token[int | None]:
-    """手动注入 user_id（后台任务 / 调度器 / 测试）。
-
-    与 :func:`reset_user_id` 配对，确保不污染其他协程。
-    """
-    return _user_id_var.set(value)
-
-
-def reset_user_id(token: contextvars.Token[int | None]) -> None:
-    """还原 :func:`set_user_id` 的设置。"""
-    _user_id_var.reset(token)
+# V0.75.2 数据隔离：上下文与解析器已抽到 :mod:`app.utils.user_scope`。
+# 原因是**仓储层也要读它** —— 若 repositories 反过来 import 本模块，会形成
+# 「数据层 → HTTP 中间件」的反向依赖。本模块只负责**写**（解析会话 → set_user_id），
+# 读取统一走 ``user_scope.current_user_id()``。
+# 三个函数在此**再导出**，故 `from app.middleware.auth import get_current_user_id`
+# 这类既有写法仍然有效。
 
 
 # ============================ 路径规则 ============================
@@ -179,11 +163,11 @@ class AuthMiddleware:
             state["auth_enabled"] = False
             state["user"] = None
             state["session_id"] = None
-            token = _user_id_var.set(LEGACY_USER_ID)
+            token = set_user_id(LEGACY_USER_ID)
             try:
                 await self.app(scope, receive, send)
             finally:
-                _user_id_var.reset(token)
+                reset_user_id(token)
             return
 
         # ── 多用户模式：解析会话 ──
@@ -205,11 +189,11 @@ class AuthMiddleware:
             await _send_unauthorized(send)
             return
 
-        token = _user_id_var.set(user.id if user else None)
+        token = set_user_id(user.id if user else None)
         try:
             await self.app(scope, receive, send)
         finally:
-            _user_id_var.reset(token)
+            reset_user_id(token)
 
 
 async def _send_unauthorized(send: Send) -> None:

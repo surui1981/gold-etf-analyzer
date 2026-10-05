@@ -111,11 +111,14 @@ async def _ensure_default_account() -> None:
     使历史持仓在账本视图中可见，避免出现「无归属」的孤儿数据。
     """
     try:
+        from app.models.user import LEGACY_USER_ID
         from app.repositories.account import AccountRepository
         from app.repositories.db import async_session_factory
 
         async with async_session_factory() as session:
-            account = await AccountRepository(session).ensure_default()
+            # 启动引导属**系统级任务**（无请求上下文）→ 必须显式传 LEGACY_USER_ID，
+            # 否则多用户模式下 current_user_id() 会抛 MissingUserContextError。
+            account = await AccountRepository(session).ensure_default(user_id=LEGACY_USER_ID)
         logger.info("default account ready: id=%s name=%s", account.id, account.name)
     except Exception as exc:
         logger.warning("default account ensure failed (%s)", exc)

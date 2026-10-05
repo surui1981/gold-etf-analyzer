@@ -6,6 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import DEFAULT_ACCOUNT_NAME, Account
+from app.utils.user_scope import resolve_user_id
 
 
 class AccountRepository:
@@ -14,26 +15,38 @@ class AccountRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list(self, user_id: int = 1, *, include_archived: bool = False) -> list[Account]:
+    async def list(
+        self, user_id: int | None = None, *, include_archived: bool = False
+    ) -> list[Account]:
         """账本列表（默认账本置顶，其余按 sort_order、id 升序）。
 
         Args:
-            user_id: 用户 ID（当前恒为 1）
+            user_id: 用户 ID；None=取当前请求上下文（V0.75.2）
             include_archived: 是否包含已归档账本（交易历史查询页需要）
         """
+        user_id = resolve_user_id(user_id)
         stmt = select(Account).where(Account.user_id == user_id)
         if not include_archived:
             stmt = stmt.where(Account.archived_at.is_(None))
         stmt = stmt.order_by(Account.is_default.desc(), Account.sort_order, Account.id)
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def get(self, account_id: int) -> Account | None:
-        """按 ID 查询账本（含已归档，供恢复/校验使用）。"""
-        stmt = select(Account).where(Account.id == account_id)
+    async def get(self, account_id: int, user_id: int | None = None) -> Account | None:
+        """按 ID 查询账本（含已归档，供恢复/校验使用）。
+
+        V0.75.2 数据隔离：**按当前用户过滤**，越权访问表现为「不存在」（返回
+        ``None``），由服务层转 404 —— 不用 403，避免泄露「id 是否存在」。
+        """
+        user_id = resolve_user_id(user_id)
+        stmt = select(Account).where(
+            Account.id == account_id,
+            Account.user_id == user_id,
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def get_default(self, user_id: int = 1) -> Account | None:
+    async def get_default(self, user_id: int | None = None) -> Account | None:
         """默认账本（first is_default=1 and 未归档）。"""
+        user_id = resolve_user_id(user_id)
         stmt = (
             select(Account)
             .where(
@@ -47,9 +60,10 @@ class AccountRepository:
         return (await self._session.execute(stmt)).scalars().first()
 
     async def get_by_name(
-        self, name: str, user_id: int = 1, *, include_archived: bool = False
+        self, name: str, user_id: int | None = None, *, include_archived: bool = False
     ) -> Account | None:
         """按名称查询（重名校验 / 「沿用」场景）。"""
+        user_id = resolve_user_id(user_id)
         stmt = select(Account).where(Account.user_id == user_id, Account.name == name)
         if not include_archived:
             stmt = stmt.where(Account.archived_at.is_(None))
@@ -60,7 +74,7 @@ class AccountRepository:
         *,
         name: str,
         note: str = "",
-        user_id: int = 1,
+        user_id: int | None = None,
         is_default: bool = False,
         sort_order: int | None = None,
         account_id: int | None = None,
@@ -75,6 +89,7 @@ class AccountRepository:
             sort_order: 展示排序；None 时取「现有最大 + 10」，保证新账本排在末尾
             account_id: 显式指定 ID（仅用于 seed id=1 的默认账本，承接历史数据）
         """
+        user_id = resolve_user_id(user_id)
         if is_default:
             await self.clear_default(user_id)
 
@@ -102,8 +117,9 @@ class AccountRepository:
         await self._session.refresh(account)
         return account
 
-    async def clear_default(self, user_id: int = 1) -> None:
+    async def clear_default(self, user_id: int | None = None) -> None:
         """清除该用户所有账本的默认标记（幂等，不提交）。"""
+        user_id = resolve_user_id(user_id)
         for account in await self.list(user_id, include_archived=True):
             if account.is_default:
                 account.is_default = False
@@ -115,7 +131,7 @@ class AccountRepository:
         await self._session.refresh(account)
         return account
 
-    async def ensure_default(self, user_id: int = 1) -> Account:
+    async def ensure_default(self, user_id: int | None = None) -> Account:
         """保障默认账本存在（启动时调用，幂等）。
 
         三种情况：
@@ -124,7 +140,11 @@ class AccountRepository:
         3. 完全没有账本 → 建立 id=1 的「默认账户」。
            显式指定 id=1 是为了承接老库升级路径：``positions.account_id`` 默认值
            为 1，若此时 accounts 由空表自增建出 id=1 也可，但显式更稳妥。
+
+        V0.75.2 数据隔离：``user_id=None`` 时取当前请求上下文；**启动引导**
+        （``main._ensure_default_account``）无请求上下文，必须显式传 LEGACY_USER_ID。
         """
+        user_id = resolve_user_id(user_id)
         default = await self.get_default(user_id)
         if default is not None:
             return default
@@ -134,7 +154,7 @@ class AccountRepository:
             accounts[0].is_default = True
             return await self.save(accounts[0])
 
-        existing = await self.get(1)
+        existing = await self.get(1, user_id)
         if existing is not None:
             existing.is_default = True
             existing.archived_at = None

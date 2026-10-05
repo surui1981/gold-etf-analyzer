@@ -615,14 +615,65 @@ git tag -a v0.79.0 -m "V0.79.0 · 阈值动态化 + 回测增强"
 **预计时间**：2-3 周（2026-10 中旬开始）
 **风险**：高（涉及几乎所有业务表 + API）
 
-**实施步骤**：
-1. 加 `migrations/versions/<hash>_add_user_id_to_business_tables.py`：
-   - `positions.user_id` / `accounts.user_id` / `news_scores.user_id` / `daily_snapshots.user_id` / `gold_price_daily.user_id` / `analysis_history.user_id` / `central_bank_purchases.user_id` / `central_bank_settings.user_id`
-   - 索引：`idx_{table}_user_id`
-2. 仓储层：`PositionRepository.list()` / `AccountRepository.list()` 等所有读路径加 `WHERE user_id = :current_user_id`
-3. API 层：所有业务接口加 `Depends(get_current_user)`，从 contextvar 取 user_id
-4. 测试：每个 API 接口增 2 例——「用户 A 创建的持仓，用户 B 不能读到 / 不能改」
-5. 数据迁移：现有数据归入 `LEGACY_USER_ID = 1`
+> ⚠ **本清单已于 2026-10-06 按本地库 `PRAGMA table_info` 实测重写。** 原文的 8 张表里有
+> **4 处与实现脱节**：写了一个并不存在的「央行设置」表、把 `analysis_records` 记成了
+> ``analysis_history``、并把 `gold_price_daily` 与 `central_bank_purchases` 这两张
+> **全局市场数据**当成用户数据；同时**漏列了 4 张真正的用户数据表**。
+> 照原文施工会白做一部分，又恰好漏掉真正的泄露面。
+
+**隔离清单（按实测分类）**
+
+一、**用户数据 · 已有 `user_id` 列**（V0.62.0 起就在，库内取值确为 1）
+- `accounts`、`positions`、`sessions`、`telemetry_events`
+- ⚠ 缺陷**不在「有没有列」，而在「没人读它」**：仓储签名写作 `user_id: int = 1`
+  （字面量默认值），全仓无一处传入真实用户 ⇒ 过滤条件恒等于「不过滤」。
+- 更严重的是 ID 寻址的方法**完全没有用户过滤**：`get()` / `list_trades()` 可凭 id
+  跨用户读，`add_trade()` / `soft_delete()` / `restore()` 可跨用户写。
+
+二、**用户数据 · 需新增 `user_id` 列**（列入本版迁移）
+- `trade_records`（交易流水）、`news_scores`（用户消息面打分）、
+  `analysis_records`（机会分析记录）、`push_subscriptions`（推送订阅；其模型注释
+  本就写明「V0.75+ 多用户时加 user_id 列 + 扩唯一键」）
+
+三、**混合表 · 需单独设计**（不能一次性全表加列）
+- `app_settings` 以 `key` 为主键，而表内 `weight_config`（用户权重）与
+  `vapid_keys`（**服务级**推送密钥）**混在一起**。直接加 `user_id` 并全表过滤，
+  会把服务密钥一并圈进用户维度、打断推送。计划：改 `(user_id, key)` 复合主键，
+  服务级键以约定值（如 `user_id=0`）落库并在用户级查询里显式排除。
+
+四、**全局数据 · 明确不加 `user_id`**
+- `gold_price_daily`（行情日历）、`central_bank_purchases`（IMF IRFCL / WGC 各国
+  季度净购金，唯一键是「国家 + 季度」）、`daily_snapshots`（每日评估基线序列）
+- `daily_snapshots` 尤其要注意：它由**调度器**在后台任务里用
+  `TrendService(settings=None, news=None)` 写入（无请求上下文），且回测直接读整条
+  序列。加 `user_id` 会同时破坏调度器与回测；若要让快照「按用户」，那是另一个
+  产品决策（每人一条序列 + 每人一份回测），**不在本版范围**。
+
+**实施步骤**
+1. 迁移：仅对「第二类」4 张表加 `user_id`（默认 1）+ 索引 `ix_{table}_user_id`；
+   把现有行归入 `LEGACY_USER_ID = 1`。
+   ⚠ 勿在迁移前 `create_all`（争锁 → 启动 hang）。
+2. 仓储层：所有查询解析当前用户 —— **这才是本版的核心，不是「加列」**。
+   - ✅ **已交付（2026-10-06 · 第 1 批）**：新增 `src/app/utils/user_scope.py`
+     （把 `user_id` 的 contextvar 抽到中立模块 + `current_user_id()` 解析器）；
+     `PositionRepository` / `AccountRepository` 共 **22 处**恢复真实用户解析，
+     并**补齐 ID 寻址方法的过滤与归属校验**；新增回归测试
+     `tests/test_services/test_user_isolation.py`（**8 例**，覆盖读/写越权与
+     解析器三条语义）。
+   - ⏳ 待办：`NewsScoreRepository` / `AnalysisRepository` / `PushRepository`
+     同样处理（依赖第 1 步的加列）。
+3. API 层：**实测无需**「给所有业务接口加 `Depends(get_current_user)`」——
+   `AuthMiddleware` 在 `AUTH_ENABLED=true` 时已对全部 `/api/` 做 401 门禁，并把用户
+   写进 contextvar；缺的只是仓储层去读。真正要做的是两件事：
+   - 给仓储层被**系统级调用**的入口显式传 `user_id`（已改：
+     `main._ensure_default_account` 传 `LEGACY_USER_ID`），否则多用户模式下解析器
+     会抛 `MissingUserContextError` —— 这是**有意的**：静默回退到 1 号用户会让
+     匿名/越权调用读到他人数据；
+   - 越权一律返回 404 而非 403，避免以状态码差异泄露「该 id 存在但不属于你」。
+4. 测试：每个接口增 2 例 —— 「用户 A 创建的持仓，用户 B 不能读到 / 不能改」。
+   仓储层已覆盖（8 例）；**API 层（真登录两个账号、带 cookie 与 CSRF）待补**。
+5. 数据迁移：现有数据归入 `LEGACY_USER_ID = 1`（`accounts` / `positions` 已是 1，
+   新增列的 4 张表需回填）。
 
 ### 5.2 V0.75.3 · 找回密码 + 用户管理
 

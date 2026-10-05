@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import DEFAULT_ACCOUNT_NAME, Account
 from app.models.position import Position, TradeRecord
+from app.utils.user_scope import resolve_user_id
 
 
 @dataclass(slots=True)
@@ -47,7 +48,7 @@ class PositionRepository:
         name: str,
         quantity: float,
         avg_cost: float,
-        user_id: int = 1,
+        user_id: int | None = None,
         account_id: int = 1,
         grams_held: float | None = None,
     ) -> Position:
@@ -56,6 +57,7 @@ class PositionRepository:
         V0.70.0（P2 #8）起 ``grams_held`` 可选——「按克」开仓时由服务层折算份数后
         同时写入；「按份」开仓时为 None。
         """
+        user_id = resolve_user_id(user_id)
         position = Position(
             symbol=symbol,
             name=name,
@@ -80,7 +82,15 @@ class PositionRepository:
         price: float,
         fee: float = 0.0,
     ) -> TradeRecord:
-        """记录一笔交易流水并提交。"""
+        """记录一笔交易流水并提交。
+
+        V0.75.2 数据隔离：先按**当前用户**校验 ``position_id`` 归属，
+        越权一律视为「持仓不存在」——仅凭 id 不再能向他人持仓写入流水。
+        服务层此前已 :meth:`get` 过一次，此处重复查询是**有意的纵深防御**
+        （写路径，代价可忽略）。
+        """
+        if await self.get(position_id) is None:
+            raise ValueError("持仓不存在")
         record = TradeRecord(
             position_id=position_id,
             side=side,
@@ -93,13 +103,16 @@ class PositionRepository:
         await self._session.refresh(record)
         return record
 
-    async def list_open(self, user_id: int = 1, account_id: int | None = None) -> list[Position]:
+    async def list_open(
+        self, user_id: int | None = None, account_id: int | None = None
+    ) -> list[Position]:
         """当前未平仓且未删除的持仓（按开仓时间升序）。
 
         Args:
-            user_id: 用户 ID
+            user_id: 用户 ID；None=取当前请求上下文（V0.75.2）
             account_id: 账本过滤；None=全部账本
         """
+        user_id = resolve_user_id(user_id)
         stmt = select(Position).where(
             Position.status == "open",
             Position.user_id == user_id,
@@ -110,17 +123,29 @@ class PositionRepository:
         stmt = stmt.order_by(Position.opened_at, Position.id)
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def get(self, position_id: int) -> Position | None:
-        """按 ID 查询持仓（含已软删除的，供撤销恢复使用）。"""
-        stmt = select(Position).where(Position.id == position_id)
+    async def get(self, position_id: int, user_id: int | None = None) -> Position | None:
+        """按 ID 查询持仓（含已软删除的，供撤销恢复使用）。
+
+        V0.75.2 数据隔离：**按当前用户过滤**。越权访问表现为「不存在」（返回
+        ``None``），由服务层转 404 —— 刻意不用 403，避免通过状态码差异
+        泄露「该 id 存在但不属于你」。
+        """
+        user_id = resolve_user_id(user_id)
+        stmt = select(Position).where(
+            Position.id == position_id,
+            Position.user_id == user_id,
+        )
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_all(self, user_id: int = 1, account_id: int | None = None) -> list[Position]:
+    async def list_all(
+        self, user_id: int | None = None, account_id: int | None = None
+    ) -> list[Position]:
         """所有未软删除的持仓（**含已平仓**），按开仓时间升序。
 
         收益曲线与获利分析需要已平仓持仓来核算已实现盈亏，故与
         :meth:`list_open` 区分（后者仅返回持仓中的）。
         """
+        user_id = resolve_user_id(user_id)
         stmt = select(Position).where(Position.user_id == user_id, Position.deleted_at.is_(None))
         if account_id is not None:
             stmt = stmt.where(Position.account_id == account_id)
@@ -128,12 +153,13 @@ class PositionRepository:
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def list_all_trades(
-        self, user_id: int = 1, account_id: int | None = None
+        self, user_id: int | None = None, account_id: int | None = None
     ) -> list[TradeRecord]:
         """所有交易流水（排除已软删除持仓的流水），按成交时间**升序**。
 
         升序是回放重建收益曲线的前提（均价法成本随买卖顺序变化）。
         """
+        user_id = resolve_user_id(user_id)
         stmt = (
             select(TradeRecord)
             .join(Position, TradeRecord.position_id == Position.id)
@@ -144,11 +170,17 @@ class PositionRepository:
         stmt = stmt.order_by(TradeRecord.traded_at, TradeRecord.id)
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def list_trades(self, position_id: int) -> list[TradeRecord]:
-        """持仓的交易流水（按时间倒序）。"""
+    async def list_trades(self, position_id: int, user_id: int | None = None) -> list[TradeRecord]:
+        """持仓的交易流水（按时间倒序）。
+
+        V0.75.2 数据隔离：JOIN ``positions`` 后按当前用户过滤 —— 否则仅凭
+        ``position_id`` 即可读到他人持仓的全部流水。
+        """
+        user_id = resolve_user_id(user_id)
         stmt = (
             select(TradeRecord)
-            .where(TradeRecord.position_id == position_id)
+            .join(Position, TradeRecord.position_id == Position.id)
+            .where(TradeRecord.position_id == position_id, Position.user_id == user_id)
             .order_by(desc(TradeRecord.traded_at), desc(TradeRecord.id))
         )
         return list((await self._session.execute(stmt)).scalars().all())
@@ -156,7 +188,7 @@ class PositionRepository:
     async def query_trades(
         self,
         *,
-        user_id: int = 1,
+        user_id: int | None = None,
         account_id: int | None = None,
         side: str | None = None,
         position_id: int | None = None,
@@ -181,6 +213,7 @@ class PositionRepository:
             start: 成交日期下界（含当日）
             end: 成交日期上界（含当日）
         """
+        user_id = resolve_user_id(user_id)
         stmt = (
             select(TradeRecord, Position, Account.name)
             .join(Position, TradeRecord.position_id == Position.id)
@@ -216,13 +249,14 @@ class PositionRepository:
             for trade, position, account_name in rows
         ]
 
-    async def stats_by_account(self, user_id: int = 1) -> dict[int, AccountStats]:
+    async def stats_by_account(self, user_id: int | None = None) -> dict[int, AccountStats]:
         """按账本聚合持仓数 / 未平仓数 / 流水笔数 / 最近成交时间。
 
         Returns:
             ``{account_id: AccountStats}``；无数据的账本不出现在结果中
             （调用方用 ``AccountStats()`` 兜底零值）。
         """
+        user_id = resolve_user_id(user_id)
         stats: dict[int, AccountStats] = {}
 
         pos_stmt = (
