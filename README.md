@@ -9,7 +9,11 @@
 | **页面** | 13 个静态页 · 67 个 REST 路径（76 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
-> 📖 [docs/application-guide.md](docs/application-guide.md) · 架构 / API / 核心模型
+> 📖 **使用文档**（按内容拆分为 5 文件，按需查阅）：
+> [overview](docs/overview.md) · [getting-started](docs/getting-started.md) ·
+> [architecture](docs/architecture.md) · [api-reference](docs/api-reference.md) ·
+> [development](docs/development.md)
+> · 完整索引见 [application-guide.md](docs/application-guide.md)
 > 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
 > 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.77.2）
 > ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
@@ -90,7 +94,7 @@
 
 **等级阈值**：`≥75 强势上升` / `≥55 上升` / `≥45 震荡` / `≥25 下降` / `<25 弱势下降`（趋势页红绿着色）
 
-> 详见 [docs/application-guide.md §4 评分模型](docs/application-guide.md)。
+> 详见 [docs/api-reference.md §6 评分模型](docs/api-reference.md#6-核心模型)。
 
 ### 2️⃣ 个人持仓管理
 
@@ -100,7 +104,7 @@
 - **收益曲线** — 流水回放重建，含**最大回撤**标注
 - **决策可解释** — 「买 / 加 / 持有 / 减 / 卖」建议附理由明细（指数分位 / 持仓状态 / 阈值依据），不是黑盒
 
-> 详见 [docs/application-guide.md §5 持仓与决策](docs/application-guide.md)。
+> 详见 [docs/api-reference.md §6 持仓与决策](docs/api-reference.md#6-核心模型)。
 
 ### 3️⃣ 央行购金监控
 
@@ -110,7 +114,7 @@
 - **cb_gold 因子联动** — `MacroFactorService` 自动从 `central_bank_purchases` 表汇总 T12M 注入宏观面评分；无数据时回退 STATIC_REF 硬编码
 - **自动调度** — 每月 1 / 15 / 末日 07:30 BJT 自动从 WGC 拉取
 
-> 详见 [docs/application-guide.md §6 央行购金](docs/application-guide.md)。
+> 详见 [docs/architecture.md §7 数据源](docs/architecture.md#7-数据源)。
 
 ---
 
@@ -365,7 +369,13 @@ node scripts/check_cluster_render.mjs                    # 前端渲染行为门
 
 ## 文档
 
-- 📖 [docs/application-guide.md](docs/application-guide.md) — 完整使用文档（架构 / API 参考 / 核心模型 / 改进计划）
+- 📖 **使用文档**（按内容拆分为 5 文件）：
+  - [docs/overview.md](docs/overview.md) — 项目概述 / 功能清单
+  - [docs/getting-started.md](docs/getting-started.md) — 快速开始 / 配置说明
+  - [docs/architecture.md](docs/architecture.md) — 技术架构 / 数据源
+  - [docs/api-reference.md](docs/api-reference.md) — API 参考 / 核心模型
+  - [docs/development.md](docs/development.md) — 测试 / 版本历史 / 改进计划 / 备注
+  · 完整索引见 [docs/application-guide.md](docs/application-guide.md)
 - 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
 - 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.76.0**：仪表盘自定义 / 通知偏好 / 首页综合研判结论卡 / 首页内嵌消息面打分器 / 多用户登录 + 数据隔离）
 - ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告

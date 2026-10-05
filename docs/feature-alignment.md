@@ -230,8 +230,8 @@ python - <<'PY'
 import json, re, urllib.request
 d = json.load(urllib.request.urlopen("http://127.0.0.1:8888/openapi.json"))
 api = {re.sub(r"\{[^}]+\}", "{}", p) for p in d["paths"]}
-doc = open("docs/application-guide.md", encoding="utf-8").read()
-sec = doc[doc.index("## 5. API 参考"):doc.index("### 5.1")]
+doc = open("docs/api-reference.md", encoding="utf-8").read()
+sec = doc[doc.index("## 5. API 参考"):doc.index("## 6.")]
 docp = {re.sub(r"\{[^}]+\}", "{}", p) for p in re.findall(r"`(/[A-Za-z0-9_\-{}/\.]*)`", sec)}
 print("openapi 有、文档缺：", sorted(api - docp) or "无")
 PY
