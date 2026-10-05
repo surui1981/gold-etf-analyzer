@@ -2,6 +2,7 @@
 
 覆盖：
 - 4 类信号判定（strong_up / strong_down / weak_up / divergent / neutral）
+- DIVERGENT 的三维背离判定与 subtype（V0.78.0：任意两维分差 ≥ 15）
 - strength_up 命中统计（含样本不足警告）
 - history 按日期倒序返回
 - signal_today 的 target 透传（V0.75.1：黄金/白银复用同一口径）
@@ -14,6 +15,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news import NewsScore
+from app.schemas.resonance import DivergentSubtype
 from app.services.resonance import ResonanceService, compute_resonance
 
 # =========================================================================
@@ -246,3 +248,85 @@ async def test_signal_today_passes_target_through(target: str) -> None:
     assert trend.calls == [(60, target)]
     assert out.signal == "neutral"
     assert out.components == {"tech": 50, "macro": 50, "news": 50}
+
+
+# =========================================================================
+# DIVERGENT 背离判定（V0.78.0：任意两维分差 ≥ 15 + subtype）
+# =========================================================================
+
+
+def test_divergent_tech_vs_news_is_subtype_tech_news() -> None:
+    """§3.5 核心场景：消息面看多 65、技术看空 35、宏观中性 50 → tech_news 背离。
+
+    「消息面是客户对投行展望的主观判断，常领先于技术面」，这类反转先行信号
+    在 V0.77.2 会被判 neutral（原实现只看 tech vs macro 方向），属整类遗漏。
+    """
+    out = compute_resonance({"tech": 35, "macro": 50, "news": 65})
+    assert out.signal == "divergent"
+    assert out.subtype == DivergentSubtype.TECH_NEWS
+    assert out.subtype == "tech_news"  # StrEnum 与裸字符串相等，前端无需转换
+    assert out.subtype_label == "技术面 vs 消息面"
+    # confidence = (65 - 35) × 0.5 = 15.0（按最大幅度 30 算，不是 tech-macro 的 15）
+    assert out.confidence == pytest.approx(15.0, abs=0.1)
+
+
+def test_divergent_macro_vs_news_is_third_pair() -> None:
+    """宏观 vs 消息面背离（V0.78.0 新增的第三对维度）。"""
+    out = compute_resonance({"tech": 50, "macro": 30, "news": 70})
+    assert out.signal == "divergent"
+    assert out.subtype == DivergentSubtype.MACRO_NEWS
+    assert out.subtype_label == "宏观面 vs 消息面"
+    assert out.confidence == pytest.approx(20.0, abs=0.1)
+
+
+def test_divergent_takes_largest_gap_not_first_hit() -> None:
+    """三对都达标时取幅度最大的一对，而非 _DIVERGENT_PAIRS 中靠前者。
+
+    复现用例 tech=35 / macro=50 / news=65：tech-macro 差 15（刚够阈值），
+    tech-news 差 30。取首个会把显著背离误标成 tech_macro —— 这是实现时
+    真实踩到的问题，故留断言锁死「取最大幅度」这一决策。
+    """
+    out = compute_resonance({"tech": 35, "macro": 50, "news": 65})
+    assert out.subtype == DivergentSubtype.TECH_NEWS
+    assert out.confidence == pytest.approx(15.0, abs=0.1)
+
+
+def test_divergent_threshold_boundary_15_triggers() -> None:
+    """幅度恰为 15 → 触发（判定用 >=）。"""
+    out = compute_resonance({"tech": 50, "macro": 65, "news": 50})
+    assert out.signal == "divergent"
+    assert out.subtype == DivergentSubtype.TECH_MACRO
+
+
+def test_divergent_threshold_boundary_14_does_not_trigger() -> None:
+    """幅度 14 → 不触发，落到 neutral 且不携带 subtype。"""
+    out = compute_resonance({"tech": 50, "macro": 64, "news": 50})
+    assert out.signal == "neutral"
+    assert out.subtype is None
+    assert out.subtype_label == ""
+    assert out.confidence == pytest.approx(50.0, abs=0.1)
+
+
+def test_slight_opposite_directions_no_longer_divergent() -> None:
+    """行为变更留档：56 vs 44 方向相反但幅度仅 12。
+
+    V0.77.2 判 divergent（只看方向相反），V0.78.0 起判 neutral ——
+    这是「取幅度 ≥ 15」这一**有意收紧**的直接后果：轻微分歧够不上
+    结构性背离。写死在此以免被后人当回归改回。
+    """
+    out = compute_resonance({"tech": 56, "macro": 44, "news": 50})
+    assert out.signal == "neutral"
+    assert out.subtype is None
+
+
+def test_divergent_subtype_serializes_as_plain_string() -> None:
+    """subtype 必须以裸字符串进 JSON，否则前端查表 DIVERGENT_I18N 会落空。
+
+    StrEnum 的两种形态不同：``model_dump()`` 给枚举对象、``model_dump_json()``
+    才给字符串，而 FastAPI 的响应走后者。若将来 schema 调整（如加
+    ``use_enum_values`` 或改回 ``str, Enum``）导致 JSON 里变成
+    ``"DivergentSubtype.TECH_NEWS"``，前端会**静默**不显示背离类型 ——
+    此断言即该静默失效的守卫。
+    """
+    out = compute_resonance({"tech": 35, "macro": 50, "news": 65})
+    assert '"subtype":"tech_news"' in out.model_dump_json()

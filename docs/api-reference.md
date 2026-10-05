@@ -247,12 +247,12 @@
 | 三大数据源 | `GET /api/v1/market/gold/trend?days=60&target=` （必需）+ `GET /api/v1/decision/etf?days=60&target=` + `GET /api/v1/resonance/signal?target=`（后两者失败仅降级对应区块，`Promise.allSettled`） |
 | 结论行 | 行动建议与置信度**一律取后端 `decision`**（`action` / `action_label` / `confidence` ∈ low·medium·high），前端不自造阈值 |
 | 三维分值 | 技术面 30% / 宏观面 40% / 消息面 30%，权重与 `/weights` 页面同源（`index.components`）；红=利多 绿=利空 **且附 ↑↓→ 文字符号**（满足色觉障碍可读性） |
-| 一致性判定 | **不在前端重算** —— 直接取 `/api/v1/resonance/signal` 的 `signal`（5 类：`strong_up` / `strong_down` / `weak_up` / `divergent` / `neutral`）。后端阈值 `_THRESH_UP=55` / `_THRESH_DOWN=45`、`confidence = avg × (1 - stdev/55)`。**理由**：若前端另立一套阈值，后端调参后两处口径必然打架 |
+| 一致性判定 | **不在前端重算** —— 直接取 `/api/v1/resonance/signal` 的 `signal`（5 类：`strong_up` / `strong_down` / `weak_up` / `divergent` / `neutral`）。后端阈值引用 `schemas/thresholds.py` 的 `DirectionThreshold.BULLISH`(55) / `BEARISH`(45)（V0.78.0 起不再裸写字面量），`confidence = avg × (1 - stdev/55)`。**`divergent` 自 V0.78.0 起改为「三维任意一对分差 ≥ 15」**（原仅判 tech vs macro 且要求方向相反，会整类漏掉「消息面看多 + 技术看空」这类反转先行信号），取**幅度最大**的一对，并由 `subtype` 标明维度对 `tech_macro` / `tech_news` / `macro_news`、`subtype_label` 给中文说明（前端 i18n 键缺失时回退它）。**理由**：若前端另立一套阈值，后端调参后两处口径必然打架 |
 | 仓位对照 | 后端 `position_ratio` 恒为 `0`（`services/position.py` 注释「账户本金未知，暂不估算」）→ 卡片**不展示「当前仓位 X%」**，只显示「空仓 / 持有 N 份 · 浮盈浮亏」，避免用 0 编造出「仓位 0%」的假信号 |
 | 数据质量折损 | ① 宏观因子中 `source == "静态参考值"` 的项数 / 名称 / 最新数据日（判据用**后端真正写入的字面量**，不能用「非 H.15 即静态」这类启发式——央行购金来源是 `世界黄金协会 GDT Q2 2026`，属正当季度源）；② 消息面 `scored=false` 时提示未打分；③ `trend.degraded=true` 时报出 mock 源市场数。三者都直接扣减「结论可信度」的提示，**如实标注优先于观感统一** |
 | 品种切换 | 黄金 `etf` / 白银 `silver_etf`，一次切换使 trend / decision / resonance **三个 target 同步生效**，选择记忆于 `localStorage.pm_synthesis_asset` |
 | 刷新 | 60s 轮询 + `inflight` 重入保护（防止慢响应叠加）；`i18n:change` 事件触发重渲染；`aria-live="polite"` 播报结论变化 |
-| i18n | 自持 `T(key, fallback)` 包装：缺失 key 时**回落到中文硬编码**（`I18n.t()` 查不到会返回 key 字面量，若不兜底页面上会直接出现 `syn.cons_strong_up` 这种裸 key）；三语各 42 个 `syn.*` 键，并由 2 条门禁守住（脚本引用键三语齐全 + 三语键集合严格一致） |
+| i18n | 自持 `T(key, fallback)` 包装：缺失 key 时**回落到中文硬编码**（`I18n.t()` 查不到会返回 key 字面量，若不兜底页面上会直接出现 `syn.cons_strong_up` 这种裸 key）；三语各 45 个 `syn.*` 键，并由 2 条门禁守住（脚本引用键三语齐全 + 三语键集合严格一致） |
 
 ### 6.7 首页内嵌消息面打分器（V0.76.0）
 

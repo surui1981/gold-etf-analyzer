@@ -14,6 +14,14 @@ WEAK_UP / DIVERGENT / NEUTRAL），并基于历史给出 STRONG_UP 命中率。
   「当日 news.score ≥ 55 且 tech ≥ 55 且 macro ≥ 55」。
 - **history(days)**：V0.70.0 MVP 只覆盖「今天」+「近 N 天的消息面方向」；
   宏观/技术历史回放留待后续版本（数据基础尚未沉淀每日宏观/技术快照）。
+
+V0.78.0 变更
+-----------
+``DIVERGENT`` 原实现只识别「技术 vs 宏观」且要求两者**方向相反**
+（tech ≥ 55 且 macro ≤ 45），于是「消息面已看多、技术仍看空」这类
+**反转先行信号**（消息面是客户对投行展望的主观判断，常领先于技术面）
+整类被误判为 ``neutral``。现改为**三维任意一对背离幅度 ≥ 15** 即触发，
+并用 ``subtype`` 标明具体维度对。依据见 ``docs/parameter-evaluation.md`` §3.5。
 """
 
 from datetime import date, timedelta
@@ -22,6 +30,8 @@ from typing import TYPE_CHECKING
 from app.repositories.news import NewsScoreRepository
 from app.schemas.common import DirectionSignal
 from app.schemas.resonance import (
+    DIVERGENT_SUBTYPE_LABELS,
+    DivergentSubtype,
     ResonanceHistoryOut,
     ResonanceSignalOut,
     StrengthUpStatsOut,
@@ -41,12 +51,25 @@ _THRESH_UP = int(DirectionThreshold.BULLISH)  # 55
 _THRESH_DOWN = int(DirectionThreshold.BEARISH)  # 45
 _MIN_SAMPLES = 20
 
+# 背离判定阈值：任意两维分差 ≥ 此值即视为「在打架」（V0.78.0 新增）
+# 15 的来由：方向相反的最小幅度是 55 vs 45 = 10，而 10~14 属轻微分歧，
+# 够不上「结构性背离」；15 起才认定为反转/分歧结构（parameter-evaluation §3.5）。
+_DIVERGENT_THRESHOLD = 15
+
+#: 候选背离维度对。判定时取**幅度最大**的一对（见下方循环注释），
+#: 而非顺序首个达标 —— 否则中性维度会掩盖更显著的背离。
+_DIVERGENT_PAIRS: tuple[tuple[str, str, str], ...] = (
+    (DivergentSubtype.TECH_MACRO.value, "tech", "macro"),
+    (DivergentSubtype.TECH_NEWS.value, "tech", "news"),
+    (DivergentSubtype.MACRO_NEWS.value, "macro", "news"),
+)
+
 # 中文信号名
 _SIGNAL_LABELS = {
     "strong_up": "强共振看多",
     "strong_down": "强共振看空",
     "weak_up": "弱多信号",
-    "divergent": "技术/宏观反向",
+    "divergent": "维度背离",
     "neutral": "中性震荡",
 }
 
@@ -72,6 +95,7 @@ def compute_resonance(
     tech = components.get("tech", 50.0)
     macro = components.get("macro", 50.0)
     news = components.get("news", 50.0)
+    subtype: DivergentSubtype | None = None  # 仅 divergent 分支赋值
 
     # 4 类判定（顺序：强 → 弱 → 背离 → 中性）
     if tech >= _THRESH_UP and macro >= _THRESH_UP and news >= _THRESH_UP:
@@ -88,22 +112,32 @@ def compute_resonance(
     elif (tech >= _THRESH_UP) + (macro >= _THRESH_UP) + (news >= _THRESH_UP) >= 2:
         confidence = 65.0
         signal = "weak_up"
-    elif (
-        # 背离：tech 与 macro 反向（典型反转信号——技术领先，宏观滞后）
-        (tech >= _THRESH_UP and macro <= _THRESH_DOWN)
-        or (tech <= _THRESH_DOWN and macro >= _THRESH_UP)
-    ):
-        confidence = _clip((max(tech, macro) - min(tech, macro)) * 0.5)
-        signal = "divergent"
     else:
-        confidence = 50.0
-        signal = "neutral"
+        # 背离：三维任意一对分差 ≥ 15（V0.78.0 起含消息面维度）。
+        # 取**幅度最大**的达标对而非首个：宏观处中性区时 tech-macro 的
+        # 15 分差会掩盖 tech-news 可能存在的 30 分显著背离 —— 而后者才是
+        # §3.5 关心的场景（消息面是反转先行指标）。并列时取 _DIVERGENT_PAIRS
+        # 中靠前者，保证同一组输入的输出稳定可复现。
+        best: tuple[str, float] | None = None
+        for pair_name, left, right in _DIVERGENT_PAIRS:
+            gap = abs(components.get(left, 50.0) - components.get(right, 50.0))
+            if gap >= _DIVERGENT_THRESHOLD and (best is None or gap > best[1]):
+                best = (pair_name, gap)
+        if best is not None:
+            subtype = DivergentSubtype(best[0])
+            confidence = _clip(best[1] * 0.5)
+            signal = "divergent"
+        else:
+            confidence = 50.0
+            signal = "neutral"
 
     label = _SIGNAL_LABELS.get(signal, "中性")
     return ResonanceSignalOut(
         score_date=score_date,
         signal=signal,
         label=label,
+        subtype=subtype,
+        subtype_label=DIVERGENT_SUBTYPE_LABELS.get(subtype.value, "") if subtype else "",
         confidence=round(confidence, 1),
         components={"tech": tech, "macro": macro, "news": news},
         direction_summary=_summarize(tech, macro, news),

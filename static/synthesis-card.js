@@ -71,8 +71,16 @@
     strong_up: { tone: 'up', i18n: 'syn.cons_strong_up', fallback: '三维同向看多（三面 ≥55）→ 共振成立，结构最干净' },
     strong_down: { tone: 'down', i18n: 'syn.cons_strong_down', fallback: '三维同向看空（三面 ≤45）→ 反向共振成立，结构最干净' },
     weak_up: { tone: 'weak', i18n: 'syn.cons_weak_up', fallback: '三维中 2 维看多 → 弱共振，方向偏多但强度不足' },
-    divergent: { tone: 'diverge', i18n: 'syn.cons_divergent', fallback: '技术面与宏观面反向 → 典型反转/分歧结构，最需警惕' },
+    divergent: { tone: 'diverge', i18n: 'syn.cons_divergent', fallback: '三维中出现显著背离（任意两维分差 ≥15）→ 反转/分歧结构，最需警惕' },
     neutral: { tone: 'neutral', i18n: 'syn.cons_neutral', fallback: '三维均在中性区（45~55）→ 无有效方向，等市场表态' }
+  };
+
+  /* V0.78.0：背离维度对 → i18n 键。缺失时回退服务端返回的 subtype_label（中文），
+     避免英文环境下显示裸 key（与本文件 T(key, fallback) 的兜底约定一致）。 */
+  var DIVERGENT_I18N = {
+    tech_macro: 'syn.dvg_tech_macro',
+    tech_news: 'syn.dvg_tech_news',
+    macro_news: 'syn.dvg_macro_news'
   };
 
   var CONF_I18N = { low: 'syn.conf_low', medium: 'syn.conf_medium', high: 'syn.conf_high' };
@@ -259,7 +267,14 @@
 
     if (res && CONSISTENCY[res.signal]) {
       var ci = CONSISTENCY[res.signal];
-      parts.push('三维结构：' + esc(T(ci.i18n, ci.fallback)));
+      var txt = T(ci.i18n, ci.fallback);
+      if (res.signal === 'divergent') {
+        /* 背离须标明「哪两维在打架」—— 只说「反向」用户无法定位（V0.78.0） */
+        var dkey = DIVERGENT_I18N[res.subtype];
+        var pair = dkey ? (T(dkey, '') || res.subtype_label || '') : (res.subtype_label || '');
+        if (pair) { txt += '（' + pair + '）'; }
+      }
+      parts.push('三维结构：' + esc(txt));
     }
     if (dec) {
       parts.push('决策引擎给出<b>' + esc(dec.action_label || '—') + '</b>（' + esc(confTxt) + '置信度）');
