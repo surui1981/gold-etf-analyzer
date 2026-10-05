@@ -13,7 +13,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.78.1";
+const VERSION = "v0.78.2";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -37,6 +37,15 @@ const STORED_AT_HEADER = "X-SW-Stored-At";
 //   整批回滚 → 整个 SHELL_CACHE 为空，离线能力归零且无任何用户可见提示。
 //   历史上 /central_bank、/backtest、/silver 三条均为 404（服务端只注册了 /central-bank，
 //   白银与回测页走 /static/*.html），导致 precache 从未成功过一次。
+//
+// ⚠⚠ 下面 6 条（`/` 与 5 个 RESTful 路由）**看着也是「绕了一道」，但必须保留原样** ——
+//   它们响应 307 → /static/*.html，很容易被当成冗余项「优化」成直连地址。改了就坏：
+//   本文件「HTML 页面」分支是 network-first，离线兜底为 `caches.match(request)`，
+//   而 `request.url` 就是**用户地址栏里的 /portfolio** —— 缓存 key 必须与之一致
+//   才可能命中。若改写成 /static/portfolio.html，离线访问 /portfolio 会查不到缓存，
+//   直接落到 offline.html（用户看到「离线」，而非他要的页面）。
+//   `cache.addAll()` 会跟随 307，并以**原始 URL** 为 key 缓存最终响应体，这是有意为之。
+//   回归锁：tests/test_scripts_check_pwa_assets.py::test_restful_nav_entries_are_precached
 const SHELL_ASSETS = [
     "/",
     "/portfolio",

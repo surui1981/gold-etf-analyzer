@@ -7,11 +7,31 @@
 #   2. pytest 全量回归（默认排除 2 个联网 fetcher 文件，避免 CI 网络抖动阻塞）
 #   3. check_static_js.py 前端内联 JS 门禁（项目无构建步骤，必须另设关卡）
 #   4. check_docs_claims.py 文档声明门禁（数据表名 / localStorage key / 静态页 / API 端点存在性断言）
+#   5. V0.78.1 新增、V0.78.2 起统一执行策略的三道门禁：
+#      check_pwa_assets.py（SW 缓存版本 / SHELL_ASSETS / manifest）
+#      check_links.py（markdown 死链与锚点）
+#      check_deps.py（代码三方 import vs pyproject 声明）
+#
+# 注：第 6 道门禁 scripts/check_cluster_render.mjs 需 Node，不在本 job 直接执行；
+#     它由 tests/test_ui_cluster_render.py 包进 pytest（机器无 node 时该用例 skip）。
+#
+# 门禁执行策略（V0.78.2 起）
+#   - 全部八道门禁带 `if: always() && steps.install.outcome == 'success'`：
+#     ① `always()` 保证前序失败时本门禁仍执行 —— 每道门禁必须自己给出结论，
+#        不被别人的失败掩盖（GitHub 默认 `if: success()` 会让其后 step 全 skip，
+#        而 skip 在界面上与「通过」仅一线之隔）；
+#     ② 但依赖必须装成功：`uv sync` 一失败，ruff / pytest 根本不存在，
+#        跑了必然红 —— 那会产出 8 个红 step 把唯一真实原因淹没，故此时 skip。
+#   - **判断 CI 是否可信，必须逐 step 看 conclusion，`skipped` ≠ 通过。**
 #
 # 设计要点：
 #   - Python matrix 3.11 / 3.12（pyproject 要求 >=3.11）
 #   - uv 缓存（~/.cache/uv + .venv）跨 job 复用
 #   - ruff 版本由 pyproject.lock 决定，不在 CI 硬锁
+#   - Action 运行时（V0.78.2）：五个 action 全部升到 Node 24 ——
+#     checkout@v7 / upload-artifact@v7 / setup-uv@v10 / setup-buildx-action@v4 /
+#     build-push-action@v7，消除 GitHub 的 Node 20 弃用提示。
+#     ⚠ 升级前逐个核对过目标版本的 breaking 与本项目用到的参数（详见提交说明）。
 #   - pytest 加 -p no:cacheprovider（CI 不需要 .pytest_cache）
 #   - 不跑联网 fetcher 文件（irfcl / h15），由 main 分支 nightly job 单独跑（TODO V0.67.x）
 #
@@ -42,10 +62,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
@@ -56,16 +76,20 @@ jobs:
       - name: Install system deps (gcc for aiosqlite)
         run: sudo apt-get update -qq && sudo apt-get install -yqq build-essential
 
-      - name: Install Python deps (with dev)
+      - id: install
+        name: Install Python deps (with dev)
         run: uv sync --frozen --extra dev
 
       - name: ruff lint
+        if: always() && steps.install.outcome == 'success'
         run: uv run ruff check src tests
 
       - name: ruff format check
+        if: always() && steps.install.outcome == 'success'
         run: uv run ruff format --check src tests
 
       - name: pytest (offline regression, exclude network fetchers)
+        if: always() && steps.install.outcome == 'success'
         run: |
           uv run pytest -q \
             --tb=short \
@@ -74,25 +98,31 @@ jobs:
             --ignore=tests/test_services/test_h15_fetcher.py
 
       - name: Frontend inline JS gate
+        if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_static_js.py
 
       - name: Documentation claims gate
+        if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_docs_claims.py
 
-      # V0.78.1 新增三道静态门禁。⚠ 它们位于 pytest 之后 ——
-      # pytest 失败时这些 step 会被 skip，此时**不可**读成「门禁通过」。
+      # V0.78.1 新增三道静态门禁；V0.78.2 起本 job 的**全部八道门禁**都带
+      # `if: always() && steps.install.outcome == 'success'` ——
+      # 前一道失败不再让后一道被 skip（详见本文件头部「门禁执行策略」）。
       - name: PWA assets gate (sw.js VERSION / SHELL_ASSETS / manifest.json)
+        if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_pwa_assets.py
 
       - name: Links gate (dead links / anchors in markdown)
+        if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_links.py
 
       - name: Dependency declaration gate (src+tests imports vs pyproject)
+        if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_deps.py
 
       - name: Upload pytest junit (失败时方便定位)
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pytest-results-py${{ matrix.python-version }}
           path: .pytest_results/
@@ -108,13 +138,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Build (runtime stage)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
