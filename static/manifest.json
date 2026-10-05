@@ -33,12 +33,12 @@
   "shortcuts": [
     {
       "name": "白银追踪",
-      "url": "/silver",
+      "url": "/static/silver.html",
       "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
     },
     {
       "name": "参数回测",
-      "url": "/backtest",
+      "url": "/static/backtest.html",
       "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
     }
   ]

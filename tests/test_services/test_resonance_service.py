@@ -3,6 +3,7 @@
 覆盖：
 - 4 类信号判定（strong_up / strong_down / weak_up / divergent / neutral）
 - DIVERGENT 的三维背离判定与 subtype（V0.78.0：任意两维分差 ≥ 15）
+- 缺维处理（V0.78.1：缺失维度不按 50 兜底、不参与判定、由 missing_dimensions 披露）
 - strength_up 命中统计（含样本不足警告）
 - history 按日期倒序返回
 - signal_today 的 target 透传（V0.75.1：黄金/白银复用同一口径）
@@ -68,11 +69,64 @@ def test_compute_score_date_propagates() -> None:
     assert out.score_date == d
 
 
-def test_compute_default_dim_50_when_missing() -> None:
-    """缺维度时按中性 50 兜底。"""
-    out = compute_resonance({"tech": 60})  # macro / news 缺失
-    # tech=60, macro=50, news=50 → tech 看多，宏观/消息中性 → 仅 1 维看多 → 中性或弱多
-    assert out.signal in {"neutral", "weak_up"}
+def test_missing_dims_are_not_backfilled_as_neutral() -> None:
+    """缺维**不再按中性 50 兜底**（V0.78.1）。
+
+    原实现用 ``components.get("tech", 50.0)`` 取值，会凭空造出一个 50 分的技术面 ——
+    把「数据不足」伪装成「多空平衡」，与 V0.78.0 Step D 在技术面 5 维上修掉的问题同形。
+    """
+    out = compute_resonance({"news": 62})  # tech / macro 缺失
+    assert out.components == {"news": 62}, "缺失维度不得出现在 components 里"
+    assert out.missing_dimensions == ["tech", "macro"]
+    assert out.signal == "neutral", "单维度构不成共振"
+    assert "技术数据不足" in out.direction_summary
+    assert "宏观数据不足" in out.direction_summary
+
+
+def test_missing_dim_does_not_fake_tech_news_divergence() -> None:
+    """核心回归：tech 缺失时不得虚报 tech_news 背离（会错标子类）。
+
+    旧行为：虚造的 tech=50 与 news=65 恰好差 15 ⇒ 报 ``tech_news``，
+    而真实存在的背离对是 ``macro_news``（macro=50 与 news=65 差 15）。
+    """
+    out = compute_resonance({"macro": 50, "news": 65})
+    assert out.signal == "divergent"
+    assert out.subtype is DivergentSubtype.MACRO_NEWS
+
+
+def test_divergent_skips_pairs_containing_missing_dim() -> None:
+    """背离只在**两维都有数据**的对之间比较。"""
+    out = compute_resonance({"tech": 30, "news": 70})  # macro 缺失
+    assert out.subtype is DivergentSubtype.TECH_NEWS
+
+
+def test_two_valid_dims_never_strong_up() -> None:
+    """只有 2 维时够不上「强共振」—— 缺的那一维方向未知，保守降级为弱多。"""
+    out = compute_resonance({"tech": 70, "macro": 70})
+    assert out.signal == "weak_up"
+
+
+def test_two_valid_dims_both_bearish_not_strong_down() -> None:
+    """同理，2 维同向看空也不构成强共振看空。"""
+    out = compute_resonance({"tech": 30, "macro": 30})
+    assert out.signal != "strong_down"
+
+
+def test_empty_components_all_dims_missing() -> None:
+    """三维全缺 → 中性，且三维护均被披露为缺数据。"""
+    out = compute_resonance({})
+    assert out.signal == "neutral"
+    assert out.components == {}
+    assert out.missing_dimensions == ["tech", "macro", "news"]
+
+
+def test_all_three_present_behavior_unchanged() -> None:
+    """回归：三维齐备时与 V0.78.0 口径**完全一致**（本次改动不触及正常路径）。"""
+    out = compute_resonance({"tech": 60, "macro": 62, "news": 58})
+    assert out.signal == "strong_up"
+    assert out.missing_dimensions == []
+    assert out.components == {"tech": 60, "macro": 62, "news": 58}
+    assert "技术看多(60)" in out.direction_summary
 
 
 # =========================================================================

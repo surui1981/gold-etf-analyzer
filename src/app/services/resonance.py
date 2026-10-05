@@ -64,6 +64,13 @@ _DIVERGENT_PAIRS: tuple[tuple[str, str, str], ...] = (
     (DivergentSubtype.MACRO_NEWS.value, "macro", "news"),
 )
 
+#: 三维的英文键 -> 中文名（顺序即展示顺序，供 _summarize 与缺维披露共用）
+_DIM_LABELS: tuple[tuple[str, str], ...] = (
+    ("tech", "技术"),
+    ("macro", "宏观"),
+    ("news", "消息"),
+)
+
 # 中文信号名
 _SIGNAL_LABELS = {
     "strong_up": "强共振看多",
@@ -85,42 +92,65 @@ def compute_resonance(
     """由 TrendIndexOut.components 计算单日共振信号。
 
     Args:
-        components: ``{"tech": ..., "macro": ..., "news": ...}`` 三个 0-100 分；
-                    缺维度时按 50（中性）兜底。
+        components: ``{"tech": ..., "macro": ..., "news": ...}`` 三个 0-100 分。
+                    **只传有数据的维度** —— 缺失的维度**不按 50 兜底**（见下）。
         score_date: 日期（signal_today 传 None → 服务层自动填今日）
 
     Returns:
         ResonanceSignalOut
+
+    V0.78.1 变更
+    -----------
+    缺失维度**不再按中性 50 兜底参与判定**（与 V0.78.0 Step D 对技术面 5 维的处理同一原则：
+    「数据不足」与「真实中性」不是一回事）。
+
+    原先的 ``components.get("tech", 50.0)`` 会凭空造出一个 50 分技术面，两类后果：
+
+    ① **虚报背离 / 错标子类**：``tech`` 缺失、``macro=50``、``news=65`` 时，虚造的 tech=50
+       与 news 恰好差 15 ⇒ 报出 ``tech_news`` 背离，而真实存在的背离对其实是 ``macro_news``；
+    ② **错判强度**：缺失维度会参与 ``weak_up`` 的「≥2 维看多」计数。
+
+    现改为只用**有效维度**判定；有效维度少于 2 时构不成「共振」，返回 ``neutral``。
+    哪些维度缺数据由 ``missing_dimensions`` 字段对外披露（不再沉默）。
+    现有标的均 ≥ 42 根 K 线、三维齐备，故生产路径行为不变。
     """
-    tech = components.get("tech", 50.0)
-    macro = components.get("macro", 50.0)
-    news = components.get("news", 50.0)
+    scores: dict[str, float] = {
+        key: float(value) for key, _ in _DIM_LABELS if (value := components.get(key)) is not None
+    }
+    missing = [key for key, _ in _DIM_LABELS if key not in scores]
     subtype: DivergentSubtype | None = None  # 仅 divergent 分支赋值
 
-    # 4 类判定（顺序：强 → 弱 → 背离 → 中性）
-    if tech >= _THRESH_UP and macro >= _THRESH_UP and news >= _THRESH_UP:
+    # 4 类判定（顺序：强 → 弱 → 背离 → 中性）。
+    # 「强」要求三维齐备且同向；只有 2 维时无论如何都够不上「强共振」——
+    # 缺的那一维未知，保守视为不够强。
+    n_valid = len(scores)
+    values = list(scores.values())
+    up_cnt = sum(1 for v in values if v >= _THRESH_UP)
+    down_cnt = sum(1 for v in values if v <= _THRESH_DOWN)
+    is_strong_up = n_valid == 3 and up_cnt == 3
+    is_strong_down = n_valid == 3 and down_cnt == 3
+
+    if is_strong_up or is_strong_down:
         # 强共振：置信度 = 平均 × 一致性折扣（标准差越小越确信）
-        avg = (tech + macro + news) / 3
-        stdev = ((tech - avg) ** 2 + (macro - avg) ** 2 + (news - avg) ** 2) ** 0.5
+        avg = sum(values) / n_valid
+        stdev = (sum((v - avg) ** 2 for v in values)) ** 0.5
         confidence = _clip(avg * (1 - stdev / 55))
-        signal = "strong_up"
-    elif tech <= _THRESH_DOWN and macro <= _THRESH_DOWN and news <= _THRESH_DOWN:
-        avg = (tech + macro + news) / 3
-        stdev = ((tech - avg) ** 2 + (macro - avg) ** 2 + (news - avg) ** 2) ** 0.5
-        confidence = _clip(avg * (1 - stdev / 55))
-        signal = "strong_down"
-    elif (tech >= _THRESH_UP) + (macro >= _THRESH_UP) + (news >= _THRESH_UP) >= 2:
+        signal = "strong_up" if is_strong_up else "strong_down"
+    elif up_cnt >= 2:
         confidence = 65.0
         signal = "weak_up"
     else:
-        # 背离：三维任意一对分差 ≥ 15（V0.78.0 起含消息面维度）。
+        # 背离：任意一对分差 ≥ 15（V0.78.0 起含消息面维度）。
         # 取**幅度最大**的达标对而非首个：宏观处中性区时 tech-macro 的
         # 15 分差会掩盖 tech-news 可能存在的 30 分显著背离 —— 而后者才是
         # §3.5 关心的场景（消息面是反转先行指标）。并列时取 _DIVERGENT_PAIRS
         # 中靠前者，保证同一组输入的输出稳定可复现。
+        # V0.78.1：**任一维缺失的维度对直接跳过** —— 拿缺失维度算分差是虚报。
         best: tuple[str, float] | None = None
         for pair_name, left, right in _DIVERGENT_PAIRS:
-            gap = abs(components.get(left, 50.0) - components.get(right, 50.0))
+            if left not in scores or right not in scores:
+                continue
+            gap = abs(scores[left] - scores[right])
             if gap >= _DIVERGENT_THRESHOLD and (best is None or gap > best[1]):
                 best = (pair_name, gap)
         if best is not None:
@@ -139,15 +169,24 @@ def compute_resonance(
         subtype=subtype,
         subtype_label=DIVERGENT_SUBTYPE_LABELS.get(subtype.value, "") if subtype else "",
         confidence=round(confidence, 1),
-        components={"tech": tech, "macro": macro, "news": news},
-        direction_summary=_summarize(tech, macro, news),
+        components={k: round(v, 1) for k, v in scores.items()},
+        missing_dimensions=missing,
+        direction_summary=_summarize(scores),
     )
 
 
-def _summarize(tech: float, macro: float, news: float) -> str:
-    """一句话中文总结 + 方向标识（供前端红绿着色）。"""
+def _summarize(scores: dict[str, float]) -> str:
+    """一句话中文总结 + 方向标识（供前端红绿着色）。
+
+    V0.78.1：缺失维度显示「数据不足」而非「中性(50)」—— 后者会把「没有数据」
+    伪装成「多空平衡」，正是 V0.78.0 Step D 在技术面 5 维上修掉的那类假中性。
+    """
     parts: list[str] = []
-    for label, score in (("技术", tech), ("宏观", macro), ("消息", news)):
+    for key, label in _DIM_LABELS:
+        if key not in scores:
+            parts.append(f"{label}数据不足")
+            continue
+        score = scores[key]
         if score >= _THRESH_UP:
             parts.append(f"{label}看多({score:.0f})")
         elif score <= _THRESH_DOWN:
@@ -210,8 +249,10 @@ class ResonanceService:
         for score_date in sorted(grouped.keys(), reverse=True):
             rows = grouped[score_date]
             effective, _, _ = aggregate_slots(rows)
-            # 历史回放：tech/macro 按中性 50 兜底（占位），仅 news 有值
-            components = {"tech": 50.0, "macro": 50.0, "news": effective}
+            # 历史回放：V0.70.0 MVP 阶段 tech/macro 的每日快照尚未沉淀。
+            # V0.78.1：**不再用中性 50 冒充**（那是「数据不足」，不是「多空平衡」），
+            # 只传有真实数据的消息面维度 —— 缺的维度由 missing_dimensions 如实披露。
+            components = {"news": effective}
             items.append(compute_resonance(components, score_date=score_date))
 
         return ResonanceHistoryOut(

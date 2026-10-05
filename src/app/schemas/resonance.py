@@ -66,7 +66,12 @@ class ResonanceSignalOut(BaseModel):
     confidence: float = Field(..., ge=0, le=100, description="置信度 0-100")
     components: dict[str, float] = Field(
         default_factory=dict,
-        description="三维度分值 components: tech / macro / news",
+        description="三维度分值 components: tech / macro / news；"
+        "**仅含有效维度**（数据不足的面不出现，V0.78.1 起不再按 50 兜底）",
+    )
+    missing_dimensions: list[str] = Field(
+        default_factory=list,
+        description="数据不足、未参与判定的维度（V0.78.1 新增）；空列表 = 三维齐备",
     )
     direction_summary: str = Field(..., description="三维度方向的中文一句话总结（红绿着色用）")
 

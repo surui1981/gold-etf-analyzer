@@ -2,7 +2,7 @@
 name = "gold-etf-analyzer"
 # 版本号须与 src/app/__init__.py 的 __version__ 一致（运行时读那里）；
 # 发版改版本后必须跑一次 `uv lock`，否则 CI 的 `uv sync --frozen` 会因 lock 过期失败。
-version = "0.78.0"
+version = "0.78.1"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -30,6 +30,11 @@ dependencies = [
     # pytest 加载 conftest 即 ImportError、容器启动即崩溃（V0.75.0/V0.75.1 CI 全红）。
     # 锁定 4.x：hashpw/gensalt/checkpw 三个 API 在该系列已验证，避开 5.0 大版本变更。
     "bcrypt>=4.2,<5.0",
+    # V0.78.1：middleware/{auth,rate_limit,trace}.py 直接 `import starlette`
+    # （Request / BaseHTTPMiddleware 等）。它虽是 fastapi 的强依赖、必然随 fastapi 装上，
+    # 但「代码直接 import 的包」必须显式声明 —— 由 scripts/check_deps.py 机械校验。
+    # 不锁上界：实际版本交由 fastapi 的约束决定（当前解析为 starlette 1.6.0）。
+    "starlette>=1.0",
 ]
 
 [project.optional-dependencies]

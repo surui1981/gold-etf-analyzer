@@ -79,6 +79,17 @@ jobs:
       - name: Documentation claims gate
         run: uv run python scripts/check_docs_claims.py
 
+      # V0.78.1 新增三道静态门禁。⚠ 它们位于 pytest 之后 ——
+      # pytest 失败时这些 step 会被 skip，此时**不可**读成「门禁通过」。
+      - name: PWA assets gate (sw.js VERSION / SHELL_ASSETS / manifest.json)
+        run: uv run python scripts/check_pwa_assets.py
+
+      - name: Links gate (dead links / anchors in markdown)
+        run: uv run python scripts/check_links.py
+
+      - name: Dependency declaration gate (src+tests imports vs pyproject)
+        run: uv run python scripts/check_deps.py
+
       - name: Upload pytest junit (失败时方便定位)
         if: always()
         uses: actions/upload-artifact@v4

@@ -39,7 +39,7 @@
     strong_up:   { cls: 'rc-strong-up',   label: '强共振看多', icon: '🟢' },
     strong_down: { cls: 'rc-strong-down', label: '强共振看空', icon: '🔴' },
     weak_up:     { cls: 'rc-weak-up',     label: '弱多信号',   icon: '🟠' },
-    divergent:   { cls: 'rc-divergent',   label: '技术/宏观反向', icon: '🟣' },
+    divergent:   { cls: 'rc-divergent',   label: '维度背离',   icon: '🟣' },
     neutral:     { cls: 'rc-neutral',     label: '中性震荡',   icon: '⚪' }
   };
 
@@ -94,10 +94,6 @@
     var card = document.getElementById(state.containerId);
     if (!card) return;
     var meta = SIGNAL_META[signal.signal] || SIGNAL_META.neutral;
-    var comps = signal.components || {};
-    var compsStr = '技术 ' + Math.round(comps.tech || 50)
-      + ' · 宏观 ' + Math.round(comps.macro || 50)
-      + ' · 消息 ' + Math.round(comps.news || 50);
     card.innerHTML =
       '<div class="rc-row ' + meta.cls + '">' +
         '<span class="rc-signal">' +

@@ -815,7 +815,7 @@ wheels = [
 
 [[package]]
 name = "gold-etf-analyzer"
-version = "0.78.0"
+version = "0.78.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiosmtplib" },
@@ -832,6 +832,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pywebpush" },
     { name = "sqlalchemy" },
+    { name = "starlette" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 
@@ -861,6 +862,7 @@ requires-dist = [
     { name = "pywebpush", specifier = ">=2.0,<3.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.16,<0.17" },
     { name = "sqlalchemy", specifier = ">=2.0.36,<3.0" },
+    { name = "starlette", specifier = ">=1.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32,<1.0" },
 ]
 provides-extras = ["dev"]
