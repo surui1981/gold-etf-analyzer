@@ -16,6 +16,10 @@ logger = get_logger(__name__)
 COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
     "daily_snapshots": [
         ("news_index", "FLOAT", "50"),
+        # V0.79.0 任务 #162：技术面 5 维度明细 JSON（trend_5 网格回测的前置）。
+        # ⚠ 历史 24 行**保持 NULL 不回填** —— 上游 K 线只覆盖其中 16-17 天，
+        # 回填不可能完整；缺失日期绝不用邻近日期顶替（那是伪造历史）。
+        ("tech_detail", "TEXT", "NULL"),
     ],
     "positions": [
         ("deleted_at", "DATETIME", "NULL"),

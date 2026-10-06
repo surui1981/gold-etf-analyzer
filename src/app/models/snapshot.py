@@ -13,6 +13,14 @@ class DailySnapshot(Base):
 
     - 每日一条（snapshot_date 唯一），重复捕获为更新
     - ``macro_detail`` 存宏观 5 因子 JSON：{key: {value, score, direction}}
+
+    - ``tech_detail`` 存技术面 5 维度 JSON（V0.79.0）：{维度名: {score, weight, contribution}}
+
+    ⚠ **为什么需要 ``tech_detail``（V0.79.0）**
+    ``tech_index`` 是「5 个子维度分 × 各自权重」的**最终加权和，拆不回去**；
+    而 Step G 要在回测里扫描**技术面内部权重**（``trend_5`` 网格），无原始分算不出来。
+    对比：宏观侧不需要额外列 —— ``macro_detail`` 里**已**存了 5 个因子的 ``score``
+    （``services/macro.py:169``），故 ``macro_5`` 网格开箱可用；技术面此前缺此落库。
     """
 
     __tablename__ = "daily_snapshots"
@@ -41,6 +49,14 @@ class DailySnapshot(Base):
 
     # 宏观因子明细（JSON）
     macro_detail: Mapped[str] = mapped_column(Text, comment="宏观 5 因子 JSON")
+
+    # 技术面 5 维度明细（JSON，V0.79.0）
+    # ⚠ 可空：历史 24 条无法回溯补（上游 K 线只覆盖其中 16-17 天，见任务 #162 结论）
+    # ⇒ 读到 None 即表示「该日无子维度分」，调用方**必须显式跳过**而非用 50 兜底
+    # （沿用 V0.78.0 Step D「数据不足 ≠ 中性」的纪律）。
+    tech_detail: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="技术面 5 维度 JSON（V0.79.0；历史行为 NULL）"
+    )
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -25,6 +25,11 @@ class SnapshotRepository:
         if existing is None:
             self._session.add(snapshot)
         else:
+            # ⚠ V0.79.0：`tech_detail` 必须列入 —— 该列表是**硬编码白名单**，
+            # 新增列若不加入，同日重复捕获时该字段**永远不会被更新**
+            # （实测：API 已返回 tech_detail，但库中仍为 NULL，因为当日快照已存在
+            #  ⇒ 走的是 update 分支而非 insert 分支）。这是「加了列但没生效」的
+            # 典型陷阱：**新列的写入路径有两处**（insert 与 update），只改一处会漏。
             for field in (
                 "close",
                 "change_pct",
@@ -39,6 +44,7 @@ class SnapshotRepository:
                 "trend_index",
                 "index_level",
                 "macro_detail",
+                "tech_detail",
             ):
                 setattr(existing, field, getattr(snapshot, field))
         await self._session.commit()

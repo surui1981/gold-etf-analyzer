@@ -25,6 +25,11 @@ class SnapshotOut(BaseModel):
     news_index: float = 50.0
     trend_index: float
     index_level: str
+    # V0.79.0 任务 #162：技术面 5 维度明细 JSON。
+    # ⚠ **历史 24 条为 None**（上游 K 线只覆盖其中 16-17 天，无法回填完整）。
+    # ⇒ 消费方（回测 Step G）读到 None 必须**显式跳过该日**，不可用中性 50 兜底
+    # （V0.78.0 Step D 纪律：数据不足 ≠ 中性）。
+    tech_detail: str | None = None
 
 
 class SnapshotListOut(BaseModel):

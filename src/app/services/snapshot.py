@@ -28,7 +28,17 @@ class DailySnapshotService:
         trend = await self._trend.analyze(days=60, target=GUIDE_TARGET)
         m = trend.metrics
         macro = trend.macro
-        tech_index = round(sum(i.contribution for i in trend.indicators), 1)
+        # ⚠ V0.79.0 修：原为 ``sum(i.contribution for i in trend.indicators)``，
+        # 而 **V0.78.0 Step D 起数据不足维度的 ``contribution`` 是 ``None``**
+        # （`trend.py:736` 起显式置 None 以区分「没算出来」与「算出来是中性」）
+        # ⇒ 任一维度不足即 ``TypeError: unsupported operand type(s) for +: 'int' and 'NoneType'``，
+        # **整次快照捕获崩溃**（Step D 改了 trend.py 却漏了这条路径）。
+        # 正确口径：只累加参与合成的有效维度；全不可用时 tech_index=0.0
+        # （与 ``_build_index`` 的 total=None→0.0 语义一致，见 trend.py:754）。
+        tech_index = round(
+            sum(i.contribution for i in trend.indicators if i.contribution is not None),
+            1,
+        )
 
         macro_detail = json.dumps(
             {
@@ -43,6 +53,21 @@ class DailySnapshotService:
             },
             ensure_ascii=False,
         )
+
+        # V0.79.0 任务 #162：落技术面 5 维度分（trend_5 网格回测的前置）。
+        # ⚠ **只落 score 非 None 的维度** —— 数据不足的维度其 score 为 None
+        # （V0.78.0 Step D 语义），**不可用 50 兜底**，否则「没算出来」会被
+        # 下游读成「算出来是中性」。缺失即键不存在，由消费方显式处理。
+        tech_detail_obj = {
+            i.name: {
+                "score": i.score,
+                "weight": i.weight,
+                "contribution": i.contribution,
+            }
+            for i in trend.indicators
+            if i.score is not None
+        }
+        tech_detail = json.dumps(tech_detail_obj, ensure_ascii=False) if tech_detail_obj else None
 
         snapshot = DailySnapshot(
             snapshot_date=date.today(),
@@ -61,6 +86,7 @@ class DailySnapshotService:
             trend_index=trend.index.score,
             index_level=trend.index.level.value,
             macro_detail=macro_detail,
+            tech_detail=tech_detail,
         )
         await self._repo.upsert(snapshot)
         logger.info(
@@ -72,6 +98,14 @@ class DailySnapshotService:
             snapshot.tech_index,
             snapshot.macro_index,
             snapshot.news_index,
+        )
+        # V0.79.0：落库子维度数需可诊断 —— 为 0 说明 5 个维度全部数据不足
+        # （或 W/M 视图旁路），此时 tech_detail 为 NULL，消费方须显式跳过。
+        logger.info(
+            "Snapshot tech_detail: date=%s dims=%d%s",
+            snapshot.snapshot_date,
+            len(tech_detail_obj),
+            "" if tech_detail_obj else " (tech_detail=NULL)",
         )
         return SnapshotOut.model_validate(snapshot)
 
