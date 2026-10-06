@@ -29,17 +29,12 @@ logger = get_logger(__name__)  # V0.67.0：使用项目 logger（自动附加 tr
 PROJECT_ROOT = Path(__file__).resolve().parents[2]  # src/app/../.. = 项目根
 STATIC_DIR = PROJECT_ROOT / "static"
 
-# 后台任务强引用集合。asyncio 内部对 task 只保留**弱引用**，若调用方不保存
-# create_task 的返回值，任务可能在执行途中被垃圾回收（ruff RUF006）。
-# 任务结束后由 done_callback 自动移出，集合不会无限增长。
-_BACKGROUND_TASKS: set[asyncio.Task] = set()
-
-
-def _spawn_background(coro) -> None:
-    """创建后台任务并持有强引用，避免被 GC 回收。"""
-    task = asyncio.create_task(coro)
-    _BACKGROUND_TASKS.add(task)
-    task.add_done_callback(_BACKGROUND_TASKS.discard)
+# 后台任务强引用集合（V0.79.0 Step G 提取到独立模块，避免循环导入）。
+# asyncio 内部对 task 只保留**弱引用**，若调用方不保存 create_task 的返回值，
+# 任务可能在执行途中被垃圾回收（ruff RUF006）。任务结束后由 done_callback
+# 自动移出，集合不会无限增长。
+from app.services.background import _BACKGROUND_TASKS  # noqa: E402,F401
+from app.services.background import spawn as _spawn_background  # noqa: E402
 
 
 def _run_alembic_upgrade() -> None:

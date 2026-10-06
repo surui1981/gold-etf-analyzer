@@ -47,8 +47,9 @@ ALLOW: dict[str, set[str]] = {
         "data_consistency_audit",  # P2 规划：数据一致性审计
     },
     "endpoint": {
-        "/api/v1/backtest/run-async",  # V0.79.0 Step G：异步回测接口，task_id 轮询
-        "/backtest/result/{task_id}",   # V0.79.0 Step G：异步回测结果查询
+        # V0.79.0 Step G：异步回测端点已实装（`POST /api/v1/backtest/run-async` +
+        # `GET /api/v1/backtest/result/{task_id}`），由 ``app.openapi()`` 自验，
+        # 不再需要 ALLOW 白名单。
     },
     "page": {
         "platinum.html",  # V0.77.0 规划：铂金页

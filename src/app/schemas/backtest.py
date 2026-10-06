@@ -306,3 +306,40 @@ class BacktestConfigOut(BacktestConfigIn):
     """回测配置输出（含保存时间）。"""
 
     updated_at: datetime | None = None
+
+
+# ─────────────── V0.79.0 Step G · 异步回测接口 ───────────────
+
+
+class BacktestTaskAcceptedOut(BaseModel):
+    """``POST /api/v1/backtest/run-async`` 202 Accepted 响应。
+
+    立即返回，客户端随后轮询 ``poll_url`` 获取结果。
+    """
+
+    task_id: str = Field(..., description="任务 ID（uuid4 hex，32 字符）")
+    status: Literal["pending"] = "pending"
+    poll_url: str = Field(..., description="轮询 GET 端点路径（相对 /api/v1）")
+    accepted_at: datetime
+
+
+class BacktestTaskResultOut(BaseModel):
+    """``GET /api/v1/backtest/result/{task_id}`` 响应。
+
+    状态机：
+      - ``pending`` / ``running`` → ``result`` 为 None
+      - ``completed`` → ``result`` 是完整 ``BacktestResultOut``（model_dump 形态）
+      - ``failed`` → ``error`` 字符串非空，``result`` 为 None
+
+    ``progress`` 字段在 V0.79.0 Step G 接口预留（恒 None），实际进度上报逻辑
+    留 V0.79.1 维护线 —— 当前实现同步计算、一次性 complete。
+    """
+
+    task_id: str
+    status: Literal["pending", "running", "completed", "failed"]
+    accepted_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    progress: float | None = None
+    error: str | None = None
+    result: BacktestResultOut | None = None

@@ -246,6 +246,22 @@ def get_backtest_service(
     return BacktestService(session=session, gold=gold, weights=weights, trend=trend)
 
 
+# V0.79.0 Step G —— 异步任务注册表（回测 run-async / 进度查询）
+
+
+def get_task_registry():
+    """异步任务注册表依赖（单例；模块级 dict + lock，详见 ``services/task_registry``）。
+
+    命名上保留函数形式以遵循 ``dependencies.py`` 的「函数即 provider」惯例，
+    但实际返回的是模块单例 —— 与 ``get_alert_dispatcher`` / ``_login_throttle_singleton``
+    等「无 FastAPI 注入但需复用」单例同等依赖模式。
+    """
+    # 本地 import 避免模块初始化时的循环依赖
+    from app.services import task_registry
+
+    return task_registry
+
+
 async def get_position_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> PositionRepository:
