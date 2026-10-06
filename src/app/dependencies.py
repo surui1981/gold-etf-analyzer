@@ -12,6 +12,7 @@ from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
 from app.repositories.db import async_session_factory
+from app.repositories.macro_factor_history import MacroFactorHistoryRepository  # V0.79.0 Step E
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.market_providers import build_provider_bundle
 from app.repositories.news import NewsScoreRepository
@@ -30,6 +31,7 @@ from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
+from app.services.macro_thresholds import MacroThresholdCalculator  # V0.79.0 Step E
 from app.services.news import NewsScoreService
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
@@ -64,6 +66,24 @@ def get_central_bank_service(
 ) -> CentralBankService:
     """央行购金业务服务依赖。"""
     return CentralBankService(repo=repo)
+
+
+async def get_macro_factor_history_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> MacroFactorHistoryRepository:
+    """每日宏观因子历史仓储依赖（V0.79.0 Step E）。"""
+    return MacroFactorHistoryRepository(session)
+
+
+def get_macro_threshold_calculator(
+    repo: MacroFactorHistoryRepository = Depends(get_macro_factor_history_repository),
+) -> MacroThresholdCalculator:
+    """宏观阈值动态计算器依赖（V0.79.0 Step E）。
+
+    V0.79.0 Step E commit 1 仅注册 provider；commit 2 才会把此 provider 接入
+    ``get_trend_service`` 让 ``MacroFactorService`` 走动态阈值。
+    """
+    return MacroThresholdCalculator(repo=repo)
 
 
 def get_scoring_service() -> OpportunityScoringService:

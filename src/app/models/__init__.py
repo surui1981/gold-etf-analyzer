@@ -7,6 +7,7 @@ from app.models import (  # noqa: F401
     account,
     analysis,
     central_bank,
+    daily_macro_factor,
     news,
     position,
     push,
