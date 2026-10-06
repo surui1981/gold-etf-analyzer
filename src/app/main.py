@@ -144,16 +144,25 @@ async def _warm_cache() -> None:
     try:
         from app.repositories.central_bank import CentralBankPurchaseRepository
         from app.repositories.db import async_session_factory
+
+        # 注入央行购金服务 → cb_gold 因子从表自动计算（不再硬编码 STATIC_REF）
+        # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
+        from app.repositories.macro_factor_history import MacroFactorHistoryRepository
         from app.services.cache import set_served
         from app.services.central_bank import CentralBankService
         from app.services.macro import MacroFactorService
+        from app.services.macro_thresholds import MacroThresholdCalculator
         from app.services.trend import GUIDE_TARGET, TrendService
 
-        # 注入央行购金服务 → cb_gold 因子从表自动计算（不再硬编码 STATIC_REF）
         async with async_session_factory() as session:
             cb_repo = CentralBankPurchaseRepository(session)
             cb_svc = CentralBankService(repo=cb_repo)
-            macro = MacroFactorService(central_bank=cb_svc)
+            threshold_calc = MacroThresholdCalculator(
+                repo=MacroFactorHistoryRepository(session)
+            )
+            macro = MacroFactorService(
+                central_bank=cb_svc, threshold_calculator=threshold_calc
+            )
             trend = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
@@ -161,8 +170,14 @@ async def _warm_cache() -> None:
                 news=None,  # 预热时未打分 → 中性 50
             )
             result = await trend.analyze(days=60, target=GUIDE_TARGET)
+            # V0.79.0 Step E：warm threshold cache 让首屏不空跑 percentile
+            await threshold_calc.warm_cache("default")
         set_served(GUIDE_TARGET, result)
-        logger.info("served cache warmup done (index=%.1f)", result.index.score)
+        logger.info(
+            "served cache warmup done (index=%.1f, macro_dynamic=%s)",
+            result.index.score,
+            getattr(result.macro, "macro_dynamic", "n/a"),
+        )
     except Exception as exc:
         logger.warning("served cache warmup failed (%s)", exc)
 
@@ -190,8 +205,17 @@ async def _start_daily_scheduler() -> None:
         from app.services.trend import TrendService
 
         async with async_session_factory() as session:
+            from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+            from app.services.macro_thresholds import MacroThresholdCalculator
+
             cb_svc = CentralBankService(repo=CentralBankPurchaseRepository(session))
-            macro = MacroFactorService(central_bank=cb_svc)
+            # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
+            threshold_calc = MacroThresholdCalculator(
+                repo=MacroFactorHistoryRepository(session)
+            )
+            macro = MacroFactorService(
+                central_bank=cb_svc, threshold_calculator=threshold_calc
+            )
             trend_svc = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,

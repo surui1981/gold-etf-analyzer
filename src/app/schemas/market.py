@@ -170,6 +170,11 @@ class MacroIndexOut(BaseModel):
     direction: DirectionSignal
     factors: list[MacroFactorOut] = Field(..., description="宏观因子明细")
     summary: str
+    macro_dynamic: bool = Field(
+        False,
+        description="V0.79.0 Step E：阈值是否来自近 252 日滚动 90/10 分位；"
+        "False=回退 hardcode（数据不足场景）",
+    )
 
 
 class NewsIndexOut(BaseModel):

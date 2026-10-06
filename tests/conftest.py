@@ -33,6 +33,7 @@ async def _reset_db() -> None:
     from app.repositories import market_data
     from app.services import backtest_throttle as throttle
     from app.services import cache as served_cache
+    from app.services import macro as macro_mod  # V0.79.0 Step E：模块级 _CACHE
     from app.services import task_registry  # V0.79.0 Step G
     from app.services.settings import clear_weights_cache
 
@@ -40,6 +41,8 @@ async def _reset_db() -> None:
     served_cache.invalidate()  # 当日 served 缓存：跨测试隔离（避免模块级缓存污染）
     throttle.clear()  # 回测 5 分钟节流缓存（V0.71.0）
     task_registry.clear()  # 异步任务注册表（V0.79.0 Step G）
+    # V0.79.0 Step E：MacroFactorService._CACHE 是模块级 dict，跨测试必须清空
+    macro_mod._CACHE = {"ts": 0.0, "result": None}
     # V0.60.0：行情缓存（_cache_get/_cache_set）也是进程级 dict，跨测试必须清空
     with market_data._CACHE_LOCK:
         market_data._CACHE.clear()

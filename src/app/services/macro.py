@@ -116,7 +116,7 @@ def _friendly_score(value: float, rule: dict) -> float:
 class MacroFactorService:
     """宏观参考因子采集与评分。"""
 
-    def __init__(self, settings=None, central_bank=None) -> None:
+    def __init__(self, settings=None, central_bank=None, threshold_calculator=None) -> None:
         # 延迟导入避免循环依赖（settings 服务引用 repositories）
         from app.services.settings import WeightService
 
@@ -124,6 +124,20 @@ class MacroFactorService:
         # 央行购金服务（可选）：注入后 cb_gold 因子从 central_bank_purchases 表自动计算；
         # 未注入时（单测/降级）回退到 STATIC_REF 硬编码值。
         self._central_bank = central_bank
+        # V0.79.0 Step E：动态阈值计算器（可选）。未注入时 evaluate 走 hardcode 默认；
+        # 注入后逐因子用近 252 日滚动 90/10 分位替换 rule.best/worst。
+        self._threshold_calculator = threshold_calculator
+
+    def _resolve_macro_target(self) -> str:
+        """V0.79.0 Step E：标的维度归一。
+
+        5 个宏观因子都是单一全市场源（H.15 / WGC / 静态参考），不同 target
+        （ny/etf/gram）同日的 factor value 完全一致 → 共享同一份阈值缓存。
+
+        返回 ``"default"``；若后续发现多标的需要差异化（如白银因子阈值需要偏移），
+        重写此函数即可，API 不变。
+        """
+        return "default"
 
     async def evaluate(self) -> MacroIndexOut:
         """采集宏观因子并合成宏观参考指数（0-100）。
@@ -143,12 +157,28 @@ class MacroFactorService:
         values: dict[str, tuple[float, str, str]] = await self._collect()
         weights = await self._settings.macro_weights() if self._settings is not None else {}
 
+        # V0.79.0 Step E：每请求只算一次动态阈值（calculator 注入时）。
+        # 未注入 → 全 hardcode；注入 → 4 滚动因子切到 252 日 90/10 分位，cb_gold 永远 hardcode。
+        if self._threshold_calculator is not None:
+            thresholds = await self._threshold_calculator.get_or_compute(
+                self._resolve_macro_target()
+            )
+            macro_dynamic = self._threshold_calculator.is_dynamic_active(thresholds)
+        else:
+            thresholds = {
+                r["key"]: (float(r["best"]), float(r["worst"])) for r in MACRO_FACTOR_RULES
+            }
+            macro_dynamic = False
+
         total = 0.0
         factors: list[MacroFactorOut] = []
         for rule in MACRO_FACTOR_RULES:
             value, data_date, source = values[rule["key"]]
             weight = weights.get(rule["key"], rule["weight"])
-            score = _friendly_score(value, rule)
+            # 用 dynamic best/worst 替换 rule 副本（_friendly_score 函数体不动）
+            rule_eff = dict(rule)
+            rule_eff["best"], rule_eff["worst"] = thresholds[rule["key"]]
+            score = _friendly_score(value, rule_eff)
             contribution = round(score * weight, 2)
             total += contribution
             direction = (
@@ -189,6 +219,9 @@ class MacroFactorService:
             direction=direction,
             factors=factors,
             summary=self._summarize(total, direction),
+            # V0.79.0 Step E：commit 2 内部组装，commit 4 才升 schema 透传到 API
+            # 旧 MacroIndexOut 没此字段，Pydantic 默认 extra="ignore" 自动忽略
+            macro_dynamic=macro_dynamic,
         )
 
     async def _collect(self) -> dict[str, tuple[float, str, str]]:

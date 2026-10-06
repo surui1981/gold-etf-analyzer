@@ -31,6 +31,7 @@ from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
+from app.services.macro import MacroFactorService  # V0.79.0 Step E
 from app.services.macro_thresholds import MacroThresholdCalculator  # V0.79.0 Step E
 from app.services.news import NewsScoreService
 from app.services.portfolio import PortfolioAnalyticsService
@@ -189,14 +190,25 @@ def get_trend_service(
     settings: WeightService = Depends(get_weight_service),
     news: NewsScoreService = Depends(get_news_score_service),
     central_bank: CentralBankService = Depends(get_central_bank_service),
+    macro_thresholds: MacroThresholdCalculator = Depends(get_macro_threshold_calculator),
 ) -> TrendService:
-    """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估 + 央行购金服务）。
+    """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估 + 央行购金服务 + 宏观阈值动态化）。
 
-    ``central_bank`` 注入后，宏观因子 ``cb_gold`` 会从 ``central_bank_purchases`` 表自动计算
-    T12M（不再依赖 STATIC_REF 硬编码）。空表时回退 STATIC_REF，单测时不注入也保持兼容。
+    - ``central_bank`` 注入后，宏观因子 ``cb_gold`` 会从 ``central_bank_purchases`` 表自动计算
+      T12M（不再依赖 STATIC_REF 硬编码）。空表时回退 STATIC_REF，单测时不注入也保持兼容。
+    - ``macro_thresholds``（V0.79.0 Step E）注入后，宏观因子 ``dxy/us10y/us30y/vix``
+      走近 252 日滚动 90/10 分位，``cb_gold`` 永远走 hardcode。数据不足（< 60 样本）
+      自动回退 hardcode。**运行时回滚路径**：把 ``get_macro_threshold_calculator``
+      改为返回 None（无需 revert）。
     """
+    macro = MacroFactorService(
+        settings=settings,
+        central_bank=central_bank,
+        threshold_calculator=macro_thresholds,
+    )
     return TrendService(
         repo=repo,
+        macro=macro,
         settings=settings,
         news=news,
         central_bank=central_bank,
