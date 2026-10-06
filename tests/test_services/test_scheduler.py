@@ -361,3 +361,132 @@ async def test_v060_intraday_warm_once_writes_served_cache(monkeypatch: pytest.M
     cached = served_cache.get_served(GUIDE_TARGET)
     assert cached is not None
     assert cached.index.score == 70.0
+
+
+# ───────────────────────── V0.79.0 Step E · step 3 ─────────────────────────
+
+
+async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
+    """V0.79.0 Step E：``_capture_and_warm`` step 3 把当日 macro factors 写入 daily_macro_factors 表。
+
+    通过 mock snapshot_svc 跳过 snap 路径（不影响 step 3），mock trend_svc.analyze
+    返回固定结果，验证 step 3 真的调了 ``_macro._collect`` + ``repo.upsert_batch``。
+    """
+    from app.services import scheduler as sch
+
+    class FakeSnapshot:
+        async def capture_today(self):
+            return None  # 跳过 snap 路径，step 3 仍应执行
+
+    # FakeTrend：analyze 走 fake 路径；_macro._collect 返回 5 因子
+    class FakeMacro:
+        async def _collect(self):
+            return {
+                "dxy": (96.5, "2026-08-28", "静态参考值"),
+                "us10y": (4.4, "2026-08-28", "静态参考值"),
+                "us30y": (4.7, "2026-08-28", "静态参考值"),
+                "vix": (18.5, "2026-08-28", "静态参考值"),
+                "cb_gold": (1019.0, "2025Q3–2026Q2 滚动12月", "央行购金表自动汇总"),
+            }
+
+    class FakeTrend:
+        _macro = FakeMacro()
+
+        async def analyze(self, days=60, target=None):
+            from app.services.scheduler import GUIDE_TARGET
+
+            target = target or GUIDE_TARGET
+            from datetime import date as date_cls
+
+            from app.schemas.market import (
+                DirectionSignal,
+                GoldTrendMetrics,
+                GoldTrendOut,
+                MacroIndexOut,
+                NewsIndexOut,
+                TrendDirection,
+                TrendIndexLevel,
+                TrendIndexOut,
+            )
+
+            return GoldTrendOut(
+                symbol="GC",
+                name="纽约金COMEX",
+                days=60,
+                points=[],
+                metrics=GoldTrendMetrics(
+                    start_date=date_cls(2026, 7, 1),
+                    end_date=date_cls(2026, 9, 1),
+                    trading_days=60,
+                    start_price=2300.0,
+                    end_price=2350.0,
+                    change_pct=2.17,
+                    high=2400.0,
+                    low=2250.0,
+                    ma20=2330.0,
+                    ma40=2310.0,
+                    change_pct_1d=0.0,
+                    change_pct_5d=0.0,
+                    direction=TrendDirection.SIDEWAYS,
+                    unit="USD/oz",
+                    summary="test",
+                ),
+                indicators={},
+                index=TrendIndexOut(score=50.0, level=TrendIndexLevel.NEUTRAL),
+                macro=MacroIndexOut(
+                    score=50.0,
+                    direction=DirectionSignal.NEUTRAL,
+                    factors=[],
+                    summary="test",
+                ),
+                news=NewsIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, note=""),
+                data_sources={},
+                degraded=False,
+                freshness=None,
+                interval="1d",
+                served_at=None,
+            )
+
+    from app.repositories.db import async_session_factory
+    from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+
+    await sch._capture_and_warm(FakeSnapshot(), FakeTrend())
+
+    # 验证：daily_macro_factors 表里应有 5 行
+    async with async_session_factory() as session:
+        repo = MacroFactorHistoryRepository(session)
+        for factor_key in ("dxy", "us10y", "us30y", "vix", "cb_gold"):
+            count = await repo.count_samples("default", factor_key)
+            assert count == 1, f"{factor_key} 期望 1 条历史，实际 {count}"
+
+
+async def test_v079_step_e_capture_and_warm_step3_failure_does_not_propagate(
+    caplog,
+) -> None:
+    """V0.79.0 Step E：step 3 抛异常时仅日志告警，不中断调度循环。"""
+    import logging
+
+    from app.services import scheduler as sch
+
+    class FailingSnapshot:
+        async def capture_today(self):
+            return None
+
+    class FailingMacro:
+        async def _collect(self):
+            raise RuntimeError("simulated collect failure")
+
+    class FailingTrend:
+        _macro = FailingMacro()
+
+        async def analyze(self, days=60, target=None):
+            return None  # 不会跑到；防止 NoneType 报错
+
+    caplog.set_level(logging.WARNING)
+    # 不应抛异常
+    await sch._capture_and_warm(FailingSnapshot(), FailingTrend())
+    # 应有 warning 日志
+    assert any(
+        "Macro factor persist/warmup failed" in record.message
+        for record in caplog.records
+    )

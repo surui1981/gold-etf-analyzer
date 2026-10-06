@@ -28,7 +28,7 @@
 import asyncio
 import calendar
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 from app.config import get_settings
 from app.services.cache import set_served
@@ -244,6 +244,37 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
                     logger.info("Alert dispatched: %s", triggered)
         except Exception as exc:
             logger.warning("alert dispatch failed: %s", exc)
+
+    # ── step 3（V0.79.0 Step E）：macro factor 落表 + warm threshold cache ──
+    # 复用 trend_svc._macro._collect() 产出当日 5 因子原始值，按唯一键
+    # (target, snapshot_date, factor_key) upsert 到 daily_macro_factors 表。
+    # 失败仅日志告警，不抛异常：避免影响调度循环下一次触发。
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+        from app.services.macro_thresholds import MacroThresholdCalculator
+
+        values = await trend_svc._macro._collect()
+        async with async_session_factory() as session:
+            repo = MacroFactorHistoryRepository(session)
+            await repo.upsert_batch(
+                target="default",
+                snapshot_date=date.today(),
+                factors=[
+                    (key, val, dt, src)
+                    for key, (val, dt, src) in values.items()
+                ],
+            )
+            calculator = MacroThresholdCalculator(repo=repo)
+            thresholds = await calculator.get_or_compute("default", today=date.today())
+            logger.info(
+                "Macro factor persisted + threshold warmed: %d factors, date=%s, dynamic=%s",
+                len(values),
+                date.today().isoformat(),
+                calculator.is_dynamic_active(thresholds),
+            )
+    except Exception as exc:
+        logger.warning("Macro factor persist/warmup failed: %s", exc)
 
 
 async def intraday_warm_once(
