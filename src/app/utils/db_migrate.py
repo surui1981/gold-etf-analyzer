@@ -20,6 +20,8 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         # ⚠ 历史 24 行**保持 NULL 不回填** —— 上游 K 线只覆盖其中 16-17 天，
         # 回填不可能完整；缺失日期绝不用邻近日期顶替（那是伪造历史）。
         ("tech_detail", "TEXT", "NULL"),
+        # V0.79.0 任务 #163：行情来源标记（历史行 NULL = 未标记，不可当作 live）
+        ("data_source", "VARCHAR(16)", "NULL"),
     ],
     "positions": [
         ("deleted_at", "DATETIME", "NULL"),

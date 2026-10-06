@@ -76,13 +76,24 @@ class _FakeGold:
 
 
 class _FakeSession:
-    """最小 AsyncSession 桩：按给定快照列表返回行。"""
+    """最小 AsyncSession 桩：按给定快照列表返回行。
 
-    def __init__(self, snapshots: list[_FakeSnapshot]) -> None:
-        self._snapshots = snapshots
+    ⚠ V0.79.0 #163：``coverage()`` 新增「统计被排除来源的快照数」查询
+    （``select(func.count())``）⇒ 结果对象需要 ``scalar_one()``。
+    桩最初只实现 ``scalars()`` / ``scalar()`` ⇒ 13 例报
+    ``'_Result' object has no attribute 'scalar_one'``。
+
+    **教训：被测代码新增一种「查询形态」时，桩必须同步扩展**（同 §2.2b
+    「桩不同构」的第三种形态：返回对象**缺方法**）。
+    """
+
+    def __init__(self, snapshots: list | None = None, excluded_count: int = 0) -> None:
+        self._snapshots = snapshots if snapshots is not None else []
+        self._excluded = excluded_count
 
     async def execute(self, stmt):
         rows = self._snapshots
+        excluded = self._excluded
 
         class _Result:
             def scalars(self_inner):
@@ -94,6 +105,11 @@ class _FakeSession:
 
             def scalar(self_inner):
                 return 0
+
+            def scalar_one(self_inner):
+                # ⚠ 无法从 stmt 判断是否为 count 查询；但本桩只服务 coverage/run
+                # 两条路径，count 仅用于「排除数」统计。
+                return excluded
 
         return _Result()
 

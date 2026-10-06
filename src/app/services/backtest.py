@@ -16,7 +16,7 @@ import itertools
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.snapshot import DailySnapshot
@@ -44,6 +44,11 @@ logger = get_logger(__name__)
 
 # 样本不足阈值（与 review 对齐）
 _MIN_SAMPLES = 20
+
+# V0.79.0 任务 #163：回测只采信这些来源的快照。
+# ⚠ ``mock`` 必须排除（编造的价格）；``None``（历史未标记）也排除 ——
+# 宁可样本少，也不要用不可信数据算出「看似正常」的 Sharpe。
+_TRUSTED_SNAPSHOT_SOURCES: tuple[str, ...] = ("live", "stale")
 
 # V0.79.0：行情来源判定（可否写入价格日历 / target→市场 key 映射）已抽到
 # ``services.price_source`` —— 回测与复盘共用，而 ``backtest`` 已 import ``review``，
@@ -157,20 +162,38 @@ class BacktestService:
         ``sample_warning=False``，用户无从分辨「回测无效」与「表现差」。
         """
         target = self._normalize_target(target)
+        # ⚠ V0.79.0 任务 #163：与 ``_load_snapshots`` **同一套过滤**（可信来源）。
+        # ⚠ 两处口径必须一致 —— 否则 coverage 报的 available_days 与真正参与
+        # 网格计算的行数不符，又是一次「披露与实际不符」的静默偏差。
         stmt = (
             select(DailySnapshot)
-            .where(DailySnapshot.tech_index.is_not(None))
+            .where(
+                DailySnapshot.tech_index.is_not(None),
+                DailySnapshot.data_source.in_(_TRUSTED_SNAPSHOT_SOURCES),
+            )
             .order_by(DailySnapshot.snapshot_date.asc())
         )
         rows = list((await self._session.execute(stmt)).scalars().all())
         if not rows:
+            # ⚠ 措辞必须准确：表**可能非空**，只是全部因来源不可信被排除
+            # （V0.79.0 #163）。说「表为空」会让用户去查错方向。
+            total_stmt = (
+                select(func.count())
+                .select_from(DailySnapshot)
+                .where(DailySnapshot.tech_index.is_not(None))
+            )
+            total = int((await self._session.execute(total_stmt)).scalar_one())
             return BacktestCoverageOut(
                 target=target,  # type: ignore[arg-type]
                 start_date=None,
                 end_date=None,
                 available_days=0,
                 available_window_trading_days=0,
-                note="daily_snapshots 表为空，无法回测",
+                note=(
+                    f"无可用快照（共 {total} 条，但全部来源不可信：mock 或未标记）"
+                    if total
+                    else "daily_snapshots 表为空，无法回测"
+                ),
                 sample_warning=True,
                 price_calendar_days=0,
                 returns_available_days=0,
@@ -181,6 +204,18 @@ class BacktestService:
         end = rows[-1].snapshot_date
         available = len(rows)
         snap_dates = [r.snapshot_date for r in rows]
+
+        # ⚠ V0.79.0 #163：统计「因来源不可信而被排除」的快照数，并在 note 披露 ——
+        # 静默排除会让样本量凭空减少却无人察觉（又一次「未执行 ≠ 不存在」）。
+        excluded_stmt = (
+            select(func.count())
+            .select_from(DailySnapshot)
+            .where(
+                DailySnapshot.tech_index.is_not(None),
+                ~DailySnapshot.data_source.in_(_TRUSTED_SNAPSHOT_SOURCES),
+            )
+        )
+        excluded = int((await self._session.execute(excluded_stmt)).scalar_one())
 
         # ── 价格日历维度（V0.79.0 新增）──
         # 必须实际查表：T+1 收益只能由「同 target 的相邻两个交易日收盘价」推出，
@@ -197,6 +232,11 @@ class BacktestService:
         parts = [f"覆盖期 {start} ~ {end}（{available} 个有效样本）"]
         if available < _MIN_SAMPLES:
             parts.append("样本较少，回测结果仅供参考")
+        if excluded:
+            parts.append(
+                f"已排除 {excluded} 天来源不可信（mock 或未标记）的快照；"
+                "历史快照均无来源标记，故从今日起才逐步可用"
+            )
         if cal_days == 0:
             parts.append(
                 "**价格日历为空，Sharpe 与命中率无法计算**"
@@ -418,10 +458,22 @@ class BacktestService:
         return target if target in valid else "etf"
 
     async def _load_snapshots(self, target: str) -> list[DailySnapshot]:
-        """加载所有有效快照（按日期升序）。"""
+        """加载**来源可信**的快照（按日期升序）。
+
+        ⚠ V0.79.0 任务 #163：按 ``data_source`` 过滤。
+        历史 24 条中 5 条的 ``close`` 经查证是 **mock 序列末值**（`_mock_us_history`
+        以 base=4430 生成，多次运行后残留），而快照此前无来源标记 ⇒ 混进回测会让
+        样本量与指标失真。
+
+        ⚠ **NULL 一律排除，不当 live**：历史行全为 NULL（无时间戳记录当时的 mock
+        末值，事后无法准确回填），猜测回填等于伪造溯源信息。
+        """
         stmt = (
             select(DailySnapshot)
-            .where(DailySnapshot.tech_index.is_not(None))
+            .where(
+                DailySnapshot.tech_index.is_not(None),
+                DailySnapshot.data_source.in_(_TRUSTED_SNAPSHOT_SOURCES),
+            )
             .order_by(DailySnapshot.snapshot_date.asc())
         )
         return list((await self._session.execute(stmt)).scalars().all())

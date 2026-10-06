@@ -45,6 +45,7 @@ class SnapshotRepository:
                 "index_level",
                 "macro_detail",
                 "tech_detail",
+                "data_source",
             ):
                 setattr(existing, field, getattr(snapshot, field))
         await self._session.commit()

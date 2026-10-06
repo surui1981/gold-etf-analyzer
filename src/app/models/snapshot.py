@@ -58,6 +58,19 @@ class DailySnapshot(Base):
         Text, nullable=True, comment="技术面 5 维度 JSON（V0.79.0；历史行为 NULL）"
     )
 
+    # ⚠ V0.79.0 任务 #163：行情来源标记（**溯源用，不可省**）
+    # 2026-10-06 实测：24 条历史快照中 5 条的 close 值完全相同（4725.07），
+    # 逐日对照真实 K 线后确认那是 **mock 序列的末值**（`_mock_us_history`
+    # 以 base=4430 按「距今天数」生成，多次运行后残留在不同日期的快照里）。
+    # 根因链：subprocess 取数失败 → 降级 mock → `capture_today` 照样落库
+    # → **快照没有任何来源标记** ⇒ 事后无法区分真值与 mock。
+    # 本列让「哪些快照是 mock 产物」可查；回测**必须**据此过滤。
+    data_source: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        comment="行情来源 live/stale/mock（V0.79.0；历史行为 NULL=未标记）",
+    )
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

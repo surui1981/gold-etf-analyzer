@@ -6,6 +6,7 @@ from datetime import date
 from app.models.snapshot import DailySnapshot
 from app.repositories.snapshot import SnapshotRepository
 from app.schemas.snapshot import SnapshotListOut, SnapshotOut
+from app.services.price_source import resolve_price_source
 from app.services.trend import GUIDE_TARGET, TrendService
 from app.utils.logger import get_logger
 
@@ -69,6 +70,10 @@ class DailySnapshotService:
         }
         tech_detail = json.dumps(tech_detail_obj, ensure_ascii=False) if tech_detail_obj else None
 
+        # 行情来源：复用 #161 的解析（target→市场 key 映射，gram 记作 sge）。
+        # ⚠ 缺失时返回空串而**不兜底 live** —— 那会静默宣称数据可信。
+        source = resolve_price_source(trend.data_sources, GUIDE_TARGET)
+
         snapshot = DailySnapshot(
             snapshot_date=date.today(),
             symbol=trend.symbol,
@@ -87,6 +92,9 @@ class DailySnapshotService:
             index_level=trend.index.level.value,
             macro_detail=macro_detail,
             tech_detail=tech_detail,
+            # ⚠ V0.79.0 任务 #163：落行情来源，否则事后无法区分真值与 mock 产物
+            # （实测历史上 5 条快照的 close 是 mock 序列末值，且无从辨识）。
+            data_source=source,
         )
         await self._repo.upsert(snapshot)
         logger.info(

@@ -35,13 +35,14 @@ class _Ind:
 
 
 class _FakeTrend:
-    """``TrendService`` 替身：返回固定 indicators 的 ``TrendOut``。"""
+    """``TrendService`` 替身：返回固定 indicators / data_sources 的 ``TrendOut``。"""
 
-    def __init__(self, indicators: list) -> None:
+    def __init__(self, indicators: list, data_sources: dict | None = None) -> None:
         self._indicators = indicators
+        self._data_sources = data_sources
 
     async def analyze(self, days: int = 60, target: str = "ny") -> _FakeTrendOut:
-        return _FakeTrendOut(self._indicators)
+        return _FakeTrendOut(self._indicators, self._data_sources)
 
 
 class _MacroFactor:
@@ -85,9 +86,15 @@ class _Metrics:
 
 
 class _FakeTrendOut:
-    """``TrendOut`` 替身 —— ⚠ 枚举须从真实模块导入（``schemas/market`` 而非 models）。"""
+    """``TrendOut`` 替身。
 
-    def __init__(self, indicators: list) -> None:
+    ⚠ 枚举须从真实模块导入（``schemas/market`` 而非 models）。
+    ⚠ V0.79.0 #163：``capture_today`` 会读 ``data_sources`` 解析行情来源
+    （经 ``services.price_source``）⇒ 桩缺该属性时报 AttributeError。
+    同 §2.2b「桩不同构」的第四种形态：**被测代码读了新字段，桩没跟上**。
+    """
+
+    def __init__(self, indicators: list, data_sources: dict | None = None) -> None:
         from app.schemas.market import TrendIndexLevel
 
         self.symbol = "518880"
@@ -97,6 +104,8 @@ class _FakeTrendOut:
         self.news = _News()
         self.indicators = indicators
         self.index = type("_I", (), {"score": 50.0, "level": TrendIndexLevel.SIDEWAYS})()
+        # 默认标为 live（可信）；用例可传 {"sge": "mock"} 等覆盖
+        self.data_sources = data_sources if data_sources is not None else {"ny": "live"}
 
 
 class _Captured:
@@ -118,11 +127,14 @@ class _Session:
         return _R()
 
 
-def _service(indicators: list[_Ind]) -> tuple[object, _Captured]:
+def _service(indicators: list[_Ind], data_sources: dict | None = None) -> tuple[object, _Captured]:
     from app.services.snapshot import DailySnapshotService
 
     repo = _Captured()
-    svc = DailySnapshotService(repo=repo, trend=_FakeTrend(indicators))  # type: ignore[arg-type]
+    svc = DailySnapshotService(
+        repo=repo,  # type: ignore[arg-type]
+        trend=_FakeTrend(indicators, data_sources),  # type: ignore[arg-type]
+    )
     return svc, repo
 
 
@@ -334,3 +346,84 @@ def test_upsert_update_path_covers_both_insert_and_update() -> None:
     # 白名单里不能漏关键字段
     for field in ("tech_index", "macro_detail", "tech_detail"):
         assert f'"{field}"' in src, f"update 白名单缺 {field}"
+
+
+# ─────────────── #163：行情来源标记与回测过滤 ───────────────
+
+
+def test_backtest_excludes_untrusted_snapshot_sources() -> None:
+    """★ 回测只采信 live/stale —— mock 与未标记（NULL）一律排除。
+
+    根因（2026-10-06 实测）：24 条历史快照中 5 条的 ``close`` 是
+    ``_mock_us_history`` 的序列末值（base=4430 生成，多次运行后残留），
+    而快照此前无来源标记 ⇒ 混进回测会让样本量与指标失真。
+    """
+    from app.services.backtest import _TRUSTED_SNAPSHOT_SOURCES
+
+    assert "mock" not in _TRUSTED_SNAPSHOT_SOURCES
+    assert set(_TRUSTED_SNAPSHOT_SOURCES) == {"live", "stale"}
+
+
+def test_backtest_coverage_and_load_use_same_filter() -> None:
+    """⚠ 两处口径必须一致（否则 available_days 与实际参与计算的行数不符）。"""
+    import inspect
+
+    from app.services.backtest import BacktestService
+
+    cov = inspect.getsource(BacktestService.coverage)
+    load = inspect.getsource(BacktestService._load_snapshots)
+    assert "_TRUSTED_SNAPSHOT_SOURCES" in cov, "coverage 未按来源过滤"
+    assert "_TRUSTED_SNAPSHOT_SOURCES" in load, "_load_snapshots 未按来源过滤"
+
+
+def test_upsert_update_path_includes_data_source() -> None:
+    """§2.2g 的教训：新列必须**同时**进 insert 与 update 两条写入路径。"""
+    import inspect
+
+    from app.repositories.snapshot import SnapshotRepository
+
+    src = inspect.getsource(SnapshotRepository.upsert)
+    assert '"data_source"' in src, "update 分支白名单缺 data_source"
+
+
+def test_db_migrate_declares_data_source() -> None:
+    """老库升级路径须补该列（否则老库查询报 no such column）。"""
+    from app.utils.db_migrate import COLUMN_MIGRATIONS
+
+    cols = {name for name, _, _ in COLUMN_MIGRATIONS["daily_snapshots"]}
+    assert "data_source" in cols
+    assert "tech_detail" in cols
+
+
+def test_schema_data_source_default_is_none() -> None:
+    """⚠ 默认 None（保守侧）：未标记 ≠ live。"""
+    from app.schemas.snapshot import SnapshotOut
+
+    assert SnapshotOut.model_fields["data_source"].default is None
+
+
+def test_data_source_is_persisted_from_trend() -> None:
+    """★ 行情来源随快照落库（#163 的核心：让「哪些是 mock 产物」可查）。"""
+    import asyncio
+
+    svc, repo = _service(_all_valid(), data_sources={"ny": "live"})
+    asyncio.run(svc.capture_today())
+    assert repo.kwargs["data_source"] == "live"
+
+
+def test_mock_data_source_is_persisted_as_mock_not_faked_live() -> None:
+    """★ 数据源为 mock 时**如实落 mock**，不得改写成 live。"""
+    import asyncio
+
+    svc, repo = _service(_all_valid(), data_sources={"ny": "mock"})
+    asyncio.run(svc.capture_today())
+    assert repo.kwargs["data_source"] == "mock", "mock 必须被如实标记"
+
+
+def test_missing_data_source_falls_back_to_empty_not_live() -> None:
+    """⚠ 来源缺失 ⇒ 落空串而**不是 live**（静默宣称可信是最坏的一类缺陷）。"""
+    import asyncio
+
+    svc, repo = _service(_all_valid(), data_sources={})
+    asyncio.run(svc.capture_today())
+    assert repo.kwargs["data_source"] == "", "缺失时不得兜底成 live"

@@ -30,6 +30,10 @@ class SnapshotOut(BaseModel):
     # ⇒ 消费方（回测 Step G）读到 None 必须**显式跳过该日**，不可用中性 50 兜底
     # （V0.78.0 Step D 纪律：数据不足 ≠ 中性）。
     tech_detail: str | None = None
+    # ⚠ V0.79.0 任务 #163：行情来源（live/stale/mock；空串或 None = 未能确定）。
+    # 历史 24 条为 NULL —— 其中 5 条经查证是 **mock 产物**（close 是 mock 序列末值
+    # 4725.07），故回测**必须**把来源非 live 的行排除，否则统计失真。
+    data_source: str | None = None
 
 
 class SnapshotListOut(BaseModel):
