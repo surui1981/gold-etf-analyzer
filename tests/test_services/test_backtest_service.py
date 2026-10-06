@@ -159,7 +159,18 @@ def test_calibration_buckets_5_buckets() -> None:
 
 
 class _FakeSession:
-    """最小化 AsyncSession stub，仅满足 type hint。"""
+    """最小化 AsyncSession stub，仅满足 type hint。
+
+    ⚠ V0.79.0 #163：``coverage()`` 用了两种结果形态 ——
+    ``select(DailySnapshot)`` 走 ``scalars().all()``，
+    ``select(func.count())`` 走 ``scalar_one()``。桩起初只实现前者，
+    CI 报 ``'_Result' object has no attribute 'scalar_one'``。
+
+    **这是本轮第三次因「桩缺方法」返工**（前两次：``test_backtest_usability``
+    与 ``test_snapshot_tech_detail``）⇒ 已在本文件与两处补全。
+    教训见 LESSONS §2.2j：**被测代码新增查询形态时，桩必须同步扩展**，
+    且应一次列全（本例两种形态都在同一 stub 里），避免逐个失败再补。
+    """
 
     async def execute(self, stmt):
         class _Result:
@@ -171,6 +182,10 @@ class _FakeSession:
                 return _Scalars()
 
             def scalar(self_inner):
+                return 0
+
+            def scalar_one(self_inner):
+                # count 查询（排除数 / 总数统计）
                 return 0
 
         return _Result()
