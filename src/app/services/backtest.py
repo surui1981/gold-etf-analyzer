@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import itertools
+import json
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -110,6 +111,53 @@ def _direction_from_score(
     if score <= bearish_threshold:
         return DirectionSignal.BEARISH
     return DirectionSignal.NEUTRAL
+
+
+def _aggregate_from_detail(
+    detail_json: str | None,
+    weights: dict[str, float],
+    which: str,
+) -> float | None:
+    """按 ``weights`` 加权聚合 ``detail_json`` 中的 ``score`` 字段。
+
+    V0.79.0 Step G 新增辅助：
+
+    - ``detail_json=None`` → 返回 None（调用方应跳过该根快照，**非中性 50**）
+    - ``detail_json`` 非空但缺失某个 ``weights`` 字段对应的子维度 →
+      同样返回 None（V0.78.0 Step D「数据不足 ≠ 中性」纪律）
+    - 任意子维度 ``score`` 为 None → 返回 None
+    - 任一 ``weights[k]`` 缺失 → 返回 None
+    - 解析失败 → 返回 None（容错：旧快照格式漂移不致 500）
+    - 否则返回 ``∑ weights[k] * detail[k]["score"]``
+
+    ``which`` 仅用于日志标签（"tech" / "macro"），不影响计算。
+    """
+    if detail_json is None:
+        return None
+    try:
+        parsed = json.loads(detail_json)
+    except (TypeError, ValueError) as exc:
+        logger.warning(
+            "Backtest %s detail JSON parse failed: %s (treat as data-insufficient)",
+            which,
+            exc,
+        )
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    total = 0.0
+    for dim, w in weights.items():
+        entry = parsed.get(dim)
+        if not isinstance(entry, dict):
+            return None
+        score = entry.get("score")
+        if score is None:
+            return None
+        try:
+            total += float(score) * float(w)
+        except (TypeError, ValueError):
+            return None
+    return total
 
 
 @dataclass(frozen=True)
@@ -324,14 +372,23 @@ class BacktestService:
             snapshot_dates=[s.snapshot_date for s in snapshots],
         )
 
-        # 网格展开：tech_w × macro_w × news_w × bullish × bearish
+        # 网格展开（V0.79.0 Step G）：7 维笛卡尔积
+        # tech_w × macro_w × news_w × bullish × bearish × (trend_5 or 1) × (macro_5 or 1)
+        # ⚠ trend_weights / macro_weights 未启用（=None）时退化为 ``[None]`` 元素，
+        # itertools.product 中保留该维度但 ``_evaluate_grid`` 拿到 None 时走扁平路径
+        # —— 与 V0.71.0 旧行为逐位等价（同一份 ``snap.tech_index``）。
+        wg = params.weight_grid
+        trend_iter = wg.trend_weights.weights if wg.trend_weights else [None]
+        macro_iter = wg.macro_weights.weights if wg.macro_weights else [None]
         rows: list[BacktestGridRow] = []
-        for tech_w, macro_w, news_w, bull_t, bear_t in itertools.product(
-            params.weight_grid.tech,
-            params.weight_grid.macro,
-            params.weight_grid.news,
+        for tech_w, macro_w, news_w, bull_t, bear_t, tr_w, ma_w in itertools.product(
+            wg.tech,
+            wg.macro,
+            wg.news,
             params.threshold_bands.bullish,
             params.threshold_bands.bearish,
+            trend_iter,
+            macro_iter,
         ):
             row = self._evaluate_grid(
                 snapshots=snapshots,
@@ -341,6 +398,8 @@ class BacktestService:
                 news_w=news_w,
                 bullish_threshold=bull_t,
                 bearish_threshold=bear_t,
+                tech_dim_weights=tr_w,
+                macro_dim_weights=ma_w,
             )
             rows.append(row)
 
@@ -549,15 +608,47 @@ class BacktestService:
         news_w: float,
         bullish_threshold: float,
         bearish_threshold: float,
+        *,
+        tech_dim_weights: dict[str, float] | None = None,
+        macro_dim_weights: dict[str, float] | None = None,
     ) -> BacktestGridRow:
-        """单组参数组合：合成 → 方向 → 命中 → 聚合。"""
+        """单组参数组合：合成 → 方向 → 命中 → 聚合。
+
+        V0.79.0 Step G：增 ``tech_dim_weights`` / ``macro_dim_weights`` 两个可选参数：
+
+        - **都未提供**（默认）→ 旧行为：用 ``snap.tech_index`` / ``snap.macro_index``
+          扁平分（向后兼容）。
+        - **提供了 ``tech_dim_weights``** → 改用 ``snap.tech_detail`` JSON
+          里每维度的 ``score`` 字段 + 用户提供的权重 **重新计算**技术面分（0=None 时
+          **整根跳过**，与 V0.78.0 Step D「数据不足 ≠ 中性」同型纪律）。
+        - ``macro_dim_weights`` 同上（macro_detail 已有 5 因子分，落地早于 Step G）。
+
+        返回行的 ``tech_dim_weights`` / ``macro_dim_weights`` 字段回填本次使用的
+        权重（None 表示本组合未启用嵌套），便于 UI 在「最胜出组合」上展示。
+        """
         sims: list[_SimDay] = []
         for snap in snapshots:
-            score = (
-                float(snap.tech_index) * tech_w
-                + float(snap.macro_index) * macro_w
-                + float(snap.news_index) * news_w
-            )
+            # ── 技术面：嵌套权重覆盖时读 tech_detail ──
+            if tech_dim_weights is not None:
+                tech_score = _aggregate_from_detail(
+                    snap.tech_detail, tech_dim_weights, "tech"
+                )
+                if tech_score is None:
+                    # 该日无 tech_detail（NULL 或缺字段）→ 跳过这根快照
+                    # （不是「中性 50」，是「压根没算出来」，按 V0.78.0 Step D 收口）
+                    continue
+            else:
+                tech_score = float(snap.tech_index)
+            # ── 宏观：嵌套权重覆盖时读 macro_detail ──
+            if macro_dim_weights is not None:
+                macro_score = _aggregate_from_detail(
+                    snap.macro_detail, macro_dim_weights, "macro"
+                )
+                if macro_score is None:
+                    continue
+            else:
+                macro_score = float(snap.macro_index)
+            score = tech_score * tech_w + macro_score * macro_w + float(snap.news_index) * news_w
             direction = _direction_from_score(score, bullish_threshold, bearish_threshold)
             ret = next_returns.get(snap.snapshot_date, 0.0)
             hit, _ = judge_hit(direction, ret)
@@ -583,6 +674,8 @@ class BacktestService:
             max_drawdown_pct=max_dd,
             win_rate=round(win_rate, 4),
             samples=len(sims),
+            tech_dim_weights=tech_dim_weights,
+            macro_dim_weights=macro_dim_weights,
         )
 
     @staticmethod

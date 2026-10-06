@@ -1,18 +1,82 @@
-"""回测（V0.71.0）：参数扫描 + Sharpe / 最大回撤 / 校准曲线。"""
+"""回测（V0.71.0）：参数扫描 + Sharpe / 最大回撤 / 校准曲线。
+
+V0.79.0 Step G：新增 ``trend_weights`` / ``macro_weights`` 嵌套权重 + 上限 1000。
+"""
 
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import ClassVar, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # V0.71.0：5 种标的共享回测基准（与前端 select 一致）
 BacktestTarget = Literal["ny", "etf", "gram", "silver_ny", "silver_etf", "silver_gram"]
 
+# V0.79.0 Step G：嵌套权重的字段名常量（与 ``weights.html`` ``TREND_FIELDS`` /
+# ``MACRO_FIELDS`` 同步取值，前后端任何一处改名必须同步；测试 ``test_weight_grid_
+# field_names_match_*`` 锁死此口径）。
+TREND_DIM_FIELDS: tuple[str, ...] = ("结构", "动量", "支撑", "动能", "回撤")
+MACRO_DIM_FIELDS: tuple[str, ...] = ("美元", "利率", "通胀", "地缘", "避险")
+
+
+class NestedWeights(BaseModel):
+    """嵌套权重候选（V0.79.0 Step G）。
+
+    每个候选是 ``{字段名: 权重}`` 字典，必须**恰好覆盖**子类 ``_expected_fields``
+    全部字段（不多不少）、且和 ``=1.0``（允许 1e-3 浮点误差）。子类通过覆盖
+    ``_expected_fields`` 复用同一段 validator，不复制粘贴。
+    """
+
+    weights: list[dict[str, float]] = Field(
+        ...,
+        min_length=1,
+        max_length=10,
+        description="权重候选列表（每个 dict 须覆盖且仅覆盖子类声明的字段，和≈1.0）",
+    )
+    # 子类覆盖：声明此 nested 必须覆盖的字段集合
+    _expected_fields: ClassVar[tuple[str, ...]] = ()
+
+    @field_validator("weights")
+    @classmethod
+    def _validate_weights(cls, value: list[dict[str, float]]) -> list[dict[str, float]]:
+        fields = cls._expected_fields
+        for j, w in enumerate(value):
+            missing = set(fields) - set(w.keys())
+            extra = set(w.keys()) - set(fields)
+            if missing or extra:
+                raise ValueError(
+                    f"第 {j + 1} 项必须覆盖且仅覆盖 {fields}，缺 {sorted(missing) or '∅'},"
+                    f" 多 {sorted(extra) or '∅'}"
+                )
+            s = sum(w.values())
+            if not (0.999 <= s <= 1.001):
+                raise ValueError(f"第 {j + 1} 项权重和必须为 1.0，实际 {s:.4f}")
+            if any(v < 0 or v > 1 for v in w.values()):
+                raise ValueError(f"第 {j + 1} 项权重必须在 [0, 1] 范围内")
+        return [{k: round(v, 4) for k, v in w.items()} for w in value]
+
+
+class TrendWeights(NestedWeights):
+    """技术面 5 维度内部权重候选（结构 / 动量 / 支撑 / 动能 / 回撤）。"""
+
+    _expected_fields: ClassVar[tuple[str, ...]] = TREND_DIM_FIELDS
+
+
+class MacroWeights(NestedWeights):
+    """宏观面 5 因子内部权重候选（美元 / 利率 / 通胀 / 地缘 / 避险）。"""
+
+    _expected_fields: ClassVar[tuple[str, ...]] = MACRO_DIM_FIELDS
+
 
 class WeightGrid(BaseModel):
-    """权重扫描网格（3 维：tech / macro / news）。"""
+    """权重扫描网格。
+
+    V0.71.0：3 维扁平（tech / macro / news 各为标量候选列表）。
+    V0.79.0 Step G：增 ``trend_weights`` / ``macro_weights`` 嵌套，使回测可扫
+    「技术面 5 维度内部权重」与「宏观 5 因子内部权重」。嵌套为可选（None = 旧行为），
+    默认走 ``tech_index`` / ``macro_index`` 扁平分（向后兼容）。
+    """
 
     tech: list[float] = Field(
         ...,
@@ -31,6 +95,14 @@ class WeightGrid(BaseModel):
         min_length=1,
         max_length=10,
         description="消息面权重候选列表",
+    )
+    trend_weights: TrendWeights | None = Field(
+        None,
+        description="技术面 5 维度内部权重候选（V0.79.0 Step G；None = 用 tech_index 扁平）",
+    )
+    macro_weights: MacroWeights | None = Field(
+        None,
+        description="宏观 5 因子内部权重候选（V0.79.0 Step G；None = 用 macro_index 扁平）",
     )
 
     @field_validator("tech", "macro", "news")
@@ -85,15 +157,39 @@ class BacktestRequestIn(BaseModel):
 
     @model_validator(mode="after")
     def _check_grid_size(self) -> BacktestRequestIn:
-        """网格组合数 = tech×macro×news；超过 125 警告并截断（前端 UI 性能边界）。"""
-        n = len(self.weight_grid.tech) * len(self.weight_grid.macro) * len(self.weight_grid.news)
-        if n > 125:
-            raise ValueError(f"权重网格组合 {n} 超过 UI 性能上限 125（5×5×5），请缩减候选数")
+        """网格组合数 = tech×macro×news×bullish×bearish×(trend_5 or 1)×(macro_5 or 1)。
+
+        V0.79.0 Step G：上限 125 → 1000。125 是 V0.71.0 的扁平 5×5×5 边界；
+        1000 是包含 7 维笛卡尔积的新边界（默认 3×1×1 × 4×4 × 1×1 = 48，
+        引入 trend_5/macro_5 后留 20× 余量供嵌套扫描使用）。
+        """
+        wg = self.weight_grid
+        n = (
+            len(wg.tech)
+            * len(wg.macro)
+            * len(wg.news)
+            * len(self.threshold_bands.bullish)
+            * len(self.threshold_bands.bearish)
+            * len(wg.trend_weights.weights if wg.trend_weights else [None])
+            * len(wg.macro_weights.weights if wg.macro_weights else [None])
+        )
+        if n > 1000:
+            raise ValueError(
+                f"权重网格组合 {n} 超过上限 1000，请缩减候选数"
+                f"（tech={len(wg.tech)}, macro={len(wg.macro)}, news={len(wg.news)},"
+                f" trend_5={len(wg.trend_weights.weights) if wg.trend_weights else 0},"
+                f" macro_5={len(wg.macro_weights.weights) if wg.macro_weights else 0}）"
+            )
         return self
 
 
 class BacktestGridRow(BaseModel):
-    """单组参数组合的回测结果。"""
+    """单组参数组合的回测结果。
+
+    V0.79.0 Step G：增 ``tech_dim_weights`` / ``macro_dim_weights`` 两字段。
+    当本次请求**未启用嵌套**时两字段为 None（向后兼容，扁平回测结果保持原形状）。
+    启用嵌套时为 `{字段: 权重}` 字典 —— 让 UI 能在「胜出组合」上展示其权重分布。
+    """
 
     tech_w: float
     macro_w: float
@@ -104,6 +200,14 @@ class BacktestGridRow(BaseModel):
     max_drawdown_pct: float
     win_rate: float = Field(..., ge=0, le=1, description="命中率 0-1")
     samples: int = Field(..., ge=0, description="样本天数")
+    tech_dim_weights: dict[str, float] | None = Field(
+        None,
+        description="技术面 5 维度内部权重（V0.79.0 Step G；None = 用扁平 tech_index）",
+    )
+    macro_dim_weights: dict[str, float] | None = Field(
+        None,
+        description="宏观 5 因子内部权重（V0.79.0 Step G；None = 用扁平 macro_index）",
+    )
 
 
 class BacktestSummary(BaseModel):

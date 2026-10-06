@@ -70,18 +70,22 @@ async def test_run_endpoint_returns_cached_within_5min(client: AsyncClient) -> N
 
 
 async def test_run_invalid_params_422(client: AsyncClient) -> None:
-    """POST /run：网格组合 > 125 → 422 拒绝。"""
+    """POST /run：网格组合 > 1000 → 422 拒绝（V0.79.0 Step G：上限 125 → 1000）。
+
+    6×6×6 × 2×2 × 1×1 = 864 ≤ 1000 → 应通过；
+    用 8×8×8 × 4×4 × 1×1 = 16384 > 1000 → 422。
+    """
     bad = {
         "days": 90,
         "target": "etf",
         "weight_grid": {
-            "tech": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],  # 6×6×6 = 216
-            "macro": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
-            "news": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6],
+            "tech": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # 8
+            "macro": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # 8
+            "news": [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # 8
         },
         "threshold_bands": {
-            "bullish": [55, 60],
-            "bearish": [45, 40],
+            "bullish": [55, 60, 65, 70],  # 4
+            "bearish": [45, 40, 35, 30],  # 4
         },
     }
     resp = await client.post("/api/v1/backtest/run", json=bad)
