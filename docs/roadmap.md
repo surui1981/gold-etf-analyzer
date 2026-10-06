@@ -367,14 +367,20 @@ git push https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git main --
 **预计时间**：4-6 周（2026-10-14 至 2026-11-22）
 **预计 commit 数**：15-20 个
 
+**当前进度**（截至 2026-10-06）：
+- Step G（回测权重嵌套扩展）：🟡 2/3 commit 已合并（dbf9239 + 77d33a5），待 Commit 3 UI 收口
+- Step E（动态化宏观阈值）：⬜ 未启动
+- Step F（技术面 5 维度重构）：⬜ 未启动（等 G 完成）
+- Step H（样本阈值分层）：⬜ 未启动
+
 ### 2.1 改进项
 
-| ID | 改进 | 优先级 | 工作量 | 来自 parameter-evaluation.md |
-|----|------|--------|--------|----------------------------|
-| G | 回测权重嵌套扩展 | P0 | 1 周 | §3.6 |
-| E | 动态化宏观阈值 | P0 | 1-2 周 | §3.2 |
-| F | 技术面 5 维度重构（组内平均） | P1 | 2-3 周 | §3.3 |
-| H | 样本阈值分层 | P2 | 0.5 天 | §3.8 |
+| ID | 改进 | 优先级 | 工作量 | 来自 parameter-evaluation.md | 状态 |
+|----|------|--------|--------|----------------------------|------|
+| G | 回测权重嵌套扩展 | P0 | 1 周 | §3.6 | 🟡 2/3 commit 已合并（待 UI 收口） |
+| E | 动态化宏观阈值 | P0 | 1-2 周 | §3.2 | ⬜ 未启动 |
+| F | 技术面 5 维度重构（组内平均） | P1 | 2-3 周 | §3.3 | ⬜ 未启动（等 G 完成） |
+| H | 样本阈值分层 | P2 | 0.5 天 | §3.8 | ⬜ 未启动 |
 
 **依赖**：F 必须等 G 完成（否则无法回测扫内部权重）。
 
@@ -382,38 +388,57 @@ git push https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git main --
 
 #### Step G · 回测权重嵌套扩展（Week 1）
 
-**目标**：`WeightGrid` 支持嵌套（`trend_5` / `macro_5` 字典形式），上限 125 → 1000。
+**目标**：`WeightGrid` 支持嵌套（`trend_5` / `macro_5` 字典形式），上限 125 → 1000，
+加异步回测端点让大网格扫描不阻塞页面。
 
-**文件改动**：
-1. `src/app/schemas/backtest.py`：
-   ```python
-   class WeightGrid(BaseModel):
-       tech_macro_news: list[tuple[float, float, float]] = [(0.30, 0.40, 0.30), (0.40, 0.40, 0.20), (0.30, 0.30, 0.40), (0.40, 0.30, 0.30), (0.50, 0.40, 0.10)]
-       trend_5: list[dict[str, float]] | None = None
-       # 例: [{"结构": 0.30, "动量": 0.20, "支撑": 0.20, "动能": 0.15, "回撤": 0.15}, ...]
-       macro_5: list[dict[str, float]] | None = None
-   ```
+**状态**：🟡 进行中（2/3 commit 已合并）
+- ✅ Commit 1 `dbf9239`：WeightGrid 嵌套 + 上限 1000
+- ✅ Commit 2 `77d33a5`：异步回测接口 + task_registry + task_id 轮询
+- ⏳ Commit 3：UI 高级模式编辑器 + 异步进度条（下一批启动）
 
-2. `src/app/services/backtest.py:itertools.product(...)`：组合计算改为笛卡尔积嵌套，先 tech_macro_news 再 trend_5 再 macro_5。**上限校验**改为 1000。
+**最终 schema 形态**（与原计划不同 —— 见 Commit 1 实现）：
+```python
+class NestedWeights(BaseModel):
+    weights: list[dict[str, float]] = Field(..., min_length=1, max_length=10)
+    _expected_fields: ClassVar[tuple[str, ...]] = ()  # 子类覆盖
 
-3. 新增异步接口 `POST /api/v1/backtest/run-async`：
-   - 返回 `task_id`，客户端轮询 `GET /backtest/result/{task_id}`
-   - 任务用 `asyncio.create_task` 或 FastAPI BackgroundTasks
-   - UI 用进度条（`static/backtest.html` 改造）
+class TrendWeights(NestedWeights):
+    _expected_fields = ("结构", "动量", "支撑", "动能", "回撤")
+class MacroWeights(NestedWeights):
+    _expected_fields = ("美元", "利率", "通胀", "地缘", "避险")
 
-4. `static/backtest.html`：UI 加 "高级模式" 折叠面板，暴露 trend_5 / macro_5 编辑器（5 个数值 input，必须和=1.0）。
+class WeightGrid(BaseModel):
+    tech: list[float]
+    macro: list[float]
+    news: list[float]
+    trend_weights: TrendWeights | None = None
+    macro_weights: MacroWeights | None = None
+```
 
-**测试改动**：
-- `tests/test_services/test_backtest.py`：增 10 例
-  - 嵌套权重笛卡尔积计算正确性
-  - 上限 1000 校验
-  - 异步任务接口响应格式
-  - 任务取消时清理
+**最终端点形态**（与原计划不同 —— 异步 + 轮询是 2 个端点不是 1 个）：
+- `POST /api/v1/backtest/run-async` → 202 Accepted + `Location: /api/v1/backtest/result/{task_id}`
+- `GET  /api/v1/backtest/result/{task_id}` → status + BacktestResultOut / error
+
+**关键决策（实现过程中沉淀）**：
+
+| 决策 | 落点 | 与原计划差异 |
+|------|------|--------------|
+| `WeightGrid` 字段 | 仍拆成 `tech` / `macro` / `news` 三个独立 `list[float]` + 2 个 Optional 嵌套 | 原计划用 `tech_macro_news: list[tuple]`，但前端表单已是独立字段，强行打包会破坏 `BacktestConfigIn` 向后兼容 |
+| 共享 5 维字段常量 | 提到 schema 顶部 `TREND_DIM_FIELDS` / `MACRO_DIM_FIELDS` | 原计划要等 Step F 提取到 `static/backtest-fields.js`；Step G 内嵌即可（Step F 仍然要做） |
+| 后台任务持有 | 抽到 `services/background.py::_spawn_background` | 原计划共用 `main.py::_spawn_background`；但 endpoint 反向 import main 会循环依赖，故提取独立模块 |
+| 强引用 set 隔离 | `conftest._reset_db` 开头 `_BACKGROUND_TASKS.clear()` | 原计划用 `asyncio.gather`；实测发现**前一个测试可能用已关闭 loop spawn** task，gather 报「attached to a different loop」—— 直接 clear + 单元测试显式 await `_wait_for_status` 更稳 |
+
+**Commit 3 · UI 高级模式编辑器（下一批启动）**：
+
+1. `static/backtest.html`：`<details id="advPanel">` 折叠面板 + 5×2 个 number input + `#asyncOn` 复选 + `#runBtnAsync` + `#asyncProgress` 进度条
+2. `static/backtest-chart.js`：CSS 注入 `.adv-panel` / `.progress-bar` / `.grp-grid`
+3. `static/i18n/{zh-CN,en-US,zh-TW}.js`：3 文件同步加 `backtest.advanced_title` 等 7 个 key
+4. `getSelectedParams()` 加 `trend_weights` / `macro_weights` 分支；新增 `runBacktestAsync()` + `pollBacktask()` 函数
 
 **commit 切分**：3 个 commit
-1. `feat(backtest): WeightGrid 支持嵌套 + 上限提升`
-2. `feat(backtest): 异步回测接口`
-3. `feat(ui): 回测页高级模式 · 内部权重编辑器`
+1. ✅ `dbf9239` `feat(backtest): WeightGrid 支持嵌套 + 上限 1000`
+2. ✅ `77d33a5` `feat(backtest): 异步回测接口 + task_id 轮询`
+3. ⏳ `feat(ui): 回测页高级模式 · trend_5/macro_5 编辑器 + 异步进度`
 
 ---
 
@@ -544,6 +569,14 @@ git push https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git main --
 # 同 V0.78.0，外加：
 uv run python scripts/check_docs_claims.py   # 410+ 处
 git tag -a v0.79.0 -m "V0.79.0 · 阈值动态化 + 回测增强"
+```
+
+**Step G Commit 3（UI 收口）启动前的前置门禁**：
+```bash
+uv run python -m pytest tests/test_api/test_async_backtest.py tests/test_api/test_backtest_api.py tests/test_services/test_backtest_service.py -q   # 56 例应全绿
+uv run ruff check src tests   # 0 error
+node scripts/check_clus_render.mjs   # UI 渲染断言（待 Commit 3 后回归）
+uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 ```
 
 ---
@@ -722,24 +755,38 @@ git tag -a v0.79.0 -m "V0.79.0 · 阈值动态化 + 回测增强"
 
 ---
 
-## 8. 立即可启动的下一步（V0.78.0 Day 1）
+## 8. 立即可启动的下一步（V0.79.0 Step G Commit 3）
 
-今天（2026-10-05）可以做的：
+今天（2026-10-06）可以做的：
 
-1. **建分支**（不在 main 上直接改）：
+1. **不需要建分支**：Step G Commit 1（`dbf9239`）+ Commit 2（`77d33a5`）已在 main 合并，Commit 3 沿用同一主线。
+
+2. **读 Commit 1 实现沉淀**：先看 `src/app/schemas/backtest.py:14-41`（`TREND_DIM_FIELDS` / `MACRO_DIM_FIELDS` 常量）、`NestedWeights` 基类，确认 UI 要暴露的字段名集合。
+
+3. **UI 改造**（按 §2.2 Step G Commit 3 计划）：
+   - `static/backtest.html`：`<details id="advPanel">` + 5×2 number input + `#runBtnAsync` + `#asyncProgress`
+   - `static/backtest-chart.js`：`injectCSS()` 加 `.adv-panel` / `.progress-bar` / `.grp-grid`
+   - `static/i18n/{zh-CN,en-US,zh-TW}.js`：3 文件同步 7 个新 key
+
+4. **端到端手测**（必须有真实浏览器或 puppeteer）：
    ```bash
-   git checkout -b feat/v0.78.0-threshold-unification
+   MARKET_PROVIDER=mock uvicorn app.main:app --port 8899 &
+   # 在 backtest 页勾选「启用 trend_5」→ 填 5 个值（验证 sum≈1.0 提示）→ 提交 → 应自动切到 /run-async 并显示进度条
+   ```
+   ⚠ **MEMORY 规则**：「前端 undefined 字面量排查」—— UI 渲染必须用 puppeteer 实跑，参考 `/tmp/check_portfolio.mjs`，不能仅凭静态阅读断言。
+
+5. **跑门禁**：
+   ```bash
+   node scripts/check_clus_render.mjs
+   uv run python scripts/check_docs_claims.py
+   uv run python scripts/check_static_js.py
+   uv run ruff check src tests
+   uv run ruff format --check src tests
    ```
 
-2. **Step A 启动**：创建 `src/app/schemas/thresholds.py`，按 §1.2 Step A 模板填入。
+6. **commit**：`feat(ui): 回测页高级模式 · trend_5/macro_5 编辑器 + 异步进度`
 
-3. **替换硬编码**：用 grep 列出所有 `>= 55` / `> 55` / `< 45` / `<= 45` / `>= 70` 位置，逐一替换。
-
-4. **跑测试**：先跑 `tests/test_services/test_decision.py` `test_resonance.py` `test_news.py` `test_trend.py` 4 个核心文件，验证抽常量不改变行为。
-
-5. **commit**：`refactor(schemas): 统一阈值常量到 schemas/thresholds.py`
-
-预计 Day 1 上午即可完成 Step A，下午推进 Step B（决策矩阵档位补全）。
+预计半天即可完成 Commit 3，之后即可启动 Step E（动态化宏观阈值，§2.2 Week 2-3）。
 
 ---
 
