@@ -559,6 +559,15 @@ window.PM_I18N_ZH_CN = {
   "backtest.calibration_title": "分值分箱校准曲线",
   "backtest.detail_title": "命中详情",
 
+  // V0.79.0 Step G Commit 3：高级模式 + 异步进度
+  "backtest.advanced_title": "高级模式（嵌套权重 + 异步）",
+  "backtest.trend_5": "启用技术面 5 维度内部权重",
+  "backtest.macro_5": "启用宏观 5 因子内部权重",
+  "backtest.async_run": "⚡ 强制异步执行（> 200 组合时自动启用）",
+  "backtest.sum_hint_ok": "✓ 权重和 = 1.0，可提交",
+  "backtest.sum_hint_bad": "⚠️ 权重和 ≠ 1.0，请调整",
+  "backtest.async_progress": "异步任务进度",
+
   "central_bank.page_title": "世界央行黄金购买统计 · 黄金价格投资辅助工具",
   "central_bank.h1": "世界央行黄金购买统计",
   "central_bank.subtitle_en": "CENTRAL BANK GOLD PURCHASES · 2020 – 2026",

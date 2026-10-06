@@ -189,6 +189,25 @@
     <div style="font-size:11px;color:var(--muted);margin-top:6px" data-i18n="backtest.grid_hint">
       💡 网格组合数 = tech × macro × news × bullish × bearish（≤ 125，超出会拒绝）；同组合 5 分钟内复用缓存
     </div>
+
+    <!-- V0.79.0 Step G Commit 3：高级模式 · 嵌套权重 + 异步执行 -->
+    <details id="advPanel" open class="adv-panel">
+      <summary data-i18n="backtest.advanced_title">高级模式（嵌套权重 + 异步）</summary>
+      <div class="adv-enable-row">
+        <label><input type="checkbox" id="trendOn"> <span data-i18n="backtest.trend_5">启用技术面 5 维度内部权重</span></label>
+        <label><input type="checkbox" id="macroOn"> <span data-i18n="backtest.macro_5">启用宏观 5 因子内部权重</span></label>
+        <label><input type="checkbox" id="asyncOn" checked> <span data-i18n="backtest.async_run">⚡ 强制异步执行（> 200 组合时自动启用）</span></label>
+      </div>
+      <div class="grp-grid" id="trendGrid" hidden></div>
+      <div class="grp-grid" id="macroGrid" hidden></div>
+      <div class="adv-hint ok" id="advHint" data-i18n="backtest.sum_hint_ok">✓ 默认未启用嵌套；启用后权重和必须 = 1.0</div>
+      <button class="run-btn-async" id="runBtnAsync" type="button" data-i18n="backtest.async_run">⚡ 异步执行</button>
+    </details>
+
+    <div id="asyncProgress" class="progress-bar" hidden>
+      <div class="progress-fill" id="asyncFill"></div>
+      <div class="progress-msg" id="asyncMsg" data-i18n="backtest.async_progress">异步任务进度</div>
+    </div>
   </section>
 
   <!-- 回测结果 -->
@@ -283,7 +302,7 @@ function renderChips() {
 }
 
 function getSelectedParams() {
-  return {
+  const params = {
     days: parseInt(document.getElementById("daysSel").value, 10),
     target: document.getElementById("targetSel").value,
     weight_grid: {
@@ -296,10 +315,173 @@ function getSelectedParams() {
       bearish: Array.from(DEFAULT_ON.bearish).sort((a, b) => b - a),
     },
   };
+  // V0.79.0 Step G Commit 3：高级模式 · 嵌套权重（中文键）
+  if (document.getElementById("trendOn").checked) {
+    const row = {};
+    document.querySelectorAll("#trendGrid input[data-key]").forEach((inp) => {
+      row[inp.dataset.key] = parseFloat(inp.value) || 0;
+    });
+    params.weight_grid.trend_weights = { weights: [row] };
+  }
+  if (document.getElementById("macroOn").checked) {
+    const row = {};
+    document.querySelectorAll("#macroGrid input[data-key]").forEach((inp) => {
+      row[inp.dataset.key] = parseFloat(inp.value) || 0;
+    });
+    params.weight_grid.macro_weights = { weights: [row] };
+  }
+  return params;
+}
+
+/* ─────────── V0.79.0 Step G · 高级模式 / 异步回测 ─────────── */
+const TREND_FIELDS = [
+  ["结构", "trend-structure"],
+  ["动量", "trend-momentum"],
+  ["支撑", "trend-support"],
+  ["动能", "trend-momentum-rsi"],
+  ["回撤", "trend-drawdown"],
+];
+const MACRO_FIELDS = [
+  ["美元", "macro-dxy"],
+  ["利率", "macro-us10y"],
+  ["通胀", "macro-cpi"],
+  ["地缘", "macro-geo"],
+  ["避险", "macro-vix"],
+];
+const DEFAULT_TREND = { "结构": 0.2, "动量": 0.2, "支撑": 0.2, "动能": 0.2, "回撤": 0.2 };
+const DEFAULT_MACRO = { "美元": 0.2, "利率": 0.2, "通胀": 0.2, "地缘": 0.2, "避险": 0.2 };
+
+function renderGrid(gridId, fields, defaults) {
+  const html = fields.map(([zh, slug]) => {
+    const v = defaults[zh];
+    return `<label class="grp-cell"><span class="grp-label">${zh}</span>` +
+      `<input type="number" min="0" max="1" step="0.05" data-key="${zh}" ` +
+      `id="${gridId === "trendGrid" ? "t_" : "m_"}${slug}" value="${v}"></label>`;
+  }).join("");
+  const el = document.getElementById(gridId);
+  if (el) el.innerHTML = html;
+}
+
+function renderTrendGrid() {
+  renderGrid("trendGrid", TREND_FIELDS, DEFAULT_TREND);
+}
+function renderMacroGrid() {
+  renderGrid("macroGrid", MACRO_FIELDS, DEFAULT_MACRO);
+}
+
+function sumApprox(gridId) {
+  let s = 0;
+  document.querySelectorAll("#" + gridId + " input[data-key]").forEach((inp) => {
+    s += parseFloat(inp.value) || 0;
+  });
+  return Math.abs(s - 1.0) < 0.01;  // 前端粗校验（后端 1e-3 是真理）
+}
+
+function validateSum() {
+  const trendOn = document.getElementById("trendOn").checked;
+  const macroOn = document.getElementById("macroOn").checked;
+  const trendOk = !trendOn || sumApprox("trendGrid");
+  const macroOk = !macroOn || sumApprox("macroGrid");
+  const allOk = trendOk && macroOk;
+  const hint = document.getElementById("advHint");
+  if (hint) {
+    hint.className = "adv-hint " + (allOk ? "ok" : "bad");
+    hint.textContent = allOk
+      ? (window.I18n ? window.I18n.t("backtest.sum_hint_ok") : "✓ 权重和 = 1.0，可提交")
+      : (window.I18n ? window.I18n.t("backtest.sum_hint_bad") : "⚠️ 权重和 ≠ 1.0，请调整");
+  }
+  document.getElementById("runBtn").disabled = !allOk;
+  document.getElementById("runBtnAsync").disabled = !allOk;
+  document.getElementById("trendGrid").hidden = !trendOn;
+  document.getElementById("macroGrid").hidden = !macroOn;
+  return allOk;
+}
+
+function showProgress(pct, msg, bad) {
+  const bar = document.getElementById("asyncProgress");
+  if (bar) bar.hidden = false;
+  const fill = document.getElementById("asyncFill");
+  if (fill) {
+    fill.style.width = pct + "%";
+    fill.className = "progress-fill" + (bad ? " bad" : "");
+  }
+  const m = document.getElementById("asyncMsg");
+  if (m) m.textContent = msg;
+}
+
+function computeCombo(wg) {
+  return wg.tech.length * wg.macro.length * wg.news.length
+    * 4 * 4
+    * (wg.trend_weights ? wg.trend_weights.weights.length : 1)
+    * (wg.macro_weights ? wg.macro_weights.weights.length : 1);
+}
+
+function decideSyncOrAsync() {
+  if (document.getElementById("asyncOn").checked) return "async";
+  const wg = getSelectedParams().weight_grid;
+  return computeCombo(wg) > 200 ? "async" : "sync";
+}
+
+async function pollBacktask(taskId, pollUrl, maxMs) {
+  const deadline = Date.now() + (maxMs || 60000);
+  let interval = 1000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, interval));
+    const r = await fetch(API_BASE + pollUrl);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const body = await r.json();
+    const pct = body.status === "pending" ? 15
+      : body.status === "running" ? 50 : 100;
+    showProgress(pct, "状态：" + body.status);
+    if (body.status === "completed" || body.status === "failed") return body;
+    interval = Math.min(interval * 1.3, 3000);  // 简易指数退避，封顶 3s
+  }
+  throw new Error("轮询超时");
+}
+
+async function runBacktestAsync() {
+  if (!validateSum()) return;
+  const params = getSelectedParams();
+  document.getElementById("resultSub").textContent = "提交任务…";
+  showProgress(5, "提交中…");
+  try {
+    const resp = await fetch(API_BASE + "/api/v1/backtest/run-async", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (resp.status === 202) {
+      const { task_id, poll_url } = await resp.json();
+      showProgress(5, (window.I18n ? window.I18n.t("backtest.async_progress") : "异步任务进度") + " · " + task_id.slice(0, 8));
+      const body = await pollBacktask(task_id, poll_url);
+      if (body.status === "completed") {
+        body.result.cached = false;
+        window.PM_Backtest.render(body.result);
+        document.getElementById("resultSub").textContent = "完成 · " + body.result.rows.length + " 行";
+        showProgress(100, "完成 · " + body.result.rows.length + " 行");
+      } else {
+        document.getElementById("btWarn").innerHTML =
+          '<div class="source-bar source-bad">❌ 异步任务失败：' + (body.error || "未知错误") + "</div>";
+        showProgress(100, "失败", true);
+      }
+      try { window.TL && window.TL.track("backtest_async_done", { rows: body.result && body.result.rows.length, task_id }); } catch (_) {}
+    } else {
+      const err = await resp.json().catch(() => ({ detail: "" }));
+      document.getElementById("btWarn").innerHTML =
+        '<div class="source-bar source-bad">❌ 提交失败 HTTP ' + resp.status + "（" + (err.detail || "") + "）</div>";
+      showProgress(100, "失败", true);
+    }
+  } catch (e) {
+    document.getElementById("btWarn").innerHTML =
+      '<div class="source-bar source-bad">❌ 异步提交失败：' + (e.message || "网络错误") + "</div>";
+    showProgress(100, "网络错误", true);
+  }
 }
 
 /* ─────────── run backtest ─────────── */
 async function runBacktest() {
+  // V0.79.0 Step G Commit 3：网格大或用户强制 → 走异步路径
+  if (decideSyncOrAsync() === "async") return runBacktestAsync();
   const params = getSelectedParams();
   document.getElementById("resultSub").textContent = "计算中…";
 
@@ -343,6 +525,9 @@ async function runBacktest() {
 
 /* ─────────── init ─────────── */
 renderChips();
+renderTrendGrid();
+renderMacroGrid();
+validateSum();  // 初始化 sum 提示与 run 按钮 disabled 状态
 
 window.PM_Backtest.mount({ onRun: runBacktest });
 
@@ -366,6 +551,19 @@ window.PM_Backtest.mount({ onRun: runBacktest });
 // 控件变化自动 run（500ms 节流）
 document.getElementById("daysSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
 document.getElementById("targetSel").addEventListener("change", () => window.PM_Backtest.debouncedRun(runBacktest, 500));
+
+// V0.79.0 Step G Commit 3：高级模式控件监听
+document.getElementById("runBtnAsync").addEventListener("click", runBacktestAsync);
+document.getElementById("trendOn").addEventListener("change", () => {
+  validateSum();
+  window.PM_Backtest.debouncedRun(runBacktest, 500);
+});
+document.getElementById("macroOn").addEventListener("change", () => {
+  validateSum();
+  window.PM_Backtest.debouncedRun(runBacktest, 500);
+});
+document.getElementById("trendGrid").addEventListener("input", validateSum);
+document.getElementById("macroGrid").addEventListener("input", validateSum);
 </script>
 <script src="/static/pwa.js" defer></script>
 </body>

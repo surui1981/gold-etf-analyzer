@@ -557,6 +557,15 @@ window.PM_I18N_en_US = {
   "backtest.calibration_title": "Score Bin Calibration Curve",
   "backtest.detail_title": "Hit Details",
 
+  // V0.79.0 Step G Commit 3: Advanced mode + async progress
+  "backtest.advanced_title": "Advanced (nested weights + async)",
+  "backtest.trend_5": "Enable 5-dim tech sub-weights",
+  "backtest.macro_5": "Enable 5-factor macro sub-weights",
+  "backtest.async_run": "⚡ Force async (auto when > 200 combos)",
+  "backtest.sum_hint_ok": "✓ Sum = 1.0, ready to submit",
+  "backtest.sum_hint_bad": "⚠ Sum ≠ 1.0, please adjust",
+  "backtest.async_progress": "Async task progress",
+
   "central_bank.page_title": "World Central Bank Gold Purchases · Gold ETF Assistant",
   "central_bank.h1": "World Central Bank Gold Purchases",
   "central_bank.subtitle_en": "CENTRAL BANK GOLD PURCHASES · 2020 – 2026",

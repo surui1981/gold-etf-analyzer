@@ -202,6 +202,15 @@ window.PM_I18N_zh_TW = {
   "backtest.detail_title": "命中明細",
   "backtest.default_notice": "未選擇標的，預設以紐約黃金為基準",
 
+  // V0.79.0 Step G Commit 3：進階模式 + 非同步進度
+  "backtest.advanced_title": "進階模式（巢狀權重 + 非同步）",
+  "backtest.trend_5": "啟用技術面 5 維度內部權重",
+  "backtest.macro_5": "啟用宏觀 5 因子內部權重",
+  "backtest.async_run": "⚡ 強制非同步執行（> 200 組合時自動啟用）",
+  "backtest.sum_hint_ok": "✓ 權重和 = 1.0，可提交",
+  "backtest.sum_hint_bad": "⚠ 權重和 ≠ 1.0，請調整",
+  "backtest.async_progress": "非同步任務進度",
+
   /* ── 央行購金（central_bank.html）chrome ── */
   "central_bank.h1": "央行購金統計",
   "central_bank.subtitle_en": "世界央行黃金購買統計 · 2020 – 2026",

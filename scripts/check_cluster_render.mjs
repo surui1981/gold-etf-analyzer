@@ -421,6 +421,63 @@ console.log("=".repeat(70));
         line.includes("基准线") || line.includes("基準線") || line.includes("calibrated baseline"), line.slice(0, 90));
     }
   }
+
+  // ── A6 backtest：高级面板 + 异步进度（V0.79.0 Step G Commit 3） ──
+  {
+    console.log("\n[A6] backtest 高级面板 + 异步进度（V0.79.0 Step G Commit 3）");
+    const bth = read("backtest.html");
+
+    // 6.1 HTML id 齐备（11 个 id）
+    for (const id of ["advPanel", "trendOn", "macroOn", "asyncOn", "runBtnAsync",
+                       "asyncProgress", "asyncFill", "asyncMsg", "trendGrid",
+                       "macroGrid", "advHint"]) {
+      ok(`A6 backtest.html 含 id="${id}"`, bth.includes(`id="${id}"`));
+    }
+
+    // 6.2 inline JS 函数定义存在
+    ok("A6 定义 runBacktestAsync 函数", bth.includes("async function runBacktestAsync"));
+    ok("A6 定义 pollBacktask 函数",    bth.includes("async function pollBacktask"));
+    ok("A6 定义 validateSum 函数",     bth.includes("function validateSum"));
+    ok("A6 定义 renderTrendGrid/renderMacroGrid",
+       bth.includes("renderTrendGrid") && bth.includes("renderMacroGrid"));
+
+    // 6.3 中文键字面（必填，后端 schema 期望）
+    ok("A6 trend_weights 中文键「结构」字面出现", bth.includes('"结构"'));
+    ok("A6 macro_weights 中文键「美元」字面出现", bth.includes('"美元"'));
+    ok("A6 trend_weights / macro_weights 字段名都在 inline JS",
+       bth.includes("trend_weights") && bth.includes("macro_weights"));
+
+    // 6.4 异步切换判定
+    ok("A6 同步/异步切换阈值 200 写明", bth.includes("> 200"));
+    ok("A6 提交到 /api/v1/backtest/run-async", bth.includes("/api/v1/backtest/run-async"));
+    ok("A6 轮询读 poll_url 字段（202 响应）", bth.includes("poll_url"));
+
+    // 6.5 三语 i18n 7 个新 key 齐备
+    const newKeys = ["backtest.advanced_title", "backtest.trend_5",
+      "backtest.macro_5", "backtest.async_run", "backtest.sum_hint_ok",
+      "backtest.sum_hint_bad", "backtest.async_progress"];
+    for (const [loc, file] of [["zh-CN", "i18n/zh-CN.js"],
+                               ["zh-TW", "i18n/zh-TW.js"],
+                               ["en-US", "i18n/en-US.js"]]) {
+      const dict = read(file);
+      for (const k of newKeys) {
+        ok(`A6 ${loc} 含 ${k}`, dict.includes(`"${k}"`));
+      }
+    }
+
+    // 6.6 CSS 注入路径（必须 backtest-chart.js，不能在 backtest.html <style>）
+    const btjs = read("backtest-chart.js");
+    ok("A6 .adv-panel 在 backtest-chart.js injectCSS",
+       btjs.includes(".adv-panel"));
+    ok("A6 .progress-bar 在 backtest-chart.js",
+       btjs.includes(".progress-bar"));
+    ok("A6 .grp-grid 在 backtest-chart.js",
+       btjs.includes(".grp-grid"));
+
+    // 6.7 中文键 vs weights.html 英文键防呆
+    ok("A6 backtest.html 不含 weights.html 风格的英文键（structure/momentum）",
+       !/data-key="(structure|momentum|support|drawdown)"/.test(bth));
+  }
 }
 
 // ── 8. V0.77.1 接线与 SW 护栏：桩 fetch / 桩 caches 全链路真实执行 ──
