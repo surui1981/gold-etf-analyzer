@@ -276,6 +276,8 @@ window.PM_I18N_en_US = {
   "trend.tab_weekly": "Weekly",
   "trend.tab_monthly": "Monthly",
   "trend.macro_title": "Macro Factor Breakdown",
+  "trend.macro_dynamic_badge": "Dynamic",
+  "trend.macro_static_badge": "Static",
   "trend.index_panel_title": "Composite Trend Index",
   "trend.components_title": "Index Components",
   "trend.comp_tech": "Technical",

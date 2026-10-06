@@ -275,6 +275,8 @@ window.PM_I18N_ZH_CN = {
   "trend.tab_weekly": "周线",
   "trend.tab_monthly": "月线",
   "trend.macro_title": "宏观因子明细",
+  "trend.macro_dynamic_badge": "动态阈值",
+  "trend.macro_static_badge": "静态阈值",
   "trend.index_panel_title": "综合趋势评估指数",
   "trend.components_title": "指数构成",
   "trend.comp_tech": "技术面",

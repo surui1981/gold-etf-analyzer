@@ -478,6 +478,57 @@ console.log("=".repeat(70));
     ok("A6 backtest.html 不含 weights.html 风格的英文键（structure/momentum）",
        !/data-key="(structure|momentum|support|drawdown)"/.test(bth));
   }
+
+  // ── A7 trend/silver 宏观阈值角标（V0.79.0 Step E Commit 4） ──
+  {
+    console.log("\n[A7] trend/silver 宏观阈值角标（V0.79.0 Step E Commit 4）");
+    const bth = read("trend.html");
+    const sh = read("silver.html");
+
+    // 7.1 trend.html 角标代码：动态/静态 badge + I18n.t + hint
+    ok("A7 trend.html 含 macroDynamic 变量定义", bth.includes("macroDynamic"));
+    ok("A7 trend.html 含 macroBadgeText 变量",
+       bth.includes("macroBadgeText"));
+    ok("A7 trend.html 通过 window.I18n.t 取翻译",
+       bth.includes("window.I18n.t"));
+    ok("A7 trend.html fallback [动态]/[静态] 字面",
+       bth.includes('"[动态]"') && bth.includes('"[静态]"'));
+    ok("A7 trend.html 含动态阈值 hint 文案",
+       bth.includes("5 因子中 ≥4"));
+    ok("A7 trend.html macroInfo 改用 innerHTML（容下 badge）",
+       bth.includes("getElementById(\"macroInfo\").innerHTML"));
+
+    // 7.2 silver.html 同步加角标（commit 4 一改两受益）
+    ok("A7 silver.html 含 macroDynamic 变量定义", sh.includes("macroDynamic"));
+    ok("A7 silver.html 通过 window.I18n.t 取翻译",
+       sh.includes("window.I18n.t"));
+    ok("A7 silver.html 含动态阈值 hint 文案",
+       sh.includes("5 因子中 ≥4"));
+    ok("A7 silver.html 与 trend.html 角标逻辑一致（macroBadgeText 同步）",
+       sh.includes("macroBadgeText"));
+
+    // 7.3 配色（沿用 srcBadge 的 #e7f5ff/#e9ecef 风格，新增 #e8f7ee 表示 dynamic）
+    ok("A7 trend.html 含动态色 #e8f7ee", bth.includes("#e8f7ee"));
+    ok("A7 trend.html 含静态色 #e9ecef", bth.includes("#e9ecef"));
+    ok("A7 silver.html 含动态色 #e8f7ee", sh.includes("#e8f7ee"));
+
+    // 7.4 i18n 三语 2 key × 3 语 = 6 条存在性
+    const zhCN = read("i18n/zh-CN.js");
+    const enUS = read("i18n/en-US.js");
+    const zhTW = read("i18n/zh-TW.js");
+    ok("A7 zh-CN 含 macro_dynamic_badge（动态阈值）",
+       zhCN.includes('"trend.macro_dynamic_badge": "动态阈值"'));
+    ok("A7 zh-CN 含 macro_static_badge（静态阈值）",
+       zhCN.includes('"trend.macro_static_badge": "静态阈值"'));
+    ok("A7 en-US 含 macro_dynamic_badge（Dynamic）",
+       enUS.includes('"trend.macro_dynamic_badge": "Dynamic"'));
+    ok("A7 en-US 含 macro_static_badge（Static）",
+       enUS.includes('"trend.macro_static_badge": "Static"'));
+    ok("A7 zh-TW 含 macro_dynamic_badge（動態閾值）",
+       zhTW.includes('"trend.macro_dynamic_badge": "動態閾值"'));
+    ok("A7 zh-TW 含 macro_static_badge（靜態閾值）",
+       zhTW.includes('"trend.macro_static_badge": "靜態閾值"'));
+  }
 }
 
 // ── 8. V0.77.1 接线与 SW 护栏：桩 fetch / 桩 caches 全链路真实执行 ──

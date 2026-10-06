@@ -435,7 +435,18 @@ function renderMain(data) {
   document.getElementById("idxMethod").innerHTML = data.index?.method || "";
 
   const macro = data.macro || {};
-  document.getElementById("macroInfo").textContent = macro.score != null ? `综合 ${macro.score?.toFixed(1)} / 100` : "";
+  // V0.79.0 Step E：动态/静态阈值角标（与 trend.html 一致；一改两受益）
+  const macroDynamic = macro.macro_dynamic === true;
+  const macroBadgeBg = macroDynamic ? "#e8f7ee" : "#e9ecef";
+  const macroBadgeColor = macroDynamic ? "var(--up)" : "var(--muted)";
+  const macroBadgeText = (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(macroDynamic ? "trend.macro_dynamic_badge" : "trend.macro_static_badge")
+    : (macroDynamic ? "[动态]" : "[静态]");
+  const macroBadgeHint = macroDynamic
+    ? "5 因子中 ≥4 使用近 252 日滚动 90/10 分位"
+    : "数据不足，阈值回退 hardcode 默认";
+  const macroBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${macroBadgeBg};color:${macroBadgeColor};font-size:10px;font-weight:500" title="${macroBadgeHint}">${macroBadgeText}</span>`;
+  document.getElementById("macroInfo").innerHTML = macro.score != null ? `综合 ${macro.score?.toFixed(1)} / 100${macroBadge}` : "";
   const macroFactorsEl = document.getElementById("macroFactors");
   macroFactorsEl.innerHTML = (macro.factors || []).map(f => `
     <div class="macro-row">

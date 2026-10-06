@@ -182,6 +182,8 @@ window.PM_I18N_zh_TW = {
   "trend.comp_macro": "宏觀面",
   "trend.comp_news": "消息面",
   "trend.macro_title": "宏觀參考因子",
+  "trend.macro_dynamic_badge": "動態閾值",
+  "trend.macro_static_badge": "靜態閾值",
   "trend.index_panel_title": "趨勢評估指數",
   "trend.components_title": "三大維度拆解",
   "trend.chart_title": "黃金價格走勢",

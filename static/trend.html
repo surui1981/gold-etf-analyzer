@@ -536,8 +536,19 @@ function render(d) {
     "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
 
   // 宏观参考因子明细
-  document.getElementById("macroInfo").textContent =
-    `宏观参考指数 ${d.macro?.score?.toFixed(1) ?? "—"}/100 · ${d.macro?.direction === "bullish" ? "利多黄金" : d.macro?.direction === "bearish" ? "利空黄金" : "中性"}`;
+  // V0.79.0 Step E：动态/静态阈值角标（部署初期数据不足 → [静态] 灰；跑满 252 日 → [动态] 绿）
+  const macroDynamic = d.macro?.macro_dynamic === true;
+  const macroBadgeBg = macroDynamic ? "#e8f7ee" : "#e9ecef";
+  const macroBadgeColor = macroDynamic ? "var(--up)" : "var(--muted)";
+  const macroBadgeText = (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(macroDynamic ? "trend.macro_dynamic_badge" : "trend.macro_static_badge")
+    : (macroDynamic ? "[动态]" : "[静态]");
+  const macroBadgeHint = macroDynamic
+    ? "5 因子中 ≥4 使用近 252 日滚动 90/10 分位"
+    : "数据不足，阈值回退 hardcode 默认";
+  const macroBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${macroBadgeBg};color:${macroBadgeColor};font-size:10px;font-weight:500" title="${macroBadgeHint}">${macroBadgeText}</span>`;
+  document.getElementById("macroInfo").innerHTML =
+    `宏观参考指数 ${d.macro?.score?.toFixed(1) ?? "—"}/100 · ${d.macro?.direction === "bullish" ? "利多黄金" : d.macro?.direction === "bearish" ? "利空黄金" : "中性"}${macroBadge}`;
   document.getElementById("macroFactors").innerHTML = (d.macro?.factors || []).map(f => {
     const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "var(--muted)";
     const srcBadge = f.source ? `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${f.source.includes("H.15") ? "#e7f5ff" : "#e9ecef"};color:${f.source.includes("H.15") ? "#1971c2" : "var(--muted)"};font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
