@@ -80,7 +80,10 @@ const SHELL_ASSETS = [
     // 直链条目供 `cache.addAll()` 预缓存。⚠ 别名不是可选的 ——
     // 邮件链接若指向未注册的路径会得到 404，离线场景下「找回密码」直接不可用。
     "/static/reset-password.html",
+    // ⚠ 下面这两条**顺序有意义**：用户管理页依赖 auth.js 的登录态，
+    // 离线打开会显示「无权访问」而非崩溃（页面自身做了 role 检查）。
     "/static/auth.js",
+    "/static/admin/users.html",
     // V0.75.1 综合研判结论卡：宿在首页顶部，离线打开时必须能渲染
     "/static/synthesis-card.js",
     // V0.76.0 首页内嵌消息面打分器：宿在首页顶部，离线打开时必须能渲染

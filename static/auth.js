@@ -318,8 +318,19 @@
     btnOut.setAttribute("role", "menuitem");
     btnOut.textContent = "↩ " + t("login.btn_logout", "退出登录");
 
+    // V0.75.3：用户管理入口，**仅 owner 可见**。
+    // ⚠ 前端隐藏只是提示 —— 真正的鉴权在 `dependencies.require_owner`，
+    // 直接打API 仍会被403拦下。两层都要有。
+    var btnAdmin = document.createElement("button");
+    btnAdmin.type = "button";
+    btnAdmin.setAttribute("role", "menuitem");
+    btnAdmin.textContent = "👥 " + t("admin.menu_entry", "用户管理");
+
     menu.appendChild(head);
     menu.appendChild(btnPwd);
+    if (user.role === "owner") {
+      menu.appendChild(btnAdmin);
+    }
     menu.appendChild(btnOut);
     wrap.appendChild(chip);
     wrap.appendChild(menu);
@@ -343,6 +354,13 @@
       e.stopPropagation();
       toggle(false);
       openChangePasswordDialog(user);
+    });
+    btnAdmin.addEventListener("click", function (e) {
+      e.stopPropagation();
+      toggle(false);
+      // ⚠ 用**绝对路径**跳走：本页可能被部署在子目录（/static/admin/），
+      // 相对路径 "./users.html" 在某些部署形态下会解析到错误位置。
+      window.location.href = "/static/admin/users.html";
     });
     btnOut.addEventListener("click", function (e) {
       e.stopPropagation();

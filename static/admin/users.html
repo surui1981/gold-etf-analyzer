@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="admin.page_title">用户管理 · 黄金价格投资辅助工具</title>
+<!-- V0.69.0 FOUC 防护：必须在 <head> 第一行、theme.css 之前 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="黄金ETF">
+<script src="/static/theme.js" defer></script>
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n.js" defer></script>
+<script src="/static/auth.js" defer></script>
+<style>
+  /* 本页专用样式。表格/按钮等基础样式 theme.css 已有，这里只补缺口。 */
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+         background: var(--bg); color: var(--text); margin: 0; padding: 20px 16px 40px; }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { font-size: 13px; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+          padding: 16px; margin-bottom: 14px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12.5px; }
+  td.actions { text-align: right; white-space: nowrap; }
+  button { font-family: inherit; font-size: 12.5px; padding: 5px 10px; margin-left: 6px;
+           border-radius: 7px; border: 1px solid var(--border); background: var(--bg);
+           color: inherit; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button.primary { background: var(--accent); color: #fff; border-color: transparent; }
+  button.danger { color: #c0392b; }
+  button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+  .tag { display: inline-block; padding: 1px 7px; border-radius: 9px; font-size: 11.5px;
+         border: 1px solid var(--border); color: var(--muted); }
+  .tag.owner { color: var(--accent); border-color: var(--accent); }
+  .tag.off { color: #c0392b; border-color: #c0392b; }
+  .alert { padding: 9px 11px; border-radius: 8px; font-size: 12.5px; margin-bottom: 12px; }
+  .alert-err { color: #c0392b; border: 1px solid #c0392b33; background: #c0392b0d; }
+  .alert-ok { color: #1e8449; border: 1px solid #1e844933; background: #1e84490d; }
+  .hidden { display: none !important; }
+  .mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: flex;
+          align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+           padding: 20px; width: 100%; max-width: 380px; }
+  .modal h3 { margin: 0 0 12px; font-size: 16px; }
+  .modal label { display: block; font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+  .modal input { width: 100%; padding: 9px 11px; font-size: 14px; font-family: inherit;
+                 border-radius: 8px; border: 1px solid var(--border);
+                 background: var(--bg); color: inherit; }
+  .modal-actions { text-align: right; margin-top: 18px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 data-i18n="admin.h_title">用户管理</h1>
+  <p class="sub" data-i18n="admin.sub">管理账号、角色与启用状态。删除为「软删除」：账号停用、数据保留。</p>
+
+  <div class="alert alert-err hidden" id="errBar" role="alert"></div>
+  <div class="alert alert-ok hidden" id="okBar" role="status"></div>
+
+  <!-- 非所有者（或未登录）时显示 —— 服务端也会拦，这里只是避免让人白跑一趟 -->
+  <div class="card hidden" id="paneDenied">
+    <p data-i18n="admin.denied">仅所有者可访问此页面。</p>
+    <a href="/static/login.html"><button type="button" data-i18n="reset.btn_back_login">返回登录页</button></a>
+  </div>
+
+  <div class="card hidden" id="paneList">
+    <table>
+      <thead>
+        <tr>
+          <th data-i18n="admin.th_id">ID</th>
+          <th data-i18n="admin.th_email">邮箱</th>
+          <th data-i18n="admin.th_display">显示名</th>
+          <th data-i18n="admin.th_role">角色</th>
+          <th data-i18n="admin.th_status">状态</th>
+          <th style="text-align:right" data-i18n="admin.th_actions">操作</th>
+        </tr>
+      </thead>
+      <tbody id="userRows"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+/* users.html 专属层（V0.75.3）。
+ *
+ * ⚠ 本页的所有「禁用按钮」都只是**提示**，真正的防护在服务端
+ * （`services/user_admin.py`）：禁止操作自己、禁止停用最后一个启用中的 owner。
+ * 前端拦不住直接打 API 的调用，所以两层都要有 —— 前端给「为什么不能做」，
+ * 后端给「做不到」。
+ */
+window.PM_ADMIN_USERS = (function () {
+  "use strict";
+
+  var users = [];
+  var busy = false;
+
+  function $(id) { return document.getElementById(id); }
+  function t(key, fb) { return PM_AUTH ? PM_AUTH.t(key, fb) : fb; }
+
+  function show(id) {
+    ["paneDenied", "paneList"].forEach(function (p) {
+      $(p).classList.toggle("hidden", p !== id);
+    });
+  }
+
+  function showErr(msg) {
+    var el = $("errBar");
+    el.textContent = msg;
+    el.classList.remove("hidden");
+    $("okBar").classList.add("hidden");
+  }
+
+  function showOk(msg) {
+    var el = $("okBar");
+    el.textContent = msg;
+    el.classList.remove("hidden");
+    $("errBar").classList.add("hidden");
+    setTimeout(function () { el.classList.add("hidden"); }, 4000);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  /** 未登录/ 非 owner ⇒ 403/401 ⇒ 显示「无权访问」而不是空表格。 */
+  function isDenied(err) {
+    if (!err) { return false; }
+    if (err.status === 401 || err.status === 403) { return true; }
+    return err.code === "owner_required" || err.code === "unauthenticated";
+  }
+
+  function render() {
+    var rows = users.map(function (u) {
+      var owner = u.role === "owner";
+      var active = u.is_active === true;
+      var self = u.is_self === true;
+      var meTag = self
+        ? ' <span class="tag">' + esc(t("admin.tag_self", "我")) + "</span>" : "";
+
+      var roleTag = '<span class="tag' + (owner ? " owner" : "") + '">'
+        + esc(owner ? t("admin.role_owner", "管理员") : t("admin.role_member", "成员")) + "</span>";
+
+      var statusTag = active
+        ? '<span class="tag">' + esc(t("admin.status_active", "启用")) + "</span>"
+        : '<span class="tag off">' + esc(t("admin.status_off", "已禁用")) + "</span>";
+
+      // ⚠ 「我」这一行的操作按钮全部禁用 —— 理由写进 title，让用户知道为什么。
+      // ⚠ 属性值用**单引号**包裹：内容里含双引号（title="..."），
+      // 而 JS 字符串本身用双引号时，转义反斜杠会被 HTML 解析器先吃掉，
+      // 导致 `node --check` 报 "missing ) after argument list"。
+      var why = esc(t("admin.why_self", "不能对自己执行此操作"));
+      var whyPwd = esc(t("admin.why_self_pwd", "请用「修改密码」功能"));
+      var dis = self ? " disabled" : "";
+      var disTitle = self ? " title='" + why + "'" : "";
+      var disTitlePwd = self ? " title='" + whyPwd + "'" : "";
+
+      var disableBtn = '<button type="button" class="danger" data-act="toggle" data-id="' + u.id
+        + '"' + dis + disTitle + ">"
+        + esc(active ? t("admin.btn_disable", "停用") : t("admin.btn_enable", "启用")) + "</button>";
+
+      var pwdBtn = '<button type="button" data-act="pwd" data-id="' + u.id
+        + '"' + dis + disTitlePwd + ">"
+        + esc(t("admin.btn_reset_pwd", "重置密码")) + "</button>";
+
+      return "<tr>"
+        + "<td>" + u.id + "</td>"
+        + "<td>" + esc(u.email) + meTag + "</td>"
+        + "<td>" + esc(u.display_name || "-") + "</td>"
+        + "<td>" + roleTag + "</td>"
+        + "<td>" + statusTag + "</td>"
+        + '<td class="actions">' + pwdBtn + disableBtn + "</td>"
+        + "</tr>";
+    }).join("");
+    $("userRows").innerHTML = rows;
+  }
+
+  function load() {
+    return PM_AUTH.apiJson("/api/v1/admin/users").then(function (d) {
+      users = d.users || [];
+      render();
+      show("paneList");
+    }).catch(function (err) {
+      if (isDenied(err)) {
+        show("paneDenied");
+        return;
+      }
+      show("paneDenied");
+      showErr(PM_AUTH.errMessage ? PM_AUTH.errMessage(err) : "加载失败");
+    });
+  }
+
+  // ─────────────── 确认弹窗（自包含，Esc 可取消）───────────────
+
+  function confirmDialog(opts) {
+    return new Promise(function (resolve) {
+      var mask = document.createElement("div");
+      mask.className = "mask";
+      mask.innerHTML =
+        '<div class="modal" role="dialog" aria-modal="true">'
+        + "<h3></h3>"
+        + '<p class="sub"></p>'
+        + '<div class="modal-actions">'
+        + '<button type="button" data-x="no"></button>'
+        + '<button type="button" class="primary" data-x="yes"></button>'
+        + "</div></div>";
+      mask.querySelector("h3").textContent = opts.title;
+      mask.querySelector("p").textContent = opts.body || "";
+      var no = mask.querySelector('[data-x="no"]');
+      var yes = mask.querySelector('[data-x="yes"]');
+      no.textContent = opts.cancelText || t("common.cancel", "取消");
+      yes.textContent = opts.okText || t("common.confirm", "确定");
+      document.body.appendChild(mask);
+      // 焦点落到「取消」——破坏性操作的安全默认值
+      no.focus();
+
+      function done(v) {
+        document.removeEventListener("keydown", onKey);
+        if (mask.parentNode) { mask.parentNode.removeChild(mask); }
+        resolve(v);
+      }
+      function onKey(e) { if (e.key === "Escape") { done(false); } }
+      no.addEventListener("click", function () { done(false); });
+      yes.addEventListener("click", function () { done(true); });
+      mask.addEventListener("click", function (e) { if (e.target === mask) { done(false); } });
+      document.addEventListener("keydown", onKey);
+    });
+  }
+
+  function passwordDialog(user) {
+    return new Promise(function (resolve) {
+      var mask = document.createElement("div");
+      mask.className = "mask";
+      mask.innerHTML =
+        '<div class="modal" role="dialog" aria-modal="true">'
+        + "<h3></h3>"
+        + '<label for="pmNewPwd"></label><input id="pmNewPwd" type="password" autocomplete="new-password" maxlength="72">'
+        + '<label for="pmNewPwd2"></label><input id="pmNewPwd2" type="password" autocomplete="new-password" maxlength="72">'
+        + '<div class="alert alert-err hidden" role="alert"></div>'
+        + '<div class="modal-actions">'
+        + '<button type="button" data-x="no"></button>'
+        + '<button type="button" class="primary" data-x="yes"></button>'
+        + "</div></div>";
+      mask.querySelector("h3").textContent =
+        t("admin.pwd_title", "重置密码") + " · " + user.email;
+      mask.querySelector('label[for="pmNewPwd"]').textContent = t("reset.password", "新密码");
+      mask.querySelector('label[for="pmNewPwd2"]').textContent = t("reset.confirm", "确认新密码");
+      mask.querySelector('[data-x="no"]').textContent = t("common.cancel", "取消");
+      mask.querySelector('[data-x="yes"]').textContent = t("common.save", "保存");
+      var errEl = mask.querySelector(".alert");
+      document.body.appendChild(mask);
+      var p1 = mask.querySelector("#pmNewPwd");
+      p1.focus();
+
+      function done(v, msg) {
+        document.removeEventListener("keydown", onKey);
+        if (errEl && msg) { errEl.textContent = msg; errEl.classList.remove("hidden"); return; }
+        if (mask.parentNode) { mask.parentNode.removeChild(mask); }
+        resolve(v);
+      }
+      function onKey(e) { if (e.key === "Escape") { done(null); } }
+      mask.querySelector('[data-x="no"]').addEventListener("click", function () { done(null); });
+      mask.querySelector('[data-x="yes"]').addEventListener("click", function () {
+        var a = p1.value;
+        var b = mask.querySelector("#pmNewPwd2").value;
+        if (!a) { done(false, t("reset.password", "新密码")); return; }
+        if (a !== b) { done(false, t("reset.err_mismatch", "两次输入的密码不一致")); return; }
+        done(a);
+      });
+      document.addEventListener("keydown", onKey);
+    });
+  }
+
+  // ─────────────── 操作 ───────────────
+
+  function findUser(id) {
+    for (var i = 0; i < users.length; i++) {
+      if (users[i].id === id) { return users[i]; }
+    }
+    return null;
+  }
+
+  function onToggle(id) {
+    var u = findUser(id);
+    if (!u) { return; }
+    var willDisable = u.is_active === true;
+    if (willDisable) {
+      confirmDialog({
+        title: t("admin.confirm_disable_title", "停用账号"),
+        body: t("admin.confirm_disable_body",
+          "停用后该账号立即无法登录，已有会话全部失效；其数据（持仓/打分/记录）会保留。"),
+        okText: t("admin.btn_disable", "停用"),
+      }).then(function (ok) {
+        if (!ok || busy) { return; }
+        busy = true;
+        PM_AUTH.apiJson("/api/v1/admin/users/" + id + "/set-active", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ is_active: false }),
+        }).then(function () {
+          showOk(t("admin.msg_disabled", "已停用该账号"));
+          return load();
+        }).catch(reportErr).then(function () { busy = false; });
+      });
+    } else {
+      // 启用是恢复动作，不需要确认
+      busy = true;
+      PM_AUTH.apiJson("/api/v1/admin/users/" + id + "/set-active", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      }).then(function () {
+        showOk(t("admin.msg_enabled", "已启用该账号"));
+        return load();
+      }).catch(reportErr).then(function () { busy = false; });
+    }
+  }
+
+  function onResetPwd(id) {
+    var u = findUser(id);
+    if (!u) { return; }
+    passwordDialog(u).then(function (pw) {
+      if (!pw || busy) { return; }
+      busy = true;
+      PM_AUTH.apiJson("/api/v1/admin/users/" + id + "/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_password: pw }),
+      }).then(function (d) {
+        showOk(t("admin.msg_pwd_reset", "密码已重置，该用户 {n} 个会话已失效")
+          .replace("{n}", String(d.sessions_revoked || 0)));
+      }).catch(reportErr).then(function () { busy = false; });
+    });
+  }
+
+  /** ⚠ 错误文案优先用服务端的 message —— 防自锁的 409 会带具体原因。 */
+  function reportErr(err) {
+    if (isDenied(err)) { show("paneDenied"); return; }
+    var msg = (err && (err.message || err.detail)) || "";
+    showErr(PM_AUTH.errMessage ? PM_AUTH.errMessage(err) : (msg || t("admin.err_generic", "操作失败")));
+  }
+
+  function onClick(ev) {
+    var el = ev.target;
+    if (!el || !el.getAttribute) { return; }
+    var act = el.getAttribute("data-act");
+    if (!act) { return; }
+    var id = parseInt(el.getAttribute("data-id"), 10);
+    if (act === "toggle") { onToggle(id); }
+    else if (act === "pwd") { onResetPwd(id); }
+  }
+
+  function boot() {
+    document.addEventListener("click", onClick);
+    //⚠ 先确认身份再加载：非 owner 时直接显示无权访问，
+    // 不发那个注定 403 的请求（避免控制台一片红，也让用户更快看到原因）。
+    PM_AUTH.loadStatus().then(function () {
+      if (!PM_AUTH.status.authEnabled) {
+        // 单用户模式：没有角色体系，直接给「未启用登录」的说明
+        show("paneDenied");
+        return;
+      }
+      return PM_AUTH.apiJson("/api/v1/auth/me").then(function (me) {
+        if (!me || me.role !== "owner") { show("paneDenied"); return; }
+        return load();
+      }).catch(function () { show("paneDenied"); });
+    }).catch(function () { show("paneDenied"); });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
+    boot();
+  }
+
+  return { boot: boot, load: load };
+})();
+</script>
+</body>
+</html>
