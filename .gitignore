@@ -30,6 +30,12 @@ htmlcov/
 pytest*.log
 pytest-cache-files-*/
 *.db-journal
+# ⚠ V0.80.0 补：WAL 模式的伴生文件。此前只忽略了 `*.db-journal`（rollback journal），
+# 而项目 V0.73.0 起开 WAL（`PRAGMA journal_mode=WAL`），会生成 `-wal` / `-shm` 两个文件。
+# V0.80.0 又把 WAL 下沉到 engine 层（测试库也开），于是它们在**每次跑测试后**都出现
+# —— 首次提交时被 `git add -A` 误带入版本库。两者都是运行时产物，不应入库。
+*.db-wal
+*.db-shm
 
 # 一次性校验产物（前端 JS 语法 / 脚本临时文件）
 # 以下四条为「具体名」式排除，不锚定路径即可。
