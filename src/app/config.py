@@ -101,6 +101,14 @@ class Settings(BaseSettings):
     # （顺延会让「长期不用的设备」永远在线）。
     session_ttl_hours: int = 336
 
+    # 公网可达的基地址（用于构造邮件里的链接，如找回密码链接）。
+    # ⚠ 默认空字符串 ⇒ 邮件里生成的是**相对链接**（如
+    # ``/static/reset-password.html?token=…``），多数邮件客户端能识别，
+    # 但点不开。公网部署**必须**显式设为 ``https://你的域名``，
+    # 否则用户收到的链接是坏的 —— 而这种坏法在开发环境（相对链接能点）
+    # 完全看不出来，故在此写明。
+    public_base_url: str = ""
+
     # 会话 cookie 名与安全属性。
     # secure=True 必须搭配 HTTPS；本地 http://127.0.0.1 下浏览器**不会回传**
     # Secure cookie，故 dev 默认 false，生产（.env.prod + nginx TLS）务必 true。

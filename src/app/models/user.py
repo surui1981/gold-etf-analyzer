@@ -151,3 +151,71 @@ class UserSession(Base):
 
 # 过期会话清理（delete_expired）与「查用户在线会话」都走该复合索引
 Index("ix_sessions_user_revoked", UserSession.user_id, UserSession.revoked_at)
+
+class PasswordResetToken(Base):
+    """密码重置一次性令牌（V0.75.3）。
+
+    ⚠⚠ **只存哈希，不存明文** —— 这是本表最重要的设计决定。
+    token 明文只在两个时刻存在：①刚生成、要写邮件的那一瞬；②用户从邮件里
+    粘回来的那一瞬。若库里存明文，则**一次库泄漏 = 所有在途账号可被重置**。
+    存``sha256(token)`` 后，泄漏拿到的是不可逆摘要，攻击者无法据此重置任何账号。
+
+    ⚠ 与会话表``UserSession`` 的区别：会话 id 是**不透明随机串**（无需哈希，
+    泄漏一个会话只能冒充该会话本身）；重置 token 是**高价值凭据**，
+    拿到即可永久改密码 ⇒ 必须哈希。
+    """
+
+    __tablename__ = "password_reset_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    user_id: Mapped[int] = mapped_column(
+        Integer, index=True, comment="归属用户 users.id"
+    )
+
+    # ⚠ sha256 摘要（64 字符十六进制），非明文
+    token_hash: Mapped[str] = mapped_column(
+        String(64), unique=True, index=True, comment="token 的 sha256 十六进制摘要（**非明文**）"
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), index=True, comment="过期时间（朴素 UTC，默认 24h）"
+    )
+
+    # ⚠ 已用即作废（``used_at`` 非空），而不是删行 —— 保留审计痕迹，
+    # 且能让「同一 token 二次使用」被识别为重放攻击（见服务层）。
+    used_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="非空 = 已使用（一次性，不可重放）"
+    )
+
+    # 触发来源：请求时的IP 与 UA。⚠ 用途是审计（发现暴力枚举邮箱的迹象），
+    # 不作为鉴权依据。
+    request_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="申请时客户端 IP（审计用）")
+    user_agent: Mapped[str | None] = mapped_column(
+        String(256), nullable=True, comment="申请时设备标识（审计用）"
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), comment="申请时间"
+    )
+
+    @property
+    def is_usable(self) -> bool:
+        """是否处于「可使用」状态：未用过 且 未过期。
+
+        ⚠ 判定放在模型层，与仓储查询的 ``WHERE used_at IS NULL AND expires_at > now``
+        用**同一套口径** —— 两处若不同步，就会出现「列表显示可用但校验失败」
+        这类无法排查的偏差（V0.79.0 曾两次踩过「两处口径不一致」）。
+        """
+        if self.used_at is not None:
+            return False
+        expires = as_naive_utc(self.expires_at)
+        return expires is not None and expires > utcnow()
+
+    def __repr__(self) -> str:  # pragma: no cover
+        # ⚠ repr 里**绝不包含** token 或其摘要（避免日志意外泄漏凭据）
+        return f"<PasswordResetToken user={self.user_id} ({'可用' if self.is_usable else '失效'})>"
+
+
+# 「查某用户是否有过在途 token」走该索引
+Index("ix_password_reset_tokens_user_used", PasswordResetToken.user_id, PasswordResetToken.used_at)
