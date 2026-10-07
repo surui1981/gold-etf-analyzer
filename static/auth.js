@@ -17,12 +17,17 @@
  * 1. **全局 fetch 打补丁**：写请求自动附加 `X-CSRF-Token` 头。
  *    这样既有 11 个页面里几十处 `fetch(..., {method:'POST'})` **完全不用改**，
  *    新增写端点也不会漏掉 CSRF 头 —— 比逐个改调用点更不易腐坏。
- * 2. **AUTH_ENABLED=false 时零副作用**：不注入任何 UI、不做跳转、
+ * 2. **V0.80.1 同步补丁 X-Admin-Token**：prod 部署下所有写端点都有
+ *    ``Depends(require_admin)``，需要 ``X-Admin-Token`` 头。从 localStorage
+ *    读 ``pm_admin_token``（与 settings.js 共用 key），自动附加。
+ *    ⇒ news.html / portfolio.html / weights.html 等几十处裸 fetch
+ *    **完全不用改**就能在 prod 下工作。
+ * 3. **AUTH_ENABLED=false 时零副作用**：不注入任何 UI、不做跳转、
  *    不修改 fetch 行为（仍打补丁，但读不到 csrf cookie 时不加头），
  *    保证单用户模式与 V0.74.3 观感完全一致。
- * 3. **401 全局兜底**：会话过期后任意请求返回 401 → 跳登录页并带 `?next=`，
+ * 4. **401 全局兜底**：会话过期后任意请求返回 401 → 跳登录页并带 `?next=`，
  *    用户登录后回到原来那一页，不用重新点导航。
- * 4. 纯原生 IIFE + `window.PM_AUTH` 命名空间（与 PM_Help / PM_PWA 一致）。
+ * 5. 纯原生 IIFE + `window.PM_AUTH` 命名空间（与 PM_Help / PM_PWA 一致）。
  */
 (function () {
   "use strict";
@@ -35,6 +40,8 @@
   var LOGIN_PAGE = "/static/login.html";
   var CSRF_COOKIE = "pm_csrf";
   var CSRF_HEADER = "X-CSRF-Token";
+  var ADMIN_TOKEN_KEY = "pm_admin_token";  // V0.80.1：与 settings.js 共用 localStorage key
+  var ADMIN_TOKEN_HEADER = "X-Admin-Token";
   var WRITE_METHODS = { POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
 
   var state = {
@@ -61,6 +68,18 @@
   function csrfToken() {
     var m = document.cookie.match(new RegExp("(?:^|; )" + CSRF_COOKIE + "=([^;]*)"));
     return m ? decodeURIComponent(m[1]) : "";
+  }
+
+  // V0.80.1：从 localStorage 读 admin token（与 settings.js 共用 LS_ADMIN key）
+  // 不在 settings.js 里调用是因为 auth.js 必须独立可加载（auth.js 是全站基座，
+  // settings.js 仅 settings 页加载），不能有反向依赖。
+  function adminToken() {
+    try {
+      var v = localStorage.getItem(ADMIN_TOKEN_KEY);
+      return v && String(v).trim() ? String(v).trim() : "";
+    } catch (e) {
+      return "";  // Safari 隐私模式 / cookie 禁用 → 视为未设
+    }
   }
 
   function isLoginPage() {
@@ -95,21 +114,36 @@
     init = init || {};
     var method = String(init.method || (input && input.method) || "GET").toUpperCase();
 
-    if (WRITE_METHODS[method] && sameOrigin(input) && !hasHeader(init, CSRF_HEADER)) {
-      var token = csrfToken();
-      if (token) {
-        var headers;
-        if (init.headers instanceof Headers) {
-          headers = init.headers;
-          headers.set(CSRF_HEADER, token);
-        } else if (init.headers && typeof init.headers === "object") {
-          headers = Object.assign({}, init.headers);
-          headers[CSRF_HEADER] = token;
-        } else {
-          headers = {};
-          headers[CSRF_HEADER] = token;
+    if (WRITE_METHODS[method] && sameOrigin(input)) {
+      // 1) CSRF 头：cookie 读得到才附加
+      if (!hasHeader(init, CSRF_HEADER)) {
+        var csrf = csrfToken();
+        if (csrf) {
+          if (init.headers instanceof Headers) {
+            init.headers.set(CSRF_HEADER, csrf);
+          } else if (init.headers && typeof init.headers === "object") {
+            init.headers = Object.assign({}, init.headers);
+            init.headers[CSRF_HEADER] = csrf;
+          } else {
+            init.headers = {};
+            init.headers[CSRF_HEADER] = csrf;
+          }
         }
-        init.headers = headers;
+      }
+      // 2) V0.80.1 Admin 头：localStorage 读得到才附加（dev 模式后端不要求 → 留空也无所谓）
+      if (!hasHeader(init, ADMIN_TOKEN_HEADER)) {
+        var adm = adminToken();
+        if (adm) {
+          if (init.headers instanceof Headers) {
+            init.headers.set(ADMIN_TOKEN_HEADER, adm);
+          } else if (init.headers && typeof init.headers === "object") {
+            init.headers = Object.assign({}, init.headers);
+            init.headers[ADMIN_TOKEN_HEADER] = adm;
+          } else {
+            init.headers = {};
+            init.headers[ADMIN_TOKEN_HEADER] = adm;
+          }
+        }
       }
     }
 
