@@ -16,6 +16,9 @@
 
 from __future__ import annotations
 
+import threading
+import time
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,19 +33,29 @@ from app.dependencies import (
 from app.middleware.auth import client_ip
 from app.middleware.trace import get_current_trace_id
 from app.models.user import User, utcnow
+from app.repositories.password_reset import PasswordResetTokenRepository
 from app.repositories.telemetry import TelemetryRepository, _event_to_model
-from app.repositories.user import UserRepository
+from app.repositories.user import SessionRepository, UserRepository
 from app.schemas.auth import (
     AuthSessionOut,
     AuthStatusOut,
     ChangePasswordIn,
     ChangePasswordOut,
+    ForgotPasswordIn,
+    ForgotPasswordOut,
     LoginIn,
     LogoutOut,
     RegisterIn,
+    ResetPasswordIn,
+    ResetPasswordOut,
     UserOut,
 )
 from app.services.auth import AuthError, AuthService, IssuedSession
+from app.services.notify import NotifierFactory
+from app.services.password_reset import InvalidResetTokenError, PasswordResetService
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,6 +72,9 @@ _STATUS_BY_CODE: dict[str, int] = {
     "email_taken": status.HTTP_409_CONFLICT,
     "password_weak": 422,
     "email_invalid": 422,
+    # V0.75.3找回密码
+    "reset_token_invalid": 400,
+    "reset_throttled": status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
 LOGIN_PAGE = "/static/login.html"
@@ -271,3 +287,107 @@ async def change_password(
     except AuthError as exc:
         raise _http_error(exc) from exc
     return ChangePasswordOut(revoked_sessions=revoked)
+
+
+# ─────────────── V0.75.3 找回密码 ───────────────
+
+# 找回密码的**邮件申请限流**：滑动窗口 + 锁定。
+# ⚠ 为什么必须单独限流：登录限流防的是「撞密码」，而这里防的是
+# **邮件炸弹** —— 攻击者可用同一 IP 连续申请，把受害者邮箱变成垃圾邮件收件箱。
+# ⚠ 限流失败**也返回 accepted=True**（不泄露，且限流本身不该让攻击者
+# 知道「你已被限流」）；只在服务端日志里记录。
+_RESET_THROTTLE_MAX = 5  # 每窗口最多申请次数
+_RESET_THROTTLE_WINDOW_S = 600  # 窗口 10 分钟
+_reset_hits: dict[str, list[float]] = {}
+_reset_lock: threading.Lock = threading.Lock()
+
+
+def _reset_throttled(key: str) -> bool:
+    """滑动窗口判定；命中则登记一次。仅进程内（与 ``LoginThrottle`` 同级别）。"""
+    now = time.monotonic()
+    with _reset_lock:
+        hits = [t for t in _reset_hits.get(key, []) if now - t < _RESET_THROTTLE_WINDOW_S]
+        if len(hits) >= _RESET_THROTTLE_MAX:
+            _reset_hits[key] = hits
+            return True
+        hits.append(now)
+        _reset_hits[key] = hits
+        return False
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordOut,
+    summary="申请重置密码（匿名可访问；响应恒定，不泄露账号存在性）",
+)
+async def forgot_password(
+    payload: ForgotPasswordIn,
+    request: Request,
+    settings: Settings = Depends(get_settings),
+    session: AsyncSession = Depends(get_db_session),
+) -> ForgotPasswordOut:
+    """签发重置 token 并（尽力）发邮件。
+
+    ⚠⚠ **响应恒定**：无论邮箱是否存在、是否被禁用、SMTP 是否可用，
+    都返回同一个结构与同一段文案。若这里改成「该邮箱不存在」，
+    就等于开放了「哪些邮箱在本系统注册过」的枚举接口。
+
+    ⚠ 限流命中也返回同一结构（否则攻击者能反推自己是否被限流）。
+    """
+    ip = client_ip(request.scope) or "unknown"
+    if _reset_throttled(ip):
+        logger.info("forgot-password: 命中邮件限流 ip=%s", ip)
+        return ForgotPasswordOut(accepted=True, message="如该邮箱已注册，我们已发送重置邮件")
+
+    users = UserRepository(session)
+    svc = PasswordResetService(
+        users,
+        SessionRepository(session),
+        PasswordResetTokenRepository(session),
+        settings=settings,
+    )
+    # ⚠ 直接复用 NotifierFactory —— 它已封装「SMTP_HOST 缺失→ None」的判定，
+    # 另写一份配置解析必然与notify 的行为漂移。
+    notifier = NotifierFactory.create("email")
+    await svc.request_reset(
+        email=payload.email,
+        smtp_notifier=notifier,
+        request_ip=ip,
+        user_agent=request.headers.get("user-agent"),
+    )
+    # ⚠ 无论实际投递结果如何，对外都是同一句
+    return ForgotPasswordOut(accepted=True, message="如该邮箱已注册，我们已发送重置邮件")
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordOut,
+    summary="用 token 设置新密码（匿名可访问）",
+)
+async def reset_password(
+    payload: ResetPasswordIn,
+    session: AsyncSession = Depends(get_db_session),
+) -> ResetPasswordOut:
+    """用邮件里的 token 设置新密码，并踢出该用户全部会话。
+
+    ⚠ 三类失败（token 不存在 / 已用 / 已过期）**一律 400 +同一 code** ——
+    区分它们等于告诉攻击者「这个 token 曾经有效」。
+    """
+    users = UserRepository(session)
+    svc = PasswordResetService(
+        users,
+        SessionRepository(session),
+        PasswordResetTokenRepository(session),
+    )
+    try:
+        revoked = await svc.reset_password(token=payload.token, new_password=payload.new_password)
+    except InvalidResetTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "reset_token_invalid", "message": str(exc)},
+            headers=ERROR_HEADERS,
+        ) from exc
+    except AuthError as exc:
+        # 密码策略不通过（弱密码）
+        raise _http_error(exc) from exc
+    return ResetPasswordOut(reset=True, sessions_revoked=revoked)

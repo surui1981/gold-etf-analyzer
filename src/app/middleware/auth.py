@@ -68,13 +68,27 @@ PUBLIC_API_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/login",
         "/api/v1/auth/register",
         "/api/v1/auth/logout",
+        # V0.75.3 找回密码：⚠ **必须是公开路径** —— 否则开启认证后，
+        # 「忘记密码」会被 401 拦住，让已忘记密码的用户**无法找回密码**（死锁）。
+        # 这是「忘记密码」功能的根本前提，不是可选的便利。
+        "/api/v1/auth/forgot-password",
+        "/api/v1/auth/reset-password",
         # 埋点走 sendBeacon，无法自定义请求头；且内容为匿名前端事件，不含业务数据
         "/api/v1/telemetry/ingest",
     }
 )
 
 # 写端点 CSRF 豁免：① 建立凭据的登录/注册（此前浏览器还没有 csrf cookie）
-# ② sendBeacon 埋点（协议上无法设置自定义头）。
+# ② sendBeacon 埋点（协议上无法设置自定义头）
+# ③ V0.75.3 找回密码的两个写端点 ——⚠ 这是**有意的例外**，
+# 理由：用户点邮件里的链接时是**全新会话**，浏览器里还没有 csrf cookie，
+# 若强制要求 CSRF 双提交，流程会卡在「先访问一次页面拿 cookie」。
+# ⚠ 风险评估：这两个端点**天然抗 CSRF** ——
+# forgot-password 无论被跨站调用多少次，都只是给受害者发邮件 + 返回恒定响应，
+#    不改变任何状态、不返回敏感内容；
+# reset-password 需要邮件里那个 43 字符随机 token，攻击者的跨站表单**拿不到它**
+#    （除非用户正开着带token 的页面 —— 而那本身需要先拿到 token）。
+#    ⇒ 豁免 CSRF 的实际风险接近零，不引入新攻击面。
 CSRF_EXEMPT_PATHS: frozenset[str] = PUBLIC_API_PATHS
 
 _WRITE_METHODS: frozenset[str] = frozenset({"POST", "PUT", "PATCH", "DELETE"})

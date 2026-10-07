@@ -152,6 +152,7 @@ class UserSession(Base):
 # 过期会话清理（delete_expired）与「查用户在线会话」都走该复合索引
 Index("ix_sessions_user_revoked", UserSession.user_id, UserSession.revoked_at)
 
+
 class PasswordResetToken(Base):
     """密码重置一次性令牌（V0.75.3）。
 
@@ -169,9 +170,7 @@ class PasswordResetToken(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
-    user_id: Mapped[int] = mapped_column(
-        Integer, index=True, comment="归属用户 users.id"
-    )
+    user_id: Mapped[int] = mapped_column(Integer, index=True, comment="归属用户 users.id")
 
     # ⚠ sha256 摘要（64 字符十六进制），非明文
     token_hash: Mapped[str] = mapped_column(
@@ -190,7 +189,9 @@ class PasswordResetToken(Base):
 
     # 触发来源：请求时的IP 与 UA。⚠ 用途是审计（发现暴力枚举邮箱的迹象），
     # 不作为鉴权依据。
-    request_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="申请时客户端 IP（审计用）")
+    request_ip: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="申请时客户端 IP（审计用）"
+    )
     user_agent: Mapped[str | None] = mapped_column(
         String(256), nullable=True, comment="申请时设备标识（审计用）"
     )

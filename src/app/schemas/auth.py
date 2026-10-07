@@ -93,8 +93,48 @@ __all__ = [
     "AuthStatusOut",
     "ChangePasswordIn",
     "ChangePasswordOut",
+    "ForgotPasswordIn",
+    "ForgotPasswordOut",
     "LoginIn",
     "LogoutOut",
     "RegisterIn",
+    "ResetPasswordIn",
+    "ResetPasswordOut",
     "UserOut",
 ]
+
+
+class ForgotPasswordIn(BaseModel):
+    """申请重置密码。
+
+    ⚠ 响应**不区分**「邮箱不存在」与「存在」—— 见服务层说明。
+    """
+
+    email: str = Field(..., min_length=3, max_length=PASSWORD_MAX, description="注册邮箱")
+
+
+class ForgotPasswordOut(BaseModel):
+    """申请重置的响应。
+
+    ⚠⚠ **永远只说「已受理」，不说「已发送」** —— 后者会泄露账号存在性。
+    真实投递状态只在服务端日志里。
+    """
+
+    accepted: bool = Field(..., description="恒为 True（受理回执，不含账号存在性信息）")
+    message: str = Field(..., description="统一文案（三语由前端 i18n 覆盖，此处为兜底）")
+
+
+class ResetPasswordIn(BaseModel):
+    """用 token 设置新密码。"""
+
+    token: str = Field(..., min_length=10, max_length=256, description="邮件链接里的 token")
+    new_password: str = Field(..., min_length=1, max_length=PASSWORD_MAX, description="新密码")
+
+
+class ResetPasswordOut(BaseModel):
+    """重置结果。"""
+
+    reset: bool = Field(..., description="是否成功")
+    sessions_revoked: int = Field(
+        ..., description="被踢下线的会话数（**告知用户**其他设备已需重新登录）"
+    )
