@@ -372,6 +372,23 @@ async def login_page() -> RedirectResponse:
     return RedirectResponse("/static/login.html")
 
 
+@app.get("/reset-password", include_in_schema=False)
+async def reset_password_page() -> RedirectResponse:
+    """找回密码落地页（V0.75.3）。
+
+    ⚠ **这个 RESTful 别名不是可选的** —— ``sw.js`` 的 ``SHELL_ASSETS`` 里
+    登记的是 ``/static/reset-password.html``，而离线兜底走
+    ``caches.match(request)``，缓存 key 必须与地址栏里的 URL 一致。
+    若只有 ``/static/*.html`` 一条路（无别名），用户从邮件点进
+    ``/reset-password`` 会得到 **404** ⇒ 离线场景下「找回密码」不可用。
+
+    同理，``SHELL_ASSETS`` 里**不能**把它写成
+    ``/static/reset-password.html`` 直链形式来「省掉」这个别名 ——
+    那会让离线访问落到 ``offline.html``（LESSONS §1.9 的既有结论）。
+    """
+    return RedirectResponse("/static/reset-password.html")
+
+
 # 静态资源（趋势追踪页面等）
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

@@ -74,6 +74,12 @@ const SHELL_ASSETS = [
     // V0.75.0 认证骨架：登录页与认证客户端须离线可打开
     // （否则离线时任意页面都跳登录页 → 落进 offline.html，无法解释原因）
     "/static/login.html",
+    // V0.75.3：找回密码落地页。照抄 login.html 的既有做法：
+    // 直链形式登记 + `main.py` 里另配一个无 .html 的 RESTful 别名（/reset-password）。
+    // ⚠ **两个都要有**：RESTful 别名供邮件里的链接与地址栏使用（好读、可收藏），
+    // 直链条目供 `cache.addAll()` 预缓存。⚠ 别名不是可选的 ——
+    // 邮件链接若指向未注册的路径会得到 404，离线场景下「找回密码」直接不可用。
+    "/static/reset-password.html",
     "/static/auth.js",
     // V0.75.1 综合研判结论卡：宿在首页顶部，离线打开时必须能渲染
     "/static/synthesis-card.js",

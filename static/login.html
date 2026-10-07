@@ -58,6 +58,18 @@
     border-radius: 9px; border: 1px solid var(--border); background: var(--bg); color: inherit; }
   input:focus { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
   .hint { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+  /* V0.75.3 找回密码入口（该页样式全内联，theme.css 无 a 规则） */
+  .foot-link { text-align: center; margin-top: 14px; font-size: 12.5px; }
+  .foot-link a { color: var(--accent); text-decoration: none; }
+  .foot-link a:hover { text-decoration: underline; }
+  /* 键盘可达性：链接须有可见焦点圈，否则键盘用户看不出焦点在哪 */
+  .foot-link a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 3px; }
+  /* V0.75.3 找回密码入口（该页样式全内联，theme.css 无 a 规则） */
+  .foot-link { text-align: center; margin-top: 14px; font-size: 12.5px; }
+  .foot-link a { color: var(--accent); text-decoration: none; }
+  .foot-link a:hover { text-decoration: underline; }
+  /* 键盘可达性：链接必须有可见焦点圈，否则键盘用户看不出焦点在哪 */
+  .foot-link a:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; border-radius: 3px; }
   .submit { width: 100%; margin-top: 18px; padding: 12px; font-size: 14.5px; font-weight: 600;
     font-family: inherit; border-radius: 9px; border: 1px solid var(--accent);
     background: var(--accent); color: #fff; cursor: pointer; }
@@ -146,6 +158,15 @@
         <div class="alert alert-err hidden" id="formErr" role="alert"></div>
 
         <button type="submit" class="submit" id="submitBtn" data-i18n="login.btn_login">登录</button>
+
+        <!-- V0.75.3：找回密码入口。
+     ⚠ 必须是**普通链接**（不用 JS 跳转）：这样它对未启用 JS 也可见，
+     且 Ctrl/Cmd+点击能开新标签页 —— 这两点对「登录页」比花哨效果重要。
+     ⚠ 样式用内联 class（该页样式全部内联在 <style> 里，theme.css 无 a 规则），
+     不写 class="link"（不存在该类，会退化成浏览器默认样式）。 -->
+        <div class="foot-link" id="forgotRow">
+          <a href="/static/reset-password.html" id="forgotLink" data-i18n="reset.forgot_entry">忘记密码？</a>
+        </div>
       </form>
 
       <div class="notice" id="regOpenNote" data-i18n="login.reg_open">开放注册中</div>
@@ -190,6 +211,12 @@ window.PM_AUTH_PAGE = (function () {
       : PM_AUTH.t("login.btn_login", "登录");
     $("password").setAttribute("autocomplete", isReg ? "new-password" : "current-password");
     $("firstAdminHint").classList.toggle("hidden", !(isReg && status.userCount === 0));
+    // V0.75.3：「忘记密码」只在**登录** Tab 显示 —— 切到注册的人是新用户，
+    // 没有既有密码可忘，显示它只会让人困惑。
+    $("forgotRow").classList.toggle("hidden", isReg);
+    // V0.75.3：「忘记密码」只在**登录** Tab 显示 —— 切到注册的人是新用户，
+    // 没有既有密码可忘，显示它只会让人困惑。
+    $("forgotRow").classList.toggle("hidden", isReg);
     hideError();
   }
 

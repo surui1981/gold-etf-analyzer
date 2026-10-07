@@ -154,7 +154,13 @@ class PasswordResetService:
         「未来换成含特殊字符的 token」时链接被截断。
         """
         base = (self._settings.public_base_url or "").rstrip("/")
-        return f"{base}/static/reset-password.html?token={quote(token)}"
+        # ⚠ 用**无 .html 的 RESTful 路径**（与 ``/login`` 同款），而非
+        # ``/static/reset-password.html``：前者是 ``main.py`` 里注册的别名，
+        # 对用户来说可读、可收藏；后者把内部静态目录结构暴露在邮件里。
+        # ⚠ 别名与页面**必须成对存在** —— 少一个，邮件链接就会 404
+        # （V0.75.3 实测：新页面若只挂 ``/static/*.html``，
+        #   ``/reset-password`` 返回 404，而邮件链接正是这个路径）。
+        return f"{base}/reset-password?token={quote(token)}"
 
     async def _send_mail(
         self,
