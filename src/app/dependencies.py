@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.user import User
+from app.models.user import ROLE_OWNER, User
 from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
@@ -459,5 +459,45 @@ def require_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"code": "unauthenticated", "message": "请先登录"},
             headers={"X-Auth-Required": "1"},
+        )
+    return user
+
+
+def require_owner(user: User = Depends(require_user)) -> User:
+    """要求当前登录用户是**所有者**（``role == ROLE_OWNER``），否则 403。
+
+    ⚠⚠ **与 ``middleware.admin_auth.require_admin`` 是两个不同维度，切勿混淆**：
+
+    - ``require_admin``校验的是**服务级凭据**（``X-Admin-Token`` 头 vs
+      ``ADMIN_TOKEN`` env）—— 它回答「这个调用方是否被允许写」，
+      与**谁登录了**无关，是防未授权写入的服务级闸门；
+    - ``require_owner`` 校验的是**登录用户的角色** —— 它回答
+      「当前这个人在本系统里能不能管别人」。
+
+    用户管理走**后者**：因为操作对象就是「用户」，需要知道**操作者是谁**，
+    否则无法实现「禁止停用/删除自己」这类防自锁规则
+    （服务级 token 回答不了「你是哪个用户」）。
+
+    两者**都保留**：用户管理端点同时受会话鉴权与角色鉴权约束，
+    且仍可叠加 ``require_admin`` 作为服务级闸门。
+
+    ⚠ 匿名/未登录由 :func:`require_user` 先抛 401，本依赖只负责 403。
+
+    Args:
+        user: 由 :func:`require_user` 解析出的登录用户
+
+    Returns:
+        角色为 owner 的 :class:`~app.models.user.User` 对象
+
+    Raises:
+        HTTPException 403: 已登录但不是所有者
+    """
+    if user.role != ROLE_OWNER:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "owner_required",
+                "message": "仅所有者可管理用户",
+            },
         )
     return user
