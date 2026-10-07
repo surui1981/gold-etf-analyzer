@@ -177,7 +177,8 @@ async def test_stats_hit_rate_and_groups(db_session: AsyncSession) -> None:
     assert s.evaluated == 2
     assert s.hits == 1
     assert s.hit_rate == 50.0
-    assert s.sample_warning is True  # 样本 < 20
+    # V0.79.0 Step H：样本 < MIN_SAMPLES_OVERALL(10) → 字符串告警
+    assert isinstance(s.sample_warning, str)
 
     by_dir = {d.direction: d for d in s.by_direction}
     assert by_dir[DirectionSignal.BULLISH].samples == 1
@@ -258,7 +259,82 @@ async def test_hint_for_score_uses_matching_bucket(db_session: AsyncSession) -> 
     assert hint["samples"] == 1
     assert hint["hit_rate"] == 100.0
     assert hint["up_rate"] == 100.0
-    assert hint["sample_warning"] is True
+    # V0.79.0 Step H：sample_warning 升级为字符串；hint 透传 ReviewStatsOut.sample_warning
+    assert isinstance(hint["sample_warning"], str)
+
+
+# ---------- V0.79.0 Step H · 样本阈值分层边界 ----------
+
+
+async def test_stats_overall_below_threshold_emits_warning_str(
+    db_session: AsyncSession,
+) -> None:
+    """样本 < MIN_SAMPLES_OVERALL(10)：返回文案字符串（非 None）。"""
+    from app.services.review import MIN_SAMPLES_OVERALL
+
+    closes = [100 + i * 0.5 for i in range(20)]
+    bars = await _seed_prices(db_session, closes)
+    # 种 9 个评分（= MIN_SAMPLES_OVERALL - 1），触发阈值
+    for i in range(MIN_SAMPLES_OVERALL - 1):
+        await _seed_score(db_session, bars[i][0], 60 + i, "bullish", basis=["美元指数"])
+
+    s = await _svc(db_session).stats(days=20, horizon=1)
+
+    assert s.evaluated == MIN_SAMPLES_OVERALL - 1
+    assert s.sample_warning is not None
+    assert isinstance(s.sample_warning, str)
+    assert str(MIN_SAMPLES_OVERALL) in s.sample_warning
+    # note 应不含 suggested（即过度激进文案内嵌）
+    assert "仅供参考" in s.sample_warning
+
+
+async def test_stats_overall_at_threshold_no_warning(db_session: AsyncSession) -> None:
+    """样本 == MIN_SAMPLES_OVERALL(10)：sample_warning = None（恰达标）。"""
+    from app.services.review import MIN_SAMPLES_OVERALL
+
+    closes = [100 + i * 0.5 for i in range(20)]
+    bars = await _seed_prices(db_session, closes)
+    for i in range(MIN_SAMPLES_OVERALL):
+        await _seed_score(db_session, bars[i][0], 60 + i, "bullish", basis=["美元指数"])
+
+    s = await _svc(db_session).stats(days=20, horizon=1)
+
+    assert s.evaluated == MIN_SAMPLES_OVERALL
+    assert s.sample_warning is None
+    assert "样本" in s.note  # note 显示"样本 10 天"
+
+
+async def test_stats_bucket_sample_warning_below_threshold(
+    db_session: AsyncSession,
+) -> None:
+    """Step H：分维度样本 < MIN_SAMPLES_BUCKET(5) → bucket.sample_warning=True。
+
+    场景：种 4 个 BULLISH + 6 个 BEARISH 样本（总 10 触发不到 warning）：
+      - BULLISH 分维度：4 < 5 → sample_warning=True
+      - BEARISH 分维度：6 ≥ 5 → sample_warning=False
+    """
+    from app.services.review import MIN_SAMPLES_BUCKET
+
+    closes = [100 + i * 0.5 for i in range(20)]
+    bars = await _seed_prices(db_session, closes)
+    # 4 个 BULLISH（< 5）
+    for i in range(MIN_SAMPLES_BUCKET - 1):
+        await _seed_score(db_session, bars[i][0], 70, "bullish", basis=["美元指数"])
+    # 6 个 BEARISH（≥ 5）
+    for i in range(MIN_SAMPLES_BUCKET + 1):
+        await _seed_score(
+            db_session, bars[i + MIN_SAMPLES_BUCKET - 1][0], 30, "bearish", basis=["美债"]
+        )
+
+    s = await _svc(db_session).stats(days=20, horizon=1)
+
+    by_dir = {d.direction: d for d in s.by_direction}
+    assert by_dir[DirectionSignal.BULLISH].samples == MIN_SAMPLES_BUCKET - 1
+    assert by_dir[DirectionSignal.BULLISH].sample_warning is True
+    assert by_dir[DirectionSignal.BEARISH].samples == MIN_SAMPLES_BUCKET + 1
+    assert by_dir[DirectionSignal.BEARISH].sample_warning is False
+    # 空桶（NEUTRAL）默认 sample_warning=True
+    assert by_dir[DirectionSignal.NEUTRAL].sample_warning is True
 
 
 async def test_meta_reports_price_progress(db_session: AsyncSession) -> None:

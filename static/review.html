@@ -290,29 +290,38 @@ async function loadStats() {
   if (!s.evaluated) {
     bn.innerHTML = `<div class="banner info">暂无可统计样本。命中率需要「历史研判 + 之后价格」两者齐备；请先在<a href="/news" data-i18n="nav.news">消息面评估</a>页打分，并确保价格日历已回填。</div>`;
   } else if (s.sample_warning) {
-    bn.innerHTML = `<div class="banner warn">⚠️ 样本仅 <b>${s.evaluated}</b> 天，统计波动较大，<b>仅作趋势参考</b>。建议持续积累到 20 天以上再据此调整打分习惯。</div>`;
+    bn.innerHTML = `<div class="banner warn">⚠️ ${esc(s.sample_warning)}</div>`;
   } else {
     bn.innerHTML = `<div class="banner ok">样本 <b>${s.evaluated}</b> 天，已具备基本参考价值。（${esc(s.note || "")}）</div>`;
   }
 
   document.getElementById("dirBars").innerHTML = (s.by_direction || []).map(x => barRow(
-    esc(x.label), x.hit_rate, dirColor(x.direction), `${x.hits ?? 0}/${x.samples ?? 0} 次`
+    esc(x.label), x.hit_rate, dirColor(x.direction),
+    `${x.hits ?? 0}/${x.samples ?? 0} 次`,
+    x.sample_warning,
   )).join("") || '<div class="desc">暂无数据</div>';
 
   document.getElementById("hzBars").innerHTML = (s.by_horizon || []).map(x => barRow(
-    `T+${x.horizon ?? "?"} 交易日`, x.hit_rate, "#1971c2", `${x.hits ?? 0}/${x.samples ?? 0} 次`
+    `T+${x.horizon ?? "?"} 交易日`, x.hit_rate, "#1971c2",
+    `${x.hits ?? 0}/${x.samples ?? 0} 次`,
+    x.sample_warning,
   )).join("");
 
   document.getElementById("calBars").innerHTML = (s.calibration || []).map(b => barRow(
-    `${b.key ?? "—"} 分`, b.up_rate, "#c9a227", `${b.samples ?? 0} 天 · 上涨 ${pct(b.up_rate)}`
+    `${b.key ?? "—"} 分`, b.up_rate, "#c9a227",
+    `${b.samples ?? 0} 天 · 上涨 ${pct(b.up_rate)}`,
+    b.sample_warning,
   )).join("");
   document.getElementById("calInsight").innerHTML = calibrationInsight(s);
 }
 
-function barRow(label, value, color, note) {
+function barRow(label, value, color, note, sampleWarning) {
   const w = value == null ? 0 : Math.max(0, Math.min(100, value));
+  const warnTag = sampleWarning
+    ? `<span style="color:#868e96;font-size:10px;margin-left:6px" title="分维度样本 < 5，统计无意义">[样本偏少]</span>`
+    : "";
   return `<div class="bar-row">
-    <span>${label}</span>
+    <span>${label}${warnTag}</span>
     <span class="bar-track"><span class="bar-fill" style="width:${w}%;background:${color}"></span></span>
     <span class="bar-note">${value == null ? "样本不足" : Number(value).toFixed(1) + "%"} · ${esc(note)}</span>
   </div>`;
@@ -344,10 +353,14 @@ function renderTags() {
     return;
   }
   tb.innerHTML = rows.map(t => {
-    const ref = t.samples >= 5
+    // V0.79.0 Step H：sample_warning 由服务端按 MIN_SAMPLES_BUCKET(5) 判定
+    const insufficient = t.sample_warning === true;
+    const ref = !insufficient
       ? (t.hit_rate >= 60 ? "较可靠" : t.hit_rate >= 40 ? "中性" : "需警惕")
       : "样本少";
-    const rc = t.samples >= 5 ? (t.hit_rate >= 60 ? "var(--up)" : t.hit_rate >= 40 ? "var(--muted)" : "var(--down)") : "var(--muted)";
+    const rc = !insufficient
+      ? (t.hit_rate >= 60 ? "var(--up)" : t.hit_rate >= 40 ? "var(--muted)" : "var(--down)")
+      : "var(--muted)";
     return `<tr>
       <td><span class="tag">${esc(t.tag)}</span></td>
       <td class="num">${t.samples}</td>

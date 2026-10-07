@@ -68,8 +68,14 @@ _SCORE_BUCKETS: tuple[tuple[float, float], ...] = (
     (80, 100),
 )
 
-# 样本不足阈值：低于此值标注「仅供参考」
-_MIN_SAMPLES = 20
+# ── V0.79.0 Step H · 样本阈值分层 ──────────────────────────────────────
+# 总体阈值：低于此值标注「样本偏少，仅供参考」（hit_rate 等统计可信度下界）
+# 由 20 → 10：原阈值过于保守，工具上线仅 2 周时几乎永远命中，现在分层后总体
+# 仍可信度下界够用，bucket 层另设更严的下界。
+MIN_SAMPLES_OVERALL = 10
+# 分维度阈值（方向 / horizon / basis / 校准分箱）：每个 bucket 样本低于此值
+# 时视为「该维度统计无意义」，前端灰色小字提醒。
+MIN_SAMPLES_BUCKET = 5
 
 
 def judge_hit(direction: DirectionSignal, change_pct: float) -> tuple[bool, str]:
@@ -353,11 +359,16 @@ class ReviewService:
             by_horizon=self._by_horizon(usable),
             calibration=self._calibration(resolved, primary),
             tags=self._by_tag(resolved, primary),
-            sample_warning=len(resolved) < _MIN_SAMPLES,
+            sample_warning=(
+                f"样本仅 {len(resolved)} 天，统计波动较大，仅供参考。"
+                f"建议积累到 {MIN_SAMPLES_OVERALL} 天以上再据此调整打分习惯"
+                if len(resolved) < MIN_SAMPLES_OVERALL
+                else None
+            ),
             note=(
-                f"样本 {len(resolved)} 天，低于 {_MIN_SAMPLES} 天时统计波动较大，仅供参考"
-                if len(resolved) < _MIN_SAMPLES
-                else f"样本 {len(resolved)} 天"
+                f"样本 {len(resolved)} 天"
+                if len(resolved) >= MIN_SAMPLES_OVERALL
+                else ""
             ),
         )
 
@@ -383,6 +394,7 @@ class ReviewService:
                     samples=len(group),
                     hits=hits,
                     hit_rate=round(hits / len(group) * 100, 1) if group else None,
+                    sample_warning=len(group) < MIN_SAMPLES_BUCKET,
                 )
             )
         return out
@@ -400,6 +412,7 @@ class ReviewService:
                     samples=len(done),
                     hits=hits,
                     hit_rate=round(hits / len(done) * 100, 1) if done else None,
+                    sample_warning=len(done) < MIN_SAMPLES_BUCKET,
                 )
             )
         return out
@@ -416,7 +429,12 @@ class ReviewService:
             ]
             if not group:
                 buckets.append(
-                    CalibrationBucketOut(key=f"{int(lower)}-{int(upper)}", lower=lower, upper=upper)
+                    CalibrationBucketOut(
+                        key=f"{int(lower)}-{int(upper)}",
+                        lower=lower,
+                        upper=upper,
+                        sample_warning=True,  # 空桶视为样本不足
+                    )
                 )
                 continue
             changes = [primary(d).change_pct for d in group if primary(d).change_pct is not None]
@@ -431,6 +449,7 @@ class ReviewService:
                     avg_score=round(sum(d.effective_score for d in group) / len(group), 1),
                     up_rate=round(ups / len(changes) * 100, 1) if changes else None,
                     hit_rate=round(hits / len(group) * 100, 1),
+                    sample_warning=len(group) < MIN_SAMPLES_BUCKET,
                 )
             )
         return buckets
@@ -449,6 +468,7 @@ class ReviewService:
                 samples=len(flags),
                 hits=sum(1 for f in flags if f),
                 hit_rate=round(sum(1 for f in flags if f) / len(flags) * 100, 1),
+                sample_warning=len(flags) < MIN_SAMPLES_BUCKET,
             )
             for tag, flags in stats.items()
         ]

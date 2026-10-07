@@ -558,3 +558,116 @@ def test_backtest_service_imports() -> None:
     assert hasattr(BacktestService, "coverage")
     assert hasattr(BacktestService, "run")
     assert hasattr(BacktestService, "_evaluate_grid")
+
+
+# ─────────────── V0.79.0 Step H · 样本阈值分层边界 ───────────────
+
+
+def test_backtest_min_samples_threshold_constants() -> None:
+    """Step H 抽常量：MIN_SAMPLES_OVERALL/BUCKET 已从 _MIN_SAMPLES=20 拆分为 10/5。"""
+    from app.services.backtest import MIN_SAMPLES_BUCKET, MIN_SAMPLES_OVERALL
+
+    assert MIN_SAMPLES_OVERALL == 10
+    assert MIN_SAMPLES_BUCKET == 5
+
+
+def _make_sized_session(n_rows: int) -> type:
+    """构造一个返回 N 行快照的 AsyncSession 桩（用于 Step H 边界测试）。"""
+    from datetime import timedelta as _td
+    from types import SimpleNamespace
+
+    class _Row(SimpleNamespace):
+        pass
+
+    rows = [_Row(snapshot_date=date(2026, 1, 1) + _td(days=i)) for i in range(n_rows)]
+
+    class _Result:
+        def scalars(self_inner):
+            class _Scalars:
+                def all(self_inner_inner):
+                    return rows
+
+            return _Scalars()
+
+        def scalar(self_inner):
+            return 0
+
+        def scalar_one(self_inner):
+            return 0
+
+    class _SizedSession:
+        async def execute(self, stmt):
+            return _Result()
+
+    return _SizedSession
+
+
+def test_backtest_coverage_below_threshold_triggers_warning() -> None:
+    """Step H：可用样本 < MIN_SAMPLES_OVERALL(10) → sample_warning=True。"""
+    from types import SimpleNamespace
+
+    from app.repositories.review import GoldPriceRepository
+    from app.services.backtest import MIN_SAMPLES_OVERALL, BacktestService
+
+    SizedSession = _make_sized_session(MIN_SAMPLES_OVERALL - 1)
+    svc = BacktestService(
+        session=SizedSession(),
+        gold=GoldPriceRepository(None),  # type: ignore[arg-type]
+        weights=WeightService(None),  # type: ignore[arg-type]
+    )
+
+    async def _zero_count(*_args, **_kwargs):
+        return 0
+
+    async def _empty_list(*_args, **_kwargs):
+        return []
+
+    svc._gold = SimpleNamespace(  # type: ignore[assignment]
+        count_in_range=_zero_count,
+        upsert_many=_zero_count,
+        list_range=_empty_list,
+    )
+    import asyncio
+
+    cov = asyncio.run(svc.coverage(target="etf", days=90))
+    assert cov.available_days == MIN_SAMPLES_OVERALL - 1
+    assert cov.sample_warning is True
+    assert str(MIN_SAMPLES_OVERALL) in cov.note
+
+
+def test_backtest_coverage_at_threshold_no_warning() -> None:
+    """Step H：可用样本 == MIN_SAMPLES_OVERALL(10) 时，
+    `available < MIN_SAMPLES_OVERALL` 判定为 False（仅看样本阈值；
+    价格日历为空会独立触发 sample_warning，与阈值分支解耦）。
+    """
+    from types import SimpleNamespace
+
+    from app.repositories.review import GoldPriceRepository
+    from app.services.backtest import MIN_SAMPLES_OVERALL, BacktestService
+
+    SizedSession = _make_sized_session(MIN_SAMPLES_OVERALL)
+    svc = BacktestService(
+        session=SizedSession(),
+        gold=GoldPriceRepository(None),  # type: ignore[arg-type]
+        weights=WeightService(None),  # type: ignore[arg-type]
+    )
+
+    async def _zero_count(*_args, **_kwargs):
+        return 0
+
+    async def _empty_list(*_args, **_kwargs):
+        return []
+
+    svc._gold = SimpleNamespace(  # type: ignore[assignment]
+        count_in_range=_zero_count,
+        upsert_many=_zero_count,
+        list_range=_empty_list,
+    )
+    import asyncio
+
+    cov = asyncio.run(svc.coverage(target="etf", days=90))
+    assert cov.available_days == MIN_SAMPLES_OVERALL
+    # 价格日历为 0 → usable=False → sample_warning=True（与阈值分支无关）
+    # Step H 分支：available == MIN_SAMPLES_OVERALL ⇒ 阈值分支不触发
+    assert cov.sample_warning is True
+    assert "价格日历为空" in cov.note

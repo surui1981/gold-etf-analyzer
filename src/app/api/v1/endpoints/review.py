@@ -71,7 +71,8 @@ async def get_hint(
 ) -> dict:
     """给定分值返回其所在分值分箱的历史命中率与上涨概率，供打分页即时提示。
 
-    样本不足时 ``sample_warning=true``，前端应标注「样本积累中」。
+    样本不足时 ``sample_warning`` 为提示文案字符串（由服务端填，前端直接渲染）；
+    充足时为 ``None``。
     """
     return await service.hint_for_score(score, days=days, target=target)
 

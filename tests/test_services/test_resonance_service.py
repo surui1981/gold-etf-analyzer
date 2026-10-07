@@ -225,15 +225,16 @@ async def test_strength_up_filters_bullish_news_only() -> None:
 
 
 async def test_strength_up_sample_warning_below_threshold() -> None:
-    """样本 < 20 → sample_warning=True。"""
+    """样本 < MIN_SAMPLES_OVERALL(10) → sample_warning=True。"""
     today = date.today()
-    bull = [_make_news(today - timedelta(days=i), 1, 60) for i in range(15)]
+    # V0.79.0 Step H：MIN_SAMPLES_OVERALL 由 20 下调至 10，故种 8 天 < 10
+    bull = [_make_news(today - timedelta(days=i), 1, 60) for i in range(8)]
     fake_news = FakeNewsRepo(bull)
     service = ResonanceService.__new__(ResonanceService)
     service._news = fake_news  # type: ignore[assignment]
     service._trend = SimpleNamespace(_repo=FakeMarket())  # type: ignore[assignment]
 
-    out = await service.strength_up(days=15, horizon=1)
+    out = await service.strength_up(days=8, horizon=1)
     assert out.sample_warning is True
     assert "仅供参考" in out.note
 
@@ -251,6 +252,48 @@ async def test_strength_up_empty_window_returns_warning() -> None:
     assert out.hit_rate is None
     assert out.sample_warning is True
     assert "无消息面打分记录" in out.note
+
+
+# ---------- V0.79.0 Step H · 样本阈值分层边界 ----------
+
+
+async def test_strength_up_below_overall_threshold_triggers_warning() -> None:
+    """Step H：样本 < MIN_SAMPLES_OVERALL(10) → sample_warning=True + 文案含阈值数。"""
+    from app.services.resonance import MIN_SAMPLES_OVERALL
+
+    today = date.today()
+    # 9 个 STRONG_UP（= MIN_SAMPLES_OVERALL - 1）
+    bull = [_make_news(today - timedelta(days=i), 1, 60) for i in range(MIN_SAMPLES_OVERALL - 1)]
+    fake_news = FakeNewsRepo(bull)
+    service = ResonanceService.__new__(ResonanceService)
+    service._news = fake_news  # type: ignore[assignment]
+    service._trend = SimpleNamespace(_repo=FakeMarket())  # type: ignore[assignment]
+
+    out = await service.strength_up(days=MIN_SAMPLES_OVERALL - 1, horizon=1)
+    assert out.sample_warning is True
+    assert str(MIN_SAMPLES_OVERALL) in out.note
+    assert "仅供参考" in out.note
+
+
+async def test_strength_up_at_overall_threshold_no_warning() -> None:
+    """Step H：resolved >= MIN_SAMPLES_OVERALL(10) → sample_warning=False（恰达标）。
+
+    STRONG_UP 列表 12 条 ⇒ resolved 通常 ≥ 10（FakeMarket T+1 价格覆盖）。
+    """
+    from app.services.resonance import MIN_SAMPLES_OVERALL
+
+    today = date.today()
+    # 多种 2 条以抵消 T+1 价格缺失
+    bull = [_make_news(today - timedelta(days=i), 1, 60) for i in range(MIN_SAMPLES_OVERALL + 2)]
+    fake_news = FakeNewsRepo(bull)
+    service = ResonanceService.__new__(ResonanceService)
+    service._news = fake_news  # type: ignore[assignment]
+    service._trend = SimpleNamespace(_repo=FakeMarket())  # type: ignore[assignment]
+
+    out = await service.strength_up(days=MIN_SAMPLES_OVERALL + 2, horizon=1)
+    assert out.resolved >= MIN_SAMPLES_OVERALL
+    assert out.sample_warning is False
+    assert "仅供参考" not in out.note
 
 
 # =========================================================================

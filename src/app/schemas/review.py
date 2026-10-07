@@ -124,6 +124,10 @@ class DirectionStatsOut(BaseModel):
     samples: int = 0
     hits: int = 0
     hit_rate: float | None = Field(None, description="命中率 %；样本为 0 时为 None")
+    sample_warning: bool = Field(
+        False,
+        description="V0.79.0 Step H：分维度样本 < MIN_SAMPLES_BUCKET(5) 时为 True",
+    )
 
 
 class HorizonStatsOut(BaseModel):
@@ -133,6 +137,10 @@ class HorizonStatsOut(BaseModel):
     samples: int = 0
     hits: int = 0
     hit_rate: float | None = None
+    sample_warning: bool = Field(
+        False,
+        description="V0.79.0 Step H：分维度样本 < MIN_SAMPLES_BUCKET(5) 时为 True",
+    )
 
 
 class CalibrationBucketOut(BaseModel):
@@ -145,6 +153,10 @@ class CalibrationBucketOut(BaseModel):
     avg_score: float | None = None
     up_rate: float | None = Field(None, description="该箱内 T+H 上涨的比例 %")
     hit_rate: float | None = Field(None, description="该箱内方向命中率 %")
+    sample_warning: bool = Field(
+        False,
+        description="V0.79.0 Step H：分维度样本 < MIN_SAMPLES_BUCKET(5) 时为 True",
+    )
 
 
 class TagStatsOut(BaseModel):
@@ -154,6 +166,10 @@ class TagStatsOut(BaseModel):
     samples: int = 0
     hits: int = 0
     hit_rate: float | None = None
+    sample_warning: bool = Field(
+        False,
+        description="V0.79.0 Step H：分维度样本 < MIN_SAMPLES_BUCKET(5) 时为 True",
+    )
 
 
 class ReviewStatsOut(BaseModel):
@@ -174,5 +190,11 @@ class ReviewStatsOut(BaseModel):
     by_horizon: list[HorizonStatsOut] = Field(default_factory=list)
     calibration: list[CalibrationBucketOut] = Field(default_factory=list)
     tags: list[TagStatsOut] = Field(default_factory=list)
-    sample_warning: bool = Field(False, description="样本不足（<20）时置 True，前端标注仅供参考")
+    sample_warning: str | None = Field(
+        None,
+        description=(
+            "V0.79.0 Step H：总体样本 < MIN_SAMPLES_OVERALL(10) 时填提示文案；"
+            "否则为 None（前端直接渲染此字段）"
+        ),
+    )
     note: str = ""

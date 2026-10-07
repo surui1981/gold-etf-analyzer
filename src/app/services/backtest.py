@@ -43,8 +43,9 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-# 样本不足阈值（与 review 对齐）
-_MIN_SAMPLES = 20
+# ── V0.79.0 Step H · 样本阈值分层 ──────────────────────────────────────
+MIN_SAMPLES_OVERALL = 10  # 总体样本阈值（覆盖期有效样本 < 此值时提示）
+MIN_SAMPLES_BUCKET = 5    # 分维度样本阈值（保留；当前 coverage 无 bucket 输出）
 
 # V0.79.0 任务 #163：回测只采信这些来源的快照。
 # ⚠ ``mock`` 必须排除（编造的价格）；``None``（历史未标记）也排除 ——
@@ -278,8 +279,10 @@ class BacktestService:
         usable = returns_ok > 0
 
         parts = [f"覆盖期 {start} ~ {end}（{available} 个有效样本）"]
-        if available < _MIN_SAMPLES:
-            parts.append("样本较少，回测结果仅供参考")
+        if available < MIN_SAMPLES_OVERALL:
+            parts.append(
+                f"样本仅 {available} 天，低于 {MIN_SAMPLES_OVERALL} 天阈值，回测结果仅供参考"
+            )
         if excluded:
             parts.append(
                 f"已排除 {excluded} 天来源不可信（mock 或未标记）的快照；"
@@ -302,7 +305,7 @@ class BacktestService:
             note="；".join(parts),
             # ⚠ 样本告警的判定**不能只看快照天数**：即使快照充足、价格日历为空，
             # 结果同样不可用（收益全 0 ⇒ Sharpe 恒 0、NEUTRAL 行全命中）。
-            sample_warning=available < _MIN_SAMPLES or not usable,
+            sample_warning=available < MIN_SAMPLES_OVERALL or not usable,
             price_calendar_days=cal_days,
             returns_available_days=returns_ok,
             returns_missing_days=returns_missing,

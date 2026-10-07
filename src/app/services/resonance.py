@@ -49,7 +49,9 @@ logger = get_logger(__name__)
 # V0.78.0：统一引用 DirectionThreshold
 _THRESH_UP = int(DirectionThreshold.BULLISH)  # 55
 _THRESH_DOWN = int(DirectionThreshold.BEARISH)  # 45
-_MIN_SAMPLES = 20
+# ── V0.79.0 Step H · 样本阈值分层 ──────────────────────────────────────
+MIN_SAMPLES_OVERALL = 10  # 总体命中率可信度下界（由 20 下调，分层后 bucket 另设）
+MIN_SAMPLES_BUCKET = 5    # 分维度样本阈值（预留，STRONG_UP 当前无 bucket 维度）
 
 # 背离判定阈值：任意两维分差 ≥ 此值即视为「在打架」（V0.78.0 新增）
 # 15 的来由：方向相反的最小幅度是 55 vs 45 = 10，而 10~14 属轻微分歧，
@@ -330,9 +332,9 @@ class ResonanceService:
             resolved += 1
 
         hit_rate = round(hits / resolved * 100, 1) if resolved else None
-        sample_warning = resolved < _MIN_SAMPLES
+        sample_warning = resolved < MIN_SAMPLES_OVERALL
         note = f"样本 {resolved} 天（STRONG_UP 信号 {len(strong_up_dates)} 天），" + (
-            f"低于 {_MIN_SAMPLES} 天时统计波动较大，仅供参考"
+            f"低于 {MIN_SAMPLES_OVERALL} 天时统计波动较大，仅供参考"
             if sample_warning
             else f"T+{horizon} 命中率 {hit_rate}%"
         )
