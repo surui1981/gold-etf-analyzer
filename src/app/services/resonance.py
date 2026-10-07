@@ -51,7 +51,7 @@ _THRESH_UP = int(DirectionThreshold.BULLISH)  # 55
 _THRESH_DOWN = int(DirectionThreshold.BEARISH)  # 45
 # ── V0.79.0 Step H · 样本阈值分层 ──────────────────────────────────────
 MIN_SAMPLES_OVERALL = 10  # 总体命中率可信度下界（由 20 下调，分层后 bucket 另设）
-MIN_SAMPLES_BUCKET = 5    # 分维度样本阈值（预留，STRONG_UP 当前无 bucket 维度）
+MIN_SAMPLES_BUCKET = 5  # 分维度样本阈值（预留，STRONG_UP 当前无 bucket 维度）
 
 # 背离判定阈值：任意两维分差 ≥ 此值即视为「在打架」（V0.78.0 新增）
 # 15 的来由：方向相反的最小幅度是 55 vs 45 = 10，而 10~14 属轻微分歧，

@@ -71,9 +71,7 @@ class TestMacroFactorServiceDynamic:
     ) -> None:
         """注入 calculator 但表完全空 → 全 hardcode，macro_dynamic=False。"""
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
-        svc = MacroFactorService(
-            settings=None, central_bank=None, threshold_calculator=calc
-        )
+        svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
         assert result.macro_dynamic is False
         # 阈值全 hardcode → score 与无 calculator 场景一致
@@ -94,6 +92,7 @@ class TestMacroFactorServiceDynamic:
         # ⚠ MacroFactorService._CACHE 是模块级 dict，跨 evaluate 实例共享。
         # 这里**两次 evaluate 在同一测试**内，必须手动清缓存避免 baseline 命中 dynamic 结果。
         from app.services import macro as macro_mod
+
         macro_mod._CACHE = {"ts": 0.0, "result": None}
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
@@ -123,9 +122,7 @@ class TestMacroFactorServiceDynamic:
         await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
-        svc = MacroFactorService(
-            settings=None, central_bank=None, threshold_calculator=calc
-        )
+        svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
         assert result.macro_dynamic is True
 
@@ -146,9 +143,7 @@ class TestMacroFactorServiceDynamic:
         await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
-        svc = MacroFactorService(
-            settings=None, central_bank=None, threshold_calculator=calc
-        )
+        svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
         # cb_gold 显式跳过 → 4 个滚动因子 dynamic → macro_dynamic=True
         assert result.macro_dynamic is True
@@ -166,9 +161,7 @@ class TestMacroFactorServiceDynamic:
         await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
-        svc = MacroFactorService(
-            settings=None, central_bank=None, threshold_calculator=calc
-        )
+        svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
         # dxy 回退 hardcode，3 个 us10y/us30y/vix 切到 dynamic → 不足 4 → False
         assert result.macro_dynamic is False

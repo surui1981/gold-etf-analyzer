@@ -145,9 +145,7 @@ class TestCalculatorWithData:
         # 仅 cb_gold dynamic，4 个滚动因子回退 → False
         assert calc.is_dynamic_active(thresholds) is False
 
-    async def test_60_samples_minimum_dynamic(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_60_samples_minimum_dynamic(self, repo: MacroFactorHistoryRepository) -> None:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         thresholds = await calc.get_or_compute("default")
@@ -165,16 +163,12 @@ class TestCalculatorWithData:
 class TestIsDynamicActive:
     """is_dynamic_active 边界。"""
 
-    async def test_all_hardcode_returns_false(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_all_hardcode_returns_false(self, repo: MacroFactorHistoryRepository) -> None:
         calc = MacroThresholdCalculator(repo=repo)
         hardcode = _hardcode_dict()
         assert calc.is_dynamic_active(hardcode) is False
 
-    async def test_three_dynamic_returns_false(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_three_dynamic_returns_false(self, repo: MacroFactorHistoryRepository) -> None:
         """3 因子切到 dynamic → 不足 4 阈值 → False。"""
         calc = MacroThresholdCalculator(repo=repo)
         thresholds = _hardcode_dict()
@@ -184,9 +178,7 @@ class TestIsDynamicActive:
         thresholds["us30y"] = (4.5, 3.5)
         assert calc.is_dynamic_active(thresholds) is False
 
-    async def test_four_dynamic_returns_true(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_four_dynamic_returns_true(self, repo: MacroFactorHistoryRepository) -> None:
         """4 因子切到 dynamic → True。"""
         calc = MacroThresholdCalculator(repo=repo)
         thresholds = _hardcode_dict()
@@ -200,9 +192,7 @@ class TestIsDynamicActive:
 class TestCache:
     """24h TTL + (target, date) key 隔离。"""
 
-    async def test_cache_hit_within_ttl(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_cache_hit_within_ttl(self, repo: MacroFactorHistoryRepository) -> None:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60, ttl_seconds=3600)
 
@@ -213,9 +203,7 @@ class TestCache:
             mock_get.assert_not_called()
         assert second == first
 
-    async def test_cache_key_isolates_by_date(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_cache_key_isolates_by_date(self, repo: MacroFactorHistoryRepository) -> None:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
 
@@ -228,9 +216,7 @@ class TestCache:
         assert any(today.isoformat() in str(k) for k in keys)
         assert any(yesterday.isoformat() in str(k) for k in keys)
 
-    async def test_cache_ttl_expiry(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_cache_ttl_expiry(self, repo: MacroFactorHistoryRepository) -> None:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60, ttl_seconds=10)
 
@@ -248,9 +234,7 @@ class TestCache:
 class TestRepoUpsert:
     """MacroFactorHistoryRepository.upsert_batch 测试。"""
 
-    async def test_upsert_batch_idempotent(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_upsert_batch_idempotent(self, repo: MacroFactorHistoryRepository) -> None:
         today = date.today()
         factors = [("dxy", 96.5, "2026-08-28", "美联储 H.15")]
         n1 = await repo.upsert_batch("default", today, factors)
@@ -265,9 +249,7 @@ class TestRepoUpsert:
         n = await repo.upsert_batch("default", date.today(), [])
         assert n == 0
 
-    async def test_get_window_orders_desc(
-        self, repo: MacroFactorHistoryRepository
-    ) -> None:
+    async def test_get_window_orders_desc(self, repo: MacroFactorHistoryRepository) -> None:
         end = date.today()
         # 种 5 条，跨 5 个日历日
         factors = [("dxy", 100.0 + i, "2026-08-28", "美联储 H.15") for i in range(5)]

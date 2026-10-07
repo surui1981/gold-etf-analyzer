@@ -76,9 +76,9 @@ TREND_WEIGHTS: dict[str, float] = {
 # - 风险组：回撤 → 距区间高点的回撤（独立信号）
 # 键集合必须覆盖 TREND_WEIGHTS 所有 5 个维度（test_trend.py 断言）。
 GROUP_WEIGHTS: dict[str, float] = {
-    "trend": 0.50,       # 结构 + 动量
+    "trend": 0.50,  # 结构 + 动量
     "overbought": 0.30,  # 动能(RSI) + 支撑(乖离)
-    "risk": 0.20,        # 回撤
+    "risk": 0.20,  # 回撤
 }
 GROUP_MAPPING: dict[str, str] = {
     "结构": "trend",
@@ -466,7 +466,12 @@ class TrendService:
         tech_note: str | None = None
         if interval == "D":
             indicators, tech_index = self._build_index(
-                closes, highs, ma20, ma40, tech_weights, unit=unit,
+                closes,
+                highs,
+                ma20,
+                ma40,
+                tech_weights,
+                unit=unit,
                 weights_meta=weights_meta,
             )
         else:
@@ -677,15 +682,9 @@ class TrendService:
         group_scores: dict[str, float | None] = {
             g: (round(sum(vs) / len(vs), 2) if vs else None) for g, vs in groups.items()
         }
-        valid_w_sum = sum(
-            GROUP_WEIGHTS[g] for g, s in group_scores.items() if s is not None
-        )
+        valid_w_sum = sum(GROUP_WEIGHTS[g] for g, s in group_scores.items() if s is not None)
         weights_norm: dict[str, float] = (
-            {
-                g: GROUP_WEIGHTS[g] / valid_w_sum
-                for g, s in group_scores.items()
-                if s is not None
-            }
+            {g: GROUP_WEIGHTS[g] / valid_w_sum for g, s in group_scores.items() if s is not None}
             if valid_w_sum > 0
             else {}
         )
@@ -819,7 +818,8 @@ class TrendService:
             # 组内每 dim 均分该组贡献（保持 Σcontribution == tech_index.score）
             group_size = {
                 g: sum(
-                    1 for n2, dd in dims.items()
+                    1
+                    for n2, dd in dims.items()
                     if GROUP_MAPPING.get(n2) == g and dd.score is not None
                 )
                 for g in group_scores

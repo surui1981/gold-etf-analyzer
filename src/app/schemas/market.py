@@ -155,8 +155,7 @@ class TrendIndexOut(BaseModel):
     composed_by: Literal["weighted", "grouped"] = Field(
         "weighted",
         description=(
-            "V0.79.0 Step F：技术面合成方式；"
-            "weighted=单维度加权平均（历史），grouped=组内平均"
+            "V0.79.0 Step F：技术面合成方式；weighted=单维度加权平均（历史），grouped=组内平均"
         ),
     )
 
@@ -263,8 +262,7 @@ class GoldTrendOut(BaseModel):
     tech_composed_by: Literal["weighted", "grouped"] = Field(
         "weighted",
         description=(
-            "V0.79.0 Step F：技术面合成方式；"
-            "weighted=单维度加权平均（历史），grouped=组内平均"
+            "V0.79.0 Step F：技术面合成方式；weighted=单维度加权平均（历史），grouped=组内平均"
         ),
     )
     macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
@@ -422,8 +420,7 @@ class SilverTrendOut(BaseModel):
     tech_composed_by: Literal["weighted", "grouped"] = Field(
         "weighted",
         description=(
-            "V0.79.0 Step F：技术面合成方式；"
-            "weighted=单维度加权平均（历史），grouped=组内平均"
+            "V0.79.0 Step F：技术面合成方式；weighted=单维度加权平均（历史），grouped=组内平均"
         ),
     )
     macro: MacroIndexOut

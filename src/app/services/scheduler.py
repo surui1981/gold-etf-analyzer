@@ -260,10 +260,7 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
             await repo.upsert_batch(
                 target="default",
                 snapshot_date=date.today(),
-                factors=[
-                    (key, val, dt, src)
-                    for key, (val, dt, src) in values.items()
-                ],
+                factors=[(key, val, dt, src) for key, (val, dt, src) in values.items()],
             )
             calculator = MacroThresholdCalculator(repo=repo)
             thresholds = await calculator.get_or_compute("default", today=date.today())

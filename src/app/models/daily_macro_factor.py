@@ -56,9 +56,7 @@ class DailyMacroFactor(Base):
         default="",
         comment='数据源标识（"美联储 H.15" / "静态参考值" / "央行购金表自动汇总"）',
     )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     __table_args__ = (
         UniqueConstraint(
@@ -77,7 +75,4 @@ class DailyMacroFactor(Base):
     )
 
     def __repr__(self) -> str:  # pragma: no cover
-        return (
-            f"<DailyMacroFactor {self.factor_key} {self.snapshot_date} "
-            f"{self.value:g}>"
-        )
+        return f"<DailyMacroFactor {self.factor_key} {self.snapshot_date} {self.value:g}>"

@@ -157,12 +157,8 @@ async def _warm_cache() -> None:
         async with async_session_factory() as session:
             cb_repo = CentralBankPurchaseRepository(session)
             cb_svc = CentralBankService(repo=cb_repo)
-            threshold_calc = MacroThresholdCalculator(
-                repo=MacroFactorHistoryRepository(session)
-            )
-            macro = MacroFactorService(
-                central_bank=cb_svc, threshold_calculator=threshold_calc
-            )
+            threshold_calc = MacroThresholdCalculator(repo=MacroFactorHistoryRepository(session))
+            macro = MacroFactorService(central_bank=cb_svc, threshold_calculator=threshold_calc)
             trend = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
@@ -210,12 +206,8 @@ async def _start_daily_scheduler() -> None:
 
             cb_svc = CentralBankService(repo=CentralBankPurchaseRepository(session))
             # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
-            threshold_calc = MacroThresholdCalculator(
-                repo=MacroFactorHistoryRepository(session)
-            )
-            macro = MacroFactorService(
-                central_bank=cb_svc, threshold_calculator=threshold_calc
-            )
+            threshold_calc = MacroThresholdCalculator(repo=MacroFactorHistoryRepository(session))
+            macro = MacroFactorService(central_bank=cb_svc, threshold_calculator=threshold_calc)
             trend_svc = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,

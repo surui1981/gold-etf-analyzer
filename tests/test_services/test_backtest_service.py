@@ -209,8 +209,12 @@ def test_trend_weights_extra_field_rejected() -> None:
         TrendWeights(
             weights=[
                 {
-                    "结构": 0.30, "动量": 0.20, "支撑": 0.20,
-                    "动能": 0.15, "回撤": 0.15, "噪声": 0.0,  # 多「噪声」
+                    "结构": 0.30,
+                    "动量": 0.20,
+                    "支撑": 0.20,
+                    "动能": 0.15,
+                    "回撤": 0.15,
+                    "噪声": 0.0,  # 多「噪声」
                 },
             ]
         )
@@ -288,9 +292,7 @@ def test_aggregate_from_detail_happy_path() -> None:
         ensure_ascii=False,
     )
     # 0.5*70 + 0.3*60 + 0.2*80 = 35 + 18 + 16 = 69.0
-    result = _aggregate_from_detail(
-        detail, {"结构": 0.5, "动量": 0.3, "支撑": 0.2}, "tech"
-    )
+    result = _aggregate_from_detail(detail, {"结构": 0.5, "动量": 0.3, "支撑": 0.2}, "tech")
     assert result == pytest.approx(69.0, abs=1e-6)
 
 
@@ -306,11 +308,14 @@ def test_aggregate_from_detail_returns_none_for_missing_dim() -> None:
         ensure_ascii=False,
     )
     # weights 要求 5 维，detail 只有 2 维
-    assert _aggregate_from_detail(
-        detail,
-        {"结构": 0.20, "动量": 0.20, "支撑": 0.20, "动能": 0.20, "回撤": 0.20},
-        "tech",
-    ) is None
+    assert (
+        _aggregate_from_detail(
+            detail,
+            {"结构": 0.20, "动量": 0.20, "支撑": 0.20, "动能": 0.20, "回撤": 0.20},
+            "tech",
+        )
+        is None
+    )
 
 
 def test_aggregate_from_detail_returns_none_for_none_score() -> None:
@@ -325,18 +330,19 @@ def test_aggregate_from_detail_returns_none_for_none_score() -> None:
         },
         ensure_ascii=False,
     )
-    assert _aggregate_from_detail(
-        detail,
-        {"结构": 0.20, "动量": 0.20, "支撑": 0.20, "动能": 0.20, "回撤": 0.20},
-        "tech",
-    ) is None
+    assert (
+        _aggregate_from_detail(
+            detail,
+            {"结构": 0.20, "动量": 0.20, "支撑": 0.20, "动能": 0.20, "回撤": 0.20},
+            "tech",
+        )
+        is None
+    )
 
 
 def test_aggregate_from_detail_invalid_json_returns_none() -> None:
     """JSON 解析错误 → 返回 None（容错：旧快照格式漂移不致回测 500）。"""
-    assert _aggregate_from_detail(
-        "{not valid}", {"type": 1.0}, "tech"
-    ) is None
+    assert _aggregate_from_detail("{not valid}", {"type": 1.0}, "tech") is None
 
 
 def test_evaluate_grid_with_tech_weights_reweights() -> None:
@@ -357,16 +363,26 @@ def test_evaluate_grid_with_tech_weights_reweights() -> None:
     )
     # 不提供 weights → 用扁平 tech_index=80 → 综合分 = 80*0.5 + 50*0.3 + 50*0.2 = 61.0
     flat = svc._evaluate_grid(
-        snapshots=[snap], next_returns={}, tech_w=0.5, macro_w=0.3, news_w=0.2,
-        bullish_threshold=70.0, bearish_threshold=30.0,
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
     )
     assert flat.samples == 1
     assert flat.tech_dim_weights is None
 
     # 提供 weights 但 detail 只有 2 维 → 整根跳过 → samples=0
     partial = svc._evaluate_grid(
-        snapshots=[snap], next_returns={}, tech_w=0.5, macro_w=0.3, news_w=0.2,
-        bullish_threshold=70.0, bearish_threshold=30.0,
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
         tech_dim_weights={"结构": 0.5, "动量": 0.5, "支撑": 0.0, "动能": 0.0, "回撤": 0.0},
     )
     assert partial.samples == 0  # 跳过
@@ -395,10 +411,19 @@ def test_evaluate_grid_with_complete_tech_weights_uses_detail() -> None:
     )
     # weights = 0.3*80 + 0.2*60 + 0.2*70 + 0.15*50 + 0.15*40 = 24+12+14+7.5+6 = 63.5
     row = svc._evaluate_grid(
-        snapshots=[snap], next_returns={}, tech_w=0.5, macro_w=0.3, news_w=0.2,
-        bullish_threshold=70.0, bearish_threshold=30.0,
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
         tech_dim_weights={
-            "结构": 0.30, "动量": 0.20, "支撑": 0.20, "动能": 0.15, "回撤": 0.15,
+            "结构": 0.30,
+            "动量": 0.20,
+            "支撑": 0.20,
+            "动能": 0.15,
+            "回撤": 0.15,
         },
     )
     assert row.samples == 1
@@ -411,7 +436,9 @@ def test_evaluate_grid_skips_snapshot_when_tech_detail_null_with_weights() -> No
     """_evaluate_grid + tech_dim_weights + tech_detail=None → 跳过（samples=0）。"""
     snap = _make_snapshot_with_details(
         date(2026, 1, 1),
-        tech_index=80.0, macro_index=50.0, news_index=50.0,
+        tech_index=80.0,
+        macro_index=50.0,
+        news_index=50.0,
         tech_detail=None,  # 历史行（V0.79.0 #162 说明：历史 16/24 无法回溯）
     )
     svc = BacktestService(
@@ -420,8 +447,13 @@ def test_evaluate_grid_skips_snapshot_when_tech_detail_null_with_weights() -> No
         weights=None,  # type: ignore[arg-type]
     )
     row = svc._evaluate_grid(
-        snapshots=[snap], next_returns={}, tech_w=0.5, macro_w=0.3, news_w=0.2,
-        bullish_threshold=70.0, bearish_threshold=30.0,
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
         tech_dim_weights={"结构": 0.20, "动量": 0.20, "支撑": 0.20, "动能": 0.20, "回撤": 0.20},
     )
     assert row.samples == 0  # 跳过：tech_detail=NULL ⇒ 不能 50 兜底
@@ -431,7 +463,9 @@ def test_evaluate_grid_falls_back_to_flat_when_weights_none() -> None:
     """_evaluate_grid 不传 tech_dim_weights → 用扁平 tech_index（旧行为）。"""
     snap = _make_snapshot_with_details(
         date(2026, 1, 1),
-        tech_index=80.0, macro_index=50.0, news_index=50.0,
+        tech_index=80.0,
+        macro_index=50.0,
+        news_index=50.0,
         tech_detail={"结构": {"score": 60.0}},  # 即便 detail 在，weights=None 时忽略
     )
     svc = BacktestService(
@@ -440,8 +474,13 @@ def test_evaluate_grid_falls_back_to_flat_when_weights_none() -> None:
         weights=None,  # type: ignore[arg-type]
     )
     row = svc._evaluate_grid(
-        snapshots=[snap], next_returns={}, tech_w=0.5, macro_w=0.3, news_w=0.2,
-        bullish_threshold=70.0, bearish_threshold=30.0,
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
     )
     assert row.samples == 1  # detail 在但 weights=None → 用扁平 tech_index=80
     assert row.tech_dim_weights is None

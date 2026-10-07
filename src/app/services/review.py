@@ -365,11 +365,7 @@ class ReviewService:
                 if len(resolved) < MIN_SAMPLES_OVERALL
                 else None
             ),
-            note=(
-                f"样本 {len(resolved)} 天"
-                if len(resolved) >= MIN_SAMPLES_OVERALL
-                else ""
-            ),
+            note=(f"样本 {len(resolved)} 天" if len(resolved) >= MIN_SAMPLES_OVERALL else ""),
         )
 
     @staticmethod

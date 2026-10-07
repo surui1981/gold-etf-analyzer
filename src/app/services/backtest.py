@@ -45,7 +45,7 @@ logger = get_logger(__name__)
 
 # ── V0.79.0 Step H · 样本阈值分层 ──────────────────────────────────────
 MIN_SAMPLES_OVERALL = 10  # 总体样本阈值（覆盖期有效样本 < 此值时提示）
-MIN_SAMPLES_BUCKET = 5    # 分维度样本阈值（保留；当前 coverage 无 bucket 输出）
+MIN_SAMPLES_BUCKET = 5  # 分维度样本阈值（保留；当前 coverage 无 bucket 输出）
 
 # V0.79.0 任务 #163：回测只采信这些来源的快照。
 # ⚠ ``mock`` 必须排除（编造的价格）；``None``（历史未标记）也排除 ——
@@ -633,9 +633,7 @@ class BacktestService:
         for snap in snapshots:
             # ── 技术面：嵌套权重覆盖时读 tech_detail ──
             if tech_dim_weights is not None:
-                tech_score = _aggregate_from_detail(
-                    snap.tech_detail, tech_dim_weights, "tech"
-                )
+                tech_score = _aggregate_from_detail(snap.tech_detail, tech_dim_weights, "tech")
                 if tech_score is None:
                     # 该日无 tech_detail（NULL 或缺字段）→ 跳过这根快照
                     # （不是「中性 50」，是「压根没算出来」，按 V0.78.0 Step D 收口）
@@ -644,9 +642,7 @@ class BacktestService:
                 tech_score = float(snap.tech_index)
             # ── 宏观：嵌套权重覆盖时读 macro_detail ──
             if macro_dim_weights is not None:
-                macro_score = _aggregate_from_detail(
-                    snap.macro_detail, macro_dim_weights, "macro"
-                )
+                macro_score = _aggregate_from_detail(snap.macro_detail, macro_dim_weights, "macro")
                 if macro_score is None:
                     continue
             else:

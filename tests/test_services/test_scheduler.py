@@ -486,7 +486,4 @@ async def test_v079_step_e_capture_and_warm_step3_failure_does_not_propagate(
     # 不应抛异常
     await sch._capture_and_warm(FailingSnapshot(), FailingTrend())
     # 应有 warning 日志
-    assert any(
-        "Macro factor persist/warmup failed" in record.message
-        for record in caplog.records
-    )
+    assert any("Macro factor persist/warmup failed" in record.message for record in caplog.records)

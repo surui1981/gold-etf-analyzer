@@ -82,9 +82,7 @@ def _compute_tech_index_weighted(detail: dict[str, float]) -> float:
     return sum(TREND_WEIGHTS[k] * v for k, v in detail.items())
 
 
-def _compute_combined_index(
-    tech_index: float, macro_index: float, news_index: float
-) -> float:
+def _compute_combined_index(tech_index: float, macro_index: float, news_index: float) -> float:
     """综合指数 = tech × 0.50 + macro × 0.30 + news × 0.20（与 trend.py:501 默认权重一致）。"""
     return tech_index * 0.50 + macro_index * 0.30 + news_index * 0.20
 
@@ -116,9 +114,7 @@ def _evaluate(rows: list[dict], use_group_combine: bool) -> tuple[float, int, in
         if tech_index is None:
             continue
         tech_indices.append(tech_index)
-        combined = _compute_combined_index(
-            tech_index, row["macro_index"], row["news_index"]
-        )
+        combined = _compute_combined_index(tech_index, row["macro_index"], row["news_index"])
         if combined >= BULL:
             direction = "bullish"
         elif combined <= BEAR:
@@ -129,9 +125,7 @@ def _evaluate(rows: list[dict], use_group_combine: bool) -> tuple[float, int, in
         if direction == "sideways":
             hit = False
         else:
-            hit = (direction == "bullish" and ret > 0) or (
-                direction == "bearish" and ret < 0
-            )
+            hit = (direction == "bullish" and ret > 0) or (direction == "bearish" and ret < 0)
         samples += 1
         if hit:
             hits += 1
@@ -198,8 +192,7 @@ def test_hit_rate_methods_agree_within_one_sigma() -> None:
     _, hits_g, _samples_g = _evaluate(rows, use_group_combine=True)
     diff = abs(hits_w - hits_g)
     assert diff <= samples_w * 0.10, (
-        f"命中数差距 ≥ 10%：grouped={hits_g}, weighted={hits_w}, "
-        f"samples={samples_w}, |Δ|={diff}"
+        f"命中数差距 ≥ 10%：grouped={hits_g}, weighted={hits_w}, samples={samples_w}, |Δ|={diff}"
     )
 
 
@@ -241,9 +234,7 @@ def test_hit_rate_compare_report_payload() -> None:
                 "hit_rate": round(hits_g / samples_g, 4),
             },
         },
-        "diff_hit_rate": round(
-            (hits_g - hits_w) / samples_w, 4
-        ),
+        "diff_hit_rate": round((hits_g - hits_w) / samples_w, 4),
     }
     # 必须能 JSON 序列化（commit 5 docs 报告脚本会复用这个 payload）
     s = json.dumps(payload, ensure_ascii=False)

@@ -107,9 +107,7 @@ class MacroThresholdCalculator:
             )
             return thresholds
 
-    async def _compute_uncached(
-        self, target: str, today: date
-    ) -> dict[str, tuple[float, float]]:
+    async def _compute_uncached(self, target: str, today: date) -> dict[str, tuple[float, float]]:
         """持锁期间执行：查表 + percentile。"""
         hardcode = self._rules_hardcode()
         thresholds: dict[str, tuple[float, float]] = {}
@@ -144,17 +142,13 @@ class MacroThresholdCalculator:
         """scheduler / 启动预热：主动 ``get_or_compute`` 并写缓存。"""
         await self.get_or_compute(target, today)
 
-    def is_dynamic_active(
-        self, thresholds: dict[str, tuple[float, float]]
-    ) -> bool:
+    def is_dynamic_active(self, thresholds: dict[str, tuple[float, float]]) -> bool:
         """5 因子中至少 4 个因子阈值 ≠ hardcode 默认 → True。
 
         loose 判定：单一因子回退不污染整体语义（4/5 仍算 dynamic）。
         """
         hardcode = self._rules_hardcode()
         dynamic_count = sum(
-            1
-            for k, (b, w) in thresholds.items()
-            if k in hardcode and (b, w) != hardcode[k]
+            1 for k, (b, w) in thresholds.items() if k in hardcode and (b, w) != hardcode[k]
         )
         return dynamic_count >= 4
