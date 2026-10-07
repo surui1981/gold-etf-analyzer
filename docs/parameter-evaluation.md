@@ -156,6 +156,28 @@
 
 短期建议先**让用户能在回测引擎里扫技术面内部权重**（当前回测只能扫 tech/macro/news 三层），再根据扫描结果决定是重构还是微调。
 
+**V0.79.0 Step F 验证结论**（2026-10-07，commits `45044f6` `020ab5e` `479bd32` `999decf`）：
+
+- **实施状态**：采用上述「3+1+1」组合方案（趋势/超买/风险），代码已上线并默认开启：
+  - 权重：`trend(结构+动量)=0.50` / `overbought(动能+支撑)=0.30` / `risk(回撤)=0.20`
+  - `TrendService.combine_by_group()` 静态 helper：返回 `(group_scores, weights_norm)`
+  - `TrendIndexOut.composed_by: Literal["weighted", "grouped"]`（仅技术面）
+  - `GoldTrendOut/SilverTrendOut.tech_composed_by` 顶层字段透传
+  - `WeightConfig.group_combine: bool = True`（可持久化，UI 在权重配置页切换）
+- **回滚通道**：UI 或 `PUT /api/v1/settings/weights` 设 `group_combine=false` 即恢复历史行为，无需重启（除 60s 配置缓存外）。
+- **实测对比**（合成数据，seed=42，100 样本）：
+  - 单维度加权：avg_tech=49.40, hits=34/100 = 34.00%
+  - 组内平均：  avg_tech=49.49, hits=33/100 = 33.00%
+  - diff:       avg_tech=0.088, hits=1
+  - **结论**：两种方法数学上不同（权重分布 0.25/0.25/0.15/0.15/0.20 vs 0.30/0.20/0.20/0.15/0.15），决策 hit_rate 仅差 1/100。
+- **默认值保留**：`group_combine=true`（推荐方案 2）。理由：
+  - 数学上消除「4 维趋势同向 + 1 维回撤」的结构性偏向；
+  - 实证上未观察到 hit_rate 显著下降；
+  - 趋势组/超买组/风险组权重大小符合「重要维度给权重，重要**组**也该给权重」的语义；
+  - 用户切回路径简单（单 toggle），风险可控。
+- **报告**：`docs/parameter-evaluation/sharpe_compare_2026-10-07.md`
+- **后续观察**：待真实历史数据（≥ 60 个 tech_detail 完整快照；Step G #162 实测目前 16/24）二次验证。
+
 ---
 
 ### 3.4 决策矩阵的"档位缺位" ⚠️ **P1**
