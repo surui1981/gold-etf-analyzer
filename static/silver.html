@@ -432,7 +432,7 @@ function renderMain(data) {
 
   document.getElementById("idxSummary").innerHTML = data.index?.summary || "";
   document.getElementById("snapTime").textContent = "快照于 " + (data.served_at || "").slice(0, 16).replace("T", " ");
-  document.getElementById("idxMethod").innerHTML = data.index?.method || "";
+  document.getElementById("idxMethod").innerHTML = (data.index?.method || "") + techComposeBadge;
 
   const macro = data.macro || {};
   // V0.79.0 Step E：动态/静态阈值角标（与 trend.html 一致；一改两受益）
@@ -446,6 +446,14 @@ function renderMain(data) {
     ? "5 因子中 ≥4 使用近 252 日滚动 90/10 分位"
     : "数据不足，阈值回退 hardcode 默认";
   const macroBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${macroBadgeBg};color:${macroBadgeColor};font-size:10px;font-weight:500" title="${macroBadgeHint}">${macroBadgeText}</span>`;
+  // V0.79.0 Step F：技术面合成方式角标（与 trend.html 同模式）
+  const techComposed = data.tech_composed_by === "weighted" ? "weighted" : "grouped";
+  const techBadgeBg = techComposed === "grouped" ? "#e8f7ee" : "#fff4e5";
+  const techBadgeColor = techComposed === "grouped" ? "var(--up)" : "var(--muted)";
+  const techBadgeText = (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(techComposed === "grouped" ? "trend.tech_grouped_badge" : "trend.tech_weighted_badge")
+    : (techComposed === "grouped" ? "[组内平均]" : "[单维度加权]");
+  const techComposeBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${techBadgeBg};color:${techBadgeColor};font-size:10px;font-weight:500">${techBadgeText}</span>`;
   document.getElementById("macroInfo").innerHTML = macro.score != null ? `综合 ${macro.score?.toFixed(1)} / 100${macroBadge}` : "";
   const macroFactorsEl = document.getElementById("macroFactors");
   macroFactorsEl.innerHTML = (macro.factors || []).map(f => `

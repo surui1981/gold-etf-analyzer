@@ -184,6 +184,9 @@ window.PM_I18N_zh_TW = {
   "trend.macro_title": "宏觀參考因子",
   "trend.macro_dynamic_badge": "動態閾值",
   "trend.macro_static_badge": "靜態閾值",
+  // V0.79.0 Step F：技術面 5 維合成方式
+  "trend.tech_grouped_badge": "[組內平均]",
+  "trend.tech_weighted_badge": "[單維度加權]",
   "trend.index_panel_title": "趨勢評估指數",
   "trend.components_title": "三大維度拆解",
   "trend.chart_title": "黃金價格走勢",
@@ -398,6 +401,13 @@ window.PM_I18N_zh_TW = {
   "weights.preset_conservative": "穩健",
   "weights.preset_balanced": "平衡",
   "weights.preset_aggressive": "積極",
+  // V0.79.0 Step F：技術面合成方式
+  "weights.tech_compose_title": "🧮 技術面合成方式（V0.79.0 Step F）",
+  "weights.tech_compose_desc": "5 個維度（結構/動量/支撐/動能/回撤）如何加權為單一技術面指數",
+  "weights.group_combine_on": "組內平均（推薦）",
+  "weights.group_combine_on_hint": "趨勢組/超買組/風險組各自組內先平均，再按 0.50/0.30/0.20 加權；降低內部相關性",
+  "weights.group_combine_off": "單維度加權（歷史）",
+  "weights.group_combine_off_hint": "5 維度獨立按 TREND_WEIGHTS（0.30/0.20/0.20/0.15/0.15）加權",
   "weights.preview_loading": "預覽計算中…",
   "weights.footer": "gold-etf-analyzer · 權重配置 · 三維度即時預覽",
 

@@ -151,6 +151,26 @@
     </div>
   </div>
 
+  <!-- V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权） -->
+  <div class="card">
+    <h2 data-i18n="weights.tech_compose_title">🧮 技术面合成方式（V0.79.0 Step F）</h2>
+    <div class="desc" data-i18n="weights.tech_compose_desc">5 个维度（结构/动量/支撑/动能/回撤）如何加权为单一技术面指数</div>
+    <label class="radio-row" style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px">
+      <input type="radio" name="group_combine" value="true" id="gcOn" checked style="margin-top:4px">
+      <span style="flex:1">
+        <b data-i18n="weights.group_combine_on">组内平均（推荐）</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px" data-i18n="weights.group_combine_on_hint">趋势组/超买组/风险组各自组内先平均，再按 0.50/0.30/0.20 加权；降低内部相关性</div>
+      </span>
+    </label>
+    <label class="radio-row" style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer">
+      <input type="radio" name="group_combine" value="false" id="gcOff" style="margin-top:4px">
+      <span style="flex:1">
+        <b data-i18n="weights.group_combine_off">单维度加权（历史）</b>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px" data-i18n="weights.group_combine_off_hint">5 维度独立按 TREND_WEIGHTS（0.30/0.20/0.20/0.15/0.15）加权</div>
+      </span>
+    </label>
+  </div>
+
   <!-- 实时预览（拖动滑块即时可见调整后指数） -->
   <div class="card" id="previewCard">
     <h2 data-i18n="weights.preview_title">👁 调整后综合指数 · 实时预览</h2>
@@ -204,6 +224,10 @@ function render() {
   document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l]) => rowHtml("t_" + k, l, trend[k])).join("");
   document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l]) => rowHtml("m_" + k, l, macro[k])).join("");
   document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l]) => rowHtml("c_" + k, l, combine[k])).join("");
+  // V0.79.0 Step F：技术面合成方式 radio 状态（缺字段向后兼容 → 默认勾选「组内平均」）
+  const gc = state.group_combine !== false;
+  document.getElementById("gcOn").checked = gc;
+  document.getElementById("gcOff").checked = !gc;
   update();
 }
 
@@ -317,7 +341,14 @@ async function loadTrendForPreview() {
 
 function collect() {
   const pick = (prefix, fields) => Object.fromEntries(fields.map(([k]) => [k, (parseInt(document.getElementById(prefix + k).value) || 0) / 100]));
-  return { trend: pick("t_", TREND_FIELDS), macro: pick("m_", MACRO_FIELDS), combine: pick("c_", COMBINE_FIELDS) };
+  // V0.79.0 Step F：技术面合成方式（组内平均 vs 单维度加权）
+  const group_combine = document.getElementById("gcOn").checked;
+  return {
+    trend: pick("t_", TREND_FIELDS),
+    macro: pick("m_", MACRO_FIELDS),
+    combine: pick("c_", COMBINE_FIELDS),
+    group_combine,
+  };
 }
 
 async function save() {
@@ -376,7 +407,7 @@ async function resetAll() {
   );
   if (!ok) return;
   const msg = document.getElementById("msg");
-  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 } };
+  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
   msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });

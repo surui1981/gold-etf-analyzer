@@ -278,6 +278,9 @@ window.PM_I18N_en_US = {
   "trend.macro_title": "Macro Factor Breakdown",
   "trend.macro_dynamic_badge": "Dynamic",
   "trend.macro_static_badge": "Static",
+  // V0.79.0 Step F: 5-dim tech synthesis method
+  "trend.tech_grouped_badge": "[Grouped]",
+  "trend.tech_weighted_badge": "[Weighted]",
   "trend.index_panel_title": "Composite Trend Index",
   "trend.components_title": "Index Components",
   "trend.comp_tech": "Technical",
@@ -308,6 +311,13 @@ window.PM_I18N_en_US = {
   "weights.preset_conservative": "Conservative (Macro-heavy)",
   "weights.preset_balanced": "Balanced (Default)",
   "weights.preset_aggressive": "Aggressive (Tech-heavy)",
+  // V0.79.0 Step F: tech-face synthesis method
+  "weights.tech_compose_title": "🧮 Tech-Face Synthesis (V0.79.0 Step F)",
+  "weights.tech_compose_desc": "How the 5 dimensions (structure/momentum/support/RSI/drawdown) combine into the tech index",
+  "weights.group_combine_on": "Grouped Average (Recommended)",
+  "weights.group_combine_on_hint": "Within-group average (trend/overbought/risk), then weighted 0.50/0.30/0.20; reduces internal correlation",
+  "weights.group_combine_off": "Per-Dim Weighted (Legacy)",
+  "weights.group_combine_off_hint": "5 dims weighted by TREND_WEIGHTS (0.30/0.20/0.20/0.15/0.15) independently",
   "weights.preview_loading": "Fetching latest assessment…",
   "weights.footer": "gold-etf-analyzer · Weight changes affect local evaluation only · Not investment advice",
   "weights.tech_label": "Technical weight",

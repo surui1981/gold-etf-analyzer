@@ -529,6 +529,71 @@ console.log("=".repeat(70));
     ok("A7 zh-TW 含 macro_static_badge（靜態閾值）",
        zhTW.includes('"trend.macro_static_badge": "靜態閾值"'));
   }
+
+  // ── A8 V0.79.0 Step F · 技术面合成方式角标 + 权重配置 4 卡片 ──
+  {
+    console.log("\n[A8] V0.79.0 Step F · 技术面合成方式角标 + 权重配置页");
+    const bth = read("trend.html");
+    const sh = read("silver.html");
+    const wh = read("weights.html");
+    const zhCN = read("i18n/zh-CN.js");
+    const enUS = read("i18n/en-US.js");
+    const zhTW = read("i18n/zh-TW.js");
+
+    // 8.1 trend.html 技术面合成方式角标（与 macro badge 同模式）
+    ok("A8 trend.html 含 techComposed 变量定义", bth.includes("techComposed"));
+    ok("A8 trend.html 含 techBadgeText 变量", bth.includes("techBadgeText"));
+    ok("A8 trend.html 通过 window.I18n.t 取翻译",
+       bth.includes("trend.tech_grouped_badge") && bth.includes("trend.tech_weighted_badge"));
+    ok("A8 trend.html fallback [组内平均]/[单维度加权] 字面",
+       bth.includes('"[组内平均]"') && bth.includes('"[单维度加权]"'));
+    ok("A8 trend.html 含组内平均 hint 文案",
+       bth.includes("5 维度按组内先平均再加权"));
+    ok("A8 trend.html 含 techComposeBadge 拼到 idxMethod",
+       bth.includes("techComposeBadge +"));
+
+    // 8.2 silver.html 同步技术面角标
+    ok("A8 silver.html 含 techComposed 变量定义", sh.includes("techComposed"));
+    ok("A8 silver.html 含 techComposeBadge 拼到 idxMethod",
+       sh.includes("+ techComposeBadge"));
+    ok("A8 silver.html 通过 window.I18n.t 取翻译",
+       sh.includes("trend.tech_grouped_badge"));
+
+    // 8.3 weights.html 第 4 卡片：组内平均 vs 单维度加权
+    ok("A8 weights.html 含 gcOn radio (group_combine=true)",
+       wh.includes('id="gcOn"'));
+    ok("A8 weights.html 含 gcOff radio (group_combine=false)",
+       wh.includes('id="gcOff"'));
+    ok("A8 weights.html 默认勾选 gcOn（推荐）",
+       /id="gcOn"\s+checked/.test(wh));
+    ok("A8 weights.html collect() 含 group_combine",
+       wh.includes("group_combine,"));
+    ok("A8 weights.html render() 含 radio 状态设置",
+       wh.includes("gcOn\").checked = gc"));
+    ok("A8 weights.html resetAll body 含 group_combine: true",
+       wh.includes("group_combine: true"));
+
+    // 8.4 i18n 三语 7 key × 3 语 = 21 条存在性
+    ok("A8 zh-CN 含 tech_grouped_badge", zhCN.includes('"trend.tech_grouped_badge": "[组内平均]"'));
+    ok("A8 zh-CN 含 tech_weighted_badge", zhCN.includes('"trend.tech_weighted_badge": "[单维度加权]"'));
+    ok("A8 zh-CN 含 tech_compose_title", zhCN.includes("weights.tech_compose_title"));
+    ok("A8 zh-CN 含 group_combine_on", zhCN.includes("weights.group_combine_on"));
+    ok("A8 zh-CN 含 group_combine_off", zhCN.includes("weights.group_combine_off"));
+    ok("A8 zh-CN 含 group_combine_on_hint", zhCN.includes("weights.group_combine_on_hint"));
+    ok("A8 zh-CN 含 group_combine_off_hint", zhCN.includes("weights.group_combine_off_hint"));
+
+    ok("A8 en-US 含 tech_grouped_badge", enUS.includes('"trend.tech_grouped_badge": "[Grouped]"'));
+    ok("A8 en-US 含 tech_weighted_badge", enUS.includes('"trend.tech_weighted_badge": "[Weighted]"'));
+    ok("A8 en-US 含 tech_compose_title", enUS.includes("weights.tech_compose_title"));
+    ok("A8 en-US 含 group_combine_on", enUS.includes("weights.group_combine_on"));
+    ok("A8 en-US 含 group_combine_off", enUS.includes("weights.group_combine_off"));
+
+    ok("A8 zh-TW 含 tech_grouped_badge", zhTW.includes('"trend.tech_grouped_badge": "[組內平均]"'));
+    ok("A8 zh-TW 含 tech_weighted_badge", zhTW.includes('"trend.tech_weighted_badge": "[單維度加權]"'));
+    ok("A8 zh-TW 含 tech_compose_title", zhTW.includes("weights.tech_compose_title"));
+    ok("A8 zh-TW 含 group_combine_on", zhTW.includes("weights.group_combine_on"));
+    ok("A8 zh-TW 含 group_combine_off_hint", zhTW.includes("weights.group_combine_off_hint"));
+  }
 }
 
 // ── 8. V0.77.1 接线与 SW 护栏：桩 fetch / 桩 caches 全链路真实执行 ──

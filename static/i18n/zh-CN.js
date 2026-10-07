@@ -277,6 +277,9 @@ window.PM_I18N_ZH_CN = {
   "trend.macro_title": "宏观因子明细",
   "trend.macro_dynamic_badge": "动态阈值",
   "trend.macro_static_badge": "静态阈值",
+  // V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权）
+  "trend.tech_grouped_badge": "[组内平均]",
+  "trend.tech_weighted_badge": "[单维度加权]",
   "trend.index_panel_title": "综合趋势评估指数",
   "trend.components_title": "指数构成",
   "trend.comp_tech": "技术面",
@@ -304,6 +307,13 @@ window.PM_I18N_ZH_CN = {
   "weights.preset_conservative": "保守（重宏观）",
   "weights.preset_balanced": "均衡（默认）",
   "weights.preset_aggressive": "激进（重技术）",
+  // V0.79.0 Step F：技术面合成方式选择卡片（组内平均 vs 单维度加权）
+  "weights.tech_compose_title": "🧮 技术面合成方式（V0.79.0 Step F）",
+  "weights.tech_compose_desc": "5 个维度（结构/动量/支撑/动能/回撤）如何加权为单一技术面指数",
+  "weights.group_combine_on": "组内平均（推荐）",
+  "weights.group_combine_on_hint": "趋势组/超买组/风险组各自组内先平均，再按 0.50/0.30/0.20 加权；降低内部相关性",
+  "weights.group_combine_off": "单维度加权（历史）",
+  "weights.group_combine_off_hint": "5 维度独立按 TREND_WEIGHTS（0.30/0.20/0.20/0.15/0.15）加权",
   "weights.preview_loading": "正在获取最新评估数据…",
   "weights.footer": "gold-etf-analyzer · 权重修改仅影响本机评估计算 · 不构成投资建议",
 

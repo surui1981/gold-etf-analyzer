@@ -530,9 +530,21 @@ function render(d) {
   const dimFormula = (d.indicators || []).map(i => `${i.name ?? "—"}×${((i.weight ?? 0) * 100).toFixed(0)}%`).join("+");
   const techFormula = dimFormula ||
     `不分解（${d.interval === "W" ? "周" : d.interval === "M" ? "月" : "本"} K 视图按中性 50 计入）`;
+  // V0.79.0 Step F：技术面合成方式角标（组内平均 vs 单维度加权）。一改两受益（silver 复用同模式）
+  const techComposed = d.tech_composed_by === "weighted" ? "weighted" : "grouped";
+  const techBadgeBg = techComposed === "grouped" ? "#e8f7ee" : "#fff4e5";
+  const techBadgeColor = techComposed === "grouped" ? "var(--up)" : "var(--muted)";
+  const techBadgeText = (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(techComposed === "grouped" ? "trend.tech_grouped_badge" : "trend.tech_weighted_badge")
+    : (techComposed === "grouped" ? "[组内平均]" : "[单维度加权]");
+  const techBadgeHint = techComposed === "grouped"
+    ? "5 维度按组内先平均再加权（趋势 0.50 / 超买 0.30 / 风险 0.20），降低内部相关性"
+    : "5 维度独立按 TREND_WEIGHTS 加权（历史行为）";
+  const techComposeBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${techBadgeBg};color:${techBadgeColor};font-size:10px;font-weight:500" title="${techBadgeHint}">${techBadgeText}</span>`;
   document.getElementById("idxMethod").innerHTML =
     "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
     techFormula +
+    techComposeBadge +
     "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
 
   // 宏观参考因子明细
