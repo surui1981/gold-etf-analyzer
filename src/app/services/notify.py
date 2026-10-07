@@ -17,6 +17,7 @@ from typing import Protocol
 import httpx
 
 from app.utils.logger import get_logger
+from app.utils.user_scope import ALL_USERS
 
 logger = get_logger(__name__)
 
@@ -178,7 +179,11 @@ class WebPushNotifier:
             logger.warning("WebPush skipped: VAPID keys not configured trace_id=%s", trace_id)
             return False
         try:
-            subs = await self._push.repo.list_active()
+            # ⚠ V0.80.0 数据隔离：这是**服务级告警广播**（非某用户的通知），
+            # 语义上就该发给「所有已订阅的人」⇒ 显式传 user_id=ALL_USERS 取全库。
+            # ⚠ 若不显式声明，默认的「当前用户」过滤会让告警**静默只发给一个人**
+            # —— 这正是「忘了传 ⇒ 静默降级」类缺陷，故此处必须写明。
+            subs = await self._push.repo.list_active(user_id=ALL_USERS)
         except Exception as exc:  # pragma: no cover
             logger.warning("WebPush subscription list failed: %s trace_id=%s", exc, trace_id)
             return False

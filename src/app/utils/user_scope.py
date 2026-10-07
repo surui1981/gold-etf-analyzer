@@ -48,6 +48,19 @@ class MissingUserContextError(RuntimeError):
     """
 
 
+# ⚠ V0.80.0：显式的「不限用户」哨兵值。
+#
+# 用途：服务级操作（告警广播 / 管理员验证推送）语义上要覆盖**所有用户**。
+# 若依赖「忘了传 user_id ⇒ 不过滤」的默认行为来实现全库查询，
+# 就等于把「越权」藏在默认值里 —— 一旦有人后来给该调用补上真实 user_id，
+# 行为会静默改变（从全库变成单人），而代码看起来「只是加了参数」。
+#
+# ⇒ 用一个显式常量表达「我就是要全库」，让意图写在代码里、可被 grep 审计。
+# 取 0 是刻意的：真实 users.id 从 1 起（LEGACY_USER_ID = 1），
+# 0 不与任何真实用户冲突。
+ALL_USERS = 0
+
+
 def get_current_user_id() -> int | None:
     """当前请求的 user_id；``None`` 表示匿名（仅在 AUTH_ENABLED=true 下会出现）。"""
     return _user_id_var.get()
@@ -95,6 +108,7 @@ def resolve_user_id(user_id: int | None) -> int:
 
 
 __all__ = [
+    "ALL_USERS",
     "MissingUserContextError",
     "current_user_id",
     "get_current_user_id",

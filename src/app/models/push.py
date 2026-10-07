@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text, func
+from sqlalchemy import DateTime, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -22,7 +22,7 @@ class PushSubscription(Base):
     __tablename__ = "push_subscriptions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    endpoint: Mapped[str] = mapped_column(String(512), unique=True, comment="FCM/Mozilla 推送端点")
+    endpoint: Mapped[str] = mapped_column(String(512), comment="FCM/Mozilla 推送端点")
     p256dh: Mapped[str] = mapped_column(Text, comment="椭圆曲线公钥（base64url）")
     auth: Mapped[str] = mapped_column(Text, comment="认证密钥（base64url）")
     user_agent: Mapped[str | None] = mapped_column(String(256), nullable=True)
@@ -30,6 +30,14 @@ class PushSubscription(Base):
         DateTime(timezone=True),
         server_default=func.now(),
     )
+    # ⚠ V0.80.0 数据隔离（#159 第 2 批）：推送订阅归属用户。
+    # 移除了 endpoint 的 unique=True —— 改为 (user_id, endpoint) 复合唯一
+    # （迁移 a3f2c1d5e6f7 已建 ix_push_subscriptions_user_endpoint）。
+    # 理由：同一台设备可能登录不同用户，端点标识本身不足以定位订阅归属。
+    user_id: Mapped[int] = mapped_column(
+        Integer, default=1, index=True, comment="归属用户 users.id（V0.75.2 加列）"
+    )
+
     archived_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True),
         nullable=True,

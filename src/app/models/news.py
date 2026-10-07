@@ -41,7 +41,16 @@ class NewsScore(Base):
     """
 
     __tablename__ = "news_scores"
-    __table_args__ = (UniqueConstraint("score_date", "slot", name="uq_news_scores_date_slot"),)
+    # ⚠ V0.80.0 数据隔离：唯一键从 ``(score_date, slot)`` 改为
+    # ``(user_id, score_date, slot)``。
+    #
+    # 改前**只含日期与槽位** ⇒ 两个用户在同一日同一槽位**根本无法共存**
+    # （实测 Bob 提交时 IntegrityError: UNIQUE constraint failed）。
+    # 那不只是测试问题：它意味着「每个用户各自打分」在数据库层被禁止，
+    # 多用户下第二个人根本无法使用打分功能。
+    __table_args__ = (
+        UniqueConstraint("user_id", "score_date", "slot", name="uq_news_scores_user_date_slot"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     score_date: Mapped[date] = mapped_column(
@@ -68,6 +77,12 @@ class NewsScore(Base):
         DateTime(timezone=True),
         server_default=func.now(),
         comment="该次打分的提交时刻",
+    )
+    # ⚠ V0.80.0 数据隔离（任务 #159 第 2 批）：归属用户。
+    # 此前本表**无 user_id** ⇒ 多用户启用后，一个用户能看到/改另一个用户的打分。
+    # 取值 LEGACY_USER_ID(=1) 是单用户模式的既有语义，与 positions/accounts 一致。
+    user_id: Mapped[int] = mapped_column(
+        Integer, default=1, index=True, comment="归属用户 users.id（V0.75.2 加列）"
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

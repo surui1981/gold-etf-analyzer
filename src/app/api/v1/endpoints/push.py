@@ -26,6 +26,7 @@ from app.services.settings import (
     get_vapid_keys,
     save_vapid_keys,
 )
+from app.utils.user_scope import ALL_USERS
 
 router = APIRouter(prefix="/push", tags=["push"])
 
@@ -110,7 +111,9 @@ async def test_push_endpoint(
 ) -> dict:
     """管理员手动验证推送链路（实际生产需要 push server 联网；CI 下 dry-run）。"""
     keys = await _ensure_vapid_keys(settings_repo)
-    subs = await service.repo.list_active()
+    # ⚠ V0.80.0：管理员「测试推送」需验证**整条链路**⇒ 取全库订阅。
+    # 默认的「当前用户」过滤只会发给管理员自己，测不出其他订阅者是否可达。
+    subs = await service.repo.list_active(user_id=ALL_USERS)
     sent, failed = await service.deliver(
         subscriptions=subs,
         vapid=keys,

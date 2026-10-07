@@ -28,6 +28,12 @@ class AnalysisRecord(Base):
     signal: Mapped[str] = mapped_column(String(16), comment="方向信号 bullish/bearish/neutral")
     factors_detail: Mapped[str] = mapped_column(Text, comment="各因子明细 JSON 字符串")
 
+    # ⚠ V0.80.0 数据隔离（任务 #159 第 2 批）：归属用户。
+    # 此前本表**无 user_id** ⇒ 多用户启用后，一个用户能看到/改另一个用户的打分。
+    # 取值 LEGACY_USER_ID(=1) 是单用户模式的既有语义，与 positions/accounts 一致。
+    user_id: Mapped[int] = mapped_column(
+        Integer, default=1, index=True, comment="归属用户 users.id（V0.75.2 加列）"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

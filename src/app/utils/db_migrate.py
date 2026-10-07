@@ -23,6 +23,13 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         # V0.79.0 任务 #163：行情来源标记（历史行 NULL = 未标记，不可当作 live）
         ("data_source", "VARCHAR(16)", "NULL"),
     ],
+    # V0.80.0 任务 #159 第 2 批：另两张用户数据表加 user_id
+    "analysis_records": [
+        ("user_id", "INTEGER", "1"),
+    ],
+    "push_subscriptions": [
+        ("user_id", "INTEGER", "1"),
+    ],
     "positions": [
         ("deleted_at", "DATETIME", "NULL"),
         # V0.62.0 单用户多账本：老库经此路径升级时补列并归入默认账本（id=1）
@@ -32,6 +39,8 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         # V0.65.0 每日 3 次打分机会：老库补槽位序号与打分时刻
         ("slot", "INTEGER", "1"),
         ("scored_at", "DATETIME", "NULL"),
+        # V0.80.0 任务 #159 第 2 批：数据隔离（归属用户，存量归 LEGACY_USER_ID=1）
+        ("user_id", "INTEGER", "1"),
         # V0.66.0 研判复盘：结构化研判依据 + 事后批注 + 补录标记
         ("basis", "TEXT", "''"),
         ("review_note", "TEXT", "''"),
@@ -48,9 +57,16 @@ INDEX_MIGRATIONS: dict[str, list[str]] = {
 
 # 复合唯一索引：表名 -> [(索引名, [列...])]
 UNIQUE_INDEX_MIGRATIONS: dict[str, list[tuple[str, list[str]]]] = {
-    # V0.65.0：每日由「一条」放宽为「最多 3 条（按 slot 区分）」
-    "news_scores": [("uq_news_scores_date_slot", ["score_date", "slot"])],
+    # ⚠ V0.80.0 数据隔离：键从 ``(score_date, slot)`` 扩为
+    # ``(user_id, score_date, slot)`` —— 改前两个用户同日同槽位无法共存。
+    "news_scores": [("uq_news_scores_user_date_slot", ["user_id", "score_date", "slot"])],
 }
+
+# ⚠ V0.80.0：随唯一键变更作废的历史唯一索引（旧名，迁移时需删除）。
+LEGACY_UNIQUE_INDEX_DROPS: list[tuple[str, str]] = [
+    # V0.65.0 建的旧键（score_date, slot）
+    ("news_scores", "uq_news_scores_date_slot"),
+]
 
 # 历史遗留索引：V0.65.0 起同一 score_date 允许多条记录，
 # 旧的 score_date 唯一索引必须移除，否则第 2/3 次打分写入会被拒。
@@ -106,6 +122,17 @@ async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
         # 移除历史遗留索引（V0.65.0：news_scores 的 score_date 唯一索引须放开）
         for legacy in LEGACY_INDEX_DROPS:
             await conn.execute(text(f"DROP INDEX IF EXISTS {legacy}"))
+
+        # ⚠ V0.80.0：先删「因唯一键变更而作废」的历史唯一索引。
+        # ⚠ **顺序很关键**：news_scores 的旧键是 (score_date, slot)，若不先删掉，
+        # 它会**继续阻止**两个用户同日同槽位共存（新建的新键虽已是三元组，
+        # 但旧键仍在生效）⇒ 数据隔离形同虚设。
+        for table, name in LEGACY_UNIQUE_INDEX_DROPS:
+            try:
+                await conn.execute(text(f"DROP INDEX IF EXISTS {name}"))
+                logger.info("sqlite legacy unique index dropped: %s (on %s)", name, table)
+            except Exception as exc:
+                logger.warning("sqlite legacy unique index drop failed: %s (%s)", name, exc)
 
         # 复合唯一索引（幂等；存量数据冲突时降级为告警，不阻断启动）
         for table, entries in UNIQUE_INDEX_MIGRATIONS.items():
