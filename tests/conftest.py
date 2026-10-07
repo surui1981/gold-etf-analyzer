@@ -28,6 +28,7 @@ async def _reset_db() -> None:
     # 解决策略：直接 ``_BACKGROUND_TASKS.clear()``（悬挂 task GC 时自然销毁），
     # DB 锁风险靠 fixture 末尾 ``await asyncio.sleep(0)`` 让出事件循环解决。
     from app.services.background import _BACKGROUND_TASKS
+
     _BACKGROUND_TASKS.clear()
 
     from app.repositories import market_data
