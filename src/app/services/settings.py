@@ -104,6 +104,14 @@ class WeightService:
         w = (await self.get_weights()).combine
         return w.tech, w.macro, w.news
 
+    async def group_combine(self) -> bool:
+        """技术面 5 维度是否按组内平均合成（V0.79.0 Step F）。
+
+        True（默认）：trend / overbought / risk 3 组组内先平均，再按 GROUP_WEIGHTS 加权；
+        False：保持单维度加权（历史行为，向后兼容）。
+        """
+        return (await self.get_weights()).group_combine
+
 
 def _migrate_legacy(raw: str) -> WeightConfig | None:
     """迁移旧版权重配置（合成权重缺 news 时按余额补全）。"""

@@ -450,9 +450,14 @@ class TrendService:
         if self._settings is not None:
             tech_weights = await self._settings.trend_weights()
             tech_w, macro_w, news_w = await self._settings.combine_weights()
+            # V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权）
+            use_group_combine = await self._settings.group_combine()
+            weights_meta = {"group_combine": use_group_combine}
         else:
             tech_weights = TREND_WEIGHTS
             tech_w, macro_w, news_w = TECH_WEIGHT, MACRO_WEIGHT, NEWS_WEIGHT
+            # 无 settings（fallback）保持组内平均默认（与 WeightConfig 默认一致）
+            weights_meta = {"group_combine": True}
 
         # V0.64.0：W/M 模式 indicators 旁路（指标对日 K 敏感）
         # ``tech_note``：技术面「不可用 / 不适用」对**外**的披露（None = 技术面正常参与）。
@@ -461,7 +466,8 @@ class TrendService:
         tech_note: str | None = None
         if interval == "D":
             indicators, tech_index = self._build_index(
-                closes, highs, ma20, ma40, tech_weights, unit=unit
+                closes, highs, ma20, ma40, tech_weights, unit=unit,
+                weights_meta=weights_meta,
             )
         else:
             # W/M 模式技术面旁路：5 维度的打分标定按「日 K 的 ±5% 量级」设计，聚合到

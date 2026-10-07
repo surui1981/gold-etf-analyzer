@@ -57,3 +57,9 @@ class WeightConfig(BaseModel):
     trend: TrendWeightConfig = Field(default_factory=TrendWeightConfig)
     macro: MacroWeightConfig = Field(default_factory=MacroWeightConfig)
     combine: CombineWeightConfig = Field(default_factory=CombineWeightConfig)
+    # V0.79.0 Step F：技术面 5 维度合成方式开关。True=组内平均（默认；降低内部相关性），
+    # False=单维度加权（历史行为，向后兼容）。不影响宏观/消息面合成。
+    group_combine: bool = Field(
+        True,
+        description="技术面 5 维度是否按组内平均合成（V0.79.0 Step F，默认开启）",
+    )

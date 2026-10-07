@@ -635,3 +635,70 @@ async def test_build_index_grouped_sum_contribution_equals_tech_index() -> None:
     assert tech_sum == pytest.approx(result.index.components["tech"], abs=0.05)
     # 有效合成权重 Σ = 1.0（与单维度加权路径一致）
     assert sum(i.weight for i in valid) == pytest.approx(1.0, abs=1e-9)
+
+
+# ───────────────────── Step F Commit 2 · settings 集成 ─────────────────────
+
+
+class FakeWeightService:
+    """假 WeightService：仅暴露本测试所需的 trend_weights / combine_weights / group_combine。
+
+    其余 WeightService 方法在本测试中不被调用，无需实现。
+    """
+
+    def __init__(self, *, group_combine: bool = True) -> None:
+        self._gc = group_combine
+
+    async def trend_weights(self) -> dict[str, float]:
+        return dict(TREND_WEIGHTS)
+
+    async def combine_weights(self) -> tuple[float, float, float]:
+        return (0.30, 0.40, 0.30)
+
+    async def group_combine(self) -> bool:
+        return self._gc
+
+
+async def test_settings_group_combine_true_routes_to_grouped_path() -> None:
+    """Step F Commit 2：settings.group_combine=True → _build_index 走组内平均分支。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    service = TrendService(
+        FakeRepo(_mk_klines(closes)),
+        macro=FakeMacro(),
+        settings=FakeWeightService(group_combine=True),
+    )
+    result = await service.analyze(days=60)
+    assert result.tech_composed_by == "grouped"
+
+
+async def test_settings_group_combine_false_routes_to_weighted_path() -> None:
+    """Step F Commit 2：settings.group_combine=False → _build_index 走单维度加权分支。
+
+    这是 Step F 的回滚通道：把配置改为 group_combine=false 立即恢复历史行为，
+    不需要改代码或重启（除权重缓存 TTL 60s 外）。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    service = TrendService(
+        FakeRepo(_mk_klines(closes)),
+        macro=FakeMacro(),
+        settings=FakeWeightService(group_combine=False),
+    )
+    result = await service.analyze(days=60)
+    assert result.tech_composed_by == "weighted"
+
+
+async def test_settings_none_falls_back_to_grouped_default() -> None:
+    """Step F Commit 2：未注入 settings（_settings is None）→ 默认走组内平均分支。
+
+    与 WeightConfig 默认 True 保持一致，避免「settings 默认 True + fallback 默认 False」
+    出现行为分歧。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    # 不传 settings（None）→ 走 fallback 路径
+    service = TrendService(
+        FakeRepo(_mk_klines(closes)),
+        macro=FakeMacro(),
+        settings=None,
+    )
+    result = await service.analyze(days=60)
+    assert result.tech_composed_by == "grouped"
