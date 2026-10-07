@@ -419,6 +419,7 @@ def _gold_to_silver(gold: GoldTrendOut) -> SilverTrendOut:
         ),
         indicators=gold.indicators,
         index=gold.index,
+        tech_composed_by=gold.tech_composed_by,
         macro=gold.macro,
         news=gold.news,
         data_sources=gold.data_sources,

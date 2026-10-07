@@ -40,7 +40,9 @@ async def test_journal_and_stats_empty(client: AsyncClient) -> None:
     body = s.json()
     assert body["evaluated"] == 0
     assert body["hit_rate"] is None
-    assert body["sample_warning"] is True
+    # V0.79.0 Step H：sample_warning 升级为 Optional[str]（服务端填提示文案）
+    assert isinstance(body["sample_warning"], str)
+    assert "10 天" in body["sample_warning"]
     assert len(body["calibration"]) == 5
 
 

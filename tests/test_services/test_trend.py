@@ -7,7 +7,13 @@ import pytest
 from app.repositories.market_data import GoldKline
 from app.schemas.common import DirectionSignal
 from app.schemas.market import MacroIndexOut, TrendDirection, TrendIndexLevel
-from app.services.trend import TREND_WEIGHTS, TrendService, moving_average
+from app.services.trend import (
+    GROUP_MAPPING,
+    GROUP_WEIGHTS,
+    TREND_WEIGHTS,
+    TrendService,
+    moving_average,
+)
 
 
 class FakeMacro:
@@ -421,7 +427,13 @@ async def test_trend_dim_reason_populated() -> None:
 
 
 async def test_trend_combined_re_normalize_when_partial() -> None:
-    """部分维度缺失：权重按 Σ有效配置权重 归一化，且 Σcontribution == 技术面指数。"""
+    """部分维度缺失：权重按 Σ有效组权重 归一化，且 Σcontribution == 技术面指数。
+
+    V0.79.0 Step F：组内平均模式 —— dim 的 ``weight`` 现在是「有效合成权重」，
+    合计 = 1.0（不是原始 per-dim 配置权重 0.20+0.15+0.15=0.5）；contribution
+    = weight × group_score（**不是**了 score × weight），因为同组内 dim 共享
+    同一 group_score。``Σcontribution`` 仍恒等于 ``tech_index.score`` 不变式。
+    """
     closes = [round(100 + i * 0.5, 3) for i in range(20)]
     result = await _service(_mk_klines(closes)).analyze(days=20)
 
@@ -430,10 +442,11 @@ async def test_trend_combined_re_normalize_when_partial() -> None:
     tech_sum = sum(i.contribution for i in valid)
     assert tech_sum == pytest.approx(result.index.components["tech"], abs=0.05)
 
+    # V0.79.0 Step F：有效合成权重归一化为 1.0（不再 = 0.5）
     cfg_sum = sum(i.weight for i in valid)
-    assert cfg_sum == pytest.approx(0.5, abs=1e-9)  # 0.20 + 0.15 + 0.15
-    for i in valid:
-        assert i.contribution == pytest.approx(i.score * i.weight / cfg_sum, abs=0.05)
+    assert cfg_sum == pytest.approx(1.0, abs=1e-9)
+    # 仍然验证 Σcontribution 不变式（per-dim contribution 不再 = score × weight，
+    # 因为同组 dim 共享同一 group_score —— 这是组内平均的本质）
 
 
 async def test_combined_summary_notes_excluded_dims() -> None:
@@ -497,3 +510,128 @@ async def test_w_and_m_interval_discloses_neutral_tech_in_summary() -> None:
     assert result.index.components.get("tech") == 50.0
     assert "不适用" in result.index.summary, "W/M 的技术面旁路必须在对外 summary 中说明"
     assert "50" in result.index.summary
+
+
+# =========================================================================
+# V0.79.0 Step F · 组内平均（combine_by_group + TrendIndexOut.composed_by）
+# =========================================================================
+
+
+def test_group_weights_sum_to_one() -> None:
+    """Step F：3 组权重合计 1.0（与旧 TREND_WEIGHTS 维度权重同合计）。"""
+    assert sum(GROUP_WEIGHTS.values()) == pytest.approx(1.0, abs=1e-9)
+    assert set(GROUP_WEIGHTS) == {"trend", "overbought", "risk"}
+
+
+def test_group_mapping_covers_all_5_dims() -> None:
+    """Step F：GROUP_MAPPING 必须覆盖 TREND_WEIGHTS 全部 5 个维度。"""
+    assert set(GROUP_MAPPING) == set(TREND_WEIGHTS)
+    # 每组至少 1 个维度（不允许出现空组）
+    for g in GROUP_WEIGHTS:
+        dims_in = [n for n, mapped in GROUP_MAPPING.items() if mapped == g]
+        assert len(dims_in) >= 1, f"空组 {g!r}"
+
+
+def test_combine_by_group_full_valid() -> None:
+    """5 维度都给分：组内平均后加权合成。
+
+    给分：结构 60、动量 70 → 趋势组 65.0
+         支撑 50、动能 50 → 超买组 50.0
+         回撤 80 → 风险组 80.0
+    预期 tech_index = 65×0.50 + 50×0.30 + 80×0.20 = 32.5 + 15 + 16 = 63.5
+    """
+    group_scores, weights_norm = TrendService.combine_by_group(
+        {"结构": 60.0, "动量": 70.0, "支撑": 50.0, "动能": 50.0, "回撤": 80.0}
+    )
+    assert group_scores == {"trend": 65.0, "overbought": 50.0, "risk": 80.0}
+    assert weights_norm == {"trend": 0.5, "overbought": 0.3, "risk": 0.2}
+
+
+def test_combine_by_group_one_dim_missing_in_2dim_group() -> None:
+    """2 维组中 1 个缺失：组内只剩 1 个，不强制 50 兜底。"""
+    # 支撑缺失 → 超买组 = (动能)/1 = 单 dim；trend/risk 完整
+    group_scores, weights_norm = TrendService.combine_by_group(
+        {"结构": 60.0, "动量": 70.0, "支撑": None, "动能": 50.0, "回撤": 80.0}
+    )
+    assert group_scores["trend"] == 65.0
+    assert group_scores["overbought"] == 50.0  # 只有动能
+    assert group_scores["risk"] == 80.0
+    # 3 组都有效 → 权重不重分配（仍 = GROUP_WEIGHTS）
+    assert weights_norm == {"trend": 0.5, "overbought": 0.3, "risk": 0.2}
+
+
+def test_combine_by_group_whole_group_missing() -> None:
+    """整组（趋势组 2 维都 None）：该组从 weights_norm 中剔除，剩余组权重按 Σ(原权重) 归一化。"""
+    # 趋势组 2 个维度都 None → 该组 score=None
+    # 超买(0.30) + 风险(0.20) 有效 → valid_w_sum = 0.50
+    # weights_norm: 超买 = 0.30/0.50 = 0.6, 风险 = 0.20/0.50 = 0.4
+    group_scores, weights_norm = TrendService.combine_by_group(
+        {"结构": None, "动量": None, "支撑": 50.0, "动能": 50.0, "回撤": 80.0}
+    )
+    assert group_scores["trend"] is None
+    assert group_scores["overbought"] == 50.0
+    assert group_scores["risk"] == 80.0
+    assert weights_norm == {"overbought": 0.6, "risk": 0.4}
+    assert "trend" not in weights_norm
+
+
+def test_combine_by_group_all_missing() -> None:
+    """5 维度都 None：tech_index = None（不引入 50 兜底）。"""
+    group_scores, weights_norm = TrendService.combine_by_group(
+        {"结构": None, "动量": None, "支撑": None, "动能": None, "回撤": None}
+    )
+    assert all(s is None for s in group_scores.values())
+    assert weights_norm == {}
+
+
+async def test_build_index_grouped_sets_composed_by() -> None:
+    """Step F：_build_index 走组内平均分支时，GoldTrendOut.tech_composed_by = "grouped"。
+
+    V0.79.0 Step F：composed_by 只对技术面有意义（不是综合指数的属性），
+    故放在 GoldTrendOut.tech_composed_by 顶层。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=60)
+
+    assert result.tech_composed_by == "grouped"
+    # 全维度有效时，组内平均分数在 0-100
+    assert 0 <= result.index.components["tech"] <= 100
+
+
+def test_build_index_weighted_path_sets_composed_by_weighted() -> None:
+    """Step F：group_combine=False 时显式走旧路径，tech_composed_by = "weighted"。"""
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    service = _service(_mk_klines(closes))
+    # 直接调 _build_index 并传 weights_meta={"group_combine": False}
+    indicators, tech_index = service._build_index(
+        closes=closes,
+        highs=closes,
+        ma20=moving_average(closes, 20),
+        ma40=moving_average(closes, 40),
+        weights=None,
+        unit="元",
+        weights_meta={"group_combine": False},
+    )
+    assert tech_index.composed_by == "weighted"
+    assert 0 <= tech_index.score <= 100
+    # 旧路径：Σ(weight) = 1.0（全维度有效）
+    assert sum(i.weight for i in indicators) == pytest.approx(1.0, abs=1e-9)
+
+
+async def test_build_index_grouped_sum_contribution_equals_tech_index() -> None:
+    """Step F：组内平均路径下 Σ(contribution) 仍 == tech_index.score（不变式）。
+
+    tech_index.score 在 GoldTrendOut 里以 ``index.components["tech"]`` 暴露
+    （trend.py:521 components 字典），Σ(contribution) 应该等于它。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(60)]
+    service = _service(_mk_klines(closes))
+    result = await service.analyze(days=60)
+
+    valid = [i for i in result.indicators if i.score is not None]
+    assert len(valid) == 5
+    tech_sum = sum(i.contribution for i in valid)
+    assert tech_sum == pytest.approx(result.index.components["tech"], abs=0.05)
+    # 有效合成权重 Σ = 1.0（与单维度加权路径一致）
+    assert sum(i.weight for i in valid) == pytest.approx(1.0, abs=1e-9)

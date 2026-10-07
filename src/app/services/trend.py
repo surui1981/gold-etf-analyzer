@@ -69,6 +69,25 @@ TREND_WEIGHTS: dict[str, float] = {
     "回撤": 0.15,  # 距区间高点回撤
 }
 
+# V0.79.0 Step F · 组内平均分组
+# 趋势 / 超买 / 风险三组各自组内平均后再加权（合计 1.0），降低 5 维度内部高度相关。
+# - 趋势组：结构 + 动量 → 都围绕「均线 + 价格动量」
+# - 超买组：动能(RSI) + 支撑(乖离) → 都衡量超买/超卖程度
+# - 风险组：回撤 → 距区间高点的回撤（独立信号）
+# 键集合必须覆盖 TREND_WEIGHTS 所有 5 个维度（test_trend.py 断言）。
+GROUP_WEIGHTS: dict[str, float] = {
+    "trend": 0.50,       # 结构 + 动量
+    "overbought": 0.30,  # 动能(RSI) + 支撑(乖离)
+    "risk": 0.20,        # 回撤
+}
+GROUP_MAPPING: dict[str, str] = {
+    "结构": "trend",
+    "动量": "trend",
+    "动能": "overbought",
+    "支撑": "overbought",
+    "回撤": "risk",
+}
+
 # 各维度「最少需要多少根 K 线」—— 低于该值该维度**不可用**，返回 None 而非中性 50
 # （V0.78.0 Step D）。门槛由该维度公式自身的输入需求决定：
 #   结构 40：均线排列需 MA5/MA20/MA40（40 根），MA20 斜率需 6 个 MA20（25 根）→ 取 40；
@@ -570,6 +589,7 @@ class TrendService:
             metrics=metrics,
             indicators=indicators,
             index=final_index,
+            tech_composed_by=tech_index.composed_by,
             macro=macro_index,
             news=news_index,
             data_sources=sources,
@@ -619,6 +639,52 @@ class TrendService:
 
     # ---------------- 追踪指数 ----------------
 
+    @staticmethod
+    def combine_by_group(
+        dims: dict[str, float | None],
+    ) -> tuple[dict[str, float | None], dict[str, float]]:
+        """组内平均合成技术面指数（V0.79.0 Step F）。
+
+        Args:
+            dims: {维度名 → score 或 None}，缺失维度传 None。
+
+        Returns:
+            (group_scores, valid_group_weights_normalized)
+              - group_scores: {组名 → 组内有效维度的均值（保留 2 位小数），
+                              整组缺失时为 None}
+              - weights_norm: {组名 → 重分配后的权重（Σ=1.0）}；整组缺失
+                              时该组不出现在 dict 里（Σ 自动只剩有效组）
+
+        整组缺失策略：保留现有「valid_w 归一化」纪律 —— 该组权重按比例
+        加到剩余组上，不引入 50 兜底（与单维度缺失时行为一致：宁可剔除
+        也别让缺失看起来像「完整判断」）。
+        """
+        groups: dict[str, list[float]] = {g: [] for g in GROUP_WEIGHTS}
+        for name, val in dims.items():
+            if val is None:
+                continue
+            g = GROUP_MAPPING.get(name)
+            if g is None:
+                # 防御：未知维度直接忽略（不抛错；上层会看到 None）
+                continue
+            groups[g].append(val)
+        group_scores: dict[str, float | None] = {
+            g: (round(sum(vs) / len(vs), 2) if vs else None) for g, vs in groups.items()
+        }
+        valid_w_sum = sum(
+            GROUP_WEIGHTS[g] for g, s in group_scores.items() if s is not None
+        )
+        weights_norm: dict[str, float] = (
+            {
+                g: GROUP_WEIGHTS[g] / valid_w_sum
+                for g, s in group_scores.items()
+                if s is not None
+            }
+            if valid_w_sum > 0
+            else {}
+        )
+        return group_scores, weights_norm
+
     def _build_index(
         self,
         closes: list[float],
@@ -627,6 +693,7 @@ class TrendService:
         ma40: list[float | None],
         weights: dict[str, float] | None = None,
         unit: str = "元",
+        weights_meta: dict | None = None,
     ) -> tuple[list[TrendIndicatorOut], TrendIndexOut]:
         """计算 5 个趋势维度并加权合成追踪指数（技术面）。
 
@@ -638,6 +705,12 @@ class TrendService:
         为什么不用中性 50 兜底：50 是一个**判断**（多空平衡），会被当作真实算出来的
         分数计入加权，并进一步喂给共振信号与决策引擎；而「数据不足」本质是**置信度**
         问题。两者对客户的含义完全不同，混用会让「没数据」看起来像「有结论」。
+
+        V0.79.0 Step F：当 ``weights_meta={"group_combine": True}``（默认）时，
+        改为**组内平均**：趋势 / 超买 / 风险 3 组组内先平均，再按
+        ``GROUP_WEIGHTS`` 加权合成。``Σcontribution`` 仍恒等于技术面指数
+        （每 dim 在组内均分其组贡献）。当 ``group_combine=False`` 时维持原
+        单维度加权行为（向后兼容）。
         """
         weights = weights or TREND_WEIGHTS
         now_close = closes[-1]
@@ -721,14 +794,91 @@ class TrendService:
                 detail="回撤控制稳健度",
             )
 
+        # ── V0.79.0 Step F · 合成方式分支 ─────────────────────────────────
+        # weights_meta={"group_combine": True/False}；默认 True（推荐方案 2）。
+        use_group_combine = (weights_meta or {}).get("group_combine", True)
+        dim_scores: dict[str, float | None] = {n: d.score for n, d in dims.items()}
+
+        if use_group_combine:
+            group_scores, weights_norm = self.combine_by_group(dim_scores)
+            # tech_index = Σ(组权重 × 组均值)
+            total_grouped: float | None = (
+                round(
+                    sum(weights_norm[g] * s for g, s in group_scores.items() if s is not None),
+                    2,
+                )
+                if weights_norm
+                else None
+            )
+            # 组内每 dim 均分该组贡献（保持 Σcontribution == tech_index.score）
+            group_size = {
+                g: sum(
+                    1 for n2, dd in dims.items()
+                    if GROUP_MAPPING.get(n2) == g and dd.score is not None
+                )
+                for g in group_scores
+            }
+            indicators: list[TrendIndicatorOut] = []
+            for name, d in dims.items():
+                g = GROUP_MAPPING.get(name)
+                group_score = group_scores.get(g) if g else None
+                n_in_group = group_size.get(g, 0) if g else 0
+                if (
+                    d.score is None
+                    or g is None
+                    or group_score is None
+                    or g not in weights_norm
+                    or n_in_group == 0
+                ):
+                    contribution = None
+                    weight_eff = 0.0
+                else:
+                    # 该 dim 在合成时实际获得的权重 = group_weight / 组内有效维度数
+                    weight_eff = weights_norm[g] / n_in_group
+                    contribution = round(weight_eff * group_score, 2)
+                indicators.append(
+                    TrendIndicatorOut(
+                        name=name,
+                        value=d.value,
+                        score=round(d.score, 1) if d.score is not None else None,
+                        direction=d.direction,
+                        weight=weight_eff,
+                        contribution=contribution,
+                        detail=d.detail,
+                        reason=d.reason,
+                    )
+                )
+            if total_grouped is None:
+                logger.warning("Tech index unavailable: all dims insufficient (bars=%d)", bars)
+                return indicators, TrendIndexOut(
+                    score=None,
+                    level=TrendIndexLevel.SIDEWAYS,
+                    direction=DirectionSignal.NEUTRAL,
+                    summary=(
+                        f"技术面 {len(dims)} 个维度均因数据不足未参与合成"
+                        f"（当前仅 {bars} 个交易日，单项最少需 {max(DIM_MIN_BARS.values())} 个）"
+                        "→ 技术面指数不可用，综合指数已剔除技术面并按剩余面权重归一化"
+                    ),
+                    composed_by="grouped",
+                )
+            total_grouped = round(total_grouped, 1)
+            level, level_dir = self._to_level(total_grouped)
+            return indicators, TrendIndexOut(
+                score=total_grouped,
+                level=level,
+                direction=level_dir,
+                summary=self._index_summary(total_grouped, level, now_close, unit),
+                composed_by="grouped",
+            )
+
+        # ── 旧路径：单维度加权（V0.78.0 Step D 行为）────────────────────
         # 加权合成：仅有效维度参与，权重按 Σ有效权重 归一化
-        # （全维度有效时 Σ有效权重 恰为 1.0 → 与旧实现逐位相同，测试有回归断言）
         valid_w = sum(
             weights.get(name, TREND_WEIGHTS[name])
             for name, d in dims.items()
             if d.score is not None
         )
-        indicators: list[TrendIndicatorOut] = []
+        indicators = []
         total: float | None = 0.0 if valid_w > 0 else None
         for name, d in dims.items():
             weight = weights.get(name, TREND_WEIGHTS[name])
@@ -763,6 +913,7 @@ class TrendService:
                     f"（当前仅 {bars} 个交易日，单项最少需 {max(DIM_MIN_BARS.values())} 个）"
                     "→ 技术面指数不可用，综合指数已剔除技术面并按剩余面权重归一化"
                 ),
+                composed_by="weighted",
             )
 
         total = round(total, 1)
@@ -772,6 +923,7 @@ class TrendService:
             level=level,
             direction=level_dir,
             summary=self._index_summary(total, level, now_close, unit),
+            composed_by="weighted",
         )
 
     @staticmethod

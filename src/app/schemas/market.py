@@ -133,6 +133,13 @@ class TrendIndexOut(BaseModel):
     技术面指数不可用（原先写死 50，会把「没有数据」伪装成「多空平衡」）。
     对外返回的综合指数在可达路径上恒为数值：技术面不可用时剔除该面、按剩余面
     权重归一化（见 ``TrendService._analyze_uncached``）。
+
+    V0.79.0 Step F：``composed_by`` 标识技术面合成方式——
+    - ``"weighted"``：单维度加权平均（历史；TREND_WEIGHTS 直接 Σ(score×weight)）
+    - ``"grouped"``：组内平均（趋势/超买/风险 3 组组内分别平均，再加权合成）
+
+    旧 client 用 Pydantic v2 默认 ``extra="ignore"`` 解析新 response 不报错，
+    新字段不影响旧字段语义。
     """
 
     score: float | None = Field(
@@ -144,6 +151,13 @@ class TrendIndexOut(BaseModel):
     components: dict[str, float] = Field(
         default_factory=dict,
         description="各面分值 components: tech / macro / news（供权重调整实时预览）",
+    )
+    composed_by: Literal["weighted", "grouped"] = Field(
+        "weighted",
+        description=(
+            "V0.79.0 Step F：技术面合成方式；"
+            "weighted=单维度加权平均（历史），grouped=组内平均"
+        ),
     )
 
 
@@ -246,6 +260,13 @@ class GoldTrendOut(BaseModel):
     metrics: GoldTrendMetrics
     indicators: list[TrendIndicatorOut] = Field(..., description="趋势参数明细（技术面）")
     index: TrendIndexOut = Field(..., description="综合趋势评估指数（技术+宏观+消息面）")
+    tech_composed_by: Literal["weighted", "grouped"] = Field(
+        "weighted",
+        description=(
+            "V0.79.0 Step F：技术面合成方式；"
+            "weighted=单维度加权平均（历史），grouped=组内平均"
+        ),
+    )
     macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
     news: NewsIndexOut = Field(..., description="消息面指数（客户评估）")
     data_sources: dict[str, str] = Field(
@@ -398,6 +419,13 @@ class SilverTrendOut(BaseModel):
     metrics: SilverTrendMetrics
     indicators: list[TrendIndicatorOut]
     index: TrendIndexOut
+    tech_composed_by: Literal["weighted", "grouped"] = Field(
+        "weighted",
+        description=(
+            "V0.79.0 Step F：技术面合成方式；"
+            "weighted=单维度加权平均（历史），grouped=组内平均"
+        ),
+    )
     macro: MacroIndexOut
     news: NewsIndexOut
     data_sources: dict[str, str] = Field(default_factory=dict)
