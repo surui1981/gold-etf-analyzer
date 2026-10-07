@@ -4,7 +4,7 @@
 
 | | |
 |---|---|
-| **当前版本** | **V0.79.0**（2026-10-07）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **当前版本** | **V0.80.0**（2026-10-07）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
 | **测试基线** | **986 用例**（67 个测试模块）· 离线口径 **942 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 986 collected |
 | **页面** | 13 个静态页 · 67 个 REST 路径（76 个端点） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
