@@ -1002,4 +1002,7 @@ window.PM_I18N_en_US = {
   "admin.pwd_title": "Reset Password",
   "admin.err_generic": "Operation failed",
   "admin.menu_entry": "User Management",
+  /* V0.81.1 admin token missing banner */
+  "admin_token.missing": "Admin token not set in this browser. All write operations are rejected.",
+  "admin_token.go_settings": "Open Settings",
 };

@@ -754,4 +754,7 @@ window.PM_I18N_zh_TW = {
   "admin.pwd_title": "重設密碼",
   "admin.err_generic": "操作失敗",
   "admin.menu_entry": "使用者管理",
+  /* V0.81.1 管理員令牌缺失提示橫幅 */
+  "admin_token.missing": "目前瀏覽器未設定管理員令牌，所有寫入操作將被拒絕",
+  "admin_token.go_settings": "前往設定",
 };

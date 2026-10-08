@@ -1002,4 +1002,7 @@ window.PM_I18N_ZH_CN = {
   "admin.pwd_title": "重置密码",
   "admin.err_generic": "操作失败",
   "admin.menu_entry": "用户管理",
+  /* V0.81.1 admin token 缺失提示横幅 */
+  "admin_token.missing": "当前浏览器未设置管理员令牌，所有写操作被拒绝",
+  "admin_token.go_settings": "去设置",
 };

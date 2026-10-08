@@ -22,6 +22,9 @@
  *    读 ``pm_admin_token``（与 settings.js 共用 key），自动附加。
  *    ⇒ news.html / portfolio.html / weights.html 等几十处裸 fetch
  *    **完全不用改**就能在 prod 下工作。
+ * 2.5 **V0.81.1 admin token 缺失提示横幅**：401 + ``detail="admin token required"``
+ *    时弹顶部横幅引导用户去设置页（避免 LAN 跨 origin 用户踩同一坑）。
+ *    每个 session 只弹一次（sessionStorage 标记）。
  * 3. **AUTH_ENABLED=false 时零副作用**：不注入任何 UI、不做跳转、
  *    不修改 fetch 行为（仍打补丁，但读不到 csrf cookie 时不加头），
  *    保证单用户模式与 V0.74.3 观感完全一致。
@@ -43,6 +46,8 @@
   var ADMIN_TOKEN_KEY = "pm_admin_token";  // V0.80.1：与 settings.js 共用 localStorage key
   var ADMIN_TOKEN_HEADER = "X-Admin-Token";
   var WRITE_METHODS = { POST: 1, PUT: 1, PATCH: 1, DELETE: 1 };
+  // V0.81.1：admin token 缺失横幅 —— sessionStorage 标记防止重复弹
+  var ADMIN_TOKEN_HINT_FLAG = "pm_admin_token_hint_shown";
 
   var state = {
     loaded: false,
@@ -80,6 +85,78 @@
     } catch (e) {
       return "";  // Safari 隐私模式 / cookie 禁用 → 视为未设
     }
+  }
+
+  /* ─────────────── admin token 缺失提示横幅（V0.81.1） ─────────────── */
+
+  var ADMIN_HINT_CSS = [
+    ".pm-admin-hint { position: fixed; top: 0; left: 0; right: 0; z-index: 9999;",
+    "  display: flex; align-items: center; gap: 12px; padding: 12px 18px;",
+    "  background: linear-gradient(90deg, #fff7e0 0%, #ffe9b8 100%);",
+    "  color: #5b4500; border-bottom: 2px solid #f0b429;",
+    "  box-shadow: 0 4px 16px rgba(0,0,0,.12);",
+    "  font-family: inherit; font-size: 13.5px; line-height: 1.4;",
+    "  animation: pmAdminHintSlide .35s ease-out; }",
+    "@keyframes pmAdminHintSlide { from { transform: translateY(-100%); } to { transform: translateY(0); } }",
+    ".pm-admin-hint-icon { font-size: 18px; flex-shrink: 0; }",
+    ".pm-admin-hint-msg { flex: 1; min-width: 0; }",
+    ".pm-admin-hint-btn { display: inline-block; padding: 6px 14px; border-radius: 6px;",
+    "  background: #f0b429; color: #1f1d18; font-weight: 600; text-decoration: none;",
+    "  border: 1px solid #d49a1c; cursor: pointer; flex-shrink: 0; font-size: 13px; }",
+    ".pm-admin-hint-btn:hover { background: #e0a616; }",
+    ".pm-admin-hint-close { background: transparent; border: 0; color: #5b4500;",
+    "  font-size: 20px; line-height: 1; cursor: pointer; padding: 0 4px; flex-shrink: 0;",
+    "  opacity: .6; }",
+    ".pm-admin-hint-close:hover { opacity: 1; }",
+    "@media (max-width: 640px) { .pm-admin-hint { font-size: 12.5px; padding: 10px 12px; gap: 8px; }",
+    "  .pm-admin-hint-btn { padding: 5px 10px; } }"
+  ].join("\n");
+
+  function injectAdminHintStyle() {
+    if (document.getElementById("pmAdminHintStyle")) return;
+    var el = document.createElement("style");
+    el.id = "pmAdminHintStyle";
+    el.textContent = ADMIN_HINT_CSS;
+    document.head.appendChild(el);
+  }
+
+  // V0.81.1：401 + "admin token required" 时弹出顶部横幅，引导用户去设置页
+  // sessionStorage 标记每个会话只弹一次（避免反复 401 时刷屏）
+  function showAdminTokenRequiredHint() {
+    try {
+      if (sessionStorage.getItem(ADMIN_TOKEN_HINT_FLAG)) return;
+      sessionStorage.setItem(ADMIN_TOKEN_HINT_FLAG, "1");
+    } catch (e) { /* 隐私模式 → 不阻止弹 */ }
+    if (document.getElementById("pmAdminTokenHint")) return;
+
+    injectAdminHintStyle();
+
+    // 设置页 URL：与 LAN nginx /static/ location 对齐（不论 /gold/ 还是 /static/ 入口都能找到）
+    var settingsUrl = (location.pathname.indexOf("/gold/") !== -1 ? "/gold/" : "/") + "static/settings.html";
+
+    var banner = document.createElement("div");
+    banner.id = "pmAdminTokenHint";
+    banner.className = "pm-admin-hint";
+    banner.setAttribute("role", "alert");
+    banner.innerHTML =
+      '<span class="pm-admin-hint-icon" aria-hidden="true">🔑</span>' +
+      '<span class="pm-admin-hint-msg"></span>' +
+      '<a class="pm-admin-hint-btn" href="' + settingsUrl + '"></a>' +
+      '<button type="button" class="pm-admin-hint-close" aria-label="close" title="关闭">×</button>';
+
+    banner.querySelector(".pm-admin-hint-msg").textContent = t(
+      "admin_token.missing",
+      "当前浏览器未设置管理员令牌，所有写操作被拒绝"
+    );
+    banner.querySelector(".pm-admin-hint-btn").textContent = t(
+      "admin_token.go_settings",
+      "去设置"
+    );
+    banner.querySelector(".pm-admin-hint-close").addEventListener("click", function () {
+      banner.remove();
+    });
+
+    document.body.appendChild(banner);
   }
 
   function isLoginPage() {
@@ -149,11 +226,23 @@
 
     init.credentials = init.credentials || "same-origin";
 
-    return nativeFetch(input, init).then(function (resp) {
+    return nativeFetch(input, init).then(async function (resp) {
       // 会话过期 / 未登录：跳登录页并记住来路（登录后原路返回）
       if (resp.status === 401 && state.authEnabled && !isLoginPage()) {
         var next = encodeURIComponent(location.pathname + location.search);
         location.replace(LOGIN_PAGE + "?next=" + next);
+      }
+      // V0.81.1：admin token 缺失提示横幅
+      // 后端 admin_auth.py:55 返回 401 + detail="admin token required" → 弹横幅引导去设置页
+      // 用 clone() 读 body 不影响调用方 resp.json()
+      if (resp.status === 401 && !isLoginPage()) {
+        try {
+          var peek = resp.clone();
+          var body = await peek.json();
+          if (body && body.detail === "admin token required") {
+            showAdminTokenRequiredHint();
+          }
+        } catch (e) { /* 不是 JSON 或 body 为空，跳过 */ }
       }
       return resp;
     });
