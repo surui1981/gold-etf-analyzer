@@ -729,6 +729,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.79.2 | 12 月中 | 测试扩充（覆盖率从 0 起步建基线，**目标 ≥ 60%**） |
 | V0.80.1 | ✅ 2026-10-08（**提前**） | Bugfix：prod 写端点自动附加 `X-Admin-Token`（`auth.js` 全局 fetch 打补丁）。原排期 2027-02 |
 | V0.81.1 | ✅ 2026-10-08（**同日第二个补丁版**） | Bugfix：admin token 缺失提示横幅（401 + `admin token required` 时引导去设置页，每会话一次）。**提前于任何排期** —— 是 V0.80.1 的直接后遗症。见 `docs/releases/v0.81.1.md` |
+| V0.82.0 | ✅ 2026-10-09（**提前于 2027-04 排期**） | LAN 多终端 admin token 修：双通道（header + cookie）+ 单用户模式 `AUTH_ENABLED=false` 整体豁免；settings 页「设置 Session」按钮一次配置整浏览器生命周期有效。含中间件测试隔离修复（`f46838b`）。**重大语义调整**：原本 V0.82 规划是「多市场独立校准」，改为优先解决 LAN 真实痛点（多终端写操作被 401）；多市场 K 顺延至 V0.83+。见 `docs/releases/v0.82.0.md` |
 
 **维护任务清单**（每小版本至少 1 项）：
 - [ ] `ruff check` 警告清零
