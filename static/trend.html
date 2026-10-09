@@ -99,7 +99,10 @@
   .warn-footer > summary { list-style: none; cursor: pointer; padding: 12px 18px;
     color: #f5d97a; font-weight: 700; font-size: 13.5px; letter-spacing: .5px;
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    user-select: none; }
+    user-select: none;
+    /* V0.83 C1 · a11y: 触控目标 ≥44×44 CSS 像素（WCAG 2.5.5 / Apple HIG）*/
+    min-height: 44px;
+    box-sizing: border-box; }
   .warn-footer > summary::-webkit-details-marker { display: none; }
   .warn-footer > summary::after { content: "▾"; font-size: 14px; opacity: .6;
     transition: transform .2s; }
@@ -239,8 +242,8 @@
         <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
       </ol>
       <label class="warn-dismiss">
-        <input type="checkbox" data-warn-dismiss>
-        <span data-i18n="warn.dismiss_session">本次会话不再展开</span>
+        <input type="checkbox" data-warn-dismiss aria-describedby="warnDismissHint">
+        <span id="warnDismissHint" data-i18n="warn.dismiss_session">本次会话不再展开</span>
       </label>
     </div>
   </details>

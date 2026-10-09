@@ -119,6 +119,14 @@
 [data-theme="hc"] .warn-banner li { color: #ffffff; }
 [data-theme="hc"] .warn-banner li b { color: #ffff00; }
 
+/* V0.83 C1 · warn-footer（<details> 折叠警示）HC 模式覆盖 —— 与 warn-banner 保持视觉一致 */
+[data-theme="hc"] .warn-footer { background: #000000; border-left-color: #ffff00; }
+[data-theme="hc"] .warn-footer > summary { color: #ffff00; }
+[data-theme="hc"] .warn-footer li b { color: #ffff00; }
+[data-theme="hc"] .warn-footer li { color: #ffffff; }
+/* V0.83 C1 · 顶 nav 警示按钮 HC 覆盖（特异性需 ≥ .topnav .topnav-meta .nav-warn-toggle） */
+[data-theme="hc"] .topnav .topnav-meta .nav-warn-toggle { background: #000000; color: #ffff00; border-color: #ffff00; }
+
 [data-theme] .topnav a.active { color: #ffffff; }  /* WCAG: accent bg + 白字 ~6.5:1 */
 [data-theme="hc"] .topnav a.active { color: #000000; background: #ffff00; }
 

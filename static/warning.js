@@ -68,6 +68,11 @@
     // 「本次会话不再展开」勾选
     if (dismiss) {
       dismiss.checked = dismissed;
+      // V0.83 C1 · a11y：把 hint span 与 checkbox 关联，让屏幕阅读器在聚焦时朗读「本次会话不再展开」
+      if (!dismiss.hasAttribute("aria-describedby")) {
+        var hint = document.getElementById("warnDismissHint");
+        if (hint) dismiss.setAttribute("aria-describedby", "warnDismissHint");
+      }
       dismiss.addEventListener("change", function () {
         try {
           if (dismiss.checked) {
