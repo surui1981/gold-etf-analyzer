@@ -1005,6 +1005,9 @@ window.PM_I18N_ZH_CN = {
   /* V0.81.1 admin token 缺失提示横幅 */
   "admin_token.missing": "当前浏览器未设置管理员令牌，所有写操作被拒绝",
   "admin_token.go_settings": "去设置",
+  /* V0.83：投资警示 disclosure 双向 toggle + sessionStorage 记忆 */
+  "warn.collapse_toggle": "⚠️ 投资警示",
+  "warn.dismiss_session": "本次会话不再展开",
   /* V0.82 commit 4：admin session cookie UI（settings 页「设置 Session」按钮等） */
   "settings.section_session_sub": "—— 或使用 Session Cookie ——",
   "settings.section_session_desc": "在多终端 LAN 场景下，<strong>HttpOnly cookie</strong> 比 localStorage 更省心：浏览器所有同源标签页 / 重新打开都自动带上，无需逐台机再设。提交后会设 30 天有效；后端用 HMAC-SHA256 签名校验，不存表。",

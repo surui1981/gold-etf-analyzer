@@ -41,7 +41,25 @@
     /* V0.69.0 WCAG AA: dim 角标 fg 与 muted 对齐，bg 同时提亮以保证 4.5:1 */
     ".fsh-dim { background:#e9ecef; color:var(--muted,#5b6470); border-color:#ced4da; }",
     ".fsh-alert { font-weight:700; }",
-    ".fresh-bar.fsh-error { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }"
+    ".fresh-bar.fsh-error { background:#ffe9e9; color:#c92a2a; border-color:#ffc9c9; }",
+    /* V0.83：topnav 内嵌版 —— 暗底上要重写 chip 配色 + 收紧容器尺寸 */
+    ".fresh-inline { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px;",
+    "  font-size:11.5px; line-height:1.6; width:100%; }",
+    ".fresh-inline .fsh-title { font-weight:600; color:#f5d97a; letter-spacing:.5px; }",
+    ".fresh-inline .fsh-chip { display:inline-flex; align-items:center; gap:5px; white-space:nowrap;",
+    "  padding:1px 9px; border-radius:20px; border:1px solid rgba(255,255,255,.12);",
+    "  background:rgba(255,255,255,.06); color:#d6d9dd; }",
+    ".fresh-inline .fsh-name { font-weight:600; color:#f5d97a; }",
+    ".fresh-inline .fsh-sep { opacity:.35; }",
+    ".fresh-inline .fsh-meta { color:#9aa3ad; font-size:11px; }",
+    /* 暗底上的 5 档语义色：用半透明 + 高对比文字 */
+    ".fresh-inline .fsh-ok { background:rgba(26,127,55,.18); color:#7ee2a3; border-color:rgba(126,226,163,.35); }",
+    ".fresh-inline .fsh-delay { background:rgba(154,103,0,.20); color:#ffd58a; border-color:rgba(255,213,138,.35); }",
+    ".fresh-inline .fsh-warn { background:rgba(179,83,9,.20); color:#ffb98a; border-color:rgba(255,185,138,.35); }",
+    ".fresh-inline .fsh-bad { background:rgba(201,42,42,.22); color:#ff9b9b; border-color:rgba(255,155,155,.40); }",
+    ".fresh-inline .fsh-dim { background:rgba(255,255,255,.04); color:#9aa3ad; border-color:rgba(255,255,255,.10); }",
+    ".fresh-inline .fsh-alert { font-weight:700; }",
+    ".fresh-inline.fsh-error { background:rgba(201,42,42,.18); color:#ff9b9b; border:1px solid rgba(255,155,155,.35); padding:4px 10px; border-radius:8px; }"
   ].join("\n");
 
   // V0.73.0 N+9: i18n helpers — 安全降级到原始字符串（i18n.js 尚未加载时）
@@ -111,7 +129,7 @@
   }
 
   function render(d) {
-    var bar = document.getElementById("freshnessBar");
+    var bar = document.getElementById("freshnessBar") || document.getElementById("freshnessInline");
     if (!bar) return;
     var order = ["ny", "sge", "etf"];
     var markets = order.map(function (k) { return d.markets && d.markets[k]; }).filter(Boolean);
@@ -121,7 +139,7 @@
       ? window.I18n.fmt.time(t)
       : (String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0"));
 
-    bar.className = "fresh-bar";
+    bar.className = bar.id === "freshnessInline" ? "fresh-inline" : "fresh-bar";
     bar.innerHTML =
       '<span class="fsh-title">' + _t("fresh.title", "🕒 数据时效") + '</span>' +
       markets.map(chip).join("") +
@@ -177,13 +195,13 @@
   }
 
   function load() {
-    var bar = document.getElementById("freshnessBar");
+    var bar = document.getElementById("freshnessBar") || document.getElementById("freshnessInline");
     if (!bar) return Promise.resolve();
     var base = location.port === "8888" ? "" : "http://127.0.0.1:8888";
     return fetchJSON(base + "/api/v1/market/freshness")
       .then(render)
       .catch(function (e) {
-        bar.className = "fresh-bar fsh-error";
+        bar.className = bar.id === "freshnessInline" ? "fresh-inline fsh-error" : "fresh-bar fsh-error";
         bar.textContent = _t("fresh.load_failed", "数据时效加载失败：") + e.message +
           _t("fresh.load_failed_suffix", "（不影响页面其他数据）");
       });

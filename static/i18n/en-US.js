@@ -1005,6 +1005,9 @@ window.PM_I18N_en_US = {
   /* V0.81.1 admin token missing banner */
   "admin_token.missing": "Admin token not set in this browser. All write operations are rejected.",
   "admin_token.go_settings": "Open Settings",
+  /* V0.83: investment warning disclosure toggle + sessionStorage memory */
+  "warn.collapse_toggle": "⚠️ Risk Notice",
+  "warn.dismiss_session": "Don't expand this session",
   /* V0.82 commit 4：admin session cookie UI (settings page "Set Session" button) */
   "settings.section_session_sub": "—— Or use Session Cookie ——",
   "settings.section_session_desc": "In LAN multi-terminal setups, an <strong>HttpOnly cookie</strong> is easier than localStorage: every same-origin tab / reopened window carries it automatically — no need to re-set on each device. Submitted token sets a 30-day cookie; the backend verifies it with HMAC-SHA256 (stateless, no DB row).",

@@ -75,6 +75,10 @@
   .index-score .lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
   /* 网站 hero 介绍区 */
   .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  /* V0.83：紧凑 hero —— 警示已下沉到页脚后不再需要大段 intro/en/notice */
+  .hero.hero-compact { padding: 14px 20px; margin-bottom: 14px; }
+  .hero.hero-compact h1 { font-size: 21px; margin-bottom: 4px; }
+  .hero.hero-compact .tagline { margin-top: 2px; margin-bottom: 4px; }
   .hero h1 { font-size: 25px; letter-spacing: .5px; }
   .hero .en { font-size: 12px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
   .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
@@ -88,11 +92,28 @@
   .refresh-btn:hover { background: var(--card); }
   .refresh-btn.refreshing { transform: rotate(360deg); }
   /* 投资警示横幅 */
-  .warn-banner { background: #1f2329; color: #eef0f3; border-radius: 12px; padding: 14px 20px; margin-bottom: 16px; border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.12); }
-  .warn-banner .w-title { color: #f5d97a; font-weight: 700; font-size: 14px; margin-bottom: 8px; letter-spacing: 1px; }
-  .warn-banner ol { margin: 0; padding-left: 20px; }
-  .warn-banner li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
-  .warn-banner li b { color: #ffffff; }
+  /* V0.83：投资警示改用 <details> + 暗底折叠区，下沉到页面底部（综合研判之后）。
+     顶 nav 上的「⚠️ 投资警示」按钮可双向 toggle。*/
+  .warn-footer { background: #1f2329; color: #eef0f3; border-radius: 12px; margin: 16px 0 12px;
+    border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
+  .warn-footer > summary { list-style: none; cursor: pointer; padding: 12px 18px;
+    color: #f5d97a; font-weight: 700; font-size: 13.5px; letter-spacing: .5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    user-select: none; }
+  .warn-footer > summary::-webkit-details-marker { display: none; }
+  .warn-footer > summary::after { content: "▾"; font-size: 14px; opacity: .6;
+    transition: transform .2s; }
+  .warn-footer[open] > summary::after { transform: rotate(180deg); }
+  .warn-footer .warn-body { padding: 4px 18px 14px; }
+  .warn-footer ol { margin: 0; padding-left: 20px; }
+  .warn-footer li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-footer li b { color: #ffffff; }
+  .warn-footer .warn-dismiss { display:inline-flex; align-items:center; gap:6px; margin-top:8px;
+    font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
+  .warn-footer .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
+  /* 默认折叠态：1 行（summary 即可见）*/
+  .warn-footer:not([open]) { margin-top: 16px; }
+  /* 老 .warn-banner 仍保留给其他 11 页（未在本 PR 改），不删 */
   .index-info { flex: 1; min-width: 240px; }
   .index-info .badge { font-size: 14px; padding: 4px 14px; }
   .index-info .txt { font-size: 14px; color: #374151; line-height: 1.7; margin-top: 8px; }
@@ -127,12 +148,33 @@
   .error { color: var(--up); text-align: center; padding: 40px 0; }
   footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
   /* 顶部导航（统一） */
-  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-  .topnav .brand { font-weight: 700; font-size: 15px; color: #f5d97a; letter-spacing: .5px; }
-  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
-  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
-  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
-  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600; }
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #f5d97a; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand .brand-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#806014);
+    box-shadow:0 0 8px rgba(245,217,122,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+  /* V0.83 第二行：数据时效 + 警示 disclosure 入口（同一行右对齐警示按钮） */
+  .topnav .topnav-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding: 4px 4px 2px; border-top: 1px dashed rgba(255,255,255,.08); }
+  .topnav .topnav-meta .fresh-inline { flex: 1 1 auto; min-width: 0; }
+  .topnav .topnav-meta .nav-warn-toggle { display:inline-flex; align-items:center; gap:5px;
+    background: rgba(245,217,122,.10); color: #f5d97a; border: 1px solid rgba(245,217,122,.28);
+    font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+    transition: background .15s; }
+  .topnav .topnav-meta .nav-warn-toggle:hover { background: rgba(245,217,122,.18); }
   /* 数据源状态条（降级可感知） */
   .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
   .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
@@ -153,54 +195,65 @@
 <a class="skip-link" href="#main">跳到主要内容</a>
 <main id="main" tabindex="-1">
 <div class="wrap">
-  <!-- 顶部导航（统一，置顶） -->
-  <nav class="topnav">
-    <div class="brand" data-i18n="brand.gold">黄金价格投资辅助工具</div>
-    <div class="links">
-      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
-      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
-      <a href="/trades" data-i18n="nav.trades">交易历史</a>
-      <a href="/weights" data-i18n="nav.weights">权重配置</a>
-      <a href="/news" data-i18n="nav.news">消息面评估</a>
-      <a href="/review" data-i18n="nav.review">研判复盘</a>
-      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
-      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
-      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
-      <a href="/static/data-health.html" data-i18n="nav.health">数据健康</a>
-      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
+  <!-- 顶部导航（统一，置顶） · V0.83：双行布局 = 品牌/链接行 + 数据时效/警示 disclosure 行 -->
+  <nav class="topnav" aria-label="主导航">
+    <div class="topnav-row">
+      <a href="/static/trend.html" class="brand" data-i18n="brand.gold">
+        <span class="brand-dot" aria-hidden="true"></span>黄金价格投资辅助工具
+      </a>
+      <div class="links">
+        <a href="/static/trend.html" data-i18n="nav.trend"><span class="nav-ico" aria-hidden="true">📈</span><span>趋势追踪</span></a>
+        <a href="/portfolio" data-i18n="nav.portfolio"><span class="nav-ico" aria-hidden="true">💼</span><span>持仓与决策</span></a>
+        <a href="/trades" data-i18n="nav.trades"><span class="nav-ico" aria-hidden="true">📜</span><span>交易历史</span></a>
+        <a href="/weights" data-i18n="nav.weights"><span class="nav-ico" aria-hidden="true">⚖️</span><span>权重配置</span></a>
+        <a href="/news" data-i18n="nav.news"><span class="nav-ico" aria-hidden="true">📰</span><span>消息面评估</span></a>
+        <a href="/review" data-i18n="nav.review"><span class="nav-ico" aria-hidden="true">🔍</span><span>研判复盘</span></a>
+        <a href="/central-bank" data-i18n="nav.central_bank"><span class="nav-ico" aria-hidden="true">🏛️</span><span>央行购金统计</span></a>
+        <a href="/static/silver.html" data-i18n="nav.silver"><span class="nav-ico" aria-hidden="true">🪙</span><span>白银追踪</span></a>
+        <a href="/static/backtest.html" data-i18n="nav.backtest"><span class="nav-ico" aria-hidden="true">🧪</span><span>参数回测</span></a>
+        <a href="/static/data-health.html" data-i18n="nav.health"><span class="nav-ico" aria-hidden="true">🩺</span><span>数据健康</span></a>
+        <a href="/static/settings.html" data-i18n="nav.settings"><span class="nav-ico" aria-hidden="true">🔔</span><span>通知中心</span></a>
+      </div>
+    </div>
+    <div class="topnav-meta">
+      <!-- V0.83：数据时效从独立 #freshnessBar 迁入 topnav 暗底第二行（freshness.js 接受 #freshnessInline 挂载点） -->
+      <div id="freshnessInline" aria-live="polite" aria-atomic="false"></div>
+      <button class="nav-warn-toggle" type="button" data-warn-toggle aria-expanded="false"
+              aria-controls="warnFooter" data-i18n="warn.collapse_toggle">⚠️ 投资警示</button>
     </div>
   </nav>
 
-  <!-- 数据时效（UX 6.1：交易时段 + 时效等级 + 数据截止日 + 采集时间，全站一致） -->
-  <div id="freshnessBar"></div>
-
-  <!-- 加载进度提示（首屏不再空白） -->
+  <!-- 加载进度提示（首屏不再空白） · V0.83：顶到 hero 位置 -->
   <div id="loadBar" class="source-bar source-warn" data-i18n="trend.loading_hint">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
 
-  <!-- 投资警示（醒目置顶） -->
-  <div class="warn-banner">
-    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
-    <ol>
-      <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
-      <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
-      <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
-      <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
-      <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
-    </ol>
-  </div>
+  <!-- V0.83：投资警示合并到底部可折叠区（dark `details/summary`） · 由 warning.js 维持展开态，
+       summary 同步顶 nav 上的「投资警示」按钮（双向 toggle） -->
+  <details id="warnFooter" class="warn-footer">
+    <summary><span data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</span></summary>
+    <div class="warn-body">
+      <ol>
+        <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
+        <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
+        <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
+        <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
+        <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
+      </ol>
+      <label class="warn-dismiss">
+        <input type="checkbox" data-warn-dismiss>
+        <span data-i18n="warn.dismiss_session">本次会话不再展开</span>
+      </label>
+    </div>
+  </details>
 
-  <header class="hero">
+  <header class="hero hero-compact">
     <div>
       <h1 data-i18n="trend.h1">黄金价格投资辅助工具 <span id="badge"></span>
         <!-- V0.60.0：手动刷新按钮（每 60 秒自动刷新中） -->
         <button id="refreshBtn" class="refresh-btn" title="手动刷新行情（每 60 秒自动刷新）">🔄</button>
       </h1>
-      <div class="en" data-i18n="brand.subtitle_en">Gold Price Investment Assistant</div>
       <div class="tagline" data-i18n="trend.tagline">三市场对照 · 趋势评估指数 · 个人持仓跟踪 · ETF 购买决策</div>
-      <p class="intro" data-i18n-html="trend.intro">汇聚<b>纽约金、上海金、黄金ETF</b>三大市场价格数据，量化评估黄金投资窗口——以趋势评估指数量化多空、以持仓盈亏跟踪投资进度、以参数面×交易面辅助 ETF 购买决策，为个人黄金投资者提供一站式数据参考。</p>
-      <div class="sub" id="subtitle" style="margin-top:8px" data-i18n="common.loading">加载中…</div>
-      <div style="margin-top:6px"><span id="freshBadge"></span></div>
-      <div class="notice" data-i18n="brand.disclaimer">数据来自 AKShare（新浪/东方财富/英为财情/上金所）· 仅供研究参考，不构成投资建议</div>
+      <div class="sub" id="subtitle" style="margin-top:6px" data-i18n="common.loading">加载中…</div>
+      <div style="margin-top:4px"><span id="freshBadge"></span></div>
     </div>
   </header>
 
@@ -965,6 +1018,7 @@ window.addEventListener("news-score-changed", () => {
 });
 </script>
   <script src="/static/freshness.js"></script>
+  <script src="/static/warning.js"></script>
   <script src="/static/pwa.js" defer></script>
 <script src="/static/help.js" defer></script>
 <script src="/static/account.js"></script>
