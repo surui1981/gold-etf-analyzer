@@ -44,7 +44,7 @@ for (const page of PAGES) {
   for (const lang of LANGS) {
     for (const theme of THEMES) {
       const tab = `[${page.path} | ${lang} | ${theme}]`;
-      await new Promise((r) => setTimeout(r, 1200)); // 限流保护
+      await new Promise((r) => setTimeout(r, 2500)); // 限流保护（dev server 5 req/s）
       const p = await browser.newPage();
 
       // 屏蔽 21s 限流的 API + 后端图表

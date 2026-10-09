@@ -629,7 +629,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | ID | 改进 | 优先级 | 工作量 | 备注 |
 |----|------|--------|--------|------|
 | K | 多市场参数差异化（白银 / 黄金 / ETF） | P3 | 2 月 | parameter-evaluation §4.3 |
-| L | 110 个 i18n 预存 gap 修复 | P0 | 1 周 | V0.83.0 暴露：trend / portfolio / backtest / trades / silver / settings / review / weights / central_bank 的 zh-TW 缺 key，独立 ticket |
+| L | ✅ 110 个 i18n 预存 gap 修复 | P0 | 1 周 → 1 commit | V0.83.1：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing。puppeteer_v083 1418/0 |
 | M | 共享 topnav 抽离 | P1 | 1 周 | V0.83.0 复制粘贴 8 处 nav markup，独立 PR |
 
 ### 4.2 长线方向（V0.84.0+）
@@ -733,6 +733,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.81.1 | ✅ 2026-10-08（**同日第二个补丁版**） | Bugfix：admin token 缺失提示横幅（401 + `admin token required` 时引导去设置页，每会话一次）。**提前于任何排期** —— 是 V0.80.1 的直接后遗症。见 `docs/releases/v0.81.1.md` |
 | V0.82.0 | ✅ 2026-10-09（**提前于 2027-04 排期**） | LAN 多终端 admin token 修：双通道（header + cookie）+ 单用户模式 `AUTH_ENABLED=false` 整体豁免；settings 页「设置 Session」按钮一次配置整浏览器生命周期有效。含中间件测试隔离修复（`f46838b`）。**重大语义调整**：原本 V0.82 规划是「多市场独立校准」，改为优先解决 LAN 真实痛点（多终端写操作被 401）；多市场 K 顺延至 V0.83+。见 `docs/releases/v0.82.0.md` |
 | V0.83.0 | ✅ 2026-10-10 | 主页 UI 改版 + 8 页面警示合并 + 静态门禁强化。6 commits：trend.html redesign（双行 nav + `#freshnessInline` 集中时效 + `<details>` 警示折叠）+ 顶 nav i18n 修复 + warning.js a11y 兜底（aria-describedby / HC 模式 / 44px 触控）+ freshness 状态变更 diff + 8 页（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）迁移 V0.83 模式 + 静态门禁强化（`check_cluster_render` V0.83 节 73 条 + 新 `check_i18n_keys.py` V0.83-scope 严格 + 新 `puppeteer_v083.mjs` 72 组合 1418/1418）。多市场 K 继续顺延 V0.84+。遗留：110 个 i18n 预存 gap + 共享 topnav 抽离两个独立 ticket。见 `docs/releases/v0.83.0.md` |
+| V0.83.1 | ✅ 2026-10-10 | 110 个 i18n 预存 gap 修复：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing（V0.83.0 暴露 110/450）。`puppeteer_v083.mjs` 间隔 1.2s → 2.5s 应对 dev server 5 req/s 限流，1418/1418 |
 
 **维护任务清单**（每小版本至少 1 项）：
 - [ ] `ruff check` 警告清零
