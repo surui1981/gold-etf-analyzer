@@ -9,7 +9,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import get_news_score_service
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.schemas.news import NewsHistoryOut, NewsScoreIn, NewsScoreOut
 from app.services.news import NewsScoreService
 
@@ -28,7 +28,7 @@ async def get_today_score(
     "",
     response_model=NewsScoreOut,
     summary="保存一次消息面打分",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def save_today_score(
     payload: NewsScoreIn,
@@ -51,7 +51,7 @@ async def save_today_score(
     "/{slot}",
     response_model=NewsScoreOut,
     summary="撤销某一次打分",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def delete_today_slot(
     slot: int,

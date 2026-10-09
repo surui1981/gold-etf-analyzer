@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 
 from app.dependencies import get_position_service
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.schemas.position import (
     PositionCreate,
     PositionDeleteOut,
@@ -27,7 +27,7 @@ ACCOUNT_QUERY = Query(
     response_model=PositionOut,
     status_code=201,
     summary="开仓",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def open_position(
     request: PositionCreate,
@@ -84,7 +84,7 @@ async def list_position_trades(
     "/{position_id}/trades",
     response_model=PositionOut,
     summary="加仓/减仓",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def add_trade(
     position_id: int,
@@ -102,7 +102,7 @@ async def add_trade(
     "/{position_id}/close",
     response_model=PositionOut,
     summary="清仓",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def close_position(
     position_id: int,
@@ -119,7 +119,7 @@ async def close_position(
     "/{position_id}",
     response_model=PositionDeleteOut,
     summary="软删除（可撤销）",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def delete_position(
     position_id: int,
@@ -136,7 +136,7 @@ async def delete_position(
     "/{position_id}/restore",
     response_model=PositionDeleteOut,
     summary="撤销软删除",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def restore_position(
     position_id: int,

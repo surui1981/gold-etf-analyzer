@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends
 
 from app.dependencies import get_setting_repository, get_weight_service
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.repositories.settings import SettingRepository
 from app.schemas.alert import AlertRuleIn, AlertRuleOut, AlertTestResult
 from app.schemas.settings import WeightConfig
@@ -29,7 +29,7 @@ async def get_weights(
     "/weights",
     response_model=WeightConfig,
     summary="保存评估权重",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def save_weights(
     config: WeightConfig,
@@ -54,7 +54,7 @@ async def get_alert_rules_endpoint(
     "/alert-rules",
     response_model=AlertRuleOut,
     summary="保存告警规则",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def put_alert_rules_endpoint(
     payload: AlertRuleIn,
@@ -68,7 +68,7 @@ async def put_alert_rules_endpoint(
     "/test-email",
     response_model=AlertTestResult,
     summary="测试邮件发送",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def test_email_endpoint() -> AlertTestResult:
     """发一封测试邮件到 NOTIFY_FROM 邮箱，验证 SMTP 配置正确。"""
@@ -94,7 +94,7 @@ async def test_email_endpoint() -> AlertTestResult:
     "/test-wechat",
     response_model=AlertTestResult,
     summary="测试微信发送",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def test_wechat_endpoint() -> AlertTestResult:
     """发一条测试微信，验证 SendKey 配置正确。"""

@@ -20,7 +20,7 @@ from app.dependencies import (
     get_setting_repository,
     get_task_registry,
 )
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.repositories.settings import SettingRepository
 from app.schemas.backtest import (
     BacktestConfigIn,
@@ -46,7 +46,7 @@ router = APIRouter(prefix="/backtest", tags=["backtest"])
     "/run",
     response_model=BacktestResultOut,
     summary="执行回测（V0.71.0）",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def run_backtest(
     payload: BacktestRequestIn,
@@ -128,7 +128,7 @@ async def _run_backtest_task(
     response_model=BacktestTaskAcceptedOut,
     status_code=status.HTTP_202_ACCEPTED,
     summary="异步执行回测（V0.79.0 Step G）",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def run_backtest_async(
     payload: BacktestRequestIn,

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_db_session
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.repositories.push import PushSubscriptionRepository
 from app.repositories.settings import SettingRepository
 from app.schemas.push import (
@@ -103,7 +103,7 @@ async def unsubscribe_endpoint(
     "/test",
     response_model=dict,
     summary="测试推送：给所有活跃订阅发一条 hello",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def test_push_endpoint(
     service: PushService = Depends(get_push_service),

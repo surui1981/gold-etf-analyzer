@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import get_account_service
-from app.middleware.admin_auth import require_admin
+from app.middleware.admin_auth import require_admin_session
 from app.schemas.account import (
     AccountArchiveOut,
     AccountCreate,
@@ -34,7 +34,7 @@ async def list_accounts(
     response_model=AccountOut,
     status_code=201,
     summary="新建账本",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def create_account(
     request: AccountCreate,
@@ -63,7 +63,7 @@ async def get_account(
     "/{account_id}",
     response_model=AccountOut,
     summary="修改账本",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def update_account(
     account_id: int,
@@ -81,7 +81,7 @@ async def update_account(
     "/{account_id}/archive",
     response_model=AccountArchiveOut,
     summary="归档账本",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def archive_account(
     account_id: int,
@@ -101,7 +101,7 @@ async def archive_account(
     "/{account_id}/restore",
     response_model=AccountArchiveOut,
     summary="恢复账本",
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_admin_session)],
 )
 async def restore_account(
     account_id: int,
