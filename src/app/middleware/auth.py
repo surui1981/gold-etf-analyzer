@@ -75,6 +75,10 @@ PUBLIC_API_PATHS: frozenset[str] = frozenset(
         "/api/v1/auth/reset-password",
         # 埋点走 sendBeacon，无法自定义请求头；且内容为匿名前端事件，不含业务数据
         "/api/v1/telemetry/ingest",
+        # V0.82：admin session cookie 自举端点 —— POST 把 token 放 body 校验
+        # 后下发 cookie，GET 查 cookie 状态；都不需要登录态（拿不到 cookie
+        # 的用户根本登不进来，登不进来就看不到这个 UI，循环依赖）。
+        "/api/v1/admin-token",
     }
 )
 

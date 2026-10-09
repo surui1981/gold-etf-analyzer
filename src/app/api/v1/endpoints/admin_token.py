@@ -1,5 +1,6 @@
 """V0.82 admin session cookie 端点。
 
+GET    /api/v1/admin-token   检查当前 cookie 是否有效（不返回 token 本身）
 POST   /api/v1/admin-token   设置 pm_admin_session cookie（30 天）
 DELETE /api/v1/admin-token   清除 cookie
 
@@ -17,7 +18,7 @@ DELETE /api/v1/admin-token   清除 cookie
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, HTTPException, Response, status
 from pydantic import BaseModel, Field
 
 from app.config import get_settings
@@ -25,6 +26,7 @@ from app.middleware.admin_auth import (
     ADMIN_SESSION_COOKIE,
     ADMIN_SESSION_TTL_SECONDS,
     issue_admin_session_cookie_value,
+    verify_admin_session_cookie,
 )
 
 router = APIRouter(prefix="/admin-token", tags=["admin-token"])
@@ -40,6 +42,39 @@ class AdminTokenOut(BaseModel):
     """POST 成功响应。"""
 
     expires_in: int = Field(..., description="cookie 有效期（秒）")
+
+
+class AdminTokenStatus(BaseModel):
+    """GET 响应：当前会话是否已设 cookie（不返回 token 本身）。
+
+    V0.82 commit 4：给 settings 页「Set session」按钮显示状态用。
+    HttpOnly cookie JS 读不到，必须服务端校验后告诉前端。
+    """
+
+    has_session: bool = Field(..., description="pm_admin_session cookie 是否有效签名")
+    ttl_seconds: int = Field(..., description="cookie 总 TTL（秒；has_session=false 时也返回，便于 UI 提示）")
+    auth_enabled: bool = Field(..., description="后端是否启用认证（false → cookie 无意义）")
+
+
+@router.get(
+    "",
+    response_model=AdminTokenStatus,
+    summary="查询 admin session cookie 状态（V0.82 commit 4）",
+)
+async def get_admin_token_status(
+    pm_admin_session: str | None = Cookie(default=None, alias=ADMIN_SESSION_COOKIE),
+) -> AdminTokenStatus:
+    """返回当前请求是否带有效 pm_admin_session cookie。
+
+    不返回 token 本身；只返回 bool + ttl 供 settings 页 UI 显示。
+    """
+    settings = get_settings()
+    has_session = verify_admin_session_cookie(pm_admin_session)
+    return AdminTokenStatus(
+        has_session=has_session,
+        ttl_seconds=ADMIN_SESSION_TTL_SECONDS,
+        auth_enabled=settings.auth_enabled,
+    )
 
 
 @router.post(

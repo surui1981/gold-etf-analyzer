@@ -90,6 +90,112 @@
     });
   }
 
+  /* ── 1b. V0.82 commit 4：admin session cookie（HttpOnly · 整域共享） ── */
+  const API_ADMIN_TOKEN = "/api/v1/admin-token";
+  const SECONDS_PER_DAY = 86400;
+
+  function setSessionHint(text, kind) {
+    const hint = $("adminSessionHint");
+    if (!hint) return;
+    hint.textContent = text;
+    hint.style.color = kind === "ok"
+      ? "var(--up)"
+      : kind === "err"
+      ? "var(--down)"
+      : "var(--muted)";
+  }
+
+  function formatTtl(seconds) {
+    if (!seconds || seconds <= 0) return "已过期";
+    const days = Math.floor(seconds / SECONDS_PER_DAY);
+    const hours = Math.floor((seconds % SECONDS_PER_DAY) / 3600);
+    if (days >= 1) return days + " 天" + (hours > 0 ? " " + hours + " 小时" : "");
+    if (hours >= 1) return hours + " 小时";
+    return Math.floor(seconds / 60) + " 分钟";
+  }
+
+  function bindAdminSessionUi() {
+    const btnSet = $("btnSetSession");
+    const btnClear = $("btnClearSession");
+    const input = $("adminSessionToken");
+    if (!btnSet || !btnClear) return;
+
+    // 页面加载时主动 GET 一次：HttpOnly cookie JS 读不到，必须服务端校验
+    function refreshSessionStatus() {
+      apiJson(API_ADMIN_TOKEN, { method: "GET" })
+        .then(function (data) {
+          if (!data.auth_enabled) {
+            setSessionHint("单用户模式无需 admin session（已禁用）", "muted");
+            btnSet.disabled = true;
+            btnClear.disabled = true;
+            return;
+          }
+          btnSet.disabled = false;
+          btnClear.disabled = false;
+          if (data.has_session) {
+            setSessionHint("Session 已生效（TTL " + formatTtl(data.ttl_seconds) + "，整域共享）", "ok");
+          } else {
+            setSessionHint("未设置 Session · 写端点会被 401 拒绝", "muted");
+          }
+        })
+        .catch(function (err) {
+          setSessionHint("查询失败：" + (err.message || "网络异常"), "err");
+        });
+    }
+    refreshSessionStatus();
+
+    btnSet.addEventListener("click", function () {
+      const tok = (input.value || "").trim();
+      if (!tok) {
+        setSessionHint("请先粘贴管理员 token", "err");
+        return;
+      }
+      btnSet.disabled = true;
+      const oldText = btnSet.textContent;
+      btnSet.textContent = "处理中…";
+      apiJson(API_ADMIN_TOKEN, {
+        method: "POST",
+        body: JSON.stringify({ token: tok }),
+      })
+        .then(function (data) {
+          input.value = "";
+          setSessionHint("✓ Session 已设置 · 30 天内所有标签页自动携带", "ok");
+          refreshSessionStatus();
+        })
+        .catch(function (err) {
+          var code = err && err.code;
+          if (code === "admin_token_invalid") {
+            setSessionHint("✗ Token 不正确", "err");
+          } else if (code === "admin_token_not_configured") {
+            setSessionHint("✗ 服务端未配置 ADMIN_TOKEN（联系管理员）", "err");
+          } else if (code === "admin_session_disabled") {
+            setSessionHint("✗ 单用户模式不支持 session", "err");
+          } else {
+            setSessionHint("✗ " + (err.message || "设置失败"), "err");
+          }
+        })
+        .finally(function () {
+          btnSet.disabled = false;
+          btnSet.textContent = oldText;
+        });
+    });
+
+    btnClear.addEventListener("click", function () {
+      btnClear.disabled = true;
+      apiJson(API_ADMIN_TOKEN, { method: "DELETE" })
+        .then(function () {
+          setSessionHint("已撤销 Session", "muted");
+          refreshSessionStatus();
+        })
+        .catch(function (err) {
+          setSessionHint("撤销失败：" + (err.message || ""), "err");
+        })
+        .finally(function () {
+          btnClear.disabled = false;
+        });
+    });
+  }
+
   /* ── 2. 告警规则 (V0.74.0 N+18 · discriminated union CRUD) ────── */
   // 内存中的规则列表（discriminated union）。GET 同步、PATCH 异步落盘。
   let _ruleStore = []; //  [{ kind, ... }, ...]
@@ -471,6 +577,7 @@
   /* ── 5. 入口 ────────────────────────────────────── */
   function init() {
     bindAdminTokenUi();
+    bindAdminSessionUi();  // V0.82 commit 4：admin session cookie UI
     bindChannelUi();
     bindRuleModal();
     $("btnSaveRules").addEventListener("click", saveRules);

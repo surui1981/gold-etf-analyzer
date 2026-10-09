@@ -23,6 +23,7 @@ from app.api.v1.endpoints import admin_token as admin_token_module
 from app.config import get_settings
 from app.middleware.admin_auth import (
     ADMIN_SESSION_COOKIE,
+    ADMIN_SESSION_TTL_SECONDS,
     require_admin_session,
 )
 
@@ -204,3 +205,61 @@ async def test_delete_works_even_without_prior_set(app_admin_token: FastAPI) -> 
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         r = await client.delete("/api/v1/admin-token")
     assert r.status_code == 200
+
+
+# ───────────────────── GET（V0.82 commit 4）─────────────────────
+
+
+async def test_get_returns_no_session_when_cookie_missing(app_admin_token: FastAPI) -> None:
+    """无 cookie ⇒ has_session=false，ttl 仍返回（UI 提示用）。"""
+    transport = ASGITransport(app=app_admin_token)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.get("/api/v1/admin-token")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["has_session"] is False
+    assert body["ttl_seconds"] == ADMIN_SESSION_TTL_SECONDS
+    assert body["auth_enabled"] is True
+
+
+async def test_get_returns_session_active_after_set(app_admin_token: FastAPI) -> None:
+    """POST 后带 cookie 访问 GET ⇒ has_session=true。"""
+    from app.middleware.admin_auth import issue_admin_session_cookie_value
+
+    cookie_val = issue_admin_session_cookie_value()
+    transport = ASGITransport(app=app_admin_token)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies={ADMIN_SESSION_COOKIE: cookie_val},
+    ) as client:
+        r = await client.get("/api/v1/admin-token")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["has_session"] is True
+    assert body["auth_enabled"] is True
+
+
+async def test_get_rejects_invalid_signature(app_admin_token: FastAPI) -> None:
+    """带乱填 cookie ⇒ has_session=false（签名不匹配）。"""
+    transport = ASGITransport(app=app_admin_token)
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        cookies={ADMIN_SESSION_COOKIE: "garbage.invalid"},
+    ) as client:
+        r = await client.get("/api/v1/admin-token")
+    assert r.status_code == 200
+    assert r.json()["has_session"] is False
+
+
+async def test_get_reports_single_user_mode(app_single_user: FastAPI) -> None:
+    """单用户模式：auth_enabled=false 透传给前端（提示 UI 不要显示按钮）。"""
+    transport = ASGITransport(app=app_single_user)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        r = await client.get("/api/v1/admin-token")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["auth_enabled"] is False
+    # ADMIN_TOKEN 在单用户模式下 get_admin_token 返回 None ⇒ cookie 必然无效
+    assert body["has_session"] is False
