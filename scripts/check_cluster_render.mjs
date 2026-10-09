@@ -265,8 +265,10 @@ console.log("=".repeat(70));
   ok("news 表头已含「依据」列", thead.includes("<th>依据</th>"));
 
   const c = read("central_bank.html");
-  ok("央行页 topnav 已补「研判复盘」", c.includes('href="/review" data-i18n="nav.review"'));
-  ok("央行页 topnav 共 11 条", countOf(c.slice(c.indexOf('<nav class="topnav">'), c.indexOf("</nav>")), /<a href=/g) === 11, String(countOf(c.slice(c.indexOf('<nav class="topnav">'), c.indexOf("</nav>")), /<a href=/g)));
+  // V0.83 C3：topnav 链接文本迁到内层 <span>，旧版「属性上直接带 data-i18n」检查改查 V0.83 模板
+  ok("央行页 topnav 已补「研判复盘」", /href="\/review"[^>]*>\s*<span class="nav-ico"[^>]*>[^<]*<\/span>\s*<span data-i18n="nav\.review">/m.test(c));
+  // V0.83 C3：topnav 含 brand + 11 链接 = 12 个 <a href=>
+  ok("央行页 topnav 共 12 个 a (brand + 11 链接)", countOf(c.slice(c.indexOf('class="topnav"'), c.indexOf("</nav>")), /<a href=/g) === 12, String(countOf(c.slice(c.indexOf('class="topnav"'), c.indexOf("</nav>")), /<a href=/g)));
   ok("图例改走 I18n.t('country.'+iso)", c.includes('I18n.t("country." + iso)') && c.includes("countryLabel"));
 }
 

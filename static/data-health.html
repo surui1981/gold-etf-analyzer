@@ -50,12 +50,51 @@
   header.hero .tagline { color: #1d4ed8; font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
   header.hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 780px; }
   header.hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
-  .topnav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #1f2329; border-radius: 12px; padding: 10px 18px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
-  .topnav .brand { font-weight: 700; font-size: 15px; color: #93c5fd; letter-spacing: .5px; }
-  .topnav .links { display: flex; gap: 6px; flex-wrap: wrap; }
-  .topnav a { color: #d6d9dd; text-decoration: none; font-size: 13.5px; padding: 6px 14px; border-radius: 8px; transition: background .15s; }
-  .topnav a:hover { background: rgba(255,255,255,.12); color: #fff; }
-  .topnav a.active { background: #1d4ed8; color: #fff; font-weight: 600; }
+  /* 顶部导航（统一，置顶）· V0.83 C3：双行布局（健康页蓝色调覆写） */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #93c5fd; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand .brand-dot { width:8px; height:8px; border-radius:50%; background:#1d4ed8;
+    box-shadow:0 0 8px rgba(147,197,253,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: #1d4ed8; color: #fff; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+  .topnav .topnav-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    padding: 4px 4px 2px; border-top: 1px dashed rgba(255,255,255,.08); }
+  .topnav .topnav-meta .fresh-inline { flex: 1 1 auto; min-width: 0; }
+  .topnav .topnav-meta .nav-warn-toggle { display:inline-flex; align-items:center; gap:5px;
+    background: rgba(147,197,253,.10); color: #93c5fd; border: 1px solid rgba(147,197,253,.28);
+    font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; flex-shrink: 0;
+    transition: background .15s; }
+  .topnav .topnav-meta .nav-warn-toggle:hover { background: rgba(147,197,253,.18); }
+  /* V0.83 C3 · 投资警示折叠区（健康页蓝调覆写） */
+  .warn-footer { background: #1f2329; color: #eef0f3; border-radius: 12px; margin: 16px 0 12px;
+    border-left: 4px solid #1d4ed8; box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
+  .warn-footer > summary { list-style: none; cursor: pointer; padding: 12px 18px;
+    color: #93c5fd; font-weight: 700; font-size: 13.5px; letter-spacing: .5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    user-select: none; min-height: 44px; box-sizing: border-box; }
+  .warn-footer > summary::-webkit-details-marker { display: none; }
+  .warn-footer > summary::after { content: "▾"; font-size: 14px; opacity: .6; transition: transform .2s; }
+  .warn-footer[open] > summary::after { transform: rotate(180deg); }
+  .warn-footer .warn-body { padding: 4px 18px 14px; }
+  .warn-footer ol { margin: 0; padding-left: 20px; }
+  .warn-footer li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .warn-footer li b { color: #ffffff; }
+  .warn-footer .warn-dismiss { display:inline-flex; align-items:center; gap:6px; margin-top:8px;
+    font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
+  .warn-footer .warn-dismiss input { accent-color: #1d4ed8; cursor: pointer; }
+  .warn-footer:not([open]) { margin-top: 16px; }
   .section { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px; }
   .section h2 { font-size: 15px; font-weight: 700; color: #1d4ed8; letter-spacing: .5px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
   .section .hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
@@ -113,24 +152,31 @@
 <a class="skip-link" href="#main">跳到主要内容</a>
 <main id="main" tabindex="-1">
 <div class="wrap">
-  <nav class="topnav">
-    <div class="brand" data-i18n="brand.health">🩺 数据健康</div>
-    <div class="links">
-      <a href="/static/trend.html" data-i18n="nav.trend">趋势追踪</a>
-      <a href="/portfolio" data-i18n="nav.portfolio">持仓与决策</a>
-      <a href="/trades" data-i18n="nav.trades">交易历史</a>
-      <a href="/weights" data-i18n="nav.weights">权重配置</a>
-      <a href="/news" data-i18n="nav.news">消息面评估</a>
-      <a href="/review" data-i18n="nav.review">研判复盘</a>
-      <a href="/central-bank" data-i18n="nav.central_bank">央行购金统计</a>
-      <a href="/static/silver.html" data-i18n="nav.silver">白银追踪</a>
-      <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
-      <a href="/static/data-health.html" class="active" data-i18n="nav.health">数据健康</a>
-      <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
+  <nav class="topnav" aria-label="主导航">
+    <div class="topnav-row">
+      <a href="/static/data-health.html" class="brand" data-i18n="brand.health">
+        <span class="brand-dot" aria-hidden="true"></span>数据健康
+      </a>
+      <div class="links">
+        <a href="/static/trend.html"><span class="nav-ico" aria-hidden="true">📈</span><span data-i18n="nav.trend">趋势追踪</span></a>
+        <a href="/portfolio"><span class="nav-ico" aria-hidden="true">💼</span><span data-i18n="nav.portfolio">持仓与决策</span></a>
+        <a href="/trades"><span class="nav-ico" aria-hidden="true">📜</span><span data-i18n="nav.trades">交易历史</span></a>
+        <a href="/weights"><span class="nav-ico" aria-hidden="true">⚖️</span><span data-i18n="nav.weights">权重配置</span></a>
+        <a href="/news"><span class="nav-ico" aria-hidden="true">📰</span><span data-i18n="nav.news">消息面评估</span></a>
+        <a href="/review"><span class="nav-ico" aria-hidden="true">🔍</span><span data-i18n="nav.review">研判复盘</span></a>
+        <a href="/central-bank"><span class="nav-ico" aria-hidden="true">🏛️</span><span data-i18n="nav.central_bank">央行购金统计</span></a>
+        <a href="/static/silver.html"><span class="nav-ico" aria-hidden="true">🪙</span><span data-i18n="nav.silver">白银追踪</span></a>
+        <a href="/static/backtest.html"><span class="nav-ico" aria-hidden="true">🧪</span><span data-i18n="nav.backtest">参数回测</span></a>
+        <a href="/static/data-health.html" class="active"><span class="nav-ico" aria-hidden="true">🩺</span><span data-i18n="nav.health">数据健康</span></a>
+        <a href="/static/settings.html"><span class="nav-ico" aria-hidden="true">🔔</span><span data-i18n="nav.settings">通知中心</span></a>
+      </div>
+    </div>
+    <div class="topnav-meta">
+      <div id="freshnessInline" aria-live="polite" aria-atomic="false"></div>
+      <button class="nav-warn-toggle" type="button" data-warn-toggle aria-expanded="false"
+              aria-controls="warnFooter" data-i18n="warn.collapse_toggle">⚠️ 投资警示</button>
     </div>
   </nav>
-
-  <div id="freshnessBar"></div>
 
   <header class="hero">
     <h1 data-i18n="health.h1">🩺 数据健康
@@ -144,14 +190,21 @@
     <div class="notice" data-i18n="health.notice">状态为进程内累计，重启后清零；数据来自 AKShare（新浪/东方财富/英为财情/上金所） + Yahoo Finance。</div>
   </header>
 
-  <div class="warn-banner">
-    <div class="w-title" data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</div>
-    <ol>
-      <li><span data-i18n="health.warn_b1"><b>演示数据不可决策</b> — 若任一标的状态为「演示数据（非真实行情）」，所有依赖该标的的指数 / 决策 / 回测均不可信，请勿据此操作。</span></li>
-      <li><span data-i18n="health.warn_b2"><b>缓存数据可能过期</b> — 「缓存数据（可能过期）」仅作为上次成功采集的快照，可能与当前市价存在显著偏差，需结合其他数据源交叉验证。</span></li>
-      <li><span data-i18n="health.warn_b3"><b>交易时段判定</b> — 纽约金按美东时间、上海金与 ETF 按北京时间计算；休市期间数据为上一交易日收盘价，标的状态正常。</span></li>
-    </ol>
-  </div>
+  <!-- V0.83 C3：投资警示合并到底部可折叠区（健康页保留整段合并键 health.warn_b1/b2/b3，3 语均已存在） -->
+  <details id="warnFooter" class="warn-footer">
+    <summary><span data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</span></summary>
+    <div class="warn-body">
+      <ol>
+        <li data-i18n-html="health.warn_b1"><b>演示数据不可决策</b> — 若任一标的状态为「演示数据（非真实行情）」，所有依赖该标的的指数 / 决策 / 回测均不可信，请勿据此操作。</li>
+        <li data-i18n-html="health.warn_b2"><b>缓存数据可能过期</b> — 「缓存数据（可能过期）」仅作为上次成功采集的快照，可能与当前市价存在显著偏差，需结合其他数据源交叉验证。</li>
+        <li data-i18n-html="health.warn_b3"><b>交易时段判定</b> — 纽约金按美东时间、上海金与 ETF 按北京时间计算；休市期间数据为上一交易日收盘价，标的状态正常。</li>
+      </ol>
+      <label class="warn-dismiss">
+        <input type="checkbox" data-warn-dismiss aria-describedby="warnDismissHint">
+        <span id="warnDismissHint" data-i18n="warn.dismiss_session">本次会话不再展开</span>
+      </label>
+    </div>
+  </details>
 
   <!-- 概览 -->
   <div class="section">
@@ -187,6 +240,7 @@
 </main>
 
 <script src="/static/freshness.js"></script>
+<script src="/static/warning.js"></script>
 <script src="/static/help.js" defer></script>
 <script>
 (function () {
