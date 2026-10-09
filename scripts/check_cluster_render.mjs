@@ -265,10 +265,12 @@ console.log("=".repeat(70));
   ok("news 表头已含「依据」列", thead.includes("<th>依据</th>"));
 
   const c = read("central_bank.html");
-  // V0.83 C3：topnav 链接文本迁到内层 <span>，旧版「属性上直接带 data-i18n」检查改查 V0.83 模板
-  ok("央行页 topnav 已补「研判复盘」", /href="\/review"[^>]*>\s*<span class="nav-ico"[^>]*>[^<]*<\/span>\s*<span data-i18n="nav\.review">/m.test(c));
-  // V0.83 C3：topnav 含 brand + 11 链接 = 12 个 <a href=>
-  ok("央行页 topnav 共 12 个 a (brand + 11 链接)", countOf(c.slice(c.indexOf('class="topnav"'), c.indexOf("</nav>")), /<a href=/g) === 12, String(countOf(c.slice(c.indexOf('class="topnav"'), c.indexOf("</nav>")), /<a href=/g)));
+  // V0.83.2 · 共享 topnav.js 注入：内联 nav markup 已迁移到 static/topnav.js，
+  // 央行页只保留 placeholder + script 引用；链接 / brand 数等 DOM 断言由 puppeteer_v083
+  // 跑出真实渲染后验证（scripts/puppeteer_v083.mjs :: topnav 11 链接 / 当前页 active）。
+  ok("央行页 :: <div id=\"topnav-mount\"> placeholder 存在", c.includes('id="topnav-mount"'));
+  ok("央行页 :: <script src=\"/static/topnav.js\"> 引入",
+     /<script src="\/static\/topnav\.js"><\/script>/.test(c));
   ok("图例改走 I18n.t('country.'+iso)", c.includes('I18n.t("country." + iso)') && c.includes("countryLabel"));
 }
 
@@ -967,14 +969,22 @@ await Promise.all(pending);
   };
   for (const page of MIGRATED_PAGES) {
     const src = read(page);
-    // 1) 顶 nav 双行
-    ok(`${page} :: class="topnav-meta" 存在`, src.includes('class="topnav-meta"'));
-    // 2) nav-warn-toggle
-    ok(`${page} :: nav-warn-toggle (data-warn-toggle + aria-controls) 存在`,
-       src.includes('data-warn-toggle') && src.includes('aria-controls="warnFooter"'));
-    // 3) freshnessInline 挂载点 + aria-live
-    ok(`${page} :: #freshnessInline 挂载 + aria-live=polite`,
-       /id="freshnessInline"[^>]*aria-live="polite"/.test(src));
+    // V0.83.2 · 共享 topnav.js 注入（roadmap §4.1 M）
+    ok(`${page} :: <div id="topnav-mount"> placeholder 存在`, src.includes('id="topnav-mount"'));
+    ok(`${page} :: <script src="/static/topnav.js"> 同步注入`,
+       /<script src="\/static\/topnav\.js"><\/script>/.test(src));
+    // 旧 <nav class="topnav"> 内联 markup 已清除（避免重复 nav）
+    ok(`${page} :: 旧 <nav class="topnav"> 内联 markup 已移除`,
+       !/<nav class="topnav"/.test(src));
+    // 共享 topnav.js 内含 nav-warn-toggle + freshnessInline 注入模板
+    const topnavSrc = read("topnav.js");
+    ok(`topnav.js :: 含 11 条 NAV_LINKS 配置`,
+       (topnavSrc.match(/path:\s*"/g) || []).length === 11,
+       `actual=${(topnavSrc.match(/path:\s*"/g) || []).length}`);
+    ok(`topnav.js :: 含 #freshnessInline 挂载 + aria-live=polite`,
+       topnavSrc.includes('id="freshnessInline"') && topnavSrc.includes('aria-live="polite"'));
+    ok(`topnav.js :: 含 nav-warn-toggle + aria-controls=warnFooter`,
+       topnavSrc.includes('data-warn-toggle') && topnavSrc.includes('aria-controls="warnFooter"'));
     // 4) warn-footer details
     ok(`${page} :: <details id="warnFooter" class="warn-footer"> 存在`,
        /<details id="warnFooter"[^>]*class="warn-footer"/.test(src));

@@ -630,7 +630,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 |----|------|--------|--------|------|
 | K | 多市场参数差异化（白银 / 黄金 / ETF） | P3 | 2 月 | parameter-evaluation §4.3 |
 | L | ✅ 110 个 i18n 预存 gap 修复 | P0 | 1 周 → 1 commit | V0.83.1：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing。puppeteer_v083 1418/0 |
-| M | 共享 topnav 抽离 | P1 | 1 周 | V0.83.0 复制粘贴 8 处 nav markup，独立 PR |
+| M | ✅ 共享 topnav 抽离 | P1 | 1 周 → 1 commit | V0.83.2：8 页面顶 nav 复制粘贴的 ~2000 字符 / 页（共 ~16KB）抽离成 `static/topnav.js` 同步注入。每页只剩 `<div id="topnav-mount"></div><script src="/static/topnav.js"></script>` 25 字符。`check_cluster_render` V0.83 节重写为 placeholder/script 断言，`check_i18n_keys` 加 JS 字面扫描（`i18n: "key"`）。`activeFor` 数组处理 FastAPI redirect 路径差异（如 `/portfolio` ↔ `/static/portfolio.html`）。`puppeteer_v083.mjs` 间隔 2.5s → 3.5s。1418/0 验证通过 |
 
 ### 4.2 长线方向（V0.84.0+）
 
@@ -734,6 +734,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.82.0 | ✅ 2026-10-09（**提前于 2027-04 排期**） | LAN 多终端 admin token 修：双通道（header + cookie）+ 单用户模式 `AUTH_ENABLED=false` 整体豁免；settings 页「设置 Session」按钮一次配置整浏览器生命周期有效。含中间件测试隔离修复（`f46838b`）。**重大语义调整**：原本 V0.82 规划是「多市场独立校准」，改为优先解决 LAN 真实痛点（多终端写操作被 401）；多市场 K 顺延至 V0.83+。见 `docs/releases/v0.82.0.md` |
 | V0.83.0 | ✅ 2026-10-10 | 主页 UI 改版 + 8 页面警示合并 + 静态门禁强化。6 commits：trend.html redesign（双行 nav + `#freshnessInline` 集中时效 + `<details>` 警示折叠）+ 顶 nav i18n 修复 + warning.js a11y 兜底（aria-describedby / HC 模式 / 44px 触控）+ freshness 状态变更 diff + 8 页（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）迁移 V0.83 模式 + 静态门禁强化（`check_cluster_render` V0.83 节 73 条 + 新 `check_i18n_keys.py` V0.83-scope 严格 + 新 `puppeteer_v083.mjs` 72 组合 1418/1418）。多市场 K 继续顺延 V0.84+。遗留：110 个 i18n 预存 gap + 共享 topnav 抽离两个独立 ticket。见 `docs/releases/v0.83.0.md` |
 | V0.83.1 | ✅ 2026-10-10 | 110 个 i18n 预存 gap 修复：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing（V0.83.0 暴露 110/450）。`puppeteer_v083.mjs` 间隔 1.2s → 2.5s 应对 dev server 5 req/s 限流，1418/1418 |
+| V0.83.2 | ✅ 2026-10-10 | 共享 topnav 抽离：8 页面（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）的顶 nav 复制粘贴（约 2000 字符 / 页）合并到 `static/topnav.js` 同步注入，placeholder + script 标记只剩 25 字符 / 页。新增 `activeFor` 数组处理 FastAPI redirect 后 `location.pathname` 变 `/static/portfolio.html` 但 link.path 是 `/portfolio` 的差异。门禁同步：`check_cluster_render` V0.83 节重写为 placeholder/script 断言 + 旧 `<nav class="topnav">` 内联 markup 移除检查；`check_i18n_keys` 加 JS 字面扫描（`i18n: "key"` 模式）覆盖 topnav.js 里的 nav.*/brand.* keys。`puppeteer_v083.mjs` 间隔 2.5s → 3.5s。1418/1418 验证通过。`check_static_js.py` 25 共享脚本（V0.83.1 是 24）含 `topnav.js`。见 `docs/releases/v0.83.2.md` |
 
 **维护任务清单**（每小版本至少 1 项）：
 - [ ] `ruff check` 警告清零

@@ -150,31 +150,9 @@
 <a class="skip-link" href="#main">跳到主要内容</a>
 <main id="main" tabindex="-1">
 <div class="wrap">
-  <nav class="topnav" aria-label="主导航">
-    <div class="topnav-row">
-      <a href="/static/trend.html" class="brand" data-i18n="brand.gold">
-        <span class="brand-dot" aria-hidden="true"></span>黄金价格投资辅助工具
-      </a>
-      <div class="links">
-        <a href="/static/trend.html"><span class="nav-ico" aria-hidden="true">📈</span><span data-i18n="nav.trend">趋势追踪</span></a>
-        <a href="/portfolio"><span class="nav-ico" aria-hidden="true">💼</span><span data-i18n="nav.portfolio">持仓与决策</span></a>
-        <a href="/trades"><span class="nav-ico" aria-hidden="true">📜</span><span data-i18n="nav.trades">交易历史</span></a>
-        <a href="/weights"><span class="nav-ico" aria-hidden="true">⚖️</span><span data-i18n="nav.weights">权重配置</span></a>
-        <a href="/news"><span class="nav-ico" aria-hidden="true">📰</span><span data-i18n="nav.news">消息面评估</span></a>
-        <a href="/review" class="active"><span class="nav-ico" aria-hidden="true">🔍</span><span data-i18n="nav.review">研判复盘</span></a>
-        <a href="/central-bank"><span class="nav-ico" aria-hidden="true">🏛️</span><span data-i18n="nav.central_bank">央行购金统计</span></a>
-        <a href="/static/silver.html"><span class="nav-ico" aria-hidden="true">🪙</span><span data-i18n="nav.silver">白银追踪</span></a>
-        <a href="/static/backtest.html"><span class="nav-ico" aria-hidden="true">🧪</span><span data-i18n="nav.backtest">参数回测</span></a>
-        <a href="/static/data-health.html"><span class="nav-ico" aria-hidden="true">🩺</span><span data-i18n="nav.health">数据健康</span></a>
-        <a href="/static/settings.html"><span class="nav-ico" aria-hidden="true">🔔</span><span data-i18n="nav.settings">通知中心</span></a>
-      </div>
-    </div>
-    <div class="topnav-meta">
-      <div id="freshnessInline" aria-live="polite" aria-atomic="false"></div>
-      <button class="nav-warn-toggle" type="button" data-warn-toggle aria-expanded="false"
-              aria-controls="warnFooter" data-i18n="warn.collapse_toggle">⚠️ 投资警示</button>
-    </div>
-  </nav>
+  <!-- V0.83.2 · 共享顶 nav（topnav.js 同步注入，roadmap §4.1 M）：brand + 11 链接 + 时效/警示 meta -->
+  <div id="topnav-mount"></div>
+  <script src="/static/topnav.js"></script>
 
   <!-- V0.83 C3：投资警示合并到底部可折叠区（由 warning.js 维持展开态） -->
   <details id="warnFooter" class="warn-footer">

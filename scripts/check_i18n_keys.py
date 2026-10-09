@@ -74,10 +74,18 @@ def is_v083_key(key: str) -> bool:
 def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
     """返回 (所有引用 key, {key: {files using it}})。
 
-    支持 ``key1|key2`` 回落链——拆出每个 key 单独加入集合。
+    扫描两种来源：
+    1. **HTML data-i18n 属性**（`data-i18n="key"` / `data-i18n-html="key"`，支持
+       ``key1|key2`` 回落链）
+    2. **JS 模板字面量**（V0.83.2 共享 topnav.js 把链接 / brand 的 i18n key 写在
+       JS 数组里而非 HTML 模板——`{ i18n: "nav.trend" }`）—— 加 JS 扫描后，删除
+       `nav.*` / `brand.*` key 仍会被门禁拦到。
+
+    不扫描 i18n.js / i18n/*.js 自身（避免递归自引用）。
     """
     all_keys: set[str] = set()
     usage: dict[str, set[str]] = defaultdict(set)
+    # 1) HTML data-i18n 属性
     for path in glob.glob(os.path.join(static_dir, "**", "*.html"), recursive=True):
         rel = os.path.relpath(path, static_dir)
         with open(path, encoding="utf-8") as f:
@@ -90,6 +98,18 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
                     continue
                 all_keys.add(k)
                 usage[k].add(rel)
+    # 2) JS 模板字面量（仅 static/*.js，避开 i18n/ 自身）
+    js_attr_re = re.compile(r'i18n:\s*["\']([A-Za-z0-9_.\-]+)["\']')
+    for path in glob.glob(os.path.join(static_dir, "*.js")):
+        rel = os.path.relpath(path, static_dir)
+        with open(path, encoding="utf-8") as f:
+            content = f.read()
+        for m in js_attr_re.finditer(content):
+            k = m.group(1)
+            if not k:
+                continue
+            all_keys.add(k)
+            usage[k].add(rel)
     return all_keys, usage
 
 
