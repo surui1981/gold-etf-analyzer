@@ -13,6 +13,13 @@
   var FETCH_TIMEOUT_MS = 30000;
   // V0.77.1 A4：本次 freshness 响应是否来自 SW 的离线缓存（非空即来自缓存，值为缓存时点）
   var swCachedAt = null;
+  // V0.83.4：智能退避（连续失败时延长轮询间隔），重置条件 = 任意成功
+  // 序列：60s → 120s → 300s → 600s（封顶 10min）
+  var BACKOFF_MS = [60000, 120000, 300000, 600000];
+  var _consecutiveFails = 0;
+  var _lastGoodData = null;     // 上一次成功的响应（用于错误时降级渲染）
+  var _lastGoodSig = null;      // 上次成功 sig（避免重复重渲染）
+  var _timer = null;            // 持有当前 setTimeout 句柄（便于退避时重排）
 
   var LEVEL_META = {
     realtime: { cls: "fsh-ok", dot: "●" },
@@ -26,12 +33,54 @@
 
   // V0.83 C2 · a11y 优化：状态签名 —— 相同状态跳过 DOM 重写，避免每 60 秒重复 announce
   // aria-live="polite" 在 innerHTML 每次重写时都会触发屏幕阅读器；相同状态时静默
+  // V0.83.4 修：API 实际返回 markets 为 dict（按市场名 key），不是 array
+  // 原 .map() 在 dict 上必然 TypeError，被 .catch 吞后整个 render() 静默失败
+  // —— V0.83.0 起生产环境的 freshness 一直显示 stale 就是这个原因。
+  // 现在 sig() 与 render() 共用同一组 order 序列，dict/array 兼容
   var lastSig = null;
   function sig(d) {
-    return (d && d.degraded ? "D" : "-") +
-      ((d && d.markets) || []).map(function (m) {
-        return (m.name || "") + "|" + m.freshness + "|" + (m.status || "ok");
+    if (!d) return "-";
+    var order = ["ny", "sge", "etf"];
+    var list = (d.markets && !Array.isArray(d.markets))
+      ? order.map(function (k) { return d.markets[k]; }).filter(Boolean)
+      : (d.markets || []);
+    return (d.degraded ? "D" : "-") +
+      list.map(function (m) {
+        return (m && m.name ? m.name : "") + "|" +
+               (m && m.freshness ? m.freshness : "?") + "|" +
+               (m && m.status ? m.status : "ok");
       }).join(";");
+  }
+
+  // V0.83.4：错误状态下的降级渲染
+  // - 有 _lastGoodData：在末次数据后追加「⏳ 离线/缓存」chip，不重写整个 bar
+  //   （保留用户已看到的 chip 信息 + 静默标记「已过期」）
+  // - 无 _lastGoodData（首次失败）：显示中性「⏳ 数据加载中…」（不红、不报错）
+  function renderStale() {
+    var bar = document.getElementById("freshnessBar") || document.getElementById("freshnessInline");
+    if (!bar) return;
+    // 去掉可能的 fsh-error class（V0.83.3 之前的红色样式）
+    bar.className = bar.id === "freshnessInline" ? "fresh-inline" : "fresh-bar";
+
+    if (_lastGoodData) {
+      // 重渲染末次数据（stale 视觉：chip 半透明）
+      bar.classList.add("fsh-stale");
+      // 幂等：仅在「⏳ 离线/缓存」chip 不存在时追加
+      if (!bar.querySelector(".fsh-stale-chip")) {
+        bar.insertAdjacentHTML(
+          "beforeend",
+          '<span class="fsh-chip fsh-warn fsh-stale-chip">' +
+            _t("fresh.stale_chip", "⏳ 离线/缓存（数据可能过期）") +
+          "</span>"
+        );
+      }
+    } else {
+      // 首次失败：中性提示，不显示错误
+      bar.innerHTML =
+        '<span class="fsh-title fsh-loading-text">' +
+          _t("fresh.loading_first", "⏳ 数据加载中…") +
+        "</span>";
+    }
   }
 
   var CSS = [
@@ -69,7 +118,11 @@
     ".fresh-inline .fsh-bad { background:rgba(201,42,42,.22); color:#ff9b9b; border-color:rgba(255,155,155,.40); }",
     ".fresh-inline .fsh-dim { background:rgba(255,255,255,.04); color:#9aa3ad; border-color:rgba(255,255,255,.10); }",
     ".fresh-inline .fsh-alert { font-weight:700; }",
-    ".fresh-inline.fsh-error { background:rgba(201,42,42,.18); color:#ff9b9b; border:1px solid rgba(255,155,155,.35); padding:4px 10px; border-radius:8px; }"
+    ".fresh-inline.fsh-error { background:rgba(201,42,42,.18); color:#ff9b9b; border:1px solid rgba(255,155,155,.35); padding:4px 10px; border-radius:8px; }",
+    /* V0.83.4：stale / 加载中 视觉（不红、不报错，仅降级提示） */
+    ".fresh-bar.fsh-stale .fsh-chip, .fresh-inline.fsh-stale .fsh-chip { opacity:.55; }",
+    ".fsh-loading-text { color:var(--muted,#6b7280); font-size:12px; padding:4px 0; }",
+    ".fresh-inline .fsh-loading-text { color:#9aa3ad; }"
   ].join("\n");
 
   // V0.73.0 N+9: i18n helpers — 安全降级到原始字符串（i18n.js 尚未加载时）
@@ -175,10 +228,11 @@
       _t("fresh.refresh_hint", "（每 60 秒自动刷新）").replace("{secs}", "60") + "</span>";
 
     // V0.77.1 A4：离线缓存披露。置于降级警示之前 —— 它解释的是「这份时效本身从哪来」。
+    // V0.83.4：fsh-bad (红) → fsh-warn (琥珀)，与「数据加载失败」红框做语义区分
     if (swCachedAt) {
       bar.insertAdjacentHTML(
         "beforeend",
-        '<span class="fsh-chip fsh-bad fsh-alert fsh-cached-chip">' +
+        '<span class="fsh-chip fsh-warn fsh-cached-chip">' +
         _t("fresh.offline_cached", "⚠ 本页数据来自离线缓存（{at}），可能已过期")
           .replace("{at}", fmtCachedAt(swCachedAt)) +
         "</span>"
@@ -227,18 +281,38 @@
     if (!bar) return Promise.resolve();
     var base = location.port === "8888" ? "" : "http://127.0.0.1:8888";
     return fetchJSON(base + "/api/v1/market/freshness")
-      .then(render)
+      .then(function (d) {
+        // V0.83.4：成功 → 清理 stale 状态（即便 sig 相同也得清，否则 render 短路会留下旧 chip）
+        // + 记下末次数据 + 重置退避计数
+        _consecutiveFails = 0;
+        bar.classList.remove("fsh-stale");
+        _lastGoodData = d;
+        _lastGoodSig = sig(d);
+        // 强制重置 lastSig（render 内部）确保本次一定重写 DOM
+        lastSig = null;
+        render(d);
+      })
       .catch(function (e) {
-        bar.className = bar.id === "freshnessInline" ? "fresh-inline fsh-error" : "fresh-bar fsh-error";
-        bar.textContent = _t("fresh.load_failed", "数据时效加载失败：") + e.message +
-          _t("fresh.load_failed_suffix", "（不影响页面其他数据）");
+        // V0.83.4：失败 → 静默降级（不显示红框），不 console.error（已在 telemetry 可见）
+        _consecutiveFails++;
+        renderStale();
       });
+  }
+
+  // V0.83.4：智能退避调度 —— 替换 setInterval，改用 setTimeout 自递归
+  // 成功重置为 60s；失败按 BACKOFF_MS 数组递增（封顶 600s / 10min）
+  function schedule() {
+    if (_timer) clearTimeout(_timer);
+    var idx = Math.min(_consecutiveFails, BACKOFF_MS.length - 1);
+    var wait = BACKOFF_MS[idx];
+    _timer = setTimeout(function () {
+      load().finally(schedule);
+    }, wait);
   }
 
   function boot() {
     ensureStyle();
-    load();
-    setInterval(load, REFRESH_MS);
+    load().finally(schedule);
   }
 
   if (document.readyState === "loading") {

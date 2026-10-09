@@ -550,6 +550,8 @@ window.PM_I18N_zh_TW = {
   "fresh.alert_icon": "⚠",
   "fresh.load_failed": "資料時效載入失敗：",
   "fresh.load_failed_suffix": "（不影響頁面其他資料）",
+  "fresh.stale_chip": "⏳ 離線/快取（資料可能過期）",
+  "fresh.loading_first": "⏳ 資料載入中…",
   "fresh.local_time_suffix": "本地時間",
 
   /* ── a11y 共用 ── */

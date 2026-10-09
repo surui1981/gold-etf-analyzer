@@ -783,6 +783,8 @@ window.PM_I18N_en_US = {
   "fresh.alert_icon": "⚠",
   "fresh.load_failed": "Failed to load freshness: ",
   "fresh.load_failed_suffix": " (other data on page is unaffected)",
+  "fresh.stale_chip": "⏳ offline/cache (data may be stale)",
+  "fresh.loading_first": "⏳ Loading data…",
   "fresh.local_time_suffix": "Local time",
   /* ── V0.74.0 N+17 · Dashboard Layout ─────────────────── */
   "dashboard.btn_reset_layout": "↺ Reset to default layout",

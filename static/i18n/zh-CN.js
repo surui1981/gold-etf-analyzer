@@ -783,6 +783,8 @@ window.PM_I18N_ZH_CN = {
   "fresh.alert_icon": "⚠",
   "fresh.load_failed": "数据时效加载失败：",
   "fresh.load_failed_suffix": "（不影响页面其他数据）",
+  "fresh.stale_chip": "⏳ 离线/缓存（数据可能过期）",
+  "fresh.loading_first": "⏳ 数据加载中…",
   "fresh.local_time_suffix": "本地时间",
   /* ── V0.74.0 N+17 · 仪表盘自定义 ───────────────────────── */
   "dashboard.btn_reset_layout": "↺ 恢复默认布局",
