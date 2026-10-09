@@ -145,12 +145,22 @@ async def get_setting_repository(
 
 
 def get_admin_token() -> str | None:
-    """V0.72.0 P3-b：返回 ``settings.admin_token``（None 表示 dev 模式）。
+    """V0.72.0 P3-b / V0.82 单用户模式豁免。
 
-    由 ``require_admin`` Depends 间接消费。生产部署（``APP_ENV=prod``）必须在
-    ``.env.prod`` 设置一个 ≥32 字符随机串。
+    返回 ``settings.admin_token``；**单用户模式**（``AUTH_ENABLED=false``）或
+    **dev 模式**（``ADMIN_TOKEN`` 未设）时返回 ``None`` ⇒ admin 鉴权跳过。
+
+    由 :func:`app.middleware.admin_auth.require_admin` / :func:`require_admin_session`
+    Depends 间接消费。
+
+    ⚠ **单用户模式豁免**（V0.82）：LAN 部署默认 ``AUTH_ENABLED=false``，
+    admin 鉴权不再需要配置（多用户场景才需要）。
     """
-    return get_settings().admin_token
+    settings = get_settings()
+    if not settings.auth_enabled:
+        # V0.82：单用户模式 → admin 鉴权整体豁免（防 LAN 多终端踩坑）
+        return None
+    return settings.admin_token
 
 
 def get_weight_service(

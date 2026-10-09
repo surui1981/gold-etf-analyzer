@@ -17,9 +17,13 @@ from app.middleware.admin_auth import require_admin
 
 @pytest.fixture
 def app_with_admin(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[FastAPI]:
-    """构建一个带 ``require_admin`` 装饰的最小 app；env 注入 ADMIN_TOKEN。"""
+    """构建一个带 ``require_admin`` 装饰的最小 app；env 注入 ADMIN_TOKEN。
+
+    V0.82 起：AUTH_ENABLED=true 才能触发 admin 校验（单用户模式默认豁免）。
+    """
     token = secrets.token_urlsafe(16)
     monkeypatch.setenv("ADMIN_TOKEN", token)
+    monkeypatch.setenv("AUTH_ENABLED", "true")
     get_settings.cache_clear()  # type: ignore[attr-defined]
 
     app = FastAPI()
