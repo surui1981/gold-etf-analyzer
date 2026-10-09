@@ -161,16 +161,19 @@ class AuthMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self._settings = get_settings()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not str(scope.get("path", "")).startswith("/api/"):
             await self.app(scope, receive, send)
             return
 
+        # V0.82 测试隔离修复：每请求重新取 settings。
+        # 原先在 __init__ 缓存 self._settings，但测试用 get_settings.cache_clear()
+        # 会换出新对象，中间件仍持有旧对象 → 测试互相污染
+        # （admin_token_endpoint → auth_api 链路 12 fail）。
         path = str(scope["path"])
         state: dict[str, Any] = scope.setdefault("state", {})
-        settings = self._settings
+        settings = get_settings()
 
         # ── 单用户模式：完全短路，不读 cookie / 不查库 ──
         if not settings.auth_enabled:
@@ -248,14 +251,14 @@ class CsrfMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
-        self._settings = get_settings()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or not str(scope.get("path", "")).startswith("/api/"):
             await self.app(scope, receive, send)
             return
 
-        settings = self._settings
+        # V0.82 测试隔离修复：每请求重新取 settings（见 AuthMiddleware 同款注释）
+        settings = get_settings()
         if not settings.auth_enabled:
             # 单用户模式：无环境凭据 → 无 CSRF 面；完全不介入（也不下发 cookie）
             await self.app(scope, receive, send)
