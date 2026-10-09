@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     account,
     admin,  # V0.75.3 用户管理
+    admin_token,  # V0.82 admin session cookie 端点
     analysis,
     auth,
     backtest,
@@ -44,3 +45,4 @@ api_router.include_router(telemetry.router)
 api_router.include_router(backtest.router)  # V0.71.0 P3-a
 api_router.include_router(push.router)  # V0.72.0 P3-b Web Push
 api_router.include_router(admin.router)  # V0.75.3 用户管理
+api_router.include_router(admin_token.router)  # V0.82 admin session cookie
