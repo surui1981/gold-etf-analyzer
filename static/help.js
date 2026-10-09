@@ -291,6 +291,7 @@
     return `
       <h3>⚠️ 投资警示</h3>
       <p class="pmh-warn">本工具输出为<strong>研究参考</strong>，不构成投资建议。市场有风险，决策需谨慎。</p>
+      <p style="font-size:11.5px;color:var(--muted);margin-top:-4px" data-i18n="help.source_warn_prompt">完整 5 条要点见各页底部折叠区 / #warn 深链</p>
 
       <h3>数据来源</h3>
       <dl class="pmh-source">

@@ -24,6 +24,16 @@
     unknown: { cls: "fsh-dim", dot: "○" }
   };
 
+  // V0.83 C2 · a11y 优化：状态签名 —— 相同状态跳过 DOM 重写，避免每 60 秒重复 announce
+  // aria-live="polite" 在 innerHTML 每次重写时都会触发屏幕阅读器；相同状态时静默
+  var lastSig = null;
+  function sig(d) {
+    return (d && d.degraded ? "D" : "-") +
+      ((d && d.markets) || []).map(function (m) {
+        return (m.name || "") + "|" + m.freshness + "|" + (m.status || "ok");
+      }).join(";");
+  }
+
   var CSS = [
     ".fresh-bar { display:flex; align-items:center; flex-wrap:wrap; gap:7px 12px;",
     "  background:var(--card,#fff); border:1px solid var(--border,#e5e7eb); border-radius:10px;",
@@ -139,6 +149,24 @@
       ? window.I18n.fmt.time(t)
       : (String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0"));
 
+    // V0.83 C2 · 状态签名：相同状态跳过 innerHTML 重写（aria-live 静默）
+    // 仍然允许挂载新增的离线缓存 chip（如果本轮新出现 swCachedAt）
+    var s = sig(d);
+    if (s === lastSig) {
+      // 幂等挂载：仅当 chip 不存在时才追加
+      if (swCachedAt && !bar.querySelector(".fsh-cached-chip")) {
+        bar.insertAdjacentHTML(
+          "beforeend",
+          '<span class="fsh-chip fsh-bad fsh-alert fsh-cached-chip">' +
+          _t("fresh.offline_cached", "⚠ 本页数据来自离线缓存（{at}），可能已过期")
+            .replace("{at}", fmtCachedAt(swCachedAt)) +
+          "</span>"
+        );
+      }
+      return;
+    }
+    lastSig = s;
+
     bar.className = bar.id === "freshnessInline" ? "fresh-inline" : "fresh-bar";
     bar.innerHTML =
       '<span class="fsh-title">' + _t("fresh.title", "🕒 数据时效") + '</span>' +
@@ -150,7 +178,7 @@
     if (swCachedAt) {
       bar.insertAdjacentHTML(
         "beforeend",
-        '<span class="fsh-chip fsh-bad fsh-alert">' +
+        '<span class="fsh-chip fsh-bad fsh-alert fsh-cached-chip">' +
         _t("fresh.offline_cached", "⚠ 本页数据来自离线缓存（{at}），可能已过期")
           .replace("{at}", fmtCachedAt(swCachedAt)) +
         "</span>"

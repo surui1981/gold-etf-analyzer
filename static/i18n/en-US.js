@@ -55,6 +55,7 @@ window.PM_I18N_en_US = {
   "help.tour_prev": "Prev",
   "help.tour_done": "Done",
   "help.guide_version_title": "What's New",
+  "help.source_warn_prompt": "Full 5-point notice in each page's footer disclosure / #warn deep-link",
 
   /* ── Brand ── */
   "brand.gold": "🏅 Gold ETF Investment Assistant",

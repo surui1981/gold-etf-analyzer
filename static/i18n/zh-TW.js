@@ -56,6 +56,7 @@ window.PM_I18N_zh_TW = {
   "help.tour_prev": "上一步",
   "help.tour_done": "完成",
   "help.guide_version_title": "版本更新",
+  "help.source_warn_prompt": "完整 5 條要點見各頁底部折疊區 / #warn 深鏈",
 
   /* ── 品牌 ── */
   "brand.gold": "🏅 黃金價格投資輔助工具",
