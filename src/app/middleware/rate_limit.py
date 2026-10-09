@@ -8,7 +8,11 @@
   后续多副本部署需换 Redis 共享状态。
 - **env 控制开关** ``RATE_LIMIT_PER_MIN=0`` 禁用（dev 友好）。
 - **不过滤 OPTIONS**：CORS 预检频繁，不应被限速。
-- **不挂在 /static/**：静态资产走 nginx 直出，不经 FastAPI；但走 FastAPI fallback 时仍计数（无副作用）。
+- **跳过 /static/**：静态资产（HTML/JS/CSS/图片）走 FastAPI fallback 时也不计数。
+  - 理由：浏览器一次页面加载会拉 HTML + 5+ JS + 2+ CSS + favicon = 10+ 请求，
+    把静态当 API 一起限会让正常用户频繁看到"加载失败"提示（V0.83.2 实测）。
+  - env ``RATE_LIMIT_SKIP_STATIC=false`` 可关闭（极端场景下需要）。
+  - 仅 API 路径（/api/、/auth/、其他业务路由）进入滑动窗口。
 
 测试
 ----
@@ -28,16 +32,26 @@ WINDOW_SECONDS = 60.0
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """per-IP 滑动窗口限速（默认 120 req/min，env ``RATE_LIMIT_PER_MIN=0`` 禁用）。"""
+    """per-IP 滑动窗口限速（默认 600 req/min，env ``RATE_LIMIT_PER_MIN=0`` 禁用）。
 
-    def __init__(self, app, per_min: int) -> None:
+    V0.83.3 升级：默认 120 → 600，跳过 /static/ 路径。
+    - 实测：单页面加载 ~10 请求 + freshness.js 60s 轮询，120/min 频繁打满，
+      触发"数据时效加载失败"误报。
+    - /static/* 是浏览器自动拉的展示资源（非 API 滥用），与限流目标无关。
+    """
+
+    def __init__(self, app, per_min: int, skip_static: bool = True) -> None:
         super().__init__(app)
         self._per_min = per_min
+        self._skip_static = skip_static
         # IP -> deque[float]（每次请求的 epoch 秒）
         self._hits: dict[str, deque[float]] = defaultdict(deque)
 
     async def dispatch(self, request: Request, call_next):  # type: ignore[override]
+        # 禁用 / OPTIONS / 静态路径 全部 bypass
         if self._per_min <= 0 or request.method == "OPTIONS":
+            return await call_next(request)
+        if self._skip_static and request.url.path.startswith("/static/"):
             return await call_next(request)
 
         ip = self._client_ip(request)

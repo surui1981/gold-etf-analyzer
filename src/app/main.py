@@ -305,7 +305,11 @@ app.add_middleware(TraceIdMiddleware)
 # 位置在 CORS 之后：LIFO 顺序下，限速包在内层先执行；OPTIONS 预检在中间件内部已豁免。
 # 测试环境（app_env='test'）自动禁用：测试套件大量连发请求，限速会误伤 201/200 测试。
 if settings.rate_limit_per_min > 0 and settings.app_env != "test":
-    app.add_middleware(RateLimitMiddleware, per_min=settings.rate_limit_per_min)
+    app.add_middleware(
+        RateLimitMiddleware,
+        per_min=settings.rate_limit_per_min,
+        skip_static=settings.rate_limit_skip_static,
+    )
 
 # CORS：开发期前端（如本地静态页）可直接跨域调用
 app.add_middleware(

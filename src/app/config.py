@@ -83,8 +83,14 @@ class Settings(BaseSettings):
     admin_token: str | None = None
 
     # 限速（per-IP 滑动窗口，60s）。0 = 禁用。
-    # 默认 120 req/min（足够 9 页 SPA + 60s 轮询）；生产调高 240 应对异常峰值。
-    rate_limit_per_min: int = 120
+    # V0.83.3：默认 120 → 600（实测单页面 + 60s 轮询 ≈ 10 req/min/tab，120 频繁打满）
+    # + 默认跳过 /static/ 路径（见 rate_limit_skip_static）
+    rate_limit_per_min: int = 600
+
+    # 限速是否跳过 /static/ 路径。默认 true：静态资源（HTML/JS/CSS/图片）不计入
+    # 滑动窗口，仅 API 路径（/api/、/auth/、其他业务路由）受 600/min 限制。
+    # 极端场景（怀疑有人在 /static/ 下做 DoS）可关 false 重新纳入计数。
+    rate_limit_skip_static: bool = True
 
     # ===== V0.75.0 · 认证骨架（多用户登录）=====
     # 总开关。**默认 false = 单用户模式**：不解析会话、不校验 CSRF、

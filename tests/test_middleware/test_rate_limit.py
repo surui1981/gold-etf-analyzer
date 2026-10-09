@@ -115,3 +115,62 @@ async def test_options_bypasses_limit(app_limited: FastAPI) -> None:
             r = await client.options("/ping", headers={"X-Forwarded-For": "1.2.3.4"})
             assert r.status_code != 429  # 限速未拦截
             assert r.status_code == 405  # FastAPI 不处理 OPTIONS（正常）
+
+
+# ───────────────────── V0.83.3 · /static/ bypass ─────────────────────
+
+
+@pytest.fixture
+def app_skip_static() -> AsyncIterator[FastAPI]:
+    """限速 5 req/min + skip_static=True + 同时挂 /api 和 /static 路由。"""
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, per_min=5, skip_static=True)
+
+    @app.get("/api/ping")
+    async def api_ping() -> dict[str, str]:
+        return {"ok": "true"}
+
+    @app.get("/static/ping")
+    async def static_ping() -> dict[str, str]:
+        return {"ok": "true"}
+
+    yield app
+
+
+async def test_static_path_bypasses_limit(app_skip_static: FastAPI) -> None:
+    """/static/ 路径不计入滑动窗口（V0.83.3）。
+
+    验证点：超 5 倍限制的 /static/ping 请求全部 200；同时 /api/ping 仍受
+    5 req/min 限制（用以证明中间件没有"完全失效"）。
+    """
+    transport = ASGITransport(app=app_skip_static)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # 1) /static/ping 30 次全过（远超 5 req/min 限制）
+        for _ in range(30):
+            r = await client.get("/static/ping", headers={"X-Forwarded-For": "9.9.9.9"})
+            assert r.status_code == 200
+        # 2) /api/ping 仍受限制：第 6 次 429
+        for _ in range(5):
+            r = await client.get("/api/ping", headers={"X-Forwarded-For": "9.9.9.9"})
+            assert r.status_code == 200
+        r = await client.get("/api/ping", headers={"X-Forwarded-For": "9.9.9.9"})
+        assert r.status_code == 429
+
+
+async def test_static_skip_can_be_disabled() -> None:
+    """skip_static=False 时 /static/ 也计入滑动窗口。"""
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, per_min=2, skip_static=False)
+
+    @app.get("/static/ping")
+    async def static_ping() -> dict[str, str]:
+        return {"ok": "true"}
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for _ in range(2):
+            r = await client.get("/static/ping", headers={"X-Forwarded-For": "8.8.8.8"})
+            assert r.status_code == 200
+        r = await client.get("/static/ping", headers={"X-Forwarded-For": "8.8.8.8"})
+        assert r.status_code == 429
+
