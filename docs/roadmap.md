@@ -1,4 +1,4 @@
-# 开发版本推进线路图（V0.78.0 → V0.82.0+）
+# 开发版本推进线路图（V0.78.0 → V0.83.0+）
 
 > **配套文档**：
 > - [parameter-evaluation.md](parameter-evaluation.md) — **8 项参数问题诊断 + 推荐新值**（本路线图的输入）
@@ -19,7 +19,7 @@
 V0.77.2 ──┬───────────┬───────────┬───────────┬───────────▶ 持续
 (当前)    │           │           │           │
           ▼           ▼           ▼           ▼
-       V0.78.0    V0.79.0    V0.80.0    V0.82.0+
+       V0.78.0    V0.79.0    V0.80.0    V0.83.0+
        10月中旬    11月中旬    12月-1月     Q1-Q2
        "一致性"    "自适应"    "可执行化"   "多市场 + 收尾"
        5 天        4-6 周      2-3 月      2-3 月
@@ -618,7 +618,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 
 ---
 
-## 4. V0.82.0+ · 多市场独立校准 + 长线
+## 4. V0.84.0+ · 多市场独立校准 + 长线
 
 **主题**：**多市场 + 收尾**。
 **预计时间**：2-3 月（2027-02-01 至 2027-04-30）
@@ -629,8 +629,10 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | ID | 改进 | 优先级 | 工作量 | 备注 |
 |----|------|--------|--------|------|
 | K | 多市场参数差异化（白银 / 黄金 / ETF） | P3 | 2 月 | parameter-evaluation §4.3 |
+| L | 110 个 i18n 预存 gap 修复 | P0 | 1 周 | V0.83.0 暴露：trend / portfolio / backtest / trades / silver / settings / review / weights / central_bank 的 zh-TW 缺 key，独立 ticket |
+| M | 共享 topnav 抽离 | P1 | 1 周 | V0.83.0 复制粘贴 8 处 nav markup，独立 PR |
 
-### 4.2 长线方向（V0.83.0+）
+### 4.2 长线方向（V0.84.0+）
 
 - **公开部署真实域名**（P3 #16）—— 等用户提供域名 + 证书
 - **模拟交易**（P3 #13）—— 不落真实流水，验证策略后切主路径
@@ -730,6 +732,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.80.1 | ✅ 2026-10-08（**提前**） | Bugfix：prod 写端点自动附加 `X-Admin-Token`（`auth.js` 全局 fetch 打补丁）。原排期 2027-02 |
 | V0.81.1 | ✅ 2026-10-08（**同日第二个补丁版**） | Bugfix：admin token 缺失提示横幅（401 + `admin token required` 时引导去设置页，每会话一次）。**提前于任何排期** —— 是 V0.80.1 的直接后遗症。见 `docs/releases/v0.81.1.md` |
 | V0.82.0 | ✅ 2026-10-09（**提前于 2027-04 排期**） | LAN 多终端 admin token 修：双通道（header + cookie）+ 单用户模式 `AUTH_ENABLED=false` 整体豁免；settings 页「设置 Session」按钮一次配置整浏览器生命周期有效。含中间件测试隔离修复（`f46838b`）。**重大语义调整**：原本 V0.82 规划是「多市场独立校准」，改为优先解决 LAN 真实痛点（多终端写操作被 401）；多市场 K 顺延至 V0.83+。见 `docs/releases/v0.82.0.md` |
+| V0.83.0 | ✅ 2026-10-10 | 主页 UI 改版 + 8 页面警示合并 + 静态门禁强化。6 commits：trend.html redesign（双行 nav + `#freshnessInline` 集中时效 + `<details>` 警示折叠）+ 顶 nav i18n 修复 + warning.js a11y 兜底（aria-describedby / HC 模式 / 44px 触控）+ freshness 状态变更 diff + 8 页（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）迁移 V0.83 模式 + 静态门禁强化（`check_cluster_render` V0.83 节 73 条 + 新 `check_i18n_keys.py` V0.83-scope 严格 + 新 `puppeteer_v083.mjs` 72 组合 1418/1418）。多市场 K 继续顺延 V0.84+。遗留：110 个 i18n 预存 gap + 共享 topnav 抽离两个独立 ticket。见 `docs/releases/v0.83.0.md` |
 
 **维护任务清单**（每小版本至少 1 项）：
 - [ ] `ruff check` 警告清零
@@ -831,7 +834,7 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.78.0 | A, B, C, D |
 | V0.79.0 | E, F, G, H |
 | V0.80.0 | I, J |
-| V0.82.0+ | K |
+| V0.84.0+ | K, L, M |
 
 **11 项改进全部覆盖**，无遗漏。
 
@@ -844,10 +847,10 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | P1 #1-6（CI / Alembic / 行情源 / 多账户） | ✅ 已完成 | — |
 | P2 #7-11（共振 / 克数 / 多时间框架 / 回测 / 多品种） | ✅ 已完成 | — |
 | P3 #12 仓位推荐 | 🟡 半成品 | **V0.80.0 J** 闭环 |
-| P3 #13 模拟交易 | 🟡 半成品 | **V0.83.0+** |
+| P3 #13 模拟交易 | 🟡 半成品 | **V0.84.0+** |
 | P3 #14 指数曲线 | ✅ | — |
 | P3 #15 监控告警 | 🟡（数据源失败告警未做） | **V0.79.x 维护线** 排期 |
-| P3 #16 公开部署 | 🟡 | **V0.83.0+** 等用户提供域名 |
+| P3 #16 公开部署 | 🟡 | **V0.84.0+** 等用户提供域名 |
 | 6.5 个性化与上下文记忆 | 🟡 | **V0.79.0 F** 部分覆盖 |
 | 6.9 加载与离线 | ✅ | — |
 | 6.11 研判复盘 | ✅ | — |
