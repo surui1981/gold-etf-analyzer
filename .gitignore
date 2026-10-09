@@ -9,8 +9,12 @@ dist/
 
 # 环境变量（含密钥，绝不入库）
 .env
+.env.local
 .env.prod
 .env.prod.local
+
+# Node（puppeteer-core 依赖）
+node_modules/
 
 # 运行时数据
 data/

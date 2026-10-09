@@ -953,6 +953,63 @@ await Promise.all(pending);
   }
 }
 
+// V0.83 commit 4 · 8 页面迁移 V0.83 模式
+{
+  console.log("\n[V0.83 C4] 8 页面迁移 V0.83 模式（topnav + warn-footer + freshnessInline）");
+  const MIGRATED_PAGES = [
+    "silver.html", "portfolio.html", "weights.html", "trades.html",
+    "backtest.html", "data-health.html", "central_bank.html", "review.html",
+  ];
+  // 每页期望的 bullet 数（plan 设计的差异点）
+  const EXPECT_BULLETS = {
+    "silver.html": 5, "portfolio.html": 5, "weights.html": 5, "trades.html": 5,
+    "backtest.html": 5, "data-health.html": 3, "central_bank.html": 4, "review.html": 5,
+  };
+  for (const page of MIGRATED_PAGES) {
+    const src = read(page);
+    // 1) 顶 nav 双行
+    ok(`${page} :: class="topnav-meta" 存在`, src.includes('class="topnav-meta"'));
+    // 2) nav-warn-toggle
+    ok(`${page} :: nav-warn-toggle (data-warn-toggle + aria-controls) 存在`,
+       src.includes('data-warn-toggle') && src.includes('aria-controls="warnFooter"'));
+    // 3) freshnessInline 挂载点 + aria-live
+    ok(`${page} :: #freshnessInline 挂载 + aria-live=polite`,
+       /id="freshnessInline"[^>]*aria-live="polite"/.test(src));
+    // 4) warn-footer details
+    ok(`${page} :: <details id="warnFooter" class="warn-footer"> 存在`,
+       /<details id="warnFooter"[^>]*class="warn-footer"/.test(src));
+    // 5) 旧 div.warn-banner 已移除
+    ok(`${page} :: 旧 <div class="warn-banner"> 已移除`, !src.includes('<div class="warn-banner">'));
+    // 6) aria-describedby=warnDismissHint（C1 a11y）
+    ok(`${page} :: dismiss aria-describedby="warnDismissHint"`,
+       src.includes('aria-describedby="warnDismissHint"'));
+    // 7) summary min-height: 44px（C1 触控目标）
+    ok(`${page} :: .warn-footer > summary min-height: 44px`,
+       /\.warn-footer\s*>\s*summary[^}]*min-height:\s*44px/.test(src));
+    // 8) warning.js script 标签
+    ok(`${page} :: <script src="/static/warning.js"> 引入`,
+       /<script src="\/static\/warning\.js"/.test(src));
+    // 9) bullet 数与 plan 一致
+    const olMatch = src.match(/<details id="warnFooter"[\s\S]*?<\/details>/);
+    const liCount = olMatch ? (olMatch[0].match(/<li[\s>]/g) || []).length : 0;
+    ok(`${page} :: warn-footer bullet 数 = ${EXPECT_BULLETS[page]}`,
+       liCount === EXPECT_BULLETS[page], `actual=${liCount}`);
+  }
+  // 跨页一致性：使用通用 5 条 warn.b*_strong/_rest 的 4 页文本 zh-CN 完全一致
+  // （plan 设计：silver/backtest 保留页面特定 keys；data-health/central_bank 用各自 i18n keys）
+  const genericPages = ["portfolio.html", "weights.html", "trades.html", "review.html"];
+  const liTextRegex = /<details id="warnFooter"[\s\S]*?<\/details>/;
+  const bulletStrings = genericPages.map((p) => {
+    const m = read(p).match(liTextRegex);
+    if (!m) return null;
+    return Array.from(m[0].matchAll(/<li(?:\s[^>]*)?>([\s\S]*?)<\/li>/g)).map((x) => x[1].replace(/<[^>]+>/g, "").trim());
+  });
+  const ref = bulletStrings[0];
+  const allMatch = ref && bulletStrings.every((b) => b && b.length === ref.length && b.every((t, i) => t === ref[i]));
+  ok("跨页通用 4 页 (portfolio/weights/trades/review) 5 条 bullet 文本 zh-CN 完全一致", allMatch,
+     allMatch ? "" : `differ: ${JSON.stringify(bulletStrings)}`);
+}
+
 console.log("\n" + "=".repeat(70));
 console.log(`结果：${pass} passed / ${fail} failed`);
 console.log("=".repeat(70));
