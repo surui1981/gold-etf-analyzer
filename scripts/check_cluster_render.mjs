@@ -996,9 +996,9 @@ await Promise.all(pending);
        !/\.warn-footer\s*\{/.test(src));
     // 5) 旧 div.warn-banner 已移除
     ok(`${page} :: 旧 <div class="warn-banner"> 已移除`, !src.includes('<div class="warn-banner">'));
-    // 6) summary 内含 #freshnessInline + .status-warn-pill
-    ok(`${page} :: summary 内含 #freshnessInline 挂载点`,
-       /<summary>[\s\S]*?id="freshnessInline"[\s\S]*?<\/summary>/.test(src));
+    // 6) summary 内含 #healthSummary + .status-warn-pill（V0.85.0：freshnessInline → healthSummary）
+    ok(`${page} :: summary 内含 #healthSummary 挂载点`,
+       /<summary>[\s\S]*?id="healthSummary"[\s\S]*?<\/summary>/.test(src));
     ok(`${page} :: summary 内含 .status-warn-pill + [data-warn-count]`,
        /<summary>[\s\S]*?class="status-warn-pill"[\s\S]*?<span data-warn-count>/.test(src));
     // 7) aria-describedby=warnDismissHint（C1 a11y）
@@ -1029,6 +1029,59 @@ await Promise.all(pending);
   const allMatch = ref && bulletStrings.every((b) => b && b.length === ref.length && b.every((t, i) => t === ref[i]));
   ok("跨页通用 4 页 (portfolio/weights/trades/review) 5 条 bullet 文本 zh-CN 完全一致", allMatch,
      allMatch ? "" : `differ: ${JSON.stringify(bulletStrings)}`);
+}
+
+// V0.85.0 · 数据时效迁移到 /data-health.html（summary = 健康摘要 chip + 警示 pill）
+{
+  console.log("\n[V0.85.0 C] 9 页 #freshnessInline → #healthSummary 迁移 + trend.html history 折叠");
+  const HEALTH_PAGES = [
+    "backtest.html", "central_bank.html", "data-health.html",
+    "portfolio.html", "review.html", "silver.html",
+    "trades.html", "trend.html", "weights.html"
+  ];
+  for (const page of HEALTH_PAGES) {
+    const src = read(page);
+    // 1) 旧 mount id 已移除（注释 / 字符串残留不计 — 只看 live element id）
+    ok(`${page} :: <span id="freshnessInline"> live mount 已移除`,
+       !/<(?:span|a)\s+id="freshnessInline"/.test(src));
+    // 2) 新 mount id 存在
+    ok(`${page} :: <a|span id="healthSummary"> 挂载点存在`,
+       /<(?:a|span)\s+id="healthSummary"/.test(src));
+    // 3) health-summary.js script 标签（9 页统一）
+    ok(`${page} :: <script src="/static/health-summary.js"> 引入`,
+       /<script src="\/static\/health-summary\.js"/.test(src));
+    // 4) freshness.js script 标签不再出现（live 引用已删除；silver 动态注入也改了）
+    ok(`${page} :: 旧 <script src="/static/freshness.js"> 已移除`,
+       !/<script src="\/static\/freshness\.js"/.test(src) && !/fs\.src\s*=\s*"\/static\/freshness\.js"/.test(src));
+    // 5) CSS 选择器从 #freshnessInline 改为 #healthSummary
+    ok(`${page} :: CSS 选择器 #freshnessInline → #healthSummary`,
+       /\.status-panel\s*>\s*summary\s+#healthSummary/.test(src) &&
+       !/\.status-panel\s*>\s*summary\s+#freshnessInline/.test(src));
+    // 6) 非 health 页 chip link；data-health 页是 panel
+    const isHealth = page === "data-health.html";
+    ok(`${page} :: ${isHealth ? "hs-panel (4-chip panel)" : "hs-chip-link (a→data-health)"}`,
+       isHealth
+         ? /<span\s+id="healthSummary"\s+class="hs-panel"/.test(src)
+         : /<a\s+id="healthSummary"\s+class="hs-chip-link"\s+href="\/data-health\.html"/.test(src));
+  }
+  // 7) trend.html history 面板默认折叠（details + class=panel-collapse，无 open 属性）
+  const trendSrc = read("trend.html");
+  ok(`trend.html :: history 面板 <details class="panel panel-collapse"> 包裹`,
+     /<details\s+class="panel\s+panel-collapse"[^>]*>\s*<summary[^>]*>[\s\S]*?snapSub/.test(trendSrc));
+  ok(`trend.html :: history 默认折叠（无 open 属性在 details 标签上）`,
+     !/<details\s+class="panel\s+panel-collapse"[^>]*\sopen[\s>=]/.test(trendSrc));
+  // 8) health-summary.js 内置 healthSummaryStyle 注入 + chip / panel CSS 关键类
+  const hsSrc = readFileSync(join(STATIC_DIR, "health-summary.js"), "utf8");
+  ok(`health-summary.js :: #healthSummaryStyle 自注入`,
+     hsSrc.includes('"healthSummaryStyle"'));
+  ok(`health-summary.js :: .hs-chip-link CSS 定义`,
+     /#healthSummary\.hs-chip-link/.test(hsSrc));
+  ok(`health-summary.js :: .hs-panel CSS 定义`,
+     /#healthSummary\.hs-panel/.test(hsSrc));
+  ok(`health-summary.js :: stopPropagation 绑定（阻止 chip 点击触发 disclosure）`,
+     /stopPropagation/.test(hsSrc));
+  ok(`health-summary.js :: BACKOFF_MS 智能退避（同 freshness.js 60→120→300→600s）`,
+     /60000.*120000.*300000.*600000/s.test(hsSrc));
 }
 
 console.log("\n" + "=".repeat(70));
