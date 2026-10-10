@@ -780,6 +780,9 @@ window.PM_I18N_zh_TW = {
   /* V0.83：投資警示 disclosure 雙向 toggle + sessionStorage 記憶 */
   "warn.collapse_toggle": "⚠️ 投資警示",
   "warn.dismiss_session": "本次工作階段不再展開",
+  /* V0.84.0：狀態條 pill（資料時效 + 警示計數合併 1 行） */
+  "status.warn_pill_label": "投資警示",
+  "status.warn_pill_unit": "條要點",
   /* V0.82 commit 4：admin session cookie UI（設定頁「設定 Session」按鈕等） */
   "settings.section_session_sub": "—— 或使用 Session Cookie ——",
   "settings.section_session_desc": "在多終端 LAN 場景下，<strong>HttpOnly cookie</strong> 比 localStorage 更省心：瀏覽器所有同源分頁 / 重新打開都自動帶上，無需逐台機器再設。提交後會設 30 天有效；後端用 HMAC-SHA256 簽章校驗，不存表。",

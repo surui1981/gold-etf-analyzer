@@ -218,10 +218,15 @@
     try { return localStorage.getItem(LS_KEY); } catch (e) { return null; }
   }
 
-  function init() {
+  async function init() {
     syncLoadDefault();
     const saved = getSavedLang();
     state.lang = saved && SUPPORTED.indexOf(saved) >= 0 ? saved : DEFAULT_LANG;
+    // V0.84.0：若 saved != DEFAULT_LANG 需先 await loadLang() 让对应 dict 进入内存，
+    // 否则 apply() 会回退到 zh-CN 字面量（setLang() 内部已 await，但 init() 历史漏写）
+    if (state.lang !== DEFAULT_LANG) {
+      await loadLang(state.lang);
+    }
     document.documentElement.setAttribute("lang", state.lang);
     document.body.setAttribute("data-lang", state.lang);
     apply(document.body);
@@ -246,7 +251,7 @@
   };
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
+    document.addEventListener("DOMContentLoaded", function () { init(); });
   } else {
     init();
   }

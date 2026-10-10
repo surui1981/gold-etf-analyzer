@@ -58,32 +58,40 @@
   .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,.25); }
   .topnav a.active .nav-ico { opacity:1; }
-  .topnav .topnav-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-    padding: 4px 4px 2px; border-top: 1px dashed rgba(255,255,255,.08); }
-  .topnav .topnav-meta .fresh-inline { flex: 1 1 auto; min-width: 0; }
-  .topnav .topnav-meta .nav-warn-toggle { display:inline-flex; align-items:center; gap:5px;
-    background: rgba(245,217,122,.10); color: #f5d97a; border: 1px solid rgba(245,217,122,.28);
-    font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; flex-shrink: 0;
-    transition: background .15s; }
-  .topnav .topnav-meta .nav-warn-toggle:hover { background: rgba(245,217,122,.18); }
   /* V0.83 C3 · 投资警示折叠区 */
-  .warn-footer { background: #1f2329; color: #eef0f3; border-radius: 12px; margin: 16px 0 12px;
-    border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
-  .warn-footer > summary { list-style: none; cursor: pointer; padding: 12px 18px;
-    color: #f5d97a; font-weight: 700; font-size: 13.5px; letter-spacing: .5px;
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  /* V0.84.0 方案 C：状态条 disclosure（数据时效 + 警示计数合并 1 行）
+     summary 装 #freshnessInline + 警示计数 pill（~36px 1 行）
+     body 装完整警示 + dismiss checkbox。由 warning.js 维持展开态。 */
+  .status-panel { background: #1f2329; color: #eef0f3; border-radius: 12px;
+    margin: 0 0 12px; border-left: 4px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
+  .status-panel > summary { list-style: none; cursor: pointer; padding: 10px 18px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     user-select: none; min-height: 44px; box-sizing: border-box; }
-  .warn-footer > summary::-webkit-details-marker { display: none; }
-  .warn-footer > summary::after { content: "▾"; font-size: 14px; opacity: .6; transition: transform .2s; }
-  .warn-footer[open] > summary::after { transform: rotate(180deg); }
-  .warn-footer .warn-body { padding: 4px 18px 14px; }
-  .warn-footer ol { margin: 0; padding-left: 20px; }
-  .warn-footer li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
-  .warn-footer li b { color: #ffffff; }
-  .warn-footer .warn-dismiss { display:inline-flex; align-items:center; gap:6px; margin-top:8px;
-    font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
-  .warn-footer .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
-  .warn-footer:not([open]) { margin-top: 16px; }
+  .status-panel > summary::-webkit-details-marker { display: none; }
+  .status-panel > summary::after { content: "▾"; font-size: 14px; opacity: .6;
+    margin-left: auto; flex-shrink: 0; transition: transform .2s; }
+  .status-panel[open] > summary::after { transform: rotate(180deg); }
+  .status-panel > summary #freshnessInline { flex: 1 1 auto; min-width: 0; }
+  .status-panel > summary .status-sep { width: 1px; height: 16px;
+    background: rgba(255,255,255,.18); flex-shrink: 0; }
+  .status-panel > summary .status-warn-pill { display: inline-flex; align-items: center;
+    gap: 4px; background: rgba(245,217,122,.10); color: #f5d97a;
+    border: 1px solid rgba(245,217,122,.28); font-size: 11.5px; padding: 2px 9px;
+    border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+  .status-panel > summary .warn-pill-label { font-weight: 600; }
+  .status-panel > summary [data-warn-count] { font-weight: 700;
+    font-variant-numeric: tabular-nums; padding: 0 1px; }
+  .status-panel:not([open]) > .status-body { display: none; }
+  .status-panel > .status-body { border-top: 1px dashed rgba(255,255,255,.10);
+    padding: 10px 18px 14px; }
+  .status-panel .warn-list { margin: 0; padding-left: 20px; }
+  .status-panel .warn-list li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .status-panel .warn-list li b { color: #ffffff; }
+  .status-panel .warn-dismiss { display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
+  .status-panel .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
+  /* 老 .warn-footer / .topnav-meta 全部弃用（不留兼容） */
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
   .card h2 { font-size: 15px; margin-bottom: 12px; }
   .hero { margin-bottom: 16px; }
@@ -145,16 +153,26 @@
   <div id="topnav-mount"></div>
   <script src="/static/topnav.js"></script>
 
-  <!-- V0.83 C3：投资警示合并到底部可折叠区（trades 此前无 warn-banner，新增以保持全站统一） -->
-  <details id="warnFooter" class="warn-footer">
-    <summary><span data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</span></summary>
-    <div class="warn-body">
-      <ol>
-        <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
-        <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
-        <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
-        <li><b data-i18n="warn.b4_strong">不被情绪波动左右，坚守投资纪律</b><span data-i18n="warn.b4_rest">——对自己的每一笔决策负责。</span></li>
-        <li><b data-i18n="warn.b5_strong">数据来源与风险声明</b><span data-i18n="warn.b5_rest">——数据来自 AKShare（新浪/东方财富/英为财情/上金所），仅供研究参考，不构成投资建议。</span></li>
+  <!-- V0.84.0 方案 C · 状态条 disclosure：summary = 时效 chips + 警示计数 pill（1 行 ~36px）；
+       body = 完整警示 + dismiss checkbox。由 warning.js 维持展开态。 -->
+  <details id="statusPanel" class="status-panel">
+    <summary>
+      <span id="freshnessInline" aria-live="polite" aria-atomic="false"></span>
+      <span class="status-sep" aria-hidden="true"></span>
+      <span class="status-warn-pill">
+        <span class="warn-pill-icon" aria-hidden="true">⚠️</span>
+        <span class="warn-pill-label" data-i18n="status.warn_pill_label">投资警示</span>
+        <span data-warn-count>5</span>
+        <span data-i18n="status.warn_pill_unit">条要点</span>
+      </span>
+    </summary>
+    <div class="status-body">
+      <ol class="warn-list">
+        <li><b data-i18n="warn.b1_strong"></b><span data-i18n="warn.b1_rest"></span></li>
+        <li><b data-i18n="warn.b2_strong"></b><span data-i18n="warn.b2_rest"></span></li>
+        <li><b data-i18n="warn.b3_strong"></b><span data-i18n="warn.b3_rest"></span></li>
+        <li><b data-i18n="warn.b4_strong"></b><span data-i18n="warn.b4_rest"></span></li>
+        <li><b data-i18n="warn.b5_strong"></b><span data-i18n="warn.b5_rest"></span></li>
       </ol>
       <label class="warn-dismiss">
         <input type="checkbox" data-warn-dismiss aria-describedby="warnDismissHint">
@@ -162,6 +180,7 @@
       </label>
     </div>
   </details>
+
 
   <header class="hero">
     <h1 data-i18n="trades.h1">交易历史查询</h1>

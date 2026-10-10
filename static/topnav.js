@@ -1,5 +1,5 @@
 /*!
- * static/topnav.js — V0.83.2 · 共享顶 nav 同步注入（roadmap §4.1 M）
+ * static/topnav.js — V0.84.0 · 共享顶 nav 同步注入（roadmap §4.1 M）
  *
  * 设计动机：8 页面原本各复制粘贴 25 行 nav markup（trend.html 主页 + silver /
  * portfolio / weights / trades / backtest / data-health / central_bank / review），
@@ -19,11 +19,16 @@
  * 4. **i18n 走原 `data-i18n` 协议**：注入的 nav 元素带 `data-i18n="nav.trend"`
  *    等属性，i18n.js（defer）按既有流程翻译；fb 默认文本（zh-CN）兜底显示，
  *    用户切到 zh-TW / en-US 后 i18n.js 替换。
+ * 5. **V0.84.0：顶 nav 收为 1 行**（brand + 11 links）。原 row 2 的时效条 +
+ *    警示按钮下沉到 `<details id="statusPanel">` —— 数据时效在 summary 内
+ *    持续可见，警示以「⚠️ N 条要点」pill 形式同行右对齐；点开看警示全文。
+ *    这样释放 ~36px 顶 nav 高度 + 删底部 warnFooter，腾出版面给 main。
  *
  * 加载方式：紧跟 `<div id="topnav-mount"></div>` 之后，例如：
  *   <div class="wrap">
  *     <div id="topnav-mount"></div>
  *     <script src="/static/topnav.js"></script>
+ *     <details id="statusPanel" class="status-panel">...</details>
  *     <section>... 页面主体 ...</section>
  *   </div>
  *
@@ -81,18 +86,13 @@
         '<span data-i18n="' + escAttr(l.i18n) + '">' + l.fb + '</span>' +
       '</a>';
     }).join("\n        ");
-    return '<!-- V0.83.2 · 共享 topnav（topnav.js 同步注入） -->\n' +
+    return '<!-- V0.84.0 · 共享 topnav（topnav.js 同步注入，1 行 brand+links） -->\n' +
       '<nav class="topnav" aria-label="主导航">\n' +
       '  <div class="topnav-row">\n' +
       '    ' + brandHTML + '\n' +
       '    <div class="links">\n' +
       '      ' + linksHTML + '\n' +
       '    </div>\n' +
-      '  </div>\n' +
-      '  <div class="topnav-meta">\n' +
-      '    <div id="freshnessInline" aria-live="polite" aria-atomic="false"></div>\n' +
-      '    <button class="nav-warn-toggle" type="button" data-warn-toggle aria-expanded="false" ' +
-              'aria-controls="warnFooter" data-i18n="warn.collapse_toggle">⚠️ 投资警示</button>\n' +
       '  </div>\n' +
       '</nav>';
   }

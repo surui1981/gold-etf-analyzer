@@ -955,16 +955,16 @@ await Promise.all(pending);
   }
 }
 
-// V0.83 commit 4 · 8 页面迁移 V0.83 模式
+// V0.84.0 · 状态条方案 C（顶 nav 收 1 行 + statusPanel 合并 freshness+warn）
 {
-  console.log("\n[V0.83 C4] 8 页面迁移 V0.83 模式（topnav + warn-footer + freshnessInline）");
+  console.log("\n[V0.84.0 C] 9 页面状态条 statusPanel 迁移（freshness + warn 合并 1 行）");
   const MIGRATED_PAGES = [
-    "silver.html", "portfolio.html", "weights.html", "trades.html",
+    "trend.html", "silver.html", "portfolio.html", "weights.html", "trades.html",
     "backtest.html", "data-health.html", "central_bank.html", "review.html",
   ];
   // 每页期望的 bullet 数（plan 设计的差异点）
   const EXPECT_BULLETS = {
-    "silver.html": 5, "portfolio.html": 5, "weights.html": 5, "trades.html": 5,
+    "trend.html": 5, "silver.html": 5, "portfolio.html": 5, "weights.html": 5, "trades.html": 5,
     "backtest.html": 5, "data-health.html": 3, "central_bank.html": 4, "review.html": 5,
   };
   for (const page of MIGRATED_PAGES) {
@@ -976,39 +976,50 @@ await Promise.all(pending);
     // 旧 <nav class="topnav"> 内联 markup 已清除（避免重复 nav）
     ok(`${page} :: 旧 <nav class="topnav"> 内联 markup 已移除`,
        !/<nav class="topnav"/.test(src));
-    // 共享 topnav.js 内含 nav-warn-toggle + freshnessInline 注入模板
+    // V0.84.0：顶 nav 1 行（无 .topnav-meta）
+    ok(`${page} :: 旧 .topnav .topnav-meta CSS 已移除`,
+       !/\.topnav\s+\.topnav-meta\s*\{/.test(src));
+    ok(`${page} :: 旧 [data-warn-toggle] 按钮已移除`, !src.includes('data-warn-toggle'));
+    // 共享 topnav.js 内含 11 链接 + 1 行 markup
     const topnavSrc = read("topnav.js");
     ok(`topnav.js :: 含 11 条 NAV_LINKS 配置`,
        (topnavSrc.match(/path:\s*"/g) || []).length === 11,
        `actual=${(topnavSrc.match(/path:\s*"/g) || []).length}`);
-    ok(`topnav.js :: 含 #freshnessInline 挂载 + aria-live=polite`,
-       topnavSrc.includes('id="freshnessInline"') && topnavSrc.includes('aria-live="polite"'));
-    ok(`topnav.js :: 含 nav-warn-toggle + aria-controls=warnFooter`,
-       topnavSrc.includes('data-warn-toggle') && topnavSrc.includes('aria-controls="warnFooter"'));
-    // 4) warn-footer details
-    ok(`${page} :: <details id="warnFooter" class="warn-footer"> 存在`,
-       /<details id="warnFooter"[^>]*class="warn-footer"/.test(src));
+    ok(`topnav.js :: 顶 nav 已收 1 行（无 .topnav-meta）`,
+       !topnavSrc.includes('topnav-meta'));
+    // V0.84.0：statusPanel 取代 warnFooter
+    ok(`${page} :: <details id="statusPanel" class="status-panel"> 存在`,
+       /<details id="statusPanel"[^>]*class="status-panel"/.test(src));
+    ok(`${page} :: 旧 <details id="warnFooter"> 已移除`,
+       !/<details id="warnFooter"/.test(src));
+    ok(`${page} :: 旧 .warn-footer CSS 已移除`,
+       !/\.warn-footer\s*\{/.test(src));
     // 5) 旧 div.warn-banner 已移除
     ok(`${page} :: 旧 <div class="warn-banner"> 已移除`, !src.includes('<div class="warn-banner">'));
-    // 6) aria-describedby=warnDismissHint（C1 a11y）
+    // 6) summary 内含 #freshnessInline + .status-warn-pill
+    ok(`${page} :: summary 内含 #freshnessInline 挂载点`,
+       /<summary>[\s\S]*?id="freshnessInline"[\s\S]*?<\/summary>/.test(src));
+    ok(`${page} :: summary 内含 .status-warn-pill + [data-warn-count]`,
+       /<summary>[\s\S]*?class="status-warn-pill"[\s\S]*?<span data-warn-count>/.test(src));
+    // 7) aria-describedby=warnDismissHint（C1 a11y）
     ok(`${page} :: dismiss aria-describedby="warnDismissHint"`,
        src.includes('aria-describedby="warnDismissHint"'));
-    // 7) summary min-height: 44px（C1 触控目标）
-    ok(`${page} :: .warn-footer > summary min-height: 44px`,
-       /\.warn-footer\s*>\s*summary[^}]*min-height:\s*44px/.test(src));
-    // 8) warning.js script 标签
+    // 8) status-panel > summary min-height: 44px（C1 触控目标 + V0.84 保留）
+    ok(`${page} :: .status-panel > summary min-height: 44px`,
+       /\.status-panel\s*>\s*summary[^}]*min-height:\s*44px/.test(src));
+    // 9) warning.js script 标签
     ok(`${page} :: <script src="/static/warning.js"> 引入`,
        /<script src="\/static\/warning\.js"/.test(src));
-    // 9) bullet 数与 plan 一致
-    const olMatch = src.match(/<details id="warnFooter"[\s\S]*?<\/details>/);
+    // 10) bullet 数与 plan 一致
+    const olMatch = src.match(/<details id="statusPanel"[\s\S]*?<\/details>/);
     const liCount = olMatch ? (olMatch[0].match(/<li[\s>]/g) || []).length : 0;
-    ok(`${page} :: warn-footer bullet 数 = ${EXPECT_BULLETS[page]}`,
+    ok(`${page} :: statusPanel warn-list li 数 = ${EXPECT_BULLETS[page]}`,
        liCount === EXPECT_BULLETS[page], `actual=${liCount}`);
   }
   // 跨页一致性：使用通用 5 条 warn.b*_strong/_rest 的 4 页文本 zh-CN 完全一致
   // （plan 设计：silver/backtest 保留页面特定 keys；data-health/central_bank 用各自 i18n keys）
   const genericPages = ["portfolio.html", "weights.html", "trades.html", "review.html"];
-  const liTextRegex = /<details id="warnFooter"[\s\S]*?<\/details>/;
+  const liTextRegex = /<details id="statusPanel"[\s\S]*?<\/details>/;
   const bulletStrings = genericPages.map((p) => {
     const m = read(p).match(liTextRegex);
     if (!m) return null;

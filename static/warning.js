@@ -1,17 +1,23 @@
 /*!
- * warning.js —— 投资警示 disclosure 双向 toggle + sessionStorage 记忆（V0.83）
+ * warning.js —— V0.84.0 投资警示 disclosure 行为（roadmap §4.1 N）
  *
- * 用法：页面加 `<details id="warnFooter">` + `<button data-warn-toggle>` + `<input data-warn-dismiss>`
- *       并引入本脚本即可。脚本会：
- *         1. 把页面原有 warn-footer 默认设为关闭（节省首屏空间）
- *         2. 顶 nav 按钮 ↔ 底部 details open 态双向同步（aria-expanded）
- *         3. 「本次会话不再展开」勾选 → sessionStorage 标记 → 下次会话前不再打开
- *         4. 当页 hash 含 #warn 时主动展开（深链）
+ * 用法：页面加 `<details id="statusPanel" class="status-panel">`，summary 内
+ *       包含 `#freshnessInline`（数据时效 chips mount 点）+ `<span data-warn-count>`
+ *       （⚠️ 警示条数 pill），body 内含 `<ol class="warn-list">` 与
+ *       `<input data-warn-dismiss>`。并引入本脚本即可。脚本会：
+ *         1. 根据 `ol.warn-list` 实际 li 数动态写入 `data-warn-count` 文本
+ *         2. sessionStorage 记忆「本次会话不再展开」（`pm_warn_dismissed_session`）
+ *         3. 当页 hash 含 #status / #warn 时主动展开（深链）
+ *         4. 勾选 dismiss → 折叠 + 写 sessionStorage
  *
  * 设计要点
  * --------
+ * - **V0.84.0**：从 `<details id="warnFooter">`（页底）合并为 `<details id="statusPanel">`
+ *   （顶 nav 紧后）。summary 内同时承载数据时效 + 警示计数 pill；点开看警示全文。
  * - **极轻量**：纯原生 IIFE（~40 行），无外部依赖，挂在 window.WarnDisclosure 命名空间。
- * - **不绑 i18n**：toggle/dismiss 文案直接走 data-i18n，脚本只切换状态。
+ * - **不绑 i18n**：count 文本由 I18n.fmt 渲染（页面自带的 data-i18n 已含 {n} 占位符），
+ *   脚本只设置 `<span data-warn-count>` 的 textContent 数字，让 i18n.js 在加载后
+ *   重新渲染带格式的字符串。
  * - **可降级**：脚本加载失败时 `<details>` 仍可手点（native 控件）。
  */
 (function () {
@@ -20,55 +26,45 @@
   var STORAGE_KEY = "pm_warn_dismissed_session";
 
   function boot() {
-    var footer = document.getElementById("warnFooter");
-    var toggles = document.querySelectorAll("[data-warn-toggle]");
-    var dismiss = document.querySelector("[data-warn-dismiss]");
-    if (!footer) return;
+    var panel = document.getElementById("statusPanel");
+    if (!panel) return;
+    var dismiss = panel.querySelector("[data-warn-dismiss]");
 
-    // sessionStorage 检查 —— 已勾选过「不再展开」则跳过默认展开
+    // 1. 动态计算警示条数 → 写 count pill
+    //    文本格式由 i18n.js 负责（key: status.warn_count，{n} 占位符）。
+    //    我们只写数字，i18n.js 加载后会自动格式化为「5 条要点」等。
+    var list = panel.querySelector(".warn-list");
+    var countEl = panel.querySelector("[data-warn-count]");
+    if (list && countEl) {
+      var n = list.querySelectorAll("li").length;
+      countEl.textContent = String(n);
+    }
+
+    // 2. 默认折叠态：dismissed=开 / 否则关（节省首屏空间，仅 1 行 summary）
     var dismissed = false;
     try { dismissed = sessionStorage.getItem(STORAGE_KEY) === "1"; } catch (e) {}
 
-    // 默认状态：dismissed=开 / 否则关（节省首屏空间）
-    if (dismissed) {
-      footer.removeAttribute("open");
-    } else if (!footer.hasAttribute("open")) {
-      // 保持关闭 —— 用户点 summary 或顶 nav 按钮再展开
-      footer.removeAttribute("open");
+    if (dismissed || !panel.hasAttribute("open")) {
+      panel.removeAttribute("open");
     }
 
-    // hash 深链：#warn 主动展开
-    if (location.hash === "#warn") {
-      footer.setAttribute("open", "");
+    // 3. hash 深链：#status / #warn（旧链接兼容）主动展开
+    if (location.hash === "#status" || location.hash === "#warn") {
+      panel.setAttribute("open", "");
     }
 
-    // 顶 nav 按钮 ↔ details open 态同步
-    function syncToggle() {
-      var open = footer.hasAttribute("open");
-      toggles.forEach(function (b) {
-        b.setAttribute("aria-expanded", open ? "true" : "false");
-      });
-    }
-
-    toggles.forEach(function (btn) {
-      btn.addEventListener("click", function (e) {
-        e.preventDefault();
-        if (footer.hasAttribute("open")) {
-          footer.removeAttribute("open");
-        } else {
-          footer.setAttribute("open", "");
-        }
-        syncToggle();
-      });
+    // V0.84.0：监听 hashchange —— 同一文档内 #status 跳转（同页 / dismiss 后想再看警示）
+    // 不会触发 reload，warning.js 不会再跑一遍，需手动响应。
+    window.addEventListener("hashchange", function () {
+      if (location.hash === "#status" || location.hash === "#warn") {
+        panel.setAttribute("open", "");
+      }
     });
 
-    footer.addEventListener("toggle", syncToggle);
-    syncToggle();
-
-    // 「本次会话不再展开」勾选
+    // 4. dismiss checkbox 行为
     if (dismiss) {
       dismiss.checked = dismissed;
-      // V0.83 C1 · a11y：把 hint span 与 checkbox 关联，让屏幕阅读器在聚焦时朗读「本次会话不再展开」
+      // V0.83 C1 · a11y：把 hint span 与 checkbox 关联
       if (!dismiss.hasAttribute("aria-describedby")) {
         var hint = document.getElementById("warnDismissHint");
         if (hint) dismiss.setAttribute("aria-describedby", "warnDismissHint");
@@ -77,8 +73,7 @@
         try {
           if (dismiss.checked) {
             sessionStorage.setItem(STORAGE_KEY, "1");
-            footer.removeAttribute("open");
-            syncToggle();
+            panel.removeAttribute("open");
           } else {
             sessionStorage.removeItem(STORAGE_KEY);
           }

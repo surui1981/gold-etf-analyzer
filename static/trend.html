@@ -92,31 +92,41 @@
   .refresh-btn:hover { background: var(--card); }
   .refresh-btn.refreshing { transform: rotate(360deg); }
   /* 投资警示横幅 */
-  /* V0.83：投资警示改用 <details> + 暗底折叠区，下沉到页面底部（综合研判之后）。
-     顶 nav 上的「⚠️ 投资警示」按钮可双向 toggle。*/
-  .warn-footer { background: #1f2329; color: #eef0f3; border-radius: 12px; margin: 16px 0 12px;
-    border-left: 4px solid var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
-  .warn-footer > summary { list-style: none; cursor: pointer; padding: 12px 18px;
-    color: #f5d97a; font-weight: 700; font-size: 13.5px; letter-spacing: .5px;
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    user-select: none;
-    /* V0.83 C1 · a11y: 触控目标 ≥44×44 CSS 像素（WCAG 2.5.5 / Apple HIG）*/
-    min-height: 44px;
-    box-sizing: border-box; }
-  .warn-footer > summary::-webkit-details-marker { display: none; }
-  .warn-footer > summary::after { content: "▾"; font-size: 14px; opacity: .6;
-    transition: transform .2s; }
-  .warn-footer[open] > summary::after { transform: rotate(180deg); }
-  .warn-footer .warn-body { padding: 4px 18px 14px; }
-  .warn-footer ol { margin: 0; padding-left: 20px; }
-  .warn-footer li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
-  .warn-footer li b { color: #ffffff; }
-  .warn-footer .warn-dismiss { display:inline-flex; align-items:center; gap:6px; margin-top:8px;
-    font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
-  .warn-footer .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
-  /* 默认折叠态：1 行（summary 即可见）*/
-  .warn-footer:not([open]) { margin-top: 16px; }
-  /* 老 .warn-banner 仍保留给其他 11 页（未在本 PR 改），不删 */
+  /* V0.84.0：方案 C · 顶 nav 收 1 行 + 状态条合并
+     数据时效 + 警示计数合并到 1 行 <details id="statusPanel">：
+       - summary：freshnessInline chips + 警示计数 pill（1 行 ~36px）
+       - 展开 body：完整警示 5 条 + dismiss checkbox
+     释放顶 nav 高度 + 删底部 warnFooter；底部不再有 warn-footer */
+  .status-panel { background: #1f2329; color: #eef0f3; border-radius: 12px;
+    margin: 0 0 12px; border-left: 4px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
+  .status-panel > summary { list-style: none; cursor: pointer; padding: 10px 18px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    user-select: none; min-height: 44px; box-sizing: border-box; }
+  .status-panel > summary::-webkit-details-marker { display: none; }
+  .status-panel > summary::after { content: "▾"; font-size: 14px; opacity: .6;
+    margin-left: auto; flex-shrink: 0; transition: transform .2s; }
+  .status-panel[open] > summary::after { transform: rotate(180deg); }
+  .status-panel > summary #freshnessInline { flex: 1 1 auto; min-width: 0; }
+  .status-panel > summary .status-sep { width: 1px; height: 16px;
+    background: rgba(255,255,255,.18); flex-shrink: 0; }
+  .status-panel > summary .status-warn-pill { display: inline-flex; align-items: center;
+    gap: 4px; background: rgba(245,217,122,.10); color: #f5d97a;
+    border: 1px solid rgba(245,217,122,.28); font-size: 11.5px; padding: 2px 9px;
+    border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+  .status-panel > summary .warn-pill-label { font-weight: 600; }
+  .status-panel > summary [data-warn-count] { font-weight: 700;
+    font-variant-numeric: tabular-nums; padding: 0 1px; }
+  .status-panel:not([open]) > .status-body { display: none; }
+  .status-panel > .status-body { border-top: 1px dashed rgba(255,255,255,.10);
+    padding: 10px 18px 14px; }
+  .status-panel .warn-list { margin: 0; padding-left: 20px; }
+  .status-panel .warn-list li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .status-panel .warn-list li b { color: #ffffff; }
+  .status-panel .warn-dismiss { display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
+  .status-panel .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
+  /* 老 .warn-footer / .topnav-meta 全部弃用（不留兼容） */
   .index-info { flex: 1; min-width: 240px; }
   .index-info .badge { font-size: 14px; padding: 4px 14px; }
   .index-info .txt { font-size: 14px; color: #374151; line-height: 1.7; margin-top: 8px; }
@@ -169,15 +179,7 @@
   .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
     box-shadow: 0 1px 3px rgba(0,0,0,.25); }
   .topnav a.active .nav-ico { opacity:1; }
-  /* V0.83 第二行：数据时效 + 警示 disclosure 入口（同一行右对齐警示按钮） */
-  .topnav .topnav-meta { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-    padding: 4px 4px 2px; border-top: 1px dashed rgba(255,255,255,.08); }
-  .topnav .topnav-meta .fresh-inline { flex: 1 1 auto; min-width: 0; }
-  .topnav .topnav-meta .nav-warn-toggle { display:inline-flex; align-items:center; gap:5px;
-    background: rgba(245,217,122,.10); color: #f5d97a; border: 1px solid rgba(245,217,122,.28);
-    font-size: 12px; padding: 3px 10px; border-radius: 999px; cursor: pointer; flex-shrink: 0;
-    transition: background .15s; }
-  .topnav .topnav-meta .nav-warn-toggle:hover { background: rgba(245,217,122,.18); }
+  /* V0.84.0：顶 nav 收 1 行（topnav-meta 已删除；时效 + 警示合并到 .status-panel） */
   /* 数据源状态条（降级可感知） */
   .source-bar { padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 14px; line-height: 1.6; }
   .source-ok { background: #e6f4ea; color: var(--down); border: 1px solid #b7e4c7; }
@@ -198,19 +200,25 @@
 <a class="skip-link" href="#main">跳到主要内容</a>
 <main id="main" tabindex="-1">
 <div class="wrap">
-  <!-- V0.83.2 · 共享顶 nav（topnav.js 同步注入，roadmap §4.1 M）：brand + 11 链接 + 时效/警示 meta -->
+  <!-- V0.84.0 · 共享顶 nav（topnav.js 同步注入）：1 行 brand+links（无 row 2） -->
   <div id="topnav-mount"></div>
   <script src="/static/topnav.js"></script>
 
-  <!-- 加载进度提示（首屏不再空白） · V0.83：顶到 hero 位置 -->
-  <div id="loadBar" class="source-bar source-warn" data-i18n="trend.loading_hint">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
-
-  <!-- V0.83：投资警示合并到底部可折叠区（dark `details/summary`） · 由 warning.js 维持展开态，
-       summary 同步顶 nav 上的「投资警示」按钮（双向 toggle） -->
-  <details id="warnFooter" class="warn-footer">
-    <summary><span data-i18n="warn.title">⚠️ 投资警示 · 谨记于心</span></summary>
-    <div class="warn-body">
-      <ol>
+  <!-- V0.84.0 方案 C · 状态条 disclosure：summary = 时效 chips + 警示计数 pill（1 行 ~36px）；
+       body = 完整警示 5 条 + dismiss checkbox。由 warning.js 维持展开态。 -->
+  <details id="statusPanel" class="status-panel">
+    <summary>
+      <span id="freshnessInline" aria-live="polite" aria-atomic="false"></span>
+      <span class="status-sep" aria-hidden="true"></span>
+      <span class="status-warn-pill">
+        <span class="warn-pill-icon" aria-hidden="true">⚠️</span>
+        <span class="warn-pill-label" data-i18n="status.warn_pill_label">投资警示</span>
+        <span data-warn-count>5</span>
+        <span data-i18n="status.warn_pill_unit">条要点</span>
+      </span>
+    </summary>
+    <div class="status-body">
+      <ol class="warn-list">
         <li><b data-i18n="warn.b1_strong">投资是超高难度的综合能力挑战</b><span data-i18n="warn.b1_rest">——对知识储备、信息甄别、心态与执行力的综合素质要求极高。</span></li>
         <li><b data-i18n="warn.b2_strong">正确筛选信息、聚焦市场核心要素</b><span data-i18n="warn.b2_rest">——这是做出正确判断的基石，切勿被噪音裹挟。</span></li>
         <li><b data-i18n="warn.b3_strong">认识自己、认识市场，理性评估与判断</b><span data-i18n="warn.b3_rest">——这是残酷市场中生存的第一法则。</span></li>
@@ -223,6 +231,9 @@
       </label>
     </div>
   </details>
+
+  <!-- 加载进度提示（首屏不再空白） · V0.84：移到状态条之后（避免与状态条视觉冲突） -->
+  <div id="loadBar" class="source-bar source-warn" data-i18n="trend.loading_hint">数据加载中…（首次约 10-30 秒，之后走缓存秒开）</div>
 
   <header class="hero hero-compact">
     <div>

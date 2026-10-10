@@ -786,6 +786,9 @@ window.PM_I18N_ZH_CN = {
   "fresh.stale_chip": "⏳ 离线/缓存（数据可能过期）",
   "fresh.loading_first": "⏳ 数据加载中…",
   "fresh.local_time_suffix": "本地时间",
+  /* V0.84.0：状态条 pill（数据时效 + 警示计数合并 1 行） */
+  "status.warn_pill_label": "投资警示",
+  "status.warn_pill_unit": "条要点",
   /* ── V0.74.0 N+17 · 仪表盘自定义 ───────────────────────── */
   "dashboard.btn_reset_layout": "↺ 恢复默认布局",
   "dashboard.hint_drag": "拖拽卡片调整顺序",

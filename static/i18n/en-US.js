@@ -786,6 +786,9 @@ window.PM_I18N_en_US = {
   "fresh.stale_chip": "⏳ offline/cache (data may be stale)",
   "fresh.loading_first": "⏳ Loading data…",
   "fresh.local_time_suffix": "Local time",
+  /* V0.84.0: status bar pill (data freshness + warning count merged in 1 row) */
+  "status.warn_pill_label": "Notice",
+  "status.warn_pill_unit": "points",
   /* ── V0.74.0 N+17 · Dashboard Layout ─────────────────── */
   "dashboard.btn_reset_layout": "↺ Reset to default layout",
   "dashboard.hint_drag": "Drag cards to reorder",
