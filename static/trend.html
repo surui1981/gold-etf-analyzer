@@ -55,6 +55,15 @@
   .up { color: var(--up); }
   .down { color: var(--down); }
   .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  /* V0.85.0 C3 · 折叠面板（详情 disclosure）：默认折叠，仅 summary 行可见
+     复用 <details> 原生 disclosure，箭头旋转指示状态 */
+  .panel-collapse { padding: 0; }
+  .panel-collapse > summary { padding: 14px 16px; list-style: none; }
+  .panel-collapse > summary::-webkit-details-marker { display: none; }
+  .panel-collapse > summary .ahom-icon { display: inline-block; transition: transform .15s; margin-right: 4px; opacity: .55; }
+  .panel-collapse[open] > summary .ahom-icon { transform: rotate(90deg); }
+  .panel-collapse[open] > summary { border-bottom: 1px dashed var(--border); }
+  .panel-collapse[open] > *:not(summary) { padding: 14px 16px; }
   .summary { margin-top: 12px; font-size: 14px; line-height: 1.6; color: #374151; }
   .summary b { color: var(--text); }
   /* ETF 价格走势单图（V0.74.3 合并去重：克价走势只在「上海金 Au99.99」面板画一次，
@@ -297,28 +306,39 @@
        原清单 ① 查看综合指数、③ 决策与建议仓位 两项已被结论卡本身承载，
        仅保留真正需要用户动作的 ② 消息面打分、④ 记录交易。 -->
 
-  <!-- 每日评估历史（本地快照） · V0.63.0 升级：区间切换 + 极值卡 -->
-  <div class="panel" style="margin-bottom:16px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
-      <div style="font-size:15px;font-weight:600" data-i18n="trend.history_title">📅 每日评估历史 · 评估指数曲线 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="snapSub"></span></div>
-      <div id="snapRangeBtns" style="display:flex;gap:6px">
-        <button class="range-btn" data-days="7" type="button">7D</button>
-        <button class="range-btn active" data-days="30" type="button">30D</button>
-        <button class="range-btn" data-days="90" type="button">90D</button>
+  <!-- V0.85.0 C3 · 每日评估历史（本地快照）默认折叠 · 首屏省 ~290px
+       V0.63.0 升级：区间切换 + 极值卡
+       <details> 默认折叠（不写 open 属性），summary 显示标题 + 当前区间标签
+       区间按钮从 summary 移到 body 内（折叠时不参与布局） -->
+  <details class="panel panel-collapse" style="margin-bottom:16px">
+    <summary style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer;list-style:none">
+      <span style="font-size:15px;font-weight:600">
+        <span class="ahom-icon" aria-hidden="true">▸</span>
+        <span data-i18n="trend.history_title">📅 每日评估历史 · 评估指数曲线</span>
+        <span id="snapSub" style="font-weight:400;font-size:12px;color:var(--muted)"></span>
+      </span>
+    </summary>
+    <div style="margin-top:8px">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;gap:6px">
+        <div id="snapRangeBtns" style="display:flex;gap:6px">
+          <button class="range-btn" data-days="7" type="button">7D</button>
+          <button class="range-btn active" data-days="30" type="button">30D</button>
+          <button class="range-btn" data-days="90" type="button">90D</button>
+        </div>
       </div>
+      <!-- V0.77.0 修复：这 4 张卡的数值原用 class="val"，但样式表中只有 .card .value
+           （第 52 行）与 .macro-row .val（第 105 行，宏因子行专用）—— 于是本组数值
+           一直没有任何字号/字重样式，与同页 #cards 的 8 张卡视觉不一致。 -->
+      <div class="cards" id="snapStatCards" style="margin-bottom:10px">
+        <div class="card"><div class="label" data-i18n="trend.snap_latest">最新</div><div class="value" id="snapLatest">—</div></div>
+        <div class="card"><div class="label" data-i18n="trend.snap_max">区间最高</div><div class="value" id="snapMax">—</div></div>
+        <div class="card"><div class="label" data-i18n="trend.snap_min">区间最低</div><div class="value" id="snapMin">—</div></div>
+        <div class="card"><div class="label" data-i18n="trend.snap_delta">日变</div><div class="value" id="snapDelta">—</div></div>
+      </div>
+      <canvas id="snapChart" style="max-height:260px"></canvas>
+      <div class="summary" id="snapSummary" style="font-size:12px;margin-top:6px"></div>
     </div>
-    <!-- V0.77.0 修复：这 4 张卡的数值原用 class="val"，但样式表中只有 .card .value
-         （第 52 行）与 .macro-row .val（第 105 行，宏因子行专用）—— 于是本组数值
-         一直没有任何字号/字重样式，与同页 #cards 的 8 张卡视觉不一致。 -->
-    <div class="cards" id="snapStatCards" style="margin-bottom:10px">
-      <div class="card"><div class="label" data-i18n="trend.snap_latest">最新</div><div class="value" id="snapLatest">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_max">区间最高</div><div class="value" id="snapMax">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_min">区间最低</div><div class="value" id="snapMin">—</div></div>
-      <div class="card"><div class="label" data-i18n="trend.snap_delta">日变</div><div class="value" id="snapDelta">—</div></div>
-    </div>
-    <canvas id="snapChart" style="max-height:260px"></canvas>
-    <div class="summary" id="snapSummary" style="font-size:12px;margin-top:6px"></div>
-  </div>
+  </details>
 
   <!-- 上海金（国内金价）对照 -->
   <div class="panel" style="margin-bottom:16px">
