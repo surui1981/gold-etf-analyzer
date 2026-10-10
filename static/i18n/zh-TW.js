@@ -783,6 +783,14 @@ window.PM_I18N_zh_TW = {
   /* V0.84.0：狀態條 pill（資料時效 + 警示計數合併 1 行） */
   "status.warn_pill_label": "投資警示",
   "status.warn_pill_unit": "條要點",
+  /* V0.85.0：數據健康摘要 chip / panel（6 數據源狀態聚合）*/
+  "hs.title": "📊 數據健康",
+  "hs.sources": "數據源",
+  "hs.live": "即時",
+  "hs.stale": "緩存",
+  "hs.mock": "演示",
+  "hs.unknown": "未知",
+  "hs.loading": "數據加載中…",
   /* V0.82 commit 4：admin session cookie UI（設定頁「設定 Session」按鈕等） */
   "settings.section_session_sub": "—— 或使用 Session Cookie ——",
   "settings.section_session_desc": "在多終端 LAN 場景下，<strong>HttpOnly cookie</strong> 比 localStorage 更省心：瀏覽器所有同源分頁 / 重新打開都自動帶上，無需逐台機器再設。提交後會設 30 天有效；後端用 HMAC-SHA256 簽章校驗，不存表。",

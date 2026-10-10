@@ -1015,6 +1015,14 @@ window.PM_I18N_en_US = {
   /* V0.83: investment warning disclosure toggle + sessionStorage memory */
   "warn.collapse_toggle": "⚠️ Risk Notice",
   "warn.dismiss_session": "Don't expand this session",
+  /* V0.85.0: data health summary chip / panel (6 data sources aggregated) */
+  "hs.title": "📊 Health",
+  "hs.sources": "Sources",
+  "hs.live": "Live",
+  "hs.stale": "Cached",
+  "hs.mock": "Mock",
+  "hs.unknown": "Unknown",
+  "hs.loading": "Loading…",
   /* V0.82 commit 4：admin session cookie UI (settings page "Set Session" button) */
   "settings.section_session_sub": "—— Or use Session Cookie ——",
   "settings.section_session_desc": "In LAN multi-terminal setups, an <strong>HttpOnly cookie</strong> is easier than localStorage: every same-origin tab / reopened window carries it automatically — no need to re-set on each device. Submitted token sets a 30-day cookie; the backend verifies it with HMAC-SHA256 (stateless, no DB row).",
