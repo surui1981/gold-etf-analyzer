@@ -102,7 +102,7 @@
   .status-panel > summary::after { content: "▾"; font-size: 14px; opacity: .6;
     margin-left: auto; flex-shrink: 0; transition: transform .2s; }
   .status-panel[open] > summary::after { transform: rotate(180deg); }
-  .status-panel > summary #freshnessInline { flex: 1 1 auto; min-width: 0; }
+  .status-panel > summary #healthSummary { flex: 1 1 auto; min-width: 0; }
   .status-panel > summary .status-sep { width: 1px; height: 16px;
     background: rgba(255,255,255,.18); flex-shrink: 0; }
   .status-panel > summary .status-warn-pill { display: inline-flex; align-items: center;
@@ -139,7 +139,7 @@
        body = 完整警示 + dismiss checkbox。由 warning.js 维持展开态。 -->
   <details id="statusPanel" class="status-panel">
     <summary>
-      <span id="freshnessInline" aria-live="polite" aria-atomic="false"></span>
+      <a id="healthSummary" class="hs-chip-link" href="/data-health.html" aria-label="数据健康"></a>
       <span class="status-sep" aria-hidden="true"></span>
       <span class="status-warn-pill">
         <span class="warn-pill-icon" aria-hidden="true">⚠️</span>
@@ -487,7 +487,7 @@ async function resetAll() {
   }
 })();
 </script>
-  <script src="/static/freshness.js"></script>
+  <script src="/static/health-summary.js"></script>
   <script src="/static/warning.js"></script>
   <script src="/static/pwa.js" defer></script>
 <script src="/static/help.js" defer></script>

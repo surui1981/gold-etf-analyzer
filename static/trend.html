@@ -107,7 +107,7 @@
   .status-panel > summary::after { content: "▾"; font-size: 14px; opacity: .6;
     margin-left: auto; flex-shrink: 0; transition: transform .2s; }
   .status-panel[open] > summary::after { transform: rotate(180deg); }
-  .status-panel > summary #freshnessInline { flex: 1 1 auto; min-width: 0; }
+  .status-panel > summary #healthSummary { flex: 1 1 auto; min-width: 0; }
   .status-panel > summary .status-sep { width: 1px; height: 16px;
     background: rgba(255,255,255,.18); flex-shrink: 0; }
   .status-panel > summary .status-warn-pill { display: inline-flex; align-items: center;
@@ -204,11 +204,11 @@
   <div id="topnav-mount"></div>
   <script src="/static/topnav.js"></script>
 
-  <!-- V0.84.0 方案 C · 状态条 disclosure：summary = 时效 chips + 警示计数 pill（1 行 ~36px）；
-       body = 完整警示 5 条 + dismiss checkbox。由 warning.js 维持展开态。 -->
+  <!-- V0.85.0 · 数据时效迁移到 /data-health.html：summary = 健康摘要 chip（6 数据源聚合）+ 警示 pill
+       点击 chip 跳 data-health.html（不展开 disclosure）；由 health-summary.js 维持 60s 自动刷新 -->
   <details id="statusPanel" class="status-panel">
     <summary>
-      <span id="freshnessInline" aria-live="polite" aria-atomic="false"></span>
+      <a id="healthSummary" class="hs-chip-link" href="/data-health.html" aria-label="数据健康"></a>
       <span class="status-sep" aria-hidden="true"></span>
       <span class="status-warn-pill">
         <span class="warn-pill-icon" aria-hidden="true">⚠️</span>
@@ -1007,7 +1007,7 @@ window.addEventListener("news-score-changed", () => {
   refreshTrendQuotes();
 });
 </script>
-  <script src="/static/freshness.js"></script>
+  <script src="/static/health-summary.js"></script>
   <script src="/static/warning.js"></script>
   <script src="/static/pwa.js" defer></script>
 <script src="/static/help.js" defer></script>
