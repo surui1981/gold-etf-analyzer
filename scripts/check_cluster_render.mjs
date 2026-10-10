@@ -1062,7 +1062,7 @@ await Promise.all(pending);
     ok(`${page} :: ${isHealth ? "hs-panel (4-chip panel)" : "hs-chip-link (a→data-health)"}`,
        isHealth
          ? /<span\s+id="healthSummary"\s+class="hs-panel"/.test(src)
-         : /<a\s+id="healthSummary"\s+class="hs-chip-link"\s+href="\/data-health\.html"/.test(src));
+         : /<a\s+id="healthSummary"\s+class="hs-chip-link"\s+href="\/data-health"/.test(src));
   }
   // 7) trend.html history 面板默认折叠（details + class=panel-collapse，无 open 属性）
   const trendSrc = read("trend.html");

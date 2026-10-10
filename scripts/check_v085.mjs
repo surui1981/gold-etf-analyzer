@@ -2,11 +2,11 @@
 // V0.85.0 数据健康摘要 chip / panel 验证：9 页 × 3 语 = 27 组合
 // 断言：
 //   1) #healthSummary 挂载点存在（live element，非 live markup 是注释里可能残留）
-//   2) 非 health 页 chip 是 <a> 且 href="/data-health.html"
+//   2) 非 health 页 chip 是 <a> 且 href="/data-health"（V0.86.1 起对齐 kebab-url 约定）
 //      data-health 页是 <span class="hs-panel">
 //   3) i18n 翻译正确（zh-CN "数据健康" / zh-TW "數據健康" / en-US "Health"）
 //   4) chip 渲染了真实健康摘要（live/total 数字 + 颜色 class）
-//   5) 非 health 页 chip 点击 → 跳 /data-health.html 且不展开 statusPanel
+//   5) 非 health 页 chip 点击 → 跳 /data-health（FastAPI 重定向到 /static/data-health.html）
 import puppeteer from "puppeteer-core";
 import { mkdirSync } from "node:fs";
 
@@ -73,8 +73,8 @@ async function checkOne(pageCfg, lang) {
           out.errors.push("data-health: expected .hs-panel class, got: " + chip.className);
         }
       } else {
-        if (chip.tagName !== "A" || chip.getAttribute("href") !== "/data-health.html") {
-          out.errors.push("chip: expected <a href='/data-health.html'>, got " +
+        if (chip.tagName !== "A" || chip.getAttribute("href") !== "/data-health") {
+          out.errors.push("chip: expected <a href='/data-health'>, got " +
             chip.tagName + " href=" + chip.getAttribute("href"));
         }
         if (!chip.classList.contains("hs-chip-link")) {

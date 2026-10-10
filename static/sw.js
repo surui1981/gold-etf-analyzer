@@ -13,7 +13,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.86.0";
+const VERSION = "v0.86.1";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -53,6 +53,8 @@ const SHELL_ASSETS = [
     "/news",
     "/central-bank",
     "/trades",
+    // V0.85.0 + V0.86.1 修复：数据健康摘要页（9 页 statusPanel chip 跳此处）
+    "/data-health",
     "/static/backtest.html",
     "/static/silver.html",
     OFFLINE_URL,

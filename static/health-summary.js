@@ -1,11 +1,13 @@
 /* 全站数据健康摘要 chip / panel（V0.85.0）
  *
  * 把分散在各页 statusPanel summary 里的「3 市场时效」chip 换成「6 数据源健康摘要」，
- * 数据时效完整披露集中到 /data-health.html。
+ * 数据时效完整披露集中到 /data-health（V0.85.0 起，与项目 kebab-url 约定一致：
+ * /portfolio /central-bank /trades 等都不带 .html 后缀）。
  *
  * 挂载点（按页面二选一）：
- *   - #healthSummary（非 health 8 页）：渲染 <a href="/data-health.html"> 紧凑 chip
- *     → 显示「5/6 实时 ·1 缓存 →」，点击跳 data-health.html
+ *   - #healthSummary（非 health 8 页）：渲染 <a href="/data-health"> 紧凑 chip
+ *     → 显示「5/6 实时 ·1 缓存 →」，点击跳 /data-health（FastAPI 重定向到
+ *     /static/data-health.html；详见 src/app/main.py::data_health_page）
  *   - #healthSummary（data-health.html）：渲染 4 个 mini-chip（数据源 / 实时 / 缓存 / 演示）
  *     → 一行展示整体健康度，summary 展开 body 后仍是 6 张市场卡详情
  *
@@ -159,7 +161,7 @@
     }
     var staleCls = s.total === 0 ? "" : "";
     return '<a id="healthSummary" class="hs-chip-link ' + colorCls + staleCls + '"' +
-           ' href="/data-health.html" aria-label="' + _t("hs.title", "📊 数据健康") + '">' +
+           ' href="/data-health" aria-label="' + _t("hs.title", "📊 数据健康") + '">' +
            inner + '</a>';
   }
 
@@ -193,7 +195,7 @@
     var s = summarize(_lastGoodData);
     var isChipMode = mount.tagName === "A" ||
       mount.classList.contains("hs-chip-link") ||
-      mount.getAttribute("href") === "/data-health.html";
+      mount.getAttribute("href") === "/data-health";
     if (isChipMode) {
       // 写入新的 <a>（替换旧节点以保证 stopPropagation 监听生效）
       var tmp = document.createElement("div");

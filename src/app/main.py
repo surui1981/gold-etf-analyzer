@@ -360,6 +360,27 @@ async def central_bank_page() -> RedirectResponse:
     return RedirectResponse("/static/central_bank.html")
 
 
+@app.get("/data-health", include_in_schema=False)
+async def data_health_page() -> RedirectResponse:
+    """数据健康摘要页（V0.85.0）—— 6 数据源实时状态完整披露。
+
+    9 页 statusPanel summary 都用 ``<a href="/data-health">`` chip 跳本页
+    （与项目 kebab-url 约定一致：``/portfolio``、``/central-bank`` 等都无
+    ``.html`` 后缀）。客户端脚本见 ``static/health-summary.js``。
+    """
+    return RedirectResponse("/static/data-health.html")
+
+
+@app.get("/data-health.html", include_in_schema=False)
+async def data_health_page_dothtml() -> RedirectResponse:
+    """``/data-health.html`` 别名（向后兼容 V0.85.0 chip 直链 + 外部书签）。
+
+    V0.85.0 早期发布的 chip ``href="/data-health.html"`` 在 V0.86.x 升级到
+    kebab-url 后仍保留此别名，避免升级过程中老浏览器或书签拿到 404。
+    """
+    return RedirectResponse("/static/data-health.html")
+
+
 @app.get("/trades", include_in_schema=False)
 async def trades_page() -> RedirectResponse:
     """交易历史查询页（P1 #6：多条件筛选 + 汇总 + CSV 导出）。"""
