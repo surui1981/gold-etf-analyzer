@@ -11,4 +11,4 @@
 #      （cache-first + sw.js 字节未变 ⇒ 不重装 SW ⇒ 不清缓存），
 #      表现为「HTML 新 + JS 旧」错配。由 scripts/check_pwa_assets.py 强制校验。
 #      ⚠ 注意与 static/dashboard.js 的同名 VERSION 区分 —— 那是布局 schema 锚，不可动。
-__version__ = "0.86.0"
+__version__ = "0.86.1"
