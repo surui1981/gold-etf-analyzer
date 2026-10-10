@@ -789,7 +789,7 @@ async function loadDecision() {
       chip.textContent = `按建议仓位 ${d.suggested_position}%`;
     }
     document.getElementById("decisionArea").innerHTML = `
-      <span class="badge" style="background:${s.color}">${actionTxt(s)}</span>
+      <span class="badge de-action" tabindex="0" role="button" aria-label="${actionTxt(s)}" data-de-action="${d.action || ""}" style="background:${s.color};cursor:help">${actionTxt(s)}</span>
       <span class="conf" style="margin-left:8px">置信度：${d.confidence === "high" ? "高" : d.confidence === "medium" ? "中" : "低"}</span>
       <div class="decision-summary">${d.summary || "暂无总结"}</div>
       <div class="position-rec" style="margin-top:10px;padding:10px 14px;background:#fffaf0;border:1px solid #f0e2b6;border-radius:8px;font-size:13.5px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
@@ -798,8 +798,15 @@ async function loadDecision() {
         <span class="badge" style="background:#1f2329;color:#f5d97a;font-size:12px">${d.position_level || "—"}</span>
         <span style="color:var(--muted);font-size:12px">评估指数 ${d.trend_index?.score?.toFixed(1) ?? "—"}/100 映射</span>
       </div>
+      ${window.PM_DecisionExplainer ? window.PM_DecisionExplainer.compareCard(d) : ""}
       <div class="factor-list">${buildFactors(d).join("")}</div>
-      ${buildComposition(d.trend_index)}`;
+      ${buildComposition(d.trend_index)}
+      ${window.PM_DecisionExplainer ? window.PM_DecisionExplainer.renderBreakdown(d) : ""}`;
+    /* V0.86.0：决策行动 chip hover tooltip（每次重渲染重新挂载） */
+    if (window.PM_DecisionExplainer) {
+      var actEl = document.querySelector("#decisionArea .de-action");
+      if (actEl) window.PM_DecisionExplainer.attachTooltip(actEl, d.action, d);
+    }
     // 简报 + 主动提醒（指数档位/纽约金波动）
     renderBriefing(d, lastNy);
     checkAlerts(d, lastNy);
@@ -1440,6 +1447,8 @@ document.addEventListener("i18n:change", function () {
 });
 </script>
   <script src="/static/health-summary.js"></script>
+  <!-- V0.86.0：决策可解释性 · 拆解 + 对比 + hover tooltip 三件套 -->
+  <script src="/static/decision-explainer.js"></script>
   <script src="/static/warning.js"></script>
   <script src="/static/pwa.js" defer></script>
 <script src="/static/help.js" defer></script>

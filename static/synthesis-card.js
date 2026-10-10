@@ -359,7 +359,10 @@
         REDUCE: 'var(--down)', SELL: 'var(--down)', WAIT: 'var(--muted)' }[dec.action] || 'var(--text)';
       actHtml =
         '<div class="syn-act">'
-        + '<span class="syn-action" style="color:' + actColor + '">' + esc(actTxt) + '</span>'
+        + '<span class="syn-action de-action" tabindex="0" role="button" aria-label="' + esc(actTxt)
+        + '" data-de-action="' + esc(dec.action || '') + '"'
+        + ' style="color:' + actColor + ';cursor:help;text-decoration:underline dotted">'
+        + esc(actTxt) + '</span>'
         + '<span class="syn-chip">' + esc(dec.action || '—') + '</span>'
         + '<span class="syn-time">' + esc(T('syn.conf_label', '行动置信度')) + ' ' + esc(confTxt) + '</span>'
         + '</div>'
@@ -493,9 +496,18 @@
       + DIMS.map(function (d) { return barRow(d, components); }).join('')
       + '</div>'
 
+      /* V0.86.0：决策可解释性 · 拆解（综合指数按权加权）+ 对比（按当前建议加减） */
+      + (dec && window.PM_DecisionExplainer ? window.PM_DecisionExplainer.compareCard(dec) : '')
+      + (dec && window.PM_DecisionExplainer ? window.PM_DecisionExplainer.renderBreakdown(dec) : '')
+
       + consHtml + reasonsHtml + todoHtml + qualHtml;
 
     state.loaded = true;
+    /* V0.86.0：决策行动 chip hover tooltip（每次重渲染重新挂载，避免 stale 监听） */
+    if (dec && window.PM_DecisionExplainer) {
+      var actEl = card.querySelector('.de-action');
+      if (actEl) window.PM_DecisionExplainer.attachTooltip(actEl, dec.action, dec);
+    }
     track('synthesis_card_view', { asset: state.asset, signal: res ? res.signal : null });
   }
 
