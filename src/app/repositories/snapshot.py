@@ -19,6 +19,34 @@ class SnapshotRepository:
         stmt = select(DailySnapshot).where(DailySnapshot.snapshot_date == snapshot_date)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def list_in_range(
+        self, start: date, end: date
+    ) -> list[DailySnapshot]:
+        """V0.90.0：按日期范围查询快照，按日期正序（含首尾）。
+
+        用于：
+        - ``trades/timeline`` 聚合：批量取 trades 时间窗内所有快照，内存对齐避免 N+1
+        - ``snapshots/in-range`` 端点：日趋势对比窗口
+
+        入参边界：
+        - ``start == end`` → 只返回当日 1 行（≤ 1）
+        - ``start > end`` → 返回空 list（**不抛异常**，调用方负责参数校验）
+
+        与 ``list_recent`` 区别：``list_recent`` 按「最近 N 天」取（倒序 + limit），
+        ``list_in_range`` 按「指定日期区间」取（正序 + 无 limit，仅按日期约束）。
+        """
+        if start > end:
+            return []
+        stmt = (
+            select(DailySnapshot)
+            .where(
+                DailySnapshot.snapshot_date >= start,
+                DailySnapshot.snapshot_date <= end,
+            )
+            .order_by(DailySnapshot.snapshot_date.asc())
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
     async def upsert(self, snapshot: DailySnapshot) -> DailySnapshot:
         """按日期插入或更新（同一自然日重复捕获为更新）。"""
         existing = await self.get_by_date(snapshot.snapshot_date)
