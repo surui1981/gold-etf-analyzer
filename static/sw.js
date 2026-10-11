@@ -13,7 +13,7 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.88.0";
+const VERSION = "v0.90.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
