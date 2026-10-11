@@ -136,6 +136,15 @@ class DailySnapshotService:
         prev = await self._repo.get_latest_before(before)
         return SnapshotOut.model_validate(prev) if prev else None
 
+    async def get_by_date(self, snapshot_date: date) -> SnapshotOut | None:
+        """V0.90.0：按日期取单日快照（含 macro_detail 反序列化），无则 None。
+
+        用于 ``GET /api/v1/snapshots/by-date/{date}`` —— 决策时间线回放的
+        决策点状态卡片核心查询。
+        """
+        row = await self._repo.get_by_date(snapshot_date)
+        return SnapshotOut.model_validate(row) if row else None
+
     async def get_in_range(
         self, start: date, end: date
     ) -> list[SnapshotOut]:
