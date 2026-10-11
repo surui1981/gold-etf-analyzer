@@ -1,0 +1,1 @@
+"""tests/test_schemas 包：Pydantic schema 单测（纯函数，不依赖 DB / 网络）。"""
