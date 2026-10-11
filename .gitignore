@@ -14,6 +14,7 @@ dist/
 .env.prod.local
 
 # Node（puppeteer-core 依赖）
+node_modules
 node_modules/
 
 # 运行时数据
