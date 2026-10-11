@@ -103,3 +103,122 @@ async def test_v063_list_history_no_duplicate_dates(db_session: AsyncSession) ->
     dates = [s.snapshot_date for s in result.snapshots]
     assert len(dates) == len(set(dates)), f"重复日期：{dates}"
     assert result.total <= 5
+
+
+# ──────────────── V0.90.0 · get_in_range ────────────────
+
+
+async def _insert(
+    session: AsyncSession,
+    snapshot_date: date,
+    *,
+    macro_json: str | None = '{"DXY": {"value": 104.5}}',
+) -> None:
+    """直接向 DB 插入指定日期的 DailySnapshot（绕过 capture_today，加快测试）。
+
+    ``macro_detail`` 是 NOT NULL 列（V0.79.0 设计：snapshot 必带宏观因子；缺失时
+    不写快照而不是写 NULL）。默认提供最小合法 JSON；测试可显式覆盖。
+    """
+    from app.models.snapshot import DailySnapshot
+
+    session.add(DailySnapshot(
+        snapshot_date=snapshot_date,
+        symbol="518880",
+        name="黄金ETF华安",
+        close=5.5, change_pct=1.0, high=5.6, low=5.4,
+        ma20=5.45, ma40=5.40, direction="up",
+        tech_index=65.0, macro_index=58.0, news_index=60.0,
+        trend_index=61.0, index_level="偏多",
+        macro_detail=macro_json or "",
+        data_source="live",
+    ))
+    await session.commit()
+
+
+class TestGetInRange:
+    """V0.90.0 新增 ``DailySnapshotService.get_in_range(start, end)`` 薄包装层。"""
+
+    async def test_empty_db_returns_empty_list(
+        self, db_session: AsyncSession
+    ) -> None:
+        """空 DB → 空 list（不抛异常）。"""
+        svc = _service(db_session)
+        result = await svc.get_in_range(date(2026, 10, 1), date(2026, 10, 7))
+        assert result == []
+
+    async def test_inclusive_endpoints_with_ascending_order(
+        self, db_session: AsyncSession
+    ) -> None:
+        """含首尾 + 按日期升序（timeline 聚合的预期顺序）。"""
+        start = date(2026, 10, 1)
+        # 倒序插入 5 行
+        for i in [4, 2, 0, 3, 1]:
+            await _insert(db_session, start + timedelta(days=i))
+
+        svc = _service(db_session)
+        result = await svc.get_in_range(start, start + timedelta(days=4))
+
+        assert len(result) == 5
+        dates = [s.snapshot_date for s in result]
+        assert dates == sorted(dates)
+        assert dates[0] == start
+        assert dates[-1] == start + timedelta(days=4)
+
+    async def test_macro_detail_is_deserialized_to_dict(
+        self, db_session: AsyncSession
+    ) -> None:
+        """macro_detail str JSON 字符串 → 自动反序列化为 dict（V0.90.0 schema 修复的端到端路径）。"""
+        await _insert(
+            db_session,
+            date(2026, 10, 1),
+            macro_json='{"DXY": {"value": 104.5}, "US10Y": {"value": 4.2}}',
+        )
+
+        svc = _service(db_session)
+        result = await svc.get_in_range(date(2026, 10, 1), date(2026, 10, 1))
+
+        assert len(result) == 1
+        macro = result[0].macro_detail
+        assert isinstance(macro, dict)
+        assert macro["DXY"]["value"] == 104.5
+        assert macro["US10Y"]["value"] == 4.2
+
+    async def test_inverted_range_returns_empty(
+        self, db_session: AsyncSession
+    ) -> None:
+        """``start > end`` → 空 list（仓储层语义透传）。"""
+        await _insert(db_session, date(2026, 10, 5))
+        svc = _service(db_session)
+        result = await svc.get_in_range(date(2026, 10, 10), date(2026, 10, 1))
+        assert result == []
+
+    async def test_sparse_data_preserves_gaps(
+        self, db_session: AsyncSession
+        ) -> None:
+        """稀疏数据：只返回已存在行（中间不补全，调用方需自己决定如何渲染空洞）。"""
+        await _insert(db_session, date(2026, 10, 1))
+        await _insert(db_session, date(2026, 10, 5))
+        await _insert(db_session, date(2026, 10, 8))
+
+        svc = _service(db_session)
+        result = await svc.get_in_range(date(2026, 10, 1), date(2026, 10, 10))
+
+        assert len(result) == 3
+        assert {s.snapshot_date for s in result} == {
+            date(2026, 10, 1),
+            date(2026, 10, 5),
+            date(2026, 10, 8),
+        }
+
+    async def test_returns_snapshot_out_instances(
+        self, db_session: AsyncSession
+    ) -> None:
+        """返回类型是 ``SnapshotOut``（含所有 schema validator），不是裸 ORM。"""
+        await _insert(db_session, date(2026, 10, 1))
+        svc = _service(db_session)
+        result = await svc.get_in_range(date(2026, 10, 1), date(2026, 10, 1))
+
+        from app.schemas.snapshot import SnapshotOut
+        assert isinstance(result[0], SnapshotOut)
+        # snapshot_date 已被 Pydantic 转 date 类型（与 ORM 行为一致，但由 schema 守门）
+        assert isinstance(result[0].snapshot_date, date)

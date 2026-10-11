@@ -135,3 +135,20 @@ class DailySnapshotService:
         """V0.72.0：取 ``before`` 之前最近一个交易日的快照（用于告警档位穿越检测）。"""
         prev = await self._repo.get_latest_before(before)
         return SnapshotOut.model_validate(prev) if prev else None
+
+    async def get_in_range(
+        self, start: date, end: date
+    ) -> list[SnapshotOut]:
+        """V0.90.0：按日期区间取快照列表（含 ``macro_detail`` 反序列化）。
+
+        薄包装：转发到 ``SnapshotRepository.list_in_range``，把 ORM rows 转
+        ``SnapshotOut``（schema validator 自动反序列化 macro_detail JSON）。
+
+        用于：
+        - ``GET /api/v1/snapshots/in-range?start=&end=``：日趋势对比窗口
+        - ``TimelineService.build``：批量取时间窗内快照内存对齐 trades
+
+        入参边界同仓储层（``start > end`` → 空 list；含首尾）。
+        """
+        rows = await self._repo.list_in_range(start, end)
+        return [SnapshotOut.model_validate(r) for r in rows]
