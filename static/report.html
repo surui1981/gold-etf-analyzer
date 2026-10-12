@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b1e3f">
+<title data-i18n="report.title">复盘报告</title>
+<meta name="description" content="V0.91.0 · 黄金 ETF 复盘报告 PDF 一键导出（5 段：持仓 / 时间线 / 消息面 / 收益曲线 / 央行购金）">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/responsive.css">
+<!-- V0.91.0：报告页与 portfolio.html 共用 print 模板（仅 print media 加载，零运行时成本） -->
+<link rel="stylesheet" href="/static/print.css" media="print">
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<script src="/static/theme.js"></script>
+<style>
+/* report.html 屏上版式（仅 screen media；print 走 print.css） */
+.report-page { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+.report-toolbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg-elevated, #fff);
+  border: 1px solid var(--border-color, #ddd);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 18px;
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+.report-toolbar button.days-btn {
+  background: #f4f4f4; border: 1px solid #ccc; border-radius: 4px;
+  padding: 4px 10px; cursor: pointer; font-size: 13px;
+}
+.report-toolbar button.days-btn.active { background: #0b1e3f; color: #fff; border-color: #0b1e3f; }
+.report-toolbar button#btn-generate, .report-toolbar button#btn-print {
+  background: #0b1e3f; color: #fff; border: 0; border-radius: 4px;
+  padding: 6px 14px; cursor: pointer; font-size: 13px;
+}
+.report-toolbar a { font-size: 13px; color: #0b1e3f; text-decoration: none; padding: 6px 12px; border: 1px solid #0b1e3f; border-radius: 4px; }
+.report-loading { padding: 24px; text-align: center; color: #888; }
+.report-error { padding: 12px 16px; background: #fee; border: 1px solid #fcc; border-radius: 6px; color: #900; margin-bottom: 12px; }
+.report-cover { text-align: center; padding: 36px 12px 24px; border-bottom: 1px dashed #ccc; margin-bottom: 18px; }
+.report-cover h1 { font-size: 26px; margin: 0 0 12px; }
+.report-meta { font-size: 14px; color: #555; line-height: 1.8; }
+.report-section { margin-bottom: 28px; }
+.report-section h2 { font-size: 18px; border-bottom: 2px solid #0b1e3f; padding-bottom: 4px; margin: 0 0 12px; }
+.report-section table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.report-section th, .report-section td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+.report-section th { background: #f6f6f6; font-weight: 600; }
+.report-section td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.report-section .empty { padding: 12px; color: #999; font-style: italic; text-align: center; }
+.decision-row { border-left: 3px solid #0b1e3f; }
+.idle-row { color: #888; font-style: italic; }
+.no-snapshot { color: #aaa; font-style: italic; }
+.report-section .idle-separator td { background: #fafafa; color: #888; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="topnav-mount"></div>
+  <script src="/static/topnav.js"></script>
+  <!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
+  <script src="/static/nav-context.js"></script>
+  <script src="/static/account.js"></script>
+  <!-- V0.84.0 status panel 模式：与 9 页统一；print.css 隐藏 -->
+  <details id="statusPanel" class="status-panel">
+    <summary><span data-i18n="status.summary_text">数据时效</span></summary>
+    <div id="statusPanel-body"></div>
+  </details>
+
+  <main class="report-page">
+    <!-- 工具栏（屏上交互；print mode 隐藏） -->
+    <div class="report-toolbar no-print">
+      <span data-i18n="report.range_label">统计区间</span>
+      <button class="days-btn" data-days="7" data-i18n="report.range_7">近 7 天</button>
+      <button class="days-btn" data-days="30" data-i18n="report.range_30">近 30 天</button>
+      <button class="days-btn" data-days="90" data-i18n="report.range_90">近 90 天</button>
+      <button class="days-btn" data-days="180" data-i18n="report.range_180">近 180 天</button>
+      &nbsp;|&nbsp;
+      <span data-i18n="report.cover_account">账本</span>: <strong id="current-account">—</strong>
+      <span style="flex:1"></span>
+      <button id="btn-generate" data-i18n="report.btn_generate">生成报告</button>
+      <button id="btn-print" data-i18n="report.btn_print">打印 / 另存为 PDF</button>
+      <a href="/portfolio" data-i18n="report.btn_back">返回</a>
+    </div>
+
+    <div class="report-loading" id="report-loading" data-i18n="report.loading">数据加载中…</div>
+    <div class="report-error" id="report-error" style="display:none"></div>
+
+    <!-- 封面（page 1，print 时占满） -->
+    <div class="report-cover" id="report-cover" style="display:none">
+      <h1 data-i18n="report.title">复盘报告</h1>
+      <div class="report-meta">
+        <div><span data-i18n="report.cover_period">统计区间</span>: <span id="cover-period">—</span></div>
+        <div><span data-i18n="report.cover_account">账本</span>: <span id="cover-account">—</span></div>
+        <div><span data-i18n="report.cover_generated">生成时刻</span>: <span id="cover-generated">—</span></div>
+      </div>
+    </div>
+
+    <!-- 5 段主体 -->
+    <section class="report-section" id="section-positions" style="display:none">
+      <h2 data-i18n="report.section_positions">一、当前持仓</h2>
+      <div id="positions-body"></div>
+    </section>
+    <section class="report-section" id="section-timeline" style="display:none">
+      <h2 data-i18n="report.section_timeline">二、决策时间线</h2>
+      <div id="timeline-body"></div>
+    </section>
+    <section class="report-section" id="section-news" style="display:none">
+      <h2 data-i18n="report.section_news">三、消息面打分</h2>
+      <div id="news-body"></div>
+    </section>
+    <section class="report-section" id="section-curve" style="display:none">
+      <h2 data-i18n="report.section_curve">四、收益曲线</h2>
+      <div id="curve-body"></div>
+    </section>
+    <section class="report-section" id="section-central" style="display:none">
+      <h2 data-i18n="report.section_central">五、央行购金</h2>
+      <div id="central-body"></div>
+    </section>
+  </main>
+</div>
+
+<script src="/static/i18n.js" defer></script>
+<!-- V0.91.0：报告生成 + 渲染（消费 V0.90.0 timeline + 既有 8 端点） -->
+<script src="/static/report.js" defer></script>
+</body>
+</html>

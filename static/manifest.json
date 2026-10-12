@@ -40,6 +40,13 @@
       "name": "参数回测",
       "url": "/static/backtest.html",
       "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "复盘报告",
+      "short_name": "报告",
+      "description": "V0.91.0 · 持仓 + 时间线 + 消息面 + 收益 + 央行购金 5 段 PDF 导出",
+      "url": "/report",
+      "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
     }
   ]
 }

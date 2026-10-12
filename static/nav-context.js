@@ -1,0 +1,196 @@
+/* V0.91.0 · 跨页上下文保留
+ * nav-context.js — 9 业务页 filter / range / 账本 等状态的「跨页持久化」
+ *
+ * 设计动机：9 个业务页（trend / portfolio / trades / weights / news / review /
+ * central-bank / silver / backtest）的筛选 / 范围 / 账本状态过去全 DOM-based，
+ * 跨页跳转即丢 —— 在 /news 看完当日打分跳去 /review，日期 / 账本 / 标的
+ * 全部重置，要重新点选（agent 调研确认）。
+ *
+ * 设计取舍：
+ * 1. **统一命名空间 pm_ctx_v1_*** —— 借鉴 pm_help_seen_version 升级机制
+ *    （V0.58.0 help.js）；未来字段增删可改 v2 强制重置，零迁移成本。
+ * 2. **避用 URL hash 存 context** —— review.html 的 #status hash 已被
+ *    warning.js 占用做 statusPanel 深链展开（agent 警告 R1）。本模块
+ *    全部用 `?` query 串做 URL 载体 + localStorage 兜底。
+ * 3. **mount 时读 + change 时写** —— 与 account.js / synthesis-card.js
+ *    范式一致；不监听 storage 事件（多 tab 同步不必要）。
+ * 4. **不监听 i18n:change** —— context 是结构化数据，无 i18n 需求。
+ * 5. **零新依赖** —— 纯浏览器 API（localStorage / URLSearchParams /
+ *    history.replaceState / CustomEvent）。
+ * 6. **页面 mount 时按需 apply** —— 各页在 bottom 调一次
+ *    `NavContext.apply(map)`，map 形如 {fStart: "#fStart", days: "#selDays"}，
+ *    找到对应 input/select 并设值；空值不设。
+ * 7. **页面 change 时单点写** —— 各页在 input.onChange 调
+ *    `NavContext.write('fStart', el.value)`，单点写避免重复触发。
+ * 8. **导出按钮 / 跨页链接** —— `NavContext.buildQuery(keys)` 返回
+ *    "?k1=v1&k2=v2" 串，供 <a href> 与 window.open 拼装。
+ *
+ * 加载方式：9 页 head 同步追加（无 defer，与 topnav.js 一致避免 FOUC）：
+ *   <script src="/static/nav-context.js"></script>
+ * 必须在 topnav.js 之后、account.js 之前加载（account-changed 事件可能
+ * 触发本模块重写 URL）。
+ *
+ * 兼容性：所有现代浏览器；URLSearchParams IE 不支持（项目早就不支持 IE）。
+ */
+
+(function () {
+  "use strict";
+
+  // 命名空间
+  const NS = "pm_ctx_v1_";
+  // 支持的 key 清单（白名单：避免 LS 任意键污染）
+  // 实际使用中各页只读自己关心的子集。
+  const SUPPORTED = [
+    "fStart", "fEnd", "fSide", "fPosition", "fKeyword", "fSize",  // trades
+    "target", "horizon", "days",                                  // review / backtest
+    "snapDays", "klineDays", "klineInterval",                     // trend
+    "filterCountry", "filterFrom", "filterTo",                    // central-bank
+    "compressThreshold",                                          // (V0.90.1 timeline 用)
+  ];
+
+  function lsKey(k) { return NS + k; }
+
+  function safeGet(k) {
+    try { return localStorage.getItem(lsKey(k)); } catch (e) { return null; }
+  }
+  function safeSet(k, v) {
+    try {
+      if (v == null || v === "") localStorage.removeItem(lsKey(k));
+      else localStorage.setItem(lsKey(k), String(v));
+    } catch (e) { /* 隐私模式 */ }
+  }
+
+  /**
+   * 读单个 key —— 优先 URL query 串，再回退 localStorage。
+   * @param {string} key
+   * @returns {string|null}
+   */
+  function get(key) {
+    if (SUPPORTED.indexOf(key) < 0) return null;
+    try {
+      const u = new URLSearchParams(location.search);
+      const q = u.get(key);
+      if (q != null && q !== "") return q;
+    } catch (e) { /* URLSearchParams 不可用 */ }
+    return safeGet(key);
+  }
+
+  /**
+   * 写单个 key 到 localStorage（不更新 URL；如需 URL 同步另调 updateUrl）。
+   * @param {string} key
+   * @param {string|number|null} value 空值/0/false 也允许写入（与 get 对称）
+   */
+  function write(key, value) {
+    if (SUPPORTED.indexOf(key) < 0) return;
+    safeSet(key, value);
+    // 派发事件：跨组件同步（与 account-changed 范式一致）
+    document.dispatchEvent(new CustomEvent("nav-context-changed", { detail: { key, value } }));
+  }
+
+  /**
+   * 应用到 DOM —— 按 map 把当前值写到对应 input/select。
+   * @param {Object<string,string|HTMLElement>} map 例如 {fStart: "#fStart", days: "#selDays"}
+   * @param {Object<string,string>} [defaults] 例如 {fSize: "50"}（get 不到时的兜底）
+   */
+  function apply(map, defaults) {
+    if (!map) return;
+    defaults = defaults || {};
+    Object.keys(map).forEach(function (key) {
+      const sel = map[key];
+      const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+      if (!el) return;
+      const v = get(key) || defaults[key];
+      if (v == null || v === "") return;
+      // <input type=date|number|text|search> / <select> 都支持直接设 value
+      try { el.value = String(v); } catch (e) { /* 防御：奇葩控件 */ }
+    });
+  }
+
+  /**
+   * 绑定变更监听 —— change 事件触发时写入 LS。
+   * @param {Object<string,string|HTMLElement>} map
+   * @param {function(string,string):void} [onAfter] 写入后回调（供业务侧触发 reload）
+   */
+  function bind(map, onAfter) {
+    if (!map) return;
+    Object.keys(map).forEach(function (key) {
+      const sel = map[key];
+      const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+      if (!el) return;
+      const handler = function () {
+        write(key, el.value);
+        if (typeof onAfter === "function") onAfter(key, el.value);
+      };
+      el.addEventListener("change", handler);
+    });
+  }
+
+  /**
+   * 拼装 query 串 —— 供 <a href> 与 window.open 使用。
+   * @param {string[]} keys
+   * @returns {string} 形如 "?fStart=2026-10-05&days=90"（无值时返回 ""）
+   */
+  function buildQuery(keys) {
+    if (!keys || !keys.length) return "";
+    const parts = [];
+    keys.forEach(function (k) {
+      if (SUPPORTED.indexOf(k) < 0) return;
+      const v = get(k);
+      if (v != null && v !== "") parts.push(encodeURIComponent(k) + "=" + encodeURIComponent(v));
+    });
+    return parts.length ? "?" + parts.join("&") : "";
+  }
+
+  /**
+   * 同步当前 URL —— 把指定 keys 写到 location.search（replaceState 不留历史）。
+   * @param {string[]} keys
+   */
+  function updateUrl(keys) {
+    if (!keys || !keys.length) return;
+    const u = new URLSearchParams(location.search);
+    keys.forEach(function (k) {
+      if (SUPPORTED.indexOf(k) < 0) return;
+      const v = get(k);
+      if (v != null && v !== "") u.set(k, String(v));
+      else u.delete(k);
+    });
+    const qs = u.toString();
+    const newUrl = location.pathname + (qs ? "?" + qs : "") + location.hash;
+    try { history.replaceState(null, "", newUrl); } catch (e) { /* file:// 或权限问题 */ }
+  }
+
+  /**
+   * 拼装报告入口 URL —— 顶栏导出按钮 / 各页跳转报告都用。
+   * 报告页硬约束：days ≤ 250（兼容 decision/etf 接口 250 上限）。
+   * @param {Object} opt
+   * @param {string} [opt.from] 起始日期 YYYY-MM-DD
+   * @param {string} [opt.to] 结束日期 YYYY-MM-DD
+   * @param {string|number} [opt.days] 预设窗口（7/30/90/180）
+   * @returns {string}
+   */
+  function buildReportUrl(opt) {
+    opt = opt || {};
+    const params = [];
+    if (opt.from) params.push("from=" + encodeURIComponent(opt.from));
+    if (opt.to) params.push("to=" + encodeURIComponent(opt.to));
+    if (opt.days != null && opt.days !== "") params.push("days=" + encodeURIComponent(opt.days));
+    // 携带账本（account.js 用 gold_account_id，不在 SUPPORTED 内；直接读 LS）
+    try {
+      const acc = localStorage.getItem("gold_account_id");
+      if (acc && acc !== "all") params.push("account_id=" + encodeURIComponent(acc));
+    } catch (e) { /* ignore */ }
+    return "/report" + (params.length ? "?" + params.join("&") : "");
+  }
+
+  // 暴露 API
+  window.PM_NavContext = {
+    SUPPORTED: SUPPORTED,
+    get: get,
+    write: write,
+    apply: apply,
+    bind: bind,
+    buildQuery: buildQuery,
+    updateUrl: updateUrl,
+    buildReportUrl: buildReportUrl,
+  };
+})();

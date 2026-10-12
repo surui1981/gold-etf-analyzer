@@ -381,6 +381,22 @@ async def data_health_page_dothtml() -> RedirectResponse:
     return RedirectResponse("/static/data-health.html")
 
 
+@app.get("/report", include_in_schema=False)
+async def report_page() -> RedirectResponse:
+    """复盘报告 PDF 导出页（V0.91.0）。
+
+    顶栏 📄 按钮 / 各页跳转链接都走这个 RESTful 别名。Query 串承载
+    ``from`` / ``to`` / ``days`` / ``account_id`` 等筛选状态（与
+    ``nav-context.js`` 协同：URL 优先、localStorage 兜底）。
+
+    设计取舍：与 9 个既有 RESTful 别名同模式（kebab-url，无 .html 后缀）。
+    **未**登记 ``/report.html`` 别名 —— ``sw.js`` 的 ``SHELL_ASSETS`` 不进
+    报告页（V0.91.0 D1 决策：PDF 导出是显式在线行为，离线落 ``offline.html``
+    合理；降低 ``cache.addAll`` 原子失败概率，保护 9 页离线可用性）。
+    """
+    return RedirectResponse("/static/report.html")
+
+
 @app.get("/trades", include_in_schema=False)
 async def trades_page() -> RedirectResponse:
     """交易历史查询页（P1 #6：多条件筛选 + 汇总 + CSV 导出）。"""

@@ -1,0 +1,197 @@
+/* V0.91.0 · 复盘报告 + 跨页上下文保留
+ * print.css — 全局 print 样式
+ *
+ * 设计动机：V0.74.0 路线图 M7「PDF 导出 ≤ 2 页」一直挂 🟡 至今未落地（[docs/ux-roadmap.md:162]）。
+ * V0.90.0 后端时间线已就位，V0.91.0 终于把"PDF 导出"补齐。
+ *
+ * 设计取舍：
+ * 1. **@page A4 + 合理边距** —— 中国 A4 21×29.7cm 业务场景最常见；margin 14mm
+ *    既留足装订位又不浪费版面。
+ * 2. **隐藏全站 chrome** —— topnav / status panel / footer / 悬浮按钮 /
+ *    提示条 / 时效条 / 帮助按钮 在 print mode 全部隐藏，只保留报告主体。
+ * 3. **链接 URL 显式展开** —— 用户存档后翻 PDF 看到"查阅某页"链接的
+ *    完整地址（默认浏览器只显示 anchor text）。
+ * 4. **表格边框 + 跨页防截断** —— `border-collapse: collapse` 印刷友好；
+ *    `tr` / `table` 设 `break-inside: avoid` 避免行被腰斩。
+ * 5. **不画 Chart.js canvas** —— 报告页（report.html）刻意不引入 Chart.js；
+ *    改用纯表格 + 文字摘要，PDF 内可搜索可复制（agent 验证 R2）。
+ * 6. **强制 print-color-adjust: exact** —— 深色主题下，PDF 里 chrome 颜色不会被
+ *    浏览器误"省墨"反转为白底白字。
+ *
+ * 加载方式：9 页 head 同步追加 `<link rel="stylesheet" href="/static/print.css" media="print">`
+ * （仅 print media 加载，零运行时成本）；report.html 必须显式 import 才能在
+ * window.print() 触发时套用。
+ *
+ * 兼容性：所有现代浏览器（Chrome 49+ / Firefox 1+ / Safari 6+ / Edge 12+）。
+ */
+
+/* ─── @page + 基础 ─────────────────────────────────────── */
+@page {
+  size: A4;
+  margin: 14mm 14mm 16mm 14mm;
+}
+
+@media print {
+  /* 1. 强制精确颜色（防止深色主题被反转） */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* 2. 基础排版：黑字白底、节省墨水 */
+  html,
+  body {
+    background: #ffffff !important;
+    color: #000000 !important;
+    font-size: 10.5pt;
+    line-height: 1.45;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* 3. 隐藏全站 chrome（顶栏 / 状态条 / 警示 / 时效 / 悬浮按钮 / footer） */
+  .topnav,
+  .status-panel,
+  details.status-panel,
+  #statusPanel,
+  #pmHelpBtn,
+  #pmUserWidget,
+  .nav-toggle,
+  .pm-drawer,
+  .skip-link,
+  footer,
+  .lang-sel,
+  .acc-sel,
+  .acc-sum,
+  .alert-bar,
+  #alertBar,
+  .data-badge,
+  .refresh-btn,
+  .btn,
+  .btn-export,
+  .btn-save,
+  .btn-ghost,
+  .dashboard-controls,
+  canvas,
+  .command-palette,
+  .notification-center,
+  /* V0.84.0 status panel 衍生 */
+  .status-warn-pill,
+  .warn-pill,
+  /* 报告页交互控件 */
+  .report-toolbar,
+  .report-loading,
+  .no-print {
+    display: none !important;
+  }
+
+  /* 4. 链接 URL 显式展开（仅"href"以 http/https/相对路径开头的链接） */
+  a[href]:not([href^="#"])::after {
+    content: " (" attr(href) ")";
+    font-size: 9pt;
+    color: #666;
+    word-break: break-all;
+  }
+  /* 锚链接 + 已显式标 no-print-url 的不展开 */
+  a[href^="#"]::after,
+  a.no-print-url::after {
+    content: "";
+  }
+
+  /* 5. 表格印刷友好 */
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+    page-break-inside: auto;
+    margin-bottom: 8pt;
+  }
+  tr,
+  thead,
+  tbody,
+  tfoot {
+    page-break-inside: avoid;
+  }
+  th,
+  td {
+    border: 0.5pt solid #888 !important;
+    padding: 4pt 6pt !important;
+    font-size: 9.5pt !important;
+    color: #000 !important;
+    background: #fff !important;
+  }
+  th {
+    background: #f0f0f0 !important;
+    font-weight: 600 !important;
+    text-align: left;
+  }
+
+  /* 6. 标题分页友好 */
+  h1, h2, h3, h4 {
+    color: #000 !important;
+    page-break-after: avoid;
+    margin-top: 10pt;
+    margin-bottom: 6pt;
+  }
+  h1 { font-size: 18pt; }
+  h2 { font-size: 14pt; }
+  h3 { font-size: 12pt; }
+  h4 { font-size: 11pt; }
+
+  /* 7. 强制分页辅助类 */
+  .page-break-before { page-break-before: always; }
+  .page-break-after { page-break-after: always; }
+  .no-break { page-break-inside: avoid; }
+
+  /* 8. 报告页专属：5 段结构 + 封面 */
+  .report-cover {
+    text-align: center;
+    padding: 30pt 10pt;
+    page-break-after: always;
+  }
+  .report-cover h1 {
+    font-size: 22pt;
+    margin-bottom: 14pt;
+  }
+  .report-section {
+    page-break-inside: avoid;
+    margin-bottom: 14pt;
+  }
+  .report-section h2 {
+    border-bottom: 1pt solid #000;
+    padding-bottom: 4pt;
+    margin-bottom: 8pt;
+  }
+  .report-meta {
+    font-size: 10pt;
+    color: #444;
+    margin-top: 6pt;
+  }
+
+  /* 9. 决策点视觉强化（decision 段） */
+  .decision-row {
+    border-left: 2pt solid #000 !important;
+    padding-left: 6pt;
+  }
+  .idle-row {
+    color: #666 !important;
+    font-style: italic;
+  }
+  .no-data {
+    color: #888 !important;
+    background: #f5f5f5 !important;
+  }
+
+  /* 10. 数字列右对齐 + tabular */
+  td.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 11. 报告页"数据缺（节假日）" 显式标记 */
+  .snapshot-missing {
+    color: #888 !important;
+    font-style: italic;
+  }
+}

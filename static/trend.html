@@ -203,6 +203,8 @@
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
+<!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
+<link rel="stylesheet" href="/static/print.css" media="print">
 </head>
 <body>
 <!-- V0.69.0 skip-link（WCAG 2.4.1） -->
@@ -212,6 +214,8 @@
   <!-- V0.84.0 · 共享顶 nav（topnav.js 同步注入）：1 行 brand+links（无 row 2） -->
   <div id="topnav-mount"></div>
   <script src="/static/topnav.js"></script>
+  <!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
+  <script src="/static/nav-context.js"></script>
 
   <!-- V0.85.0 · 数据时效迁移到 /data-health.html：summary = 健康摘要 chip（6 数据源聚合）+ 警示 pill
        点击 chip 跳 data-health.html（不展开 disclosure）；由 health-summary.js 维持 60s 自动刷新 -->

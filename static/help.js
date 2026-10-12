@@ -17,7 +17,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "V0.73.0";
+  const VERSION = "V0.91.0";
   const LS = {
     tourPrefix: "pm_help_tour_",
     seenVer: "pm_help_seen_version",
@@ -269,6 +269,12 @@
         <li><b>顶栏语言切换器</b> → 顶栏最右侧下拉（简中 / 繁中 / English）；切换瞬间生效；localStorage 记忆</li>
         <li><b>英文版</b> → 切换后所有 data-i18n 节点同步更新；货币/日期/百分比走 <code>Intl.*</code> locale 自动适配</li>
         <li><b>未翻译 key</b> → 自动 fallback 到简体中文（保证 UI 不出乱码）；触发 <code>i18n_fallback_hit</code> 埋点用于翻译覆盖率监控</li>
+      </ol>
+      <h3>V0.91.0 新增（复盘报告 PDF + 跨页上下文保留）</h3>
+      <ol class="pmh-guide">
+        <li><b>顶栏 📄 导出按钮</b> → 9 页统一入口；点击自动拼当前账本 + 区间 → 新标签打开 <a href="/report">/report</a> 报告页</li>
+        <li><b>5 段复盘报告</b> → 封面 + 持仓 + 决策时间线（消费 V0.90.0 timeline）+ 消息面打分 + 收益曲线 + 央行购金；点「打印 / 另存为 PDF」走浏览器原生 <code>window.print()</code></li>
+        <li><b>跨页上下文保留</b> → 切换业务页时，<code>account_id</code> / <code>target</code> / <code>days</code> / <code>horizon</code> 等筛选状态由 <code>nav-context.js</code> 自动同步（URL 优先、localStorage 兜底，<code>pm_ctx_v1_*</code> 命名空间）</li>
       </ol>
       <p class="pmh-tip">💡 综合指数 &gt; 75 强势上升 / &gt; 55 上升 / &gt; 45 震荡 / &gt; 25 下降 / 其他弱势下降</p>
     `;

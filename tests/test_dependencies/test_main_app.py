@@ -42,6 +42,7 @@ ROOT_ALIASES = [
     ("/trades", "/static/trades.html"),
     ("/login", "/static/login.html"),
     ("/reset-password", "/static/reset-password.html"),
+    ("/report", "/static/report.html"),  # V0.91.0 复盘报告 PDF 导出页
 ]
 
 
@@ -70,7 +71,7 @@ async def client_with_lifespan() -> AsyncClient:
 
 
 class TestRootAliases:
-    """11 个根路径别名必须返回 307 + 正确的 Location header。"""
+    """12 个根路径别名必须返回 307 + 正确的 Location header。"""
 
     @pytest.mark.parametrize(
         "alias_path,expected_target",
@@ -104,8 +105,8 @@ class TestRootAliases:
             and not r.path.startswith("/login")
             and not r.path.startswith("/sw")
         ]
-        # 精确数：10 个 alias + / 本身 = 11 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 11, (
+        # 精确数：11 个 alias + / 本身 = 12 个 GET（不含 /sw.js）
+        assert len(ROOT_ALIASES) == 12, (
             "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
         )
 

@@ -1,5 +1,5 @@
 /*!
- * static/topnav.js — V0.84.0 · 共享顶 nav 同步注入（roadmap §4.1 M）
+ * static/topnav.js — V0.91.0 · 共享顶 nav 同步注入（roadmap §4.1 M）
  *
  * 设计动机：8 页面原本各复制粘贴 25 行 nav markup（trend.html 主页 + silver /
  * portfolio / weights / trades / backtest / data-health / central_bank / review），
@@ -23,6 +23,11 @@
  *    警示按钮下沉到 `<details id="statusPanel">` —— 数据时效在 summary 内
  *    持续可见，警示以「⚠️ N 条要点」pill 形式同行右对齐；点开看警示全文。
  *    这样释放 ~36px 顶 nav 高度 + 删底部 warnFooter，腾出版面给 main。
+ * 6. **V0.91.0：导出复盘报告按钮（📄）**：复用品牌行右侧的"顶栏"位置（D3 决策），
+ *    9 页统一可见。**不进 NAV_LINKS**（按钮不是链接，单独模板）。
+ *    点击 → 拼 `/report?days=&account_id=&...` URL → 新标签打开。
+ *    URL 拼装优先调用 `PM_NavContext.buildReportUrl`（nav-context.js 加载后可用），
+ *    否则用内联保底（防御：单页加载顺序变动时仍可工作）。
  *
  * 加载方式：紧跟 `<div id="topnav-mount"></div>` 之后，例如：
  *   <div class="wrap">
@@ -86,15 +91,53 @@
         '<span data-i18n="' + escAttr(l.i18n) + '">' + l.fb + '</span>' +
       '</a>';
     }).join("\n        ");
-    return '<!-- V0.84.0 · 共享 topnav（topnav.js 同步注入，1 行 brand+links） -->\n' +
+    var exportHTML = buildExportButton();
+    return '<!-- V0.91.0 · 共享 topnav（topnav.js 同步注入，1 行 brand+links+export） -->\n' +
       '<nav class="topnav" aria-label="主导航">\n' +
       '  <div class="topnav-row">\n' +
       '    ' + brandHTML + '\n' +
       '    <div class="links">\n' +
       '      ' + linksHTML + '\n' +
       '    </div>\n' +
+      '    ' + exportHTML + '\n' +
       '  </div>\n' +
       '</nav>';
+  }
+
+  // 导出复盘报告按钮（V0.91.0）—— 不进 NAV_LINKS（按钮不是链接，单独模板）。
+  // 文案靠 i18n nav.export；icon 用 📄；走 brand 行右侧（CSS .nav-btn-export 定位）。
+  // 走 data-i18n 协议，fb 默认 zh-CN 由 i18n.js 切语种后覆盖。
+  function buildExportButton() {
+    return '<button type="button" class="nav-btn-export" ' +
+      'aria-label="Export report" ' +
+      'data-action="open-report">' +
+      '<span class="nav-ico" aria-hidden="true">📄</span>' +
+      '<span data-i18n="nav.export">导出复盘报告</span>' +
+    '</button>';
+  }
+
+  // 打开报告页 —— 优先走 PM_NavContext.buildReportUrl；fallback 内联保底。
+  // 触发时机：用户点击 .nav-btn-export；事件委托到 document，避免对每个按钮单独绑。
+  function openReport() {
+    var url = null;
+    if (window.PM_NavContext && typeof window.PM_NavContext.buildReportUrl === "function") {
+      var days = window.PM_NavContext.get("days") || "30";
+      url = window.PM_NavContext.buildReportUrl({ days: days });
+    } else {
+      // Fallback：nav-context.js 未加载（或加载顺序异常）时内联拼装
+      var daysFallback = "30";
+      try {
+        var lsDays = localStorage.getItem("pm_ctx_v1_days");
+        if (lsDays && /^\d+$/.test(lsDays)) daysFallback = lsDays;
+      } catch (e) { /* 隐私模式 */ }
+      var parts = ["days=" + encodeURIComponent(daysFallback)];
+      try {
+        var acc = localStorage.getItem("gold_account_id");
+        if (acc && acc !== "all") parts.push("account_id=" + encodeURIComponent(acc));
+      } catch (e) { /* ignore */ }
+      url = "/report?" + parts.join("&");
+    }
+    if (url) window.open(url, "_blank", "noopener");
   }
 
   // 替换 placeholder div。必须同步：当前 script 紧跟 placeholder，浏览器在
@@ -108,4 +151,14 @@
     console.warn("[topnav] #topnav-mount not found, fallback to body prepend");
     document.body.insertAdjacentHTML("afterbegin", buildNav());
   }
+
+  // 事件委托：导出按钮 click。document 级委托一次，复用 9 页所有 nav 按钮实例。
+  document.addEventListener("click", function (e) {
+    var target = e.target;
+    // closest 找到按钮本体（点击 icon / text 都能命中）
+    var btn = target.closest && target.closest(".nav-btn-export[data-action='open-report']");
+    if (!btn) return;
+    e.preventDefault();
+    openReport();
+  });
 })();

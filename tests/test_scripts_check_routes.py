@@ -27,9 +27,9 @@ class TestDiscoverRoutes:
     """``discover_routes(app)`` 反射 FastAPI app.routes 的过滤逻辑。"""
 
     def test_reflects_actual_routes(self) -> None:
-        """真实 app 反射：11 alias + /sw.js = 12 条（含 ``include_in_schema=False``）。"""
+        """真实 app 反射：12 alias + /sw.js = 13 条（含 ``include_in_schema=False``）。"""
         routes = check_routes.discover_routes(fastapi_app)
-        # 至少含 11 个 alias + 1 个 sw.js
+        # 至少含 12 个 alias + 1 个 sw.js
         assert "/" in routes
         assert "/portfolio" in routes
         assert "/data-health" in routes
@@ -46,14 +46,14 @@ class TestDiscoverRoutes:
         )
 
     def test_count_matches_root_aliases_parametrize(self) -> None:
-        """反射数应等于 ``tests/test_main_app.py::ROOT_ALIASES`` 的 11 + /sw.js = 12。
+        """反射数应等于 ``tests/test_main_app.py::ROOT_ALIASES`` 的 12 + /sw.js = 13。
 
         任何 main.py alias 漏注册都会被这个数捕获（防 V0.85 漏注册 /data-health 复现）。
         """
         routes = check_routes.discover_routes(fastapi_app)
-        # 11 alias + 1 sw.js = 12
-        assert len(routes) == 12, (
-            f"反射 {len(routes)} 条；期望 12（11 alias + /sw.js）。"
+        # 12 alias + 1 sw.js = 13
+        assert len(routes) == 13, (
+            f"反射 {len(routes)} 条；期望 13（12 alias + /sw.js）。"
             "新增 alias 必须同步更新 EXPECTED_ALIAS_PATHS + test_main_app.ROOT_ALIASES"
         )
 
@@ -191,12 +191,12 @@ class TestExpectedStatusConsistency:
     """``EXPECTED_STATUS`` 与 ``tests/test_main_app.py::ROOT_ALIASES`` 同步断言。
 
     这两个事实真相**必须**同步：漏任何一处都会让 V0.85 漏注册 /data-health
-    类回归漏检。两个测试都断言相同数目（11 alias + /sw.js）。
+    类回归漏检。两个测试都断言相同数目（12 alias + /sw.js）。
     """
 
     def test_expected_alias_paths_count(self) -> None:
-        """EXPECTED_ALIAS_PATHS 必须正好 11 条（与 main.py alias 数同步）。"""
-        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 11
+        """EXPECTED_ALIAS_PATHS 必须正好 12 条（与 main.py alias 数同步）。"""
+        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 12
 
     def test_expected_status_alias_keys_match(self) -> None:
         """EXPECTED_STATUS 的 alias 部分 key 集合 ⊇ EXPECTED_ALIAS_PATHS。"""
@@ -210,5 +210,5 @@ class TestExpectedStatusConsistency:
             )
 
     def test_expected_status_alias_keys_count(self) -> None:
-        """EXPECTED_STATUS 必须含 11 alias + /sw.js + /docs + /static/trend.html = 14。"""
-        assert len(check_routes.EXPECTED_STATUS) == 14
+        """EXPECTED_STATUS 必须含 12 alias + /sw.js + /docs + /static/trend.html = 15。"""
+        assert len(check_routes.EXPECTED_STATUS) == 15

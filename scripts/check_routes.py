@@ -50,7 +50,8 @@ from typing import Callable
 # ──────────────── 期望状态表（事实真相；与 test_main_app.py ROOT_ALIASES 同步） ────────────────
 
 
-# 11 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应）
+# 12 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应；
+# V0.91.0 新增 /report —— 复盘报告 PDF 导出页）
 EXPECTED_ALIAS_PATHS: list[str] = [
     "/",
     "/portfolio",
@@ -63,6 +64,7 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/trades",
     "/login",
     "/reset-password",
+    "/report",
 ]
 
 # 期望 status 表：alias → 307，特殊端点 → 各自 status

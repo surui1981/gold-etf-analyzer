@@ -112,6 +112,8 @@
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
+<!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
+<link rel="stylesheet" href="/static/print.css" media="print">
 </head>
 <body>
 <!-- V0.69.0 skip-link -->
@@ -133,6 +135,10 @@
       <a href="/static/backtest.html" data-i18n="nav.backtest">参数回测</a>
       <a href="/static/data-health.html" data-i18n="nav.health">数据健康</a>
       <a href="/static/settings.html" data-i18n="nav.settings">通知中心</a>
+      <!-- V0.91.0：本页用硬编码 nav（未走 topnav.js），单独追加导出按钮 -->
+      <button type="button" class="nav-btn-export" data-action="open-report"
+              style="color:#d6d9dd;background:transparent;border:1px solid rgba(255,255,255,.18);font-size:13.5px;padding:6px 14px;border-radius:8px;cursor:pointer"
+              data-i18n="nav.export">导出复盘报告</button>
     </div>
   </nav>
 
@@ -624,6 +630,32 @@ async function loadHistory() {
 <script src="/static/account.js"></script>
   <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->
   <script src="/static/telemetry.js" defer></script>
+<!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
+<script src="/static/nav-context.js"></script>
+<!-- V0.91.0：news.html 硬编码 nav 上的导出按钮（topnav.js 事件委托未生效，自挂 click） -->
+<script>
+(function(){
+  document.addEventListener("click", function(e){
+    var t = e.target;
+    var btn = t.closest && t.closest('[data-action="open-report"]');
+    if (!btn) return;
+    e.preventDefault();
+    var url = "/report?days=30";
+    try {
+      if (window.PM_NavContext && window.PM_NavContext.buildReportUrl) {
+        var days = window.PM_NavContext.get("days") || "30";
+        url = window.PM_NavContext.buildReportUrl({ days: days });
+      } else {
+        var lsDays = localStorage.getItem("pm_ctx_v1_days");
+        if (lsDays && /^\d+$/.test(lsDays)) url = "/report?days=" + encodeURIComponent(lsDays);
+        var acc = localStorage.getItem("gold_account_id");
+        if (acc && acc !== "all") url += "&account_id=" + encodeURIComponent(acc);
+      }
+    } catch (err) { /* ignore */ }
+    window.open(url, "_blank", "noopener");
+  });
+})();
+</script>
   <script src="/static/nav-drawer.js" defer></script>
   <script src="/static/command-palette.js" defer></script>
 </body>
