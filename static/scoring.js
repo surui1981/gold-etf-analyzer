@@ -21,8 +21,8 @@
     // 填充 tag 下拉
     populateTagFilter();
 
-    // Tab 切换
-    document.querySelectorAll('.tab').forEach((t) => {
+    // Tab 切换（按钮 role="tab" + aria-selected，与 login.html 风格一致）
+    document.querySelectorAll('[role="tab"]').forEach((t) => {
       t.addEventListener('click', () => switchTab(t.dataset.tab));
     });
 
@@ -46,7 +46,9 @@
   }
 
   function switchTab(tab) {
-    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === tab));
+    document.querySelectorAll('[role="tab"]').forEach((t) =>
+      t.setAttribute('aria-selected', t.dataset.tab === tab ? 'true' : 'false')
+    );
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + tab));
   }
 

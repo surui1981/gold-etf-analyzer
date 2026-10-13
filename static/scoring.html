@@ -14,10 +14,13 @@
   } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
 })();</script>
 <link rel="stylesheet" href="/static/theme.css">
+<link rel="stylesheet" href="/static/responsive.css">
 <link rel="manifest" href="/static/manifest.json">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" data-i18n="nav.scoring" content="打分汇总">
+<!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
+<link rel="stylesheet" href="/static/print.css" media="print">
 <script src="/static/theme.js" defer></script>
 <!-- V0.73.0 i18n FOUC guard -->
 <script>(function(){
@@ -33,101 +36,144 @@
 <!-- V0.75.0：认证客户端 -->
 <script src="/static/auth.js" defer></script>
 <style>
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); padding:24px; }
-  .wrap { max-width:1200px; margin:0 auto; }
-  .toolbar { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:14px 18px; margin-bottom:14px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
-  .toolbar label { font-size:12px; color:var(--muted); margin-right:6px; }
-  .toolbar input, .toolbar select { padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; background:var(--bg); color:var(--text); }
-  .toolbar button { padding:6px 14px; background:var(--accent); color:#fff; border:0; border-radius:6px; cursor:pointer; font-size:13px; }
-  .toolbar button:hover { background:var(--accent-hover); }
-  .tab-bar { display:flex; border-bottom:2px solid var(--border); margin-bottom:14px; }
-  .tab { padding:10px 18px; cursor:pointer; font-size:14px; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-2px; }
-  .tab.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
-  .tab-panel { display:none; }
-  .tab-panel.active { display:block; }
-  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 22px; margin-bottom:14px; }
-  .card h2 { font-size:15px; margin-bottom:10px; }
-  .card .desc { font-size:11px; color:var(--muted); margin-bottom:8px; }
-  table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { padding:6px 8px; text-align:left; border-bottom:1px solid var(--border); }
-  th { font-weight:600; color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:0.5px; }
-  /* 日历视图 */
-  .cal-month { margin-bottom:18px; }
-  .cal-month-title { font-size:13px; font-weight:600; margin-bottom:6px; }
-  .cal-grid { display:grid; grid-template-columns:repeat(7, 1fr); gap:2px; }
-  .cal-cell { aspect-ratio:1; padding:4px; border-radius:4px; font-size:10px; color:#fff; text-align:center; position:relative; min-height:32px; }
-  .cal-cell.empty { background:transparent; }
-  .cal-cell .cal-day { font-size:11px; font-weight:600; }
-  .cal-cell .cal-trend { font-size:9px; opacity:0.85; }
-  /* index level colors */
-  .cal-cell.lv-strong_bullish { background:#16a34a; }
-  .cal-cell.lv-bullish { background:#65a30d; }
-  .cal-cell.lv-neutral { background:#737373; }
-  .cal-cell.lv-bearish { background:#dc2626; }
-  .cal-cell.lv-strong_bearish { background:#991b1b; }
-  .cal-cell.lv-missing { background:#d4d4d8; color:#52525b; }
-  /* 标签 chip */
-  .tag-chip { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; background:var(--bg); border:1px solid var(--border); margin:2px; }
-  .num { text-align:right; font-variant-numeric:tabular-nums; }
-  .empty { padding:32px; text-align:center; color:var(--muted); font-size:13px; }
-  .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; }
-  .stat { padding:10px 12px; background:var(--bg); border-radius:6px; }
-  .stat .v { font-size:18px; font-weight:600; }
-  .stat .l { font-size:11px; color:var(--muted); }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+  /* ── Hero 标题区（与 portfolio / news / trades 对齐）── */
+  .hero { background: linear-gradient(135deg, #fffaf0, #ffffff 60%, #f7f8fa); border: 1px solid #f0e2b6; border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
+  .hero h1 { font-size: 22px; }
+  .hero .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .hero .notice { display: inline-block; margin-top: 8px; font-size: 11.5px; color: #92400e; background: #fff7e6; border: 1px solid #f0e2b6; border-radius: 6px; padding: 3px 10px; }
+  /* ── 工具栏（与 central_bank .filters 风格对齐）── */
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; padding: 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+  .toolbar label { font-size: 12px; color: var(--muted); }
+  .toolbar select, .toolbar input { font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+  .toolbar button { font-size: 12.5px; padding: 4px 14px; border: none; border-radius: 6px; background: #1f2329; color: #fff; cursor: pointer; }
+  .toolbar button:hover { background: var(--accent); }
+  /* ── 卡片（与 portfolio / news / central_bank 一致）── */
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
+  .card h2 { font-size: 15px; margin-bottom: 6px; }
+  .desc { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
+  /* ── Tabs（沿用 login.html role="tablist" 风格）── */
+  .tabs { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-bottom: 16px; max-width: 320px; }
+  .tabs button { flex: 1; padding: 8px 0; font-size: 13.5px; font-family: inherit; cursor: pointer;
+    background: transparent; border: 0; border-radius: 6px; color: var(--muted); transition: all .15s; }
+  .tabs button[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  /* ── 表格（与各页一致）── */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  /* ── 标签 chip ── */
+  .tag-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: var(--bg); border: 1px solid var(--border); margin: 2px; }
+  /* ── 命中率 stat 网格 ── */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+  .stat { padding: 10px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
+  .stat .v { font-size: 18px; font-weight: 600; }
+  .stat .l { font-size: 11px; color: var(--muted); }
+  /* ── 日历视图 ── */
+  .cal-month { margin-bottom: 18px; }
+  .cal-month-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+  .cal-cell { aspect-ratio: 1; padding: 4px; border-radius: 4px; font-size: 10px; color: #fff; text-align: center; position: relative; min-height: 32px; }
+  .cal-cell.empty { background: transparent; }
+  .cal-cell .cal-day { font-size: 11px; font-weight: 600; }
+  .cal-cell .cal-trend { font-size: 9px; opacity: 0.85; }
+  .cal-cell.lv-strong_bullish { background: #16a34a; }
+  .cal-cell.lv-bullish { background: #65a30d; }
+  .cal-cell.lv-neutral { background: #737373; }
+  .cal-cell.lv-bearish { background: #dc2626; }
+  .cal-cell.lv-strong_bearish { background: #991b1b; }
+  .cal-cell.lv-missing { background: #d4d4d8; color: #52525b; }
+  .empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
+<!-- V0.69.0 skip-link -->
+<a class="skip-link" href="#main" data-i18n="a11y.skip_to_main">跳到主要内容</a>
+<main id="main" tabindex="-1">
 <div class="wrap">
+  <!-- V0.92.0 · 共享顶 nav（topnav.js 同步注入）：brand + 12 链接 + 时效/警示 meta -->
   <div id="topnav-mount"></div>
-  <h1 style="font-size:20px; margin:18px 0 12px;" data-i18n="scoring.title">历史打分数据汇总</h1>
+  <script src="/static/topnav.js"></script>
+  <!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
+  <script src="/static/nav-context.js"></script>
 
+  <!-- V0.84.0 方案 C · 状态条 disclosure：summary = 时效 chips + 警示计数 pill（1 行 ~36px）；
+       body = 完整警示 + dismiss checkbox。由 warning.js 维持展开态。 -->
+  <details id="statusPanel" class="status-panel">
+    <summary>
+      <a id="healthSummary" class="hs-chip-link" href="/data-health" aria-label="数据健康"></a>
+      <span class="status-sep" aria-hidden="true"></span>
+      <span class="status-warn-pill">
+        <span class="warn-pill-icon" aria-hidden="true">⚠️</span>
+        <span class="warn-pill-label" data-i18n="status.warn_pill_label">投资警示</span>
+        <span data-warn-count>5</span>
+        <span data-i18n="status.warn_pill_unit">条要点</span>
+      </span>
+    </summary>
+    <div class="status-body">
+      <ol class="warn-list">
+        <li><b data-i18n="warn.b1_strong"></b><span data-i18n="warn.b1_rest"></span></li>
+        <li><b data-i18n="warn.b2_strong"></b><span data-i18n="warn.b2_rest"></span></li>
+        <li><b data-i18n="warn.b3_strong"></b><span data-i18n="warn.b3_rest"></span></li>
+        <li><b data-i18n="warn.b4_strong"></b><span data-i18n="warn.b4_rest"></span></li>
+        <li><b data-i18n="warn.b5_strong"></b><span data-i18n="warn.b5_rest"></span></li>
+      </ol>
+      <label class="warn-dismiss">
+        <input type="checkbox" data-warn-dismiss aria-describedby="warnDismissHint">
+        <span id="warnDismissHint" data-i18n="warn.dismiss_session">本次会话不再展开</span>
+      </label>
+    </div>
+  </details>
+
+  <header class="hero">
+    <h1 data-i18n="scoring.title">📊 历史打分数据汇总</h1>
+    <div class="tagline" data-i18n="scoring.tagline">按日 / 月 / 标签维度的综合指数时序 + 命中分析</div>
+    <div class="notice" data-i18n="brand.notice_short">仅供研究参考，不构成投资建议</div>
+  </header>
+
+  <!-- 工具栏：日期范围 + 标签筛选 + group_by + horizon + 刷新 -->
   <div class="toolbar">
-    <div>
-      <label data-i18n="scoring.data_range">数据范围</label>
-      <input type="date" id="fromDate" value="">
-      <span style="color:var(--muted);">~</span>
-      <input type="date" id="toDate" value="">
-    </div>
-    <div>
-      <label data-i18n="scoring.tag_filter">依据标签筛选</label>
-      <select id="tagFilter"><option value="" data-i18n="scoring.tag_filter_all">全部</option></select>
-    </div>
-    <div>
-      <label>group_by</label>
-      <select id="groupBy">
-        <option value="day">day</option>
-        <option value="week">week</option>
-        <option value="month" selected>month</option>
-      </select>
-    </div>
-    <div>
-      <label>horizon</label>
-      <select id="horizon">
-        <option value="t1">T+1</option>
-        <option value="t3">T+3</option>
-        <option value="t5" selected>T+5</option>
-      </select>
-    </div>
+    <label data-i18n="scoring.data_range">数据范围</label>
+    <input type="date" id="fromDate" value="">
+    <span style="color:var(--muted);">~</span>
+    <input type="date" id="toDate" value="">
+    <label data-i18n="scoring.tag_filter">依据标签筛选</label>
+    <select id="tagFilter"><option value="" data-i18n="scoring.tag_filter_all">全部</option></select>
+    <label>group_by</label>
+    <select id="groupBy">
+      <option value="day">day</option>
+      <option value="week">week</option>
+      <option value="month" selected>month</option>
+    </select>
+    <label>horizon</label>
+    <select id="horizon">
+      <option value="t1">T+1</option>
+      <option value="t3">T+3</option>
+      <option value="t5" selected>T+5</option>
+    </select>
     <button id="refreshBtn" data-i18n="report.btn_generate">生成报告</button>
   </div>
 
-  <div class="tab-bar">
-    <div class="tab active" data-tab="table" data-i18n="scoring.tab_table">表格视图</div>
-    <div class="tab" data-tab="calendar" data-i18n="scoring.tab_calendar">日历视图</div>
+  <!-- Tabs：表格视图 / 日历视图（沿用 login.html role="tablist" 风格）-->
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="table" data-i18n="scoring.tab_table">表格视图</button>
+    <button role="tab" aria-selected="false" data-tab="calendar" data-i18n="scoring.tab_calendar">日历视图</button>
   </div>
 
   <div class="tab-panel active" id="panel-table">
     <!-- 段 1: 4 指数时序（按 group_by 聚合）-->
     <div class="card">
       <h2 data-i18n="scoring.section_index">4 指数时序</h2>
-      <div class="desc" data-i18n="scoring.trend_index_mean">综合指数均值</div>
+      <div class="desc" data-i18n="scoring.section_index_desc">按日 / 周 / 月聚合后的综合指数与命中分布</div>
       <div id="summaryTable"></div>
     </div>
     <!-- 段 2: 依据标签频次 -->
     <div class="card">
       <h2 data-i18n="scoring.section_tag">依据标签频次</h2>
-      <div class="desc" data-i18n="scoring.tag_count">出现次数</div>
+      <div class="desc" data-i18n="scoring.section_tag_desc">各消息面标签的出现次数与 T+1/T+3/T+5 命中率</div>
       <div id="tagTable"></div>
     </div>
     <!-- 段 3: 命中率（按 horizon） -->
@@ -138,16 +184,15 @@
     </div>
   </div>
 
-  <div class="tab-panel" id="panel-calendar">
+  <div class="tab-panel" id="panel-calendar" role="tabpanel">
     <div class="card">
       <h2 data-i18n="scoring.tab_calendar">日历视图</h2>
-      <div class="desc" data-i18n="scoring.data_source_pct">数据源占比</div>
+      <div class="desc" data-i18n="scoring.calendar_desc">每日 4 指数热力图：绿 = 多 / 灰 = 缺数据 / 红 = 空</div>
       <div id="calendarView"></div>
     </div>
   </div>
 </div>
-
-<script src="/static/topnav.js" defer></script>
+</main>
 <script src="/static/i18n.js" defer></script>
 <script src="/static/scoring.js" defer></script>
 </body>
