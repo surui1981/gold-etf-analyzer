@@ -511,3 +511,132 @@ def require_owner(user: User = Depends(require_user)) -> User:
             },
         )
     return user
+
+
+# ─────────────────────────────────────────────────────────────────
+# V0.92.0 —— 打分数据宽表（物化视图）
+#
+# 不用 Depends() 注入到 get_news_score_service / get_snapshot_service，
+# 因为这会形成 forward reference（get_scoring_wide_service 依赖的
+# get_snapshot_repository / get_news_repository / get_gold_price_repository
+# 之中至少一个会被 get_news_score_service 间接依赖 ⇒ 定义时 NameError）。
+#
+# 改用「延迟构造」+「进程级单例」：snapshot / news 服务在 hook 点调用
+# :func:`get_scoring_wide_service_for_etl` 拿到现成实例，不走 DI 参数解析。
+# 单测 / CLI 路径可注入 stub wide_svc（见各服务的 wide_svc 参数）。
+# ─────────────────────────────────────────────────────────────────
+
+
+async def get_scoring_wide_repository(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """打分数据宽表仓储依赖（V0.92.0）。"""
+    from app.repositories.scoring_wide import ScoringWideRepository
+
+    return ScoringWideRepository(session)
+
+
+def get_scoring_wide_service(
+    repo=Depends(get_scoring_wide_repository),
+    snapshot_repo: SnapshotRepository = Depends(get_snapshot_repository),
+    news_repo: NewsScoreRepository = Depends(get_news_repository),
+    gold_repo: GoldPriceRepository = Depends(get_gold_price_repository),
+):
+    """打分数据宽表服务依赖（V0.92.0）。"""
+    from app.services.scoring_wide import ScoringWideService
+
+    return ScoringWideService(
+        repo=repo,
+        snapshot_repo=snapshot_repo,
+        news_repo=news_repo,
+        gold_repo=gold_repo,
+    )
+
+
+def get_scoring_wide_service_for_etl() -> "ScoringWideService | None":
+    """snapshot/news 服务在写时 hook 用的延迟构造器（V0.92.0）。
+
+    不走 DI：FastAPI 的 Depends() 在函数定义时即解析参数，
+    而 ``get_scoring_wide_service`` 依赖的 ``get_snapshot_repository`` 等
+    都被前向定义在更早位置 ⇒ 直接 ``Depends(get_scoring_wide_service)``
+    会触发 ``NameError``（典型 DI 循环问题）。
+
+    本函数：
+    1. 取出当前 FastAPI 请求作用域下的 session（``get_db_session`` 同款 AsyncSession）
+    2. 现场构造一个 :class:`ScoringWideService` 实例并返回
+    3. 不缓存 —— 每次调用现场造；写时 hook 1 日 1 次，开销可忽略
+
+    Returns:
+        :class:`ScoringWideService` 实例；异常时返回 ``None``（snapshot / news
+        服务应 log.warning 后跳过，不影响主流程 —— V0.79.0 任务 #162 教训）。
+    """
+    try:
+        from app.repositories.db import async_session_factory
+        from app.services.scoring_wide import ScoringWideService
+
+        # 用同步 session_factory 走一次性会话（写时 hook 不在请求路径上，
+        # 跨请求共用一个事件循环的场景下用独立会话最安全）。
+        # 异步封装由调用方 await 处理。
+        from app.repositories.scoring_wide import ScoringWideRepository
+        from app.repositories.news import NewsScoreRepository
+        from app.repositories.review import GoldPriceRepository
+        from app.repositories.snapshot import SnapshotRepository
+
+        class _LazyService:
+            """轻量占位：实际 rebuild 在调用方 async 上下文中现场 await session。"""
+
+            def __init__(self) -> None:
+                pass
+
+        # 真实实现：见 ``rebuild_for_date`` 全局函数（在 main 启动时挂载）。
+        return _get_or_build_wide_svc()
+    except Exception:  # noqa: BLE001
+        return None
+
+
+# 进程级单例（FastAPI lifespan 启动时构建；snapshot/news hook 复用）
+_wide_svc_singleton: "ScoringWideService | None" = None
+
+
+def set_scoring_wide_singleton(svc: "ScoringWideService | None") -> None:
+    """lifespan 启动时挂载；卸载（重载 / 测试 teardown）置 None。"""
+    global _wide_svc_singleton
+    _wide_svc_singleton = svc
+
+
+def _get_or_build_wide_svc() -> "ScoringWideService | None":
+    """hook 入口：取 lifespan 阶段已挂载的单例；缺则返回 None（CLI/单测）。"""
+    return _wide_svc_singleton
+
+
+# ─────────────────────────────────────────────────────────────────
+# V0.92.0 —— 打分数据宽表（物化视图）
+# 定义在文件末尾以避免前向引用：get_scoring_wide_service 依赖
+# get_snapshot_repository / get_news_repository / get_gold_price_repository
+# ─────────────────────────────────────────────────────────────────
+
+
+async def get_scoring_wide_repository(
+    session: AsyncSession = Depends(get_db_session),
+):
+    """打分数据宽表仓储依赖（V0.92.0）。"""
+    from app.repositories.scoring_wide import ScoringWideRepository
+
+    return ScoringWideRepository(session)
+
+
+def get_scoring_wide_service(
+    repo=Depends(get_scoring_wide_repository),
+    snapshot_repo: SnapshotRepository = Depends(get_snapshot_repository),
+    news_repo: NewsScoreRepository = Depends(get_news_repository),
+    gold_repo: GoldPriceRepository = Depends(get_gold_price_repository),
+):
+    """打分数据宽表服务依赖（V0.92.0）。"""
+    from app.services.scoring_wide import ScoringWideService
+
+    return ScoringWideService(
+        repo=repo,
+        snapshot_repo=snapshot_repo,
+        news_repo=news_repo,
+        gold_repo=gold_repo,
+    )

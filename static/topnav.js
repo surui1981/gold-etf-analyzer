@@ -58,6 +58,7 @@
     { path: "/central-bank",            activeFor: ["/central-bank", "/static/central_bank.html"], ico: "🏛️", i18n: "nav.central_bank", fb: "央行购金统计" },
     { path: "/static/silver.html",      activeFor: ["/static/silver.html"], ico: "🪙", i18n: "nav.silver",       fb: "白银追踪" },
     { path: "/static/backtest.html",    activeFor: ["/static/backtest.html"], ico: "🧪", i18n: "nav.backtest",     fb: "参数回测" },
+    { path: "/scoring",                 activeFor: ["/scoring", "/static/scoring.html"], ico: "📊", i18n: "nav.scoring",     fb: "打分汇总" },
     { path: "/static/data-health.html", activeFor: ["/static/data-health.html"], ico: "🩺", i18n: "nav.health",       fb: "数据健康" },
     { path: "/static/settings.html",    activeFor: ["/static/settings.html"], ico: "🔔", i18n: "nav.settings",     fb: "通知中心" },
   ];

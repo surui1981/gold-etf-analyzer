@@ -20,9 +20,12 @@ class DailySnapshotService:
         self,
         repo: SnapshotRepository,
         trend: TrendService,
+        # V0.92.0：写时 hook 触发打分数据宽表 ETL；可空（CLI / 单测不传）
+        wide_svc=None,
     ) -> None:
         self._repo = repo
         self._trend = trend
+        self._wide_svc = wide_svc
 
     async def capture_today(self) -> SnapshotOut:
         """捕获并持久化当日评估快照（同日重复捕获为更新）。"""
@@ -107,6 +110,18 @@ class DailySnapshotService:
             snapshot.macro_index,
             snapshot.news_index,
         )
+        # V0.92.0：写时 hook 触发打分数据宽表 ETL。
+        # 宽表写失败 log.warning 但**不**回滚源表（V0.79.0 任务 #162 教训）。
+        # ``wide_svc`` 可空（CLI / 单测不传），缺则跳过。
+        if self._wide_svc is not None:
+            await self._wide_svc.rebuild(snapshot.snapshot_date)
+        else:
+            # V0.92.0：DI 没注入时回退到 lifespan 阶段挂载的进程级单例
+            from app.dependencies import _get_or_build_wide_svc
+
+            wide_svc = _get_or_build_wide_svc()
+            if wide_svc is not None:
+                await wide_svc.rebuild(snapshot.snapshot_date)
         # V0.79.0：落库子维度数需可诊断 —— 为 0 说明 5 个维度全部数据不足
         # （或 W/M 视图旁路），此时 tech_detail 为 NULL，消费方须显式跳过。
         logger.info(

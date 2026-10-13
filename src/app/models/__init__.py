@@ -12,6 +12,7 @@ from app.models import (  # noqa: F401
     position,
     push,
     review,
+    scoring_wide,
     settings,
     snapshot,
     telemetry,

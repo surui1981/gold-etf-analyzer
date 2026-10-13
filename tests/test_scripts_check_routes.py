@@ -27,12 +27,13 @@ class TestDiscoverRoutes:
     """``discover_routes(app)`` 反射 FastAPI app.routes 的过滤逻辑。"""
 
     def test_reflects_actual_routes(self) -> None:
-        """真实 app 反射：12 alias + /sw.js = 13 条（含 ``include_in_schema=False``）。"""
+        """真实 app 反射：13 alias + /sw.js = 14 条（含 ``include_in_schema=False``）。"""
         routes = check_routes.discover_routes(fastapi_app)
-        # 至少含 12 个 alias + 1 个 sw.js
+        # 至少含 13 个 alias + 1 个 sw.js
         assert "/" in routes
         assert "/portfolio" in routes
         assert "/data-health" in routes
+        assert "/scoring" in routes
         assert "/sw.js" in routes
         # 不含 /openapi.json（Starlette 自动生成，已在脚本里过滤）
         assert "/openapi.json" not in routes
@@ -46,14 +47,14 @@ class TestDiscoverRoutes:
         )
 
     def test_count_matches_root_aliases_parametrize(self) -> None:
-        """反射数应等于 ``tests/test_main_app.py::ROOT_ALIASES`` 的 12 + /sw.js = 13。
+        """反射数应等于 ``tests/test_main_app.py::ROOT_ALIASES`` 的 13 + /sw.js = 14。
 
         任何 main.py alias 漏注册都会被这个数捕获（防 V0.85 漏注册 /data-health 复现）。
         """
         routes = check_routes.discover_routes(fastapi_app)
-        # 12 alias + 1 sw.js = 13
-        assert len(routes) == 13, (
-            f"反射 {len(routes)} 条；期望 13（12 alias + /sw.js）。"
+        # 13 alias + 1 sw.js = 14
+        assert len(routes) == 14, (
+            f"反射 {len(routes)} 条；期望 14（13 alias + /sw.js）。"
             "新增 alias 必须同步更新 EXPECTED_ALIAS_PATHS + test_main_app.ROOT_ALIASES"
         )
 
@@ -195,8 +196,8 @@ class TestExpectedStatusConsistency:
     """
 
     def test_expected_alias_paths_count(self) -> None:
-        """EXPECTED_ALIAS_PATHS 必须正好 12 条（与 main.py alias 数同步）。"""
-        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 12
+        """EXPECTED_ALIAS_PATHS 必须正好 13 条（与 main.py alias 数同步）。"""
+        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 13
 
     def test_expected_status_alias_keys_match(self) -> None:
         """EXPECTED_STATUS 的 alias 部分 key 集合 ⊇ EXPECTED_ALIAS_PATHS。"""
@@ -210,5 +211,5 @@ class TestExpectedStatusConsistency:
             )
 
     def test_expected_status_alias_keys_count(self) -> None:
-        """EXPECTED_STATUS 必须含 12 alias + /sw.js + /docs + /static/trend.html = 15。"""
-        assert len(check_routes.EXPECTED_STATUS) == 15
+        """EXPECTED_STATUS 必须含 13 alias + /sw.js + /docs + /static/trend.html = 16。"""
+        assert len(check_routes.EXPECTED_STATUS) == 16

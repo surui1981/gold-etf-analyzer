@@ -267,7 +267,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     _spawn_background(_warm_cache())
     # 每日 07:00 BJT 调度：自动捕获快照 + 预热 served cache
     await _start_daily_scheduler()
+    # V0.92.0：注册打分数据宽表服务单例，供 snapshot / news 服务写时 hook 调用
+    # （避免 DI 前向引用：get_scoring_wide_service 间接依赖 snapshot_repo /
+    #  news_repo / gold_repo，而 snapshot_service / news_service 又依赖 wide_svc，
+    #  定义时即触发 NameError ⇒ 改用 lifespan 阶段挂载的进程级单例）
+    from app.dependencies import set_scoring_wide_singleton
+    from app.repositories.db import async_session_factory
+    from app.repositories.news import NewsScoreRepository
+    from app.repositories.review import GoldPriceRepository
+    from app.repositories.scoring_wide import ScoringWideRepository
+    from app.repositories.snapshot import SnapshotRepository
+    from app.services.scoring_wide import ScoringWideService
+
+    async with async_session_factory() as boot_session:
+        wide_svc = ScoringWideService(
+            repo=ScoringWideRepository(boot_session),
+            snapshot_repo=SnapshotRepository(boot_session),
+            news_repo=NewsScoreRepository(boot_session),
+            gold_repo=GoldPriceRepository(boot_session),
+        )
+        set_scoring_wide_singleton(wide_svc)
     yield
+    # V0.92.0：卸载宽表单例
+    set_scoring_wide_singleton(None)
     await engine.dispose()
 
 
@@ -395,6 +417,18 @@ async def report_page() -> RedirectResponse:
     合理；降低 ``cache.addAll`` 原子失败概率，保护 9 页离线可用性）。
     """
     return RedirectResponse("/static/report.html")
+
+
+@app.get("/scoring", include_in_schema=False)
+async def scoring_page() -> RedirectResponse:
+    """历史打分数据汇总页（V0.92.0）。
+
+    顶栏 📊 按钮走此 RESTful 别名（kebab-url，无 .html 后缀；与 12 个
+    既有别名同模式）。背后是 ``scoring_daily_wide`` 物化宽表（24 列 ×
+    N 日），由 ``DailySnapshotService.capture_today`` 与
+    ``NewsScoreService.save_today`` 写时 hook 同步 ETL。
+    """
+    return RedirectResponse("/static/scoring.html")
 
 
 @app.get("/trades", include_in_schema=False)

@@ -6,9 +6,9 @@
 任何路由遗漏都会立刻在 CI 失败。
 
 **关键覆盖**：
-- 12 个根路径别名（``/``、``/portfolio``、``/weights``、``/news``、``/review``、
+- 13 个根路径别名（``/``、``/portfolio``、``/weights``、``/news``、``/review``、
   ``/central-bank``、``/data-health``、``/data-health.html``、``/trades``、
-  ``/login``、``/reset-password``、``/sw.js``）都返回 307 → /static/*.html
+  ``/login``、``/reset-password``、``/report``、``/scoring``、``/sw.js``）都返回 307 → /static/*.html
 - 静态 mount：``/static/index.html`` 或 ``/static/trend.html`` 可访问
 - TestClient（异步）触发 lifespan 走通：migrate → ensure_default → warm cache → scheduler
 - ``/docs`` 与 ``/openapi.json`` 在 dev 下可达（auth_enabled=false 时）
@@ -43,6 +43,7 @@ ROOT_ALIASES = [
     ("/login", "/static/login.html"),
     ("/reset-password", "/static/reset-password.html"),
     ("/report", "/static/report.html"),  # V0.91.0 复盘报告 PDF 导出页
+    ("/scoring", "/static/scoring.html"),  # V0.92.0 历史打分数据汇总
 ]
 
 
@@ -105,8 +106,8 @@ class TestRootAliases:
             and not r.path.startswith("/login")
             and not r.path.startswith("/sw")
         ]
-        # 精确数：11 个 alias + / 本身 = 12 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 12, (
+        # 精确数：12 个 alias + / 本身 = 13 个 GET（不含 /sw.js）
+        assert len(ROOT_ALIASES) == 13, (
             "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
         )
 

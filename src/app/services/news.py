@@ -103,8 +103,10 @@ def _as_utc(dt: datetime | None) -> datetime | None:
 class NewsScoreService:
     """消息面每日打分管理（每日最多 3 次，加权合成当日有效分值）。"""
 
-    def __init__(self, repo: NewsScoreRepository) -> None:
+    def __init__(self, repo: NewsScoreRepository, wide_svc=None) -> None:
         self._repo = repo
+        # V0.92.0：写时 hook 触发打分数据宽表 ETL；可空（CLI / 单测）
+        self._wide_svc = wide_svc
 
     # ---------- 内部工具 ----------
 
@@ -255,6 +257,20 @@ class NewsScoreService:
             from app.services.trend import TrendService
 
             TrendService.invalidate_for_news()
+
+        # V0.92.0：写时 hook 触发打分数据宽表 ETL。
+        # 触发后：消息面字段（slot_count / basis_tags / backfilled_count）+ outcomes
+        # 重新计算并 upsert 到 scoring_daily_wide。
+        # 补录历史（target_date < today）也触发——这样历史宽表行的 news 字段会更新。
+        if self._wide_svc is not None:
+            await self._wide_svc.rebuild(target_date)
+        else:
+            # V0.92.0：DI 没注入时回退到 lifespan 阶段挂载的进程级单例
+            from app.dependencies import _get_or_build_wide_svc
+
+            wide_svc = _get_or_build_wide_svc()
+            if wide_svc is not None:
+                await wide_svc.rebuild(target_date)
 
         if target_date != today:
             return await self.get_by_date(target_date)
