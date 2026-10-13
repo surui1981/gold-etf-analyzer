@@ -1,7 +1,7 @@
 """scoring_daily_wide 表新增（V0.92.0 · 历史打分数据汇总）
 
 Revision ID: i5d6e7f8a9b0
-Revises: b4c6d8e2f0a1
+Revises: c4d5e6f7a8b9
 Create Date: 2026-10-13 10:00:00.000000
 
 迁移策略（SQLite 友好、可重复执行）
@@ -51,7 +51,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "i5d6e7f8a9b0"
-down_revision: str | Sequence[str] | None = "b4c6d8e2f0a1"
+down_revision: str | Sequence[str] | None = "c4d5e6f7a8b9"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
