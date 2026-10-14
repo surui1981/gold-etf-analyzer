@@ -60,6 +60,10 @@ class ScoringWideOut(BaseModel):
     hit_t1: bool | None = None
     hit_t3: bool | None = None
     hit_t5: bool | None = None
+    # V0.93.0：T+0 outcome —— 当日 close vs 上一交易日 close 的命中判定。
+    # 定位「当日尾盘快速反馈」，非「预测能力」评估（盘内信息泄露）。
+    actual_change_pct_t0: float | None = None
+    hit_t0: bool | None = None
     outcome_pending_until: date | None = None
 
     @field_validator("news_basis_tags", mode="before")
@@ -115,12 +119,17 @@ class ScoringSummaryBucket(BaseModel):
     trend_index_mean: float | None = None
     trend_index_median: float | None = None
     news_index_mean: float | None = None
+    # V0.93.0：加 T+0 命中率（T+0 = 当日 close vs 上一交易日 close 的命中比例）
+    hit_rate_t0: float | None = None
     hit_rate_t1: float | None = None
     hit_rate_t3: float | None = None
     hit_rate_t5: float | None = None
     up_days: int = 0
     down_days: int = 0
     sideways_days: int = 0
+    # V0.92.1 hotfix：单日桶（group_by=day 且桶内 1 行）按所选 horizon 标记该行 hit 状态；
+    # week/month 桶/pending 行 → None。前端据此渲染"命中"列（是=红 / 否=绿 / —=灰）。
+    hit: bool | None = None
 
 
 class ScoringSummaryOut(BaseModel):
@@ -130,6 +139,9 @@ class ScoringSummaryOut(BaseModel):
     to_date: date
     group_by: str
     tag: str | None = None
+    # V0.92.1 hotfix：命中筛选（"yes" / "no" / "all"）与所选 horizon（默认 t1）
+    hit_filter: str = "all"
+    horizon: str = "t1"
     buckets: list[ScoringSummaryBucket]
 
 
@@ -184,3 +196,34 @@ class ScoringByTagOut(BaseModel):
     from_date: date
     to_date: date
     tags: list[ScoringTagStat]
+
+
+# ──────────── 预测评估卡（V0.94.0） ────────────
+
+
+class ScoringHorizonVerdict(BaseModel):
+    """单个 horizon 的判定状态（用于预测评估卡）。"""
+
+    horizon: str  # "t0" | "t1" | "t3" | "t5"
+    status: str  # "ready"（已就绪） | "pending"（等待收盘） | "missing"（无打分/无方向）
+    actual_change_pct: float | None = None
+    hit: bool | None = None
+    pending_until: date | None = None  # pending 状态：等到该日收盘后才有 outcome
+
+
+class ScoringVerdictOut(BaseModel):
+    """``/api/v1/scoring/verdict`` 响应（V0.94.0 预测评估卡）。"""
+
+    target_date: date
+    # 你的预测
+    news_index: float | None = None
+    prediction_direction: str | None = None  # "bullish" | "bearish" | "neutral" | None
+    prediction_confidence: float | None = None  # 0-100 数值
+    # 4 个 horizon 状态
+    verdicts: list[ScoringHorizonVerdict]
+    # 依据（basis_tags 去重后）
+    basis_tags: list[str] = []
+    # 一句话总结
+    summary: str
+    # 无打分时的友好提示（前端可走「暂无打分」分支）
+    no_score: bool = False

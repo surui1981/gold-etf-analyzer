@@ -57,6 +57,9 @@ const SHELL_ASSETS = [
     "/data-health",
     "/static/backtest.html",
     "/static/silver.html",
+    // V0.92.0 修复：打分汇总页 (V0.92.0 layout 与其他页对齐) — 加进 SHELL_ASSETS
+    // 让 SW 重新 install 时 precache 新版，避免 RUNTIME_CACHE 旧 307 持续回放旧 HTML
+    "/static/scoring.html",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",
@@ -117,6 +120,17 @@ self.addEventListener("activate", (event) => {
                         .map((k) => caches.delete(k)),
                 ),
             )
+            // V0.92.0 hotfix：清除 RUNTIME_CACHE 里 stale 的 /scoring 入口（307 → /static/scoring.html）
+            // 与 /static/scoring.html 旧版 HTML —— /static/* 走 cache-first，若不清掉，
+            // SHELL_CACHE 里新版永远没机会被命中。一次性清理：activate 后新条目进 SHELL_CACHE 优先。
+            .then(async () => {
+                const rt = await caches.open(RUNTIME_CACHE);
+                const stale = ["/scoring", "/static/scoring.html"];
+                for (const url of stale) {
+                    const hit = await rt.match(url);
+                    if (hit) await rt.delete(url);
+                }
+            })
             .then(() => self.clients.claim()),
     );
 });

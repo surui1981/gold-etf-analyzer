@@ -59,6 +59,8 @@
       tag: document.getElementById('tagFilter').value || null,
       group_by: document.getElementById('groupBy').value,
       horizon: document.getElementById('horizon').value,
+      // V0.92.1 hotfix：行级命中筛选（默认 "all"）
+      hit: document.getElementById('hitFilter').value,
     };
   }
 
@@ -69,13 +71,23 @@
       loadTagStats(p),
       loadHitStats(p),
       loadList(p),
+      // V0.94.0：verdict 卡随 toDate 联动（取区间末端，便于查看任意一天）
+      loadVerdict(p.to),
     ]);
   }
 
   async function loadSummary(p) {
-    const url = `${API_BASE}/summary?from=${p.from}&to=${p.to}&group_by=${p.group_by}${p.tag ? '&tag=' + encodeURIComponent(p.tag) : ''}`;
-    const data = await fetchJson(url);
-    renderSummaryTable(data);
+    // V0.92.1 hotfix：追加 hit / horizon 参数，命中筛选行级过滤
+    const params = new URLSearchParams({
+      from: p.from,
+      to: p.to,
+      group_by: p.group_by,
+      horizon: p.horizon,
+      hit: p.hit,
+    });
+    if (p.tag) params.set('tag', p.tag);
+    const data = await fetchJson(`${API_BASE}/summary?${params.toString()}`);
+    renderSummaryTable(data, p);
   }
 
   async function loadTagStats(p) {
@@ -93,6 +105,88 @@
     renderCalendar(data);
   }
 
+  // V0.94.0：预测评估卡
+  async function loadVerdict(targetDate) {
+    if (!targetDate) return;
+    const data = await fetchJson(`${API_BASE}/verdict?date=${targetDate}`);
+    renderVerdict(data);
+  }
+
+  function renderVerdict(data) {
+    const el = document.getElementById('verdictBody');
+    if (!el) return;
+    if (!data || data.no_score) {
+      el.innerHTML = `<div class="verdict-no-score">${T('scoring.verdict_no_score', '暂无打分数据（先做 capture_today）')}</div>`;
+      return;
+    }
+
+    // 顶部：日期 + 你的预测 + 置信度 + 依据
+    const dirMap = {
+      bullish: { cn: T('scoring.verdict_call_bullish', '看多'), cls: 'bullish' },
+      bearish: { cn: T('scoring.verdict_call_bearish', '看空'), cls: 'bearish' },
+      neutral: { cn: T('scoring.verdict_call_neutral', '看平'), cls: 'neutral' },
+    };
+    const dirInfo = data.prediction_direction
+      ? dirMap[data.prediction_direction] || { cn: data.prediction_direction, cls: 'neutral' }
+      : { cn: T('scoring.verdict_no_score', '暂无研判'), cls: 'none' };
+    const confStr = data.prediction_confidence != null
+      ? T('scoring.verdict_confidence', '{score} 分').replace('{score}', Math.round(data.prediction_confidence))
+      : '—';
+
+    const basisHtml = (data.basis_tags || []).length
+      ? `<div class="verdict-basis"><span data-i18n="scoring.verdict_basis">${T('scoring.verdict_basis', '依据')}</span>：${data.basis_tags.map(t => `<span class="basis-chip">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
+
+    // 4 个 horizon 网格
+    const verdictsHtml = (data.verdicts || []).map((v) => {
+      const hLabel = v.horizon.toUpperCase();
+      let statusCls, statusText, changeHtml = '';
+      if (v.status === 'ready') {
+        if (v.hit === true) {
+          statusCls = 'hit';
+          statusText = T('scoring.verdict_hit', '命中');
+        } else {
+          statusCls = 'miss';
+          statusText = T('scoring.verdict_miss', '未命中');
+        }
+        if (v.actual_change_pct != null) {
+          const pct = v.actual_change_pct;
+          const sign = pct > 0 ? '+' : '';
+          const cls = pct > 0 ? 'pos' : pct < 0 ? 'neg' : '';
+          changeHtml = `<div class="vi-change ${cls}">${sign}${pct.toFixed(2)}%</div>`;
+        }
+      } else if (v.status === 'pending') {
+        statusCls = 'pending';
+        statusText = T('scoring.verdict_status_pending', '等待收盘');
+        if (v.pending_until) {
+          changeHtml = `<div class="vi-pending-until">→ ${v.pending_until}</div>`;
+        }
+      } else {
+        statusCls = 'missing';
+        statusText = T('scoring.verdict_status_missing', '缺数据');
+      }
+      return `<div class="verdict-item">
+        <div class="vi-horizon">${hLabel}</div>
+        <div class="vi-status ${statusCls}">${statusText}</div>
+        ${changeHtml}
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      <div class="verdict-header">
+        <div class="verdict-date">${data.target_date}</div>
+        <div class="verdict-call-block">
+          <span class="v-label" data-i18n="scoring.verdict_your_call">${T('scoring.verdict_your_call', '你的预测')}</span>
+          <span class="verdict-call ${dirInfo.cls}">${dirInfo.cn}</span>
+          <span class="verdict-confidence">${confStr}</span>
+        </div>
+        ${basisHtml}
+      </div>
+      <div class="verdict-grid">${verdictsHtml}</div>
+      <div class="verdict-summary">${escapeHtml(data.summary || '')}</div>
+    `;
+  }
+
   async function fetchJson(url) {
     try {
       const r = await fetch(url, { credentials: 'same-origin' });
@@ -108,17 +202,23 @@
   }
 
   // ── 渲染：4 指数时序表 ──
-  function renderSummaryTable(data) {
+  function renderSummaryTable(data, p) {
     const el = document.getElementById('summaryTable');
     if (!data.buckets || data.buckets.length === 0) {
       el.innerHTML = `<div class="empty">${T('scoring.empty', '暂无打分数据')}</div>`;
       return;
     }
+    // V0.92.1 hotfix：注入"命中"列。
+    //   - day 桶：bucket.hit=true→是（红） / false→否（绿） / null→待定（灰）
+    //   - week/month 桶：bucket.hit=null（聚合无单值）→ 待定（灰）
+    // 该列始终存在；group_by != day 时所有行均"待定"——提示用户切 day 才能看到命中颜色
     let html = '<table><thead><tr>';
     html += `<th>${T('report.cover_period', '期间')}</th>`;
     html += `<th>${T('scoring.trend_index_mean', '综合指数均值')}</th>`;
     html += `<th>${T('scoring.trend_index_median', '综合指数中位')}</th>`;
     html += `<th>${T('scoring.news_index_mean', '消息面均值')}</th>`;
+    html += `<th>${T('scoring.hit_col', '命中')}</th>`;
+    html += `<th title="${T('scoring.t0_desc', 'T+0 = 当日尾盘 vs 上一交易日（快速反馈，含盘内信息泄露）')}">${T('scoring.hit_rate_t0', 'T+0 命中率')}</th>`;
     html += `<th>${T('scoring.hit_rate_t1', 'T+1 命中率')}</th>`;
     html += `<th>${T('scoring.hit_rate_t3', 'T+3 命中率')}</th>`;
     html += `<th>${T('scoring.hit_rate_t5', 'T+5 命中率')}</th>`;
@@ -127,11 +227,21 @@
     html += `<th>${T('scoring.sideways_days', '横盘')}</th>`;
     html += '</tr></thead><tbody>';
     for (const b of data.buckets) {
+      const hitCls =
+        b.hit === true ? 'hit-yes' : b.hit === false ? 'hit-no' : 'hit-pending';
+      const hitText =
+        b.hit === true
+          ? T('scoring.hit_col_yes', '是')
+          : b.hit === false
+          ? T('scoring.hit_col_no', '否')
+          : T('scoring.hit_col_pending', '待定');
       html += '<tr>';
       html += `<td>${b.period}</td>`;
       html += `<td class="num">${fmt(b.trend_index_mean, 1)}</td>`;
       html += `<td class="num">${fmt(b.trend_index_median, 1)}</td>`;
       html += `<td class="num">${fmt(b.news_index_mean, 1)}</td>`;
+      html += `<td class="hit-cell ${hitCls}">${hitText}</td>`;
+      html += `<td class="num">${fmtPct(b.hit_rate_t0)}</td>`;
       html += `<td class="num">${fmtPct(b.hit_rate_t1)}</td>`;
       html += `<td class="num">${fmtPct(b.hit_rate_t3)}</td>`;
       html += `<td class="num">${fmtPct(b.hit_rate_t5)}</td>`;

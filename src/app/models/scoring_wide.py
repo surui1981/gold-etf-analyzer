@@ -3,11 +3,15 @@
 把 4 指数（snapshot）+ 消息面聚合（news_scores）+ 价格涨跌（gold_price_daily）
 预拼装成 1 行/日，避免任何"按日/月/tag 汇总"查询都要 4-6 表 JOIN + JSON parse。
 
+V0.93.0 加 T+0 outcome 列（``actual_change_pct_t0`` / ``hit_t0``）——
+定位「当日尾盘快速反馈」，T+1 仍为「未来窗口」主战场。详见 migration
+``j6d7e8f9a0b1``。
+
 ⚠ **字段设计纪律**
 - 所有数值列允许 NULL（V0.78.0 Step D：数据不足 ≠ 中性，**绝不**用 50 / 0 兜底）
 - ``news_basis_tags`` 存 JSON 文本（应用层 ``json.loads`` 后做 tag 维度 filter）
 - ``snapshot_id`` 可空（当日可能未捕获快照，宽表仍记录 partial 数据）
-- 2 个 outcome 列在 pending 期为 NULL（``outcome_pending_until`` 标记完成日）
+- 4 个 outcome 列在 pending 期为 NULL（``outcome_pending_until`` 标记完成日）
 """
 
 from datetime import date, datetime
@@ -116,6 +120,14 @@ class ScoringDailyWide(Base):
     )
     hit_t5: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, comment="T+5 命中"
+    )
+    # V0.93.0：T+0 outcome —— 当日 close vs 上一交易日 close 的命中判定。
+    # 定位「快速反馈」（打分时刻已发生盘内信息，仅 sanity check，不作预测能力评估）。
+    actual_change_pct_t0: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="当日 vs 上一交易日收盘（V0.93.0 T+0 验证）"
+    )
+    hit_t0: Mapped[bool | None] = mapped_column(
+        Boolean, nullable=True, comment="T+0 命中（当日 close vs 上一交易日 close）"
     )
     outcome_pending_until: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="T+5 完成日期；NULL=未完成"

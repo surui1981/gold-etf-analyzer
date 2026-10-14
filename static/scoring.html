@@ -13,15 +13,6 @@
     document.documentElement.setAttribute("data-theme",eff);
   } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
 })();</script>
-<link rel="stylesheet" href="/static/theme.css">
-<link rel="stylesheet" href="/static/responsive.css">
-<link rel="manifest" href="/static/manifest.json">
-<link rel="apple-touch-icon" href="/static/icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" data-i18n="nav.scoring" content="打分汇总">
-<!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
-<link rel="stylesheet" href="/static/print.css" media="print">
-<script src="/static/theme.js" defer></script>
 <!-- V0.73.0 i18n FOUC guard -->
 <script>(function(){
   try {
@@ -31,48 +22,109 @@
     }
   } catch(e){}
 })();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" data-i18n="nav.scoring" content="打分汇总">
+<!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
+<link rel="stylesheet" href="/static/print.css" media="print">
+<script src="/static/theme.js" defer></script>
 <script src="/static/i18n/zh-CN.js"></script>
 <script src="/static/i18n.js" defer></script>
 <!-- V0.75.0：认证客户端 -->
 <script src="/static/auth.js" defer></script>
 <style>
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
-  .wrap { max-width: 1120px; margin: 0 auto; }
-  /* ── Hero 标题区（与 portfolio / news / trades 对齐）── */
-  .hero { background: linear-gradient(135deg, #fffaf0, #ffffff 60%, #f7f8fa); border: 1px solid #f0e2b6; border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
-  .hero h1 { font-size: 22px; }
-  .hero .tagline { color: var(--muted); font-size: 13px; margin-top: 6px; }
-  .hero .notice { display: inline-block; margin-top: 8px; font-size: 11.5px; color: #92400e; background: #fff7e6; border: 1px solid #f0e2b6; border-radius: 6px; padding: 3px 10px; }
-  /* ── 工具栏（与 central_bank .filters 风格对齐）── */
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  /* 顶部导航（统一）· V0.83 C3：双行布局 */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #f5d97a; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand .brand-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#806014);
+    box-shadow:0 0 8px rgba(245,217,122,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+  /* V0.84.0 方案 C · 状态条 disclosure：summary = 时效 chips + 警示计数 pill（1 行 ~36px）；
+     body = 完整警示 + dismiss checkbox。由 warning.js 维持展开态。 */
+  .status-panel { background: #1f2329; color: #eef0f3; border-radius: 12px;
+    margin: 0 0 12px; border-left: 4px solid var(--accent);
+    box-shadow: 0 2px 6px rgba(0,0,0,.10); overflow: hidden; }
+  .status-panel > summary { list-style: none; cursor: pointer; padding: 10px 18px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    user-select: none; min-height: 44px; box-sizing: border-box; }
+  .status-panel > summary::-webkit-details-marker { display: none; }
+  .status-panel > summary::after { content: "▾"; font-size: 14px; opacity: .6;
+    margin-left: auto; flex-shrink: 0; transition: transform .2s; }
+  .status-panel[open] > summary::after { transform: rotate(180deg); }
+  .status-panel > summary #healthSummary { flex: 1 1 auto; min-width: 0; }
+  .status-panel > summary .status-sep { width: 1px; height: 16px;
+    background: rgba(255,255,255,.18); flex-shrink: 0; }
+  .status-panel > summary .status-warn-pill { display: inline-flex; align-items: center;
+    gap: 4px; background: rgba(245,217,122,.10); color: #f5d97a;
+    border: 1px solid rgba(245,217,122,.28); font-size: 11.5px; padding: 2px 9px;
+    border-radius: 999px; white-space: nowrap; flex-shrink: 0; }
+  .status-panel > summary .warn-pill-label { font-weight: 600; }
+  .status-panel > summary [data-warn-count] { font-weight: 700;
+    font-variant-numeric: tabular-nums; padding: 0 1px; }
+  .status-panel:not([open]) > .status-body { display: none; }
+  .status-panel > .status-body { border-top: 1px dashed rgba(255,255,255,.10);
+    padding: 10px 18px 14px; }
+  .status-panel .warn-list { margin: 0; padding-left: 20px; }
+  .status-panel .warn-list li { font-size: 12.5px; line-height: 2; color: #d6d9dd; }
+  .status-panel .warn-list li b { color: #ffffff; }
+  .status-panel .warn-dismiss { display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 8px; font-size: 11.5px; color: #9aa3ad; cursor: pointer; }
+  .status-panel .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
+  /* Hero（与 central_bank / portfolio 对齐） */
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%); border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 23px; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 820px; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  /* 工具栏（与 central_bank .filters 风格对齐） */
   .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; padding: 12px 16px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   .toolbar label { font-size: 12px; color: var(--muted); }
   .toolbar select, .toolbar input { font-size: 13px; padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
   .toolbar button { font-size: 12.5px; padding: 4px 14px; border: none; border-radius: 6px; background: #1f2329; color: #fff; cursor: pointer; }
   .toolbar button:hover { background: var(--accent); }
-  /* ── 卡片（与 portfolio / news / central_bank 一致）── */
+  /* 卡片（与 portfolio / news / central_bank 一致） */
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 22px; margin-bottom: 16px; }
   .card h2 { font-size: 15px; margin-bottom: 6px; }
   .desc { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
-  /* ── Tabs（沿用 login.html role="tablist" 风格）── */
+  /* Tabs（沿用 login.html role="tablist" 风格） */
   .tabs { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 4px; margin-bottom: 16px; max-width: 320px; }
   .tabs button { flex: 1; padding: 8px 0; font-size: 13.5px; font-family: inherit; cursor: pointer;
     background: transparent; border: 0; border-radius: 6px; color: var(--muted); transition: all .15s; }
   .tabs button[aria-selected="true"] { background: var(--card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); font-weight: 600; }
   .tab-panel { display: none; }
   .tab-panel.active { display: block; }
-  /* ── 表格（与各页一致）── */
+  /* 表格（与各页一致） */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
   th { font-weight: 600; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
   .num { text-align: right; font-variant-numeric: tabular-nums; }
-  /* ── 标签 chip ── */
+  /* 标签 chip */
   .tag-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: var(--bg); border: 1px solid var(--border); margin: 2px; }
-  /* ── 命中率 stat 网格 ── */
+  /* 命中率 stat 网格 */
   .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
   .stat { padding: 10px 12px; background: var(--bg); border-radius: 6px; border: 1px solid var(--border); }
   .stat .v { font-size: 18px; font-weight: 600; }
   .stat .l { font-size: 11px; color: var(--muted); }
-  /* ── 日历视图 ── */
+  /* 日历视图 */
   .cal-month { margin-bottom: 18px; }
   .cal-month-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
@@ -87,6 +139,47 @@
   .cal-cell.lv-strong_bearish { background: #991b1b; }
   .cal-cell.lv-missing { background: #d4d4d8; color: #52525b; }
   .empty { padding: 32px; text-align: center; color: var(--muted); font-size: 13px; }
+  /* V0.92.1 hotfix：行级命中 chip（是=红 / 否=绿 / 待定=灰）。
+     「是」显示为红色以满足"是 为红色"视觉规约；「否」用语义化绿色。 */
+  td.hit-cell { text-align: center; font-weight: 600; }
+  td.hit-yes { color: #dc2626; }       /* 红 = 命中（用户指定语义） */
+  td.hit-no { color: #16a34a; }        /* 绿 = 未命中 */
+  td.hit-pending { color: var(--muted); } /* 灰 = pending（等待 T+1/T+3/T+5 就绪） */
+  /* V0.94.0：预测评估卡（scoring 顶部） —— hero 风格 + 4 horizon 网格 */
+  .verdict-card { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%);
+    border: 1px solid #f0e2b6; border-left: 4px solid var(--accent); }
+  .verdict-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px 18px;
+    padding: 4px 0 14px; border-bottom: 1px dashed var(--border); margin-bottom: 14px; }
+  .verdict-date { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .verdict-call-block { display: flex; align-items: baseline; gap: 8px; }
+  .verdict-call-block .v-label { font-size: 12px; color: var(--muted); }
+  .verdict-call { font-size: 20px; font-weight: 700; }
+  .verdict-call.bullish { color: #16a34a; }
+  .verdict-call.bearish { color: #dc2626; }
+  .verdict-call.neutral { color: #737373; }
+  .verdict-call.none { color: var(--muted); }
+  .verdict-confidence { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .verdict-basis { font-size: 12px; color: var(--muted); }
+  .verdict-basis .basis-chip { display: inline-block; padding: 1px 7px; margin: 0 4px 0 0;
+    background: #fff8e1; border: 1px solid #f0e2b6; border-radius: 4px; color: #92710a; font-size: 11px; }
+  .verdict-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .verdict-item { padding: 10px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; text-align: center; }
+  .verdict-item .vi-horizon { font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.5px; font-weight: 600; }
+  .verdict-item .vi-status { font-size: 14px; font-weight: 700; margin: 6px 0 4px; }
+  .verdict-item .vi-status.hit { color: #dc2626; }       /* 红 = 命中（V0.92.1 规约） */
+  .verdict-item .vi-status.miss { color: #16a34a; }      /* 绿 = 未命中 */
+  .verdict-item .vi-status.pending { color: var(--muted); }  /* 灰 = 等待 */
+  .verdict-item .vi-status.missing { color: var(--muted); opacity: .6; }
+  .verdict-item .vi-change { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .verdict-item .vi-change.pos { color: #16a34a; font-weight: 600; }
+  .verdict-item .vi-change.neg { color: #dc2626; font-weight: 600; }
+  .verdict-item .vi-pending-until { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .verdict-summary { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border);
+    font-size: 12.5px; color: #4b5563; line-height: 1.7; }
+  .verdict-no-score { padding: 24px; text-align: center; color: var(--muted); font-size: 13px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
 </style>
 </head>
 <body>
@@ -128,13 +221,15 @@
     </div>
   </details>
 
-  <header class="hero">
+  <!-- Hero（与 central_bank / portfolio / news 对齐：h1 + tagline + intro + notice） -->
+  <section class="hero">
     <h1 data-i18n="scoring.title">📊 历史打分数据汇总</h1>
     <div class="tagline" data-i18n="scoring.tagline">按日 / 月 / 标签维度的综合指数时序 + 命中分析</div>
+    <div class="intro" data-i18n-html="scoring.intro">本页汇总每日 4 指数（技术 / 宏观 / 消息 / 综合）以及打分依据标签，按日 / 周 / 月聚合展示，并按 T+1 / T+3 / T+5 三个窗口统计实际命中与方向校准。<b>仅供回溯校准</b>，不代表未来表现。</div>
     <div class="notice" data-i18n="brand.notice_short">仅供研究参考，不构成投资建议</div>
-  </header>
+  </section>
 
-  <!-- 工具栏：日期范围 + 标签筛选 + group_by + horizon + 刷新 -->
+  <!-- 工具栏：日期范围 + 标签筛选 + group_by + horizon + 命中筛选 + 刷新 -->
   <div class="toolbar">
     <label data-i18n="scoring.data_range">数据范围</label>
     <input type="date" id="fromDate" value="">
@@ -144,17 +239,34 @@
     <select id="tagFilter"><option value="" data-i18n="scoring.tag_filter_all">全部</option></select>
     <label>group_by</label>
     <select id="groupBy">
-      <option value="day">day</option>
+      <option value="day" selected>day</option>
       <option value="week">week</option>
-      <option value="month" selected>month</option>
+      <option value="month">month</option>
     </select>
     <label>horizon</label>
-    <select id="horizon">
-      <option value="t1">T+1</option>
+    <select id="horizon" title="V0.93.0：T+0 = 当日尾盘 vs 上一交易日（快速反馈，含盘内信息泄露）">
+      <option value="t0">T+0</option>
+      <option value="t1" selected>T+1</option>
       <option value="t3">T+3</option>
-      <option value="t5" selected>T+5</option>
+      <option value="t5">T+5</option>
+    </select>
+    <!-- V0.92.1 hotfix：行级命中筛选（默认"全部"，用户可切"是/否"过滤；
+         是 在表格中显示为红色——见 td.hit-yes） -->
+    <label data-i18n="scoring.hit_filter">命中筛选</label>
+    <select id="hitFilter">
+      <option value="all" data-i18n="scoring.hit_filter_all" selected>全部</option>
+      <option value="yes" data-i18n="scoring.hit_filter_yes">是</option>
+      <option value="no" data-i18n="scoring.hit_filter_no">否</option>
     </select>
     <button id="refreshBtn" data-i18n="report.btn_generate">生成报告</button>
+  </div>
+
+  <!-- V0.94.0：预测评估卡（默认取 endDate；随工具栏 from/toDate 联动） -->
+  <div class="card verdict-card" id="verdictCard">
+    <h2 data-i18n="scoring.verdict_title">📊 今日预测评估</h2>
+    <div id="verdictBody">
+      <div class="verdict-no-score" data-i18n="scoring.verdict_no_score">暂无打分数据</div>
+    </div>
   </div>
 
   <!-- Tabs：表格视图 / 日历视图（沿用 login.html role="tablist" 风格）-->
@@ -191,9 +303,19 @@
       <div id="calendarView"></div>
     </div>
   </div>
+
+  <footer data-i18n="scoring.footer">© 黄金价格投资辅助工具 · 命中率为历史回测结果，不构成投资建议</footer>
 </div>
 </main>
-<script src="/static/i18n.js" defer></script>
 <script src="/static/scoring.js" defer></script>
+  <script src="/static/pwa.js" defer></script>
+<script src="/static/health-summary.js"></script>
+  <script src="/static/warning.js"></script>
+<script src="/static/help.js" defer></script>
+<script src="/static/account.js"></script>
+  <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->
+  <script src="/static/telemetry.js" defer></script>
+  <script src="/static/nav-drawer.js" defer></script>
+  <script src="/static/command-palette.js" defer></script>
 </body>
 </html>

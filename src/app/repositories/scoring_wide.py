@@ -130,9 +130,11 @@ class ScoringWideRepository:
                 "resonance_signal",
                 "resonance_subtype",
                 # outcomes
+                "actual_change_pct_t0",  # V0.93.0 T+0
                 "actual_change_pct_t1",
                 "actual_change_pct_t3",
                 "actual_change_pct_t5",
+                "hit_t0",  # V0.93.0 T+0
                 "hit_t1",
                 "hit_t3",
                 "hit_t5",

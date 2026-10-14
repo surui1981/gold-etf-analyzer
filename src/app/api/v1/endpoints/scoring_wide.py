@@ -19,6 +19,7 @@ from app.schemas.scoring_wide import (
     ScoringByTagOut,
     ScoringHitStatsOut,
     ScoringSummaryOut,
+    ScoringVerdictOut,
     ScoringWideListOut,
     ScoringWideOut,
 )
@@ -55,13 +56,32 @@ def _validate_range(start: date, end: date, max_days: int = 730) -> None:
 async def scoring_summary(
     from_date: date = Query(..., alias="from", description="下界（含）"),
     to_date: date = Query(..., alias="to", description="上界（含）"),
-    group_by: str = Query("month", pattern="^(day|week|month)$", description="分桶粒度"),
+    group_by: str = Query("day", pattern="^(day|week|month)$", description="分桶粒度"),
     tag: str | None = Query(None, description="按 basis_tags 包含过滤（可选）"),
+    # V0.92.1 hotfix：行级命中筛选（默认 "all"）+ 所选 horizon（默认 t1）
+    hit: str = Query(
+        "all",
+        alias="hit",
+        pattern="^(all|yes|no)$",
+        description="行级命中筛选：yes=仅命中 / no=仅未命中 / all=全部",
+    ),
+    horizon: str = Query(
+        "t1",
+        pattern="^(t0|t1|t3|t5)$",  # V0.93.0：加 t0
+        description="命中筛选与 bucket.hit 字段所用的 horizon",
+    ),
     service: ScoringWideService = Depends(get_scoring_wide_service),
 ) -> ScoringSummaryOut:
     """按 day/week/month 分桶聚合。可选 tag 过滤（如 "美元指数"）。"""
     _validate_range(from_date, to_date)
-    return await service.summary(start=from_date, end=to_date, group_by=group_by, tag=tag)
+    return await service.summary(
+        start=from_date,
+        end=to_date,
+        group_by=group_by,
+        tag=tag,
+        hit_filter=hit,
+        horizon=horizon,
+    )
 
 
 @router.get(
@@ -95,7 +115,7 @@ async def scoring_by_date(
 async def scoring_hit_stats(
     from_date: date = Query(..., alias="from"),
     to_date: date = Query(..., alias="to"),
-    horizon: str = Query("t5", pattern="^(t1|t3|t5)$"),
+    horizon: str = Query("t5", pattern="^(t0|t1|t3|t5)$"),  # V0.93.0：加 t0
     service: ScoringWideService = Depends(get_scoring_wide_service),
 ) -> ScoringHitStatsOut:
     """按 horizon 聚合命中率（按方向 / 按月 / 校准曲线 3 维）。"""
@@ -145,3 +165,23 @@ async def scoring_list(
     """按日期范围取宽表行（升序，含首尾）—— 供前端 detail 视图用。"""
     _validate_range(from_date, to_date)
     return await service.list_in_range(start=from_date, end=to_date)
+
+
+# V0.94.0：预测评估卡端点（scoring 页顶部）
+@router.get(
+    "/verdict",
+    response_model=ScoringVerdictOut,
+    summary="V0.94.0：单日预测评估卡（方向 + 4 horizon 状态 + 一句话总结）",
+)
+async def scoring_verdict(
+    target_date: date = Query(..., alias="date", description="评估日期（默认今天）"),
+    service: ScoringWideService = Depends(get_scoring_wide_service),
+) -> ScoringVerdictOut:
+    """取单日预测评估卡：方向 + 4 horizon 状态 + 一句话 summary。
+
+    4 个 horizon 状态：
+    - ``ready``：hit 字段已就绪（可显示「命中/未命中 + 实际涨跌」）
+    - ``pending``：等待 T+N 收盘（显示「等待中」）
+    - ``missing``：字段不一致 / 无方向
+    """
+    return await service.verdict(target_date=target_date)
