@@ -1125,7 +1125,7 @@ window.PM_I18N_en_US = {
   "scoring.score_bucket": "Score Bucket",
   "scoring.up_days": "Up Days",
   "scoring.down_days": "Down Days",
-  "scoring.sideways_days": "Sideways Days",
+  "scoring.gold_ny_close": "NY Gold USD/oz Close",
   "scoring.data_missing": "No data (holiday)",
   "scoring.strong_bullish": "Strong Bull",
   "scoring.bullish": "Bull",

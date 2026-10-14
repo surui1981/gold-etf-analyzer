@@ -124,6 +124,10 @@ class ScoringWideService:
             row.change_pct = snap.change_pct
             row.direction = snap.direction
             row.data_source = snap.data_source
+        # V0.95.0：NY 金（COMEX）美元/盎司收盘价 —— ``gold_base`` 已是
+        # ``DEFAULT_REVIEW_TARGET='ny'`` 标的，无新查询；落宽表供 4 指数时序表用。
+        if gold_base is not None and gold_base.close > 0:
+            row.gold_ny_close = gold_base.close
 
         # ── 消息面聚合 ──
         if news_records:
@@ -285,7 +289,11 @@ class ScoringWideService:
             hit_t5 = [r.hit_t5 for r in grp if r.hit_t5 is not None]
             up = sum(1 for r in grp if r.direction == "up")
             down = sum(1 for r in grp if r.direction == "down")
-            side = sum(1 for r in grp if r.direction == "sideways")
+            # V0.95.0：桶内最后一日的 NY 金美元/盎司收盘价（period-end snapshot）。
+            # day 桶内 1 行 → 当日收盘；week/month 桶 → 桶内最末日收盘。
+            # 任一行缺数据 → None（前端显示 "—"）。
+            ny_closes = [r.gold_ny_close for r in grp if r.gold_ny_close is not None]
+            gold_ny_close = ny_closes[-1] if ny_closes else None
             # V0.92.1 hotfix：单日桶（group_by=day 且桶内恰 1 行）→ 承载该行 hit 状态
             bucket_hit: bool | None = None
             if group_by == "day" and len(grp) == 1:
@@ -303,7 +311,7 @@ class ScoringWideService:
                     hit_rate_t5=round(sum(hit_t5) / len(hit_t5), 3) if hit_t5 else None,
                     up_days=up,
                     down_days=down,
-                    sideways_days=side,
+                    gold_ny_close=gold_ny_close,
                     hit=bucket_hit,
                 )
             )

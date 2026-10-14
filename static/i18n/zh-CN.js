@@ -1125,7 +1125,7 @@ window.PM_I18N_ZH_CN = {
   "scoring.score_bucket": "分值分箱",
   "scoring.up_days": "上涨日数",
   "scoring.down_days": "下跌日数",
-  "scoring.sideways_days": "横盘日数",
+  "scoring.gold_ny_close": "NY金美元/盎司收盘",
   "scoring.data_missing": "数据缺（节假日）",
   "scoring.strong_bullish": "强多",
   "scoring.bullish": "偏多",

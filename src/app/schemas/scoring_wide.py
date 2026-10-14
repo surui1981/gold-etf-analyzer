@@ -43,6 +43,8 @@ class ScoringWideOut(BaseModel):
     change_pct: float | None = None
     direction: str | None = None
     data_source: str | None = None
+    # V0.95.0：NY 金（COMEX）美元/盎司收盘价 —— 4 指数时序表替换「横盘日数」用。
+    gold_ny_close: float | None = None
 
     # 消息面聚合
     news_slot_count: int | None = None
@@ -126,7 +128,9 @@ class ScoringSummaryBucket(BaseModel):
     hit_rate_t5: float | None = None
     up_days: int = 0
     down_days: int = 0
-    sideways_days: int = 0
+    # V0.95.0：「横盘日数」列替换为「NY金美元/盎司收盘价」（取桶内最后一日收盘）。
+    # day 桶 → 当日收盘；week/month 桶 → period-end snapshot。
+    gold_ny_close: float | None = None
     # V0.92.1 hotfix：单日桶（group_by=day 且桶内 1 行）按所选 horizon 标记该行 hit 状态；
     # week/month 桶/pending 行 → None。前端据此渲染"命中"列（是=红 / 否=绿 / —=灰）。
     hit: bool | None = None
