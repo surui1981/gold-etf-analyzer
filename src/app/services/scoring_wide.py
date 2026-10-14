@@ -279,7 +279,8 @@ class ScoringWideService:
             buckets_map[key].append(r)
 
         buckets: list[ScoringSummaryBucket] = []
-        for key in sorted(buckets_map.keys()):
+        # V0.95.1：4 指数时序表"最近→远期"自上而下排（之前是升序：远→近）
+        for key in sorted(buckets_map.keys(), reverse=True):
             grp = buckets_map[key]
             trend_vals = [r.trend_index for r in grp if r.trend_index is not None]
             news_vals = [r.news_index for r in grp if r.news_index is not None]
@@ -389,7 +390,8 @@ class ScoringWideService:
             key = self._bucket_key(r.date, "month")
             buckets_map[key].append(r)
         by_month: list[ScoringSummaryBucket] = []
-        for key in sorted(buckets_map.keys()):
+        # V0.95.1：与主表一致，最新月在前
+        for key in sorted(buckets_map.keys(), reverse=True):
             grp = buckets_map[key]
             hits = [getattr(r, hit_col) for r in grp]
             rate = round(sum(hits) / len(hits), 3) if hits else None
