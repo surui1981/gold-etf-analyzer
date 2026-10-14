@@ -224,7 +224,8 @@
     html += `<th>${T('scoring.hit_rate_t5', 'T+5 命中率')}</th>`;
     html += `<th>${T('scoring.up_days', '涨')}</th>`;
     html += `<th>${T('scoring.down_days', '跌')}</th>`;
-    html += `<th>${T('scoring.sideways_days', '横盘')}</th>`;
+    // V0.95.0：横盘日数列替换为 NY 金美元/盎司收盘价（period-end snapshot）
+    html += `<th>${T('scoring.gold_ny_close', 'NY金美元/盎司收盘')}</th>`;
     html += '</tr></thead><tbody>';
     for (const b of data.buckets) {
       const hitCls =
@@ -247,7 +248,8 @@
       html += `<td class="num">${fmtPct(b.hit_rate_t5)}</td>`;
       html += `<td class="num">${b.up_days}</td>`;
       html += `<td class="num">${b.down_days}</td>`;
-      html += `<td class="num">${b.sideways_days}</td>`;
+      // V0.95.0：NY 金美元/盎司收盘价 —— 2 位小数 + 千分位；缺数据显示 "—"
+      html += `<td class="num">${b.gold_ny_close != null ? fmt2(b.gold_ny_close) : '—'}</td>`;
       html += '</tr>';
     }
     html += '</tbody></table>';
@@ -375,6 +377,11 @@
   function fmtPct(v) {
     if (v == null) return '—';
     return (v * 100).toFixed(1) + '%';
+  }
+  // V0.95.0：金额格式化（千分位 + 2 位小数）—— NY 金美元/盎司等美元报价
+  function fmt2(v) {
+    if (v == null) return '—';
+    return Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
