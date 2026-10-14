@@ -78,6 +78,12 @@ class ScoringDailyWide(Base):
     data_source: Mapped[str | None] = mapped_column(
         String(16), nullable=True, comment="行情来源 live/stale/mock（V0.79.0 #163）"
     )
+    # V0.95.0：NY 金（COMEX）美元/盎司收盘价 —— 与 ``close``（沪金 ETF 元/份）
+    # 是 2 个不同标的，4 指数时序表用其替换「横盘日数」列。
+    # 数据源：``gold_price_daily.target='ny'``（DEFAULT_REVIEW_TARGET）。
+    gold_ny_close: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="NY 金美元/盎司收盘价（V0.95.0）"
+    )
 
     # ── 消息面聚合 ──
     news_slot_count: Mapped[int | None] = mapped_column(

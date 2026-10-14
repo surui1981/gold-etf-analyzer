@@ -122,6 +122,7 @@ class ScoringWideRepository:
                 "change_pct",
                 "direction",
                 "data_source",
+                "gold_ny_close",  # V0.95.0 NY 金美元/盎司
                 # 消息面
                 "news_slot_count",
                 "news_basis_tags",
