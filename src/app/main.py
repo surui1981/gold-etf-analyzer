@@ -298,6 +298,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         llm_client = ClaudeClient(
             api_key=settings.llm_api_key,
             model=settings.llm_model,
+            base_url=settings.llm_base_url,
             timeout=settings.llm_timeout_seconds,
             max_tokens=settings.llm_max_tokens,
         )
@@ -344,7 +345,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             )
         app.state.llm_client = llm_client
         app.state.tool_dispatcher = tool_dispatcher
-        logger.info("AI 智能分析已启用（model=%s）", settings.llm_model)
+        logger.info(
+            "AI 智能分析已启用（model=%s，base_url=%s）",
+            settings.llm_model, settings.llm_base_url,
+        )
     else:
         app.state.llm_client = None
         app.state.tool_dispatcher = None

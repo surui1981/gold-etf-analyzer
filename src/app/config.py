@@ -53,7 +53,9 @@ class Settings(BaseSettings):
     # ===== V0.97.0 · AI 智能分析（Claude LLM）=====
     # Anthropic API key（None / 空 = AI 入口隐藏，feature flag 关）
     llm_api_key: str | None = None
-    # 默认模型（claude-sonnet-4-5 性价比最稳，未来可加 Opus）
+    # Anthropic 兼容 base_url（默认官方；可用国内代理如 https://api.minimax.cn/anthropic）
+    llm_base_url: str = "https://api.anthropic.com"
+    # 默认模型（claude-sonnet-4-5 性价比最稳；代理可换成 MiniMax-M3.1-Flash-Preview）
     llm_model: str = "claude-sonnet-4-5"
     # 单次 LLM 响应最大 token（V0.97 默认 2048）
     llm_max_tokens: int = 2048

@@ -68,9 +68,10 @@ class ClaudeResponse:
 
 
 class ClaudeClient:
-    """Anthropic Claude API 异步客户端。"""
+    """Anthropic Claude API 异步客户端（兼容任何 Anthropic-协议端点）。"""
 
-    ENDPOINT = "https://api.anthropic.com/v1/messages"
+    # 默认官方端点；用户可通过 base_url 覆盖为国内代理
+    DEFAULT_BASE_URL = "https://api.anthropic.com"
     ANTHROPIC_VERSION = "2023-06-01"
     _RETRY_BACKOFFS: tuple[float, ...] = (2.0, 5.0, 15.0)  # 仅 429/5xx 触发
 
@@ -79,11 +80,15 @@ class ClaudeClient:
         *,
         api_key: str,
         model: str = "claude-sonnet-4-5",
+        base_url: str = DEFAULT_BASE_URL,
         timeout: float = 30.0,
         max_tokens: int = 2048,
     ) -> None:
         if not api_key:
             raise ValueError("api_key must not be empty (configure LLM_API_KEY)")
+        # 去掉尾部 /，再拼 /v1/messages
+        self._base_url = base_url.rstrip("/")
+        self._endpoint = f"{self._base_url}/v1/messages"
         self._api_key = api_key
         self._model = model
         self._timeout = timeout
@@ -132,7 +137,7 @@ class ClaudeClient:
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     resp = await client.post(
-                        self.ENDPOINT, json=body, headers=headers,
+                        self._endpoint, json=body, headers=headers,
                     )
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc

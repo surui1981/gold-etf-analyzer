@@ -374,3 +374,59 @@ async def test_tool_dispatcher_unknown_tool_returns_error() -> None:
     )
     assert r.is_error is True
     assert "unknown tool" in r.content
+
+
+def test_claude_client_base_url_default() -> None:
+    """默认 base_url → 官方端点。"""
+    c = ClaudeClient(api_key="sk-test")
+    assert c._endpoint == "https://api.anthropic.com/v1/messages"
+
+
+def test_claude_client_base_url_override_strips_trailing_slash() -> None:
+    """自定义 base_url（国内代理）+ 尾部 / 自动 strip。"""
+    c = ClaudeClient(
+        api_key="sk-test",
+        base_url="https://api.minimax.cn/anthropic/",
+    )
+    assert c._endpoint == "https://api.minimax.cn/anthropic/v1/messages"
+
+
+@pytest.mark.asyncio
+async def test_claude_client_uses_custom_base_url() -> None:
+    """ask() 走自定义 base_url，不走默认。"""
+    c = ClaudeClient(
+        api_key="sk-test", base_url="https://api.minimax.cn/anthropic", timeout=5.0,
+    )
+    captured = {}
+
+    async def fake_post(url, *, json, headers):
+        captured["url"] = url
+        captured["json"] = json
+
+        class R:
+            status_code = 200
+            def raise_for_status(self_inner): pass
+            def json(self_inner):
+                return {
+                    "id": "msg_01", "type": "message", "role": "assistant",
+                    "content": [{"type": "text", "text": "ok"}],
+                    "stop_reason": "end_turn",
+                    "usage": {"input_tokens": 5, "output_tokens": 3},
+                }
+        return R()
+
+    class FakeAsyncClient:
+        def __init__(self, *a, **kw): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): pass
+        async def post(self, url, *, json, headers): return await fake_post(url, json=json, headers=headers)
+
+    import app.services.llm.claude as claude_mod
+    orig = claude_mod.httpx.AsyncClient
+    claude_mod.httpx.AsyncClient = FakeAsyncClient
+    try:
+        await c.ask(system="sys", messages=[{"role": "user", "content": "hi"}])
+    finally:
+        claude_mod.httpx.AsyncClient = orig
+
+    assert captured["url"] == "https://api.minimax.cn/anthropic/v1/messages"
