@@ -1,4 +1,4 @@
-# 开发版本推进线路图（V0.78.0 → V0.87.0+）
+# 开发版本推进线路图（V0.78.0 → V0.96+）
 
 > **配套文档**：
 > - [parameter-evaluation.md](parameter-evaluation.md) — **8 项参数问题诊断 + 推荐新值**（本路线图的输入）
@@ -7,9 +7,9 @@
 
 > **本文件范围**：把 parameter-evaluation.md 的改进项 + 其他后台任务排进具体版本，给出**每版本的实施步骤、commit 切分、测试与文档同步**。
 
-> **基线版本**：V0.86.1（commit `1b34e25`，2026-10-11） —— 本路线图据此规划。
-> **已交付总览**：V0.78.0（10-05 · 阈值口径统一 + 决策补全）→ V0.78.1（10-05 · SW 缓存脱钩 + 依赖声明 + 8 道门禁）→ V0.79.0（10-07 · 阈值动态化 + 回测增强 + Step G/E/F/H 全部完成）→ V0.80.0（10-07 · 决策网格化 + 仓位结合）→ V0.81.0/81.1（10-08 · V0.75.3 认证收尾 + token 横幅）→ V0.82.0（10-09 · LAN 多终端 admin token 双通道）→ V0.83.0（10-10 · 主页 UI 改版 + 8 页警示合并）→ V0.83.1（10-10 · 110 个 zh-TW 翻译 gap 修复）→ V0.83.2（10-10 · 共享 topnav 抽离）→ V0.83.3（10-10 · 限速中间件 /static/ bypass + 120→600/min）→ V0.83.4（10-10 · freshness 降级 UX 重设计 + sig() dict bug 修复）→ V0.84.0（10-10 · 状态条方案 C 数据时效 + 警示合并）→ V0.85.0（10-11 · 数据时效迁移到 /data-health + 主页版面优化）→ V0.86.0（10-11 · 决策可解释性增强拆解 + 对比 + tooltip）→ V0.86.1（10-11 · 数据健康跳转 404 hotfix）。
-> **当前焦点**：V0.87+ backlog（见 §11）—— 从「后端靠 R/R」转向「前端靠门禁 + UX 深化」。
+> **基线版本**：V0.95.1（commit `2e956d3`，2026-10-15） —— 本路线图据此规划。
+> **已交付总览**：V0.78.0（10-05 · 阈值口径统一 + 决策补全）→ V0.78.1（10-05 · SW 缓存脱钩 + 依赖声明 + 8 道门禁）→ V0.79.0（10-07 · 阈值动态化 + 回测增强 + Step G/E/F/H 全部完成）→ V0.80.0（10-07 · 决策网格化 + 仓位结合）→ V0.81.0/81.1（10-08 · V0.75.3 认证收尾 + token 横幅）→ V0.82.0（10-09 · LAN 多终端 admin token 双通道）→ V0.83.0（10-10 · 主页 UI 改版 + 8 页警示合并）→ V0.83.1（10-10 · 110 个 zh-TW 翻译 gap 修复）→ V0.83.2（10-10 · 共享 topnav 抽离）→ V0.83.3（10-10 · 限速中间件 /static/ bypass + 120→600/min）→ V0.83.4（10-10 · freshness 降级 UX 重设计 + sig() dict bug 修复）→ V0.84.0（10-10 · 状态条方案 C 数据时效 + 警示合并）→ V0.85.0（10-11 · 数据时效迁移到 /data-health + 主页版面优化）→ V0.86.0（10-11 · 决策可解释性增强拆解 + 对比 + tooltip）→ V0.86.1（10-11 · 数据健康跳转 404 hotfix）→ V0.87.0（10-11 · `scripts/check_routes.py` HTTP 门禁 + main.py 路由冒烟 27 例）→ V0.88.0（10-12 · admin.py 19 例 + import_central_bank.py 13 例 · 维护线 src/ 87→90%+）→ V0.90.0（10-12 · 版本号 + 发版说明）→ V0.91.0（10-12 · 复盘报告 PDF 一键导出 + 跨页上下文保留）→ V0.92.0（10-14 · 历史打分数据汇总 · scoring_daily_wide 物化宽表 26 列 + 5 端点 + 双 Tab 视图）→ V0.92.1（10-15 · 行级命中筛选 + 是=红 #dc2626）→ V0.93.0（10-15 · T+0 outcome 当日尾盘验证）→ V0.94.0（10-15 · 预测评估卡 verdict card）→ V0.95.0（10-15 · 4 指数时序表「横盘日数」替换为 NY 金美元/盎司收盘）→ V0.95.1（10-15 · 4 指数时序桶排序降序 · 最近→远期自上而下）。
+> **当前焦点**：V0.96+ backlog（见 §12）—— 物化宽表已稳定，转向「数据深度」+「UX 体验优化」两条线。
 
 ---
 
@@ -17,16 +17,16 @@
 
 ```
                           2026-10-中下旬         2026-11          2026-12+
-V0.86.1 ──┬───────────┬───────────┬───────────┬───────────▶ 持续
+V0.95.1 ──┬───────────┬───────────┬───────────┬───────────▶ 持续
 (基线)    │           │           │           │
           ▼           ▼           ▼           ▼
-       V0.87.0     V0.88.0     V0.89.0     V0.90+
-       "门禁+UX"   "深化"      "PWA"       "K 项"
+       V0.96.0     V0.97.0     V0.98.0     V0.99+
+       "数据深度"   "UX 优化"   "K 项"      "K+"
        1 周        1-2 周      1 周        3-4 周
        ─────────────────────────────────────
        并行线:
-       维护线 V0.86.x / V0.87.x ── hotfix / 依赖升级 / 测试扩充（每 2 周 1 个）
-       K 项（多市场独立校准）── 推迟到 V0.90+，需 3-4 周投入
+       维护线 V0.95.x / V0.96.x ── hotfix / 依赖升级 / 测试扩充（每 2 周 1 个）
+       K 项（多市场独立校准）── 推迟到 V0.98+，需 3-4 周投入
 ```
 
 **历史快照（已交付）**：
@@ -34,14 +34,17 @@ V0.86.1 ──┬───────────┬─────────
 V0.78.0 (10-05) → V0.78.1 (10-05) → V0.79.0 (10-07) → V0.80.0 (10-07) →
 V0.81.0 (10-08) → V0.81.1 (10-08) → V0.82.0 (10-09) → V0.83.0 (10-10) →
 V0.83.1 (10-10) → V0.83.2 (10-10) → V0.83.3 (10-10) → V0.83.4 (10-10) →
-V0.84.0 (10-10) → V0.85.0 (10-11) → V0.86.0 (10-11) → V0.86.1 (10-11)
+V0.84.0 (10-10) → V0.85.0 (10-11) → V0.86.0 (10-11) → V0.86.1 (10-11) →
+V0.87.0 (10-11) → V0.88.0 (10-12) → V0.90.0 (10-12) → V0.91.0 (10-12) →
+V0.92.0 (10-14) → V0.92.1 (10-15) → V0.93.0 (10-15) → V0.94.0 (10-15) →
+V0.95.0 (10-15) → V0.95.1 (10-15)
 ```
 
-**关键决策（V0.87+ 方向）**：
-- **从「参数调优 / 后端重构」转向「前端门禁 + UX 深化」**——V0.78-V0.82 已经把后端参数/数据结构打磨到稳定；V0.83-V0.86 是 UX 修复系列，V0.87+ 沿这个方向继续。
-- **每个新功能版带 1 道门禁**（V0.86.1 教训：puppeteer 只验证 DOM 渲染，URL 跳转盲点）—— V0.87.0 候选 1 `scripts/check_routes.py` 是直接产物。
-- **维护线持续运转**——bugfix / 依赖升级 / 测试扩充不阻塞主版本，每 2 周一个 V0.86.x 小版本。
-- **K 项（多市场独立校准）继续推迟**——parameter-evaluation 11 项中唯一未交付；评估 V0.90+ 投入 3-4 周完成。
+**关键决策（V0.96+ 方向）**：
+- **物化宽表已稳定（V0.92.0）** —— 历史打分数据汇总页可生产用，转向「数据深度」（更多维度/跨市场对比/复盘分析）。
+- **UX 体验深化**——V0.92.1 命中筛选、V0.93.0 T+0 快速反馈、V0.94.0 预测评估卡、V0.95.x 桶排序 + NY 金收盘价 都是「让用户更快看到结果」的 UX 改进；V0.96+ 沿这个方向继续。
+- **维护线持续运转**——bugfix / 依赖升级 / 测试扩充不阻塞主版本，每 2 周一个 V0.95.x 小版本。
+- **K 项（多市场独立校准）继续推迟**——parameter-evaluation 11 项中唯一未交付；评估 V0.98+ 投入 3-4 周完成。
 
 ---
 
@@ -750,6 +753,17 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 | V0.85.0 | ✅ 2026-10-11 | 数据时效迁移到 /data-health.html + 主页版面优化：用户提「数据时效移动到数据健康页面，并对主页版面进行优化」。4 方案中选 A（状态条瘦身 + 主页紧凑化，风险最低）。8 页非 health 的 statusPanel summary 内 `#freshnessInline` 替换为 `<a class="hs-chip-link" href="/data-health.html">` 紧凑摘要 chip（显示「X/Y 实时 ·N 缓存 →」+ stopPropagation 阻止 disclosure 误触发）；data-health.html 的 summary 升级为 4 个 mini-chip（数据源 / 实时 / 缓存 / 演示），点 summary 展开仍是完整 6 张市场卡。新增共享脚本 `static/health-summary.js`（自洽模块 + CSS 自注入 + 智能退避 60→120→300→600s + i18n 安全降级），从 `/api/v1/market/health` 聚合 6 数据源状态（gold × 3 + silver × 3）。趋势主页 trend.html「每日评估历史」面板包到 `<details class="panel-collapse">` 默认折叠，首屏省 ~290px（4 张极值卡 + 260px 图表 + 区间按钮全部进折叠体）。3 语 i18n +7 keys（hs.title / hs.sources / hs.live / hs.stale / hs.mock / hs.unknown / hs.loading）。9 页 `freshness.js` script 全部替换为 `health-summary.js`；backtest/central_bank 之前缺 freshness.js 导致 #freshnessInline 一直空 —— C2 同时修复该历史 bug；silver.html 内 stale 动态加载 `PM_Freshness.mount('freshnessInline')` 死码也清理为 `health-summary.js`。门禁：`check_cluster_render.mjs` V0.85 节 63 断言（含旧 V0.84 节 `#freshnessInline` 改 `#healthSummary`）+ 新增 `check_v085.mjs` 51 断言（27 渲染 + 24 chip-click 不展开 disclosure），437/0 + 51/0 全过。见 `docs/releases/v0.85.0.md` |
 | V0.86.0 | ✅ 2026-10-11 | 决策可解释性增强（拆解 + 对比 + tooltip 三件套）：用户提「同步路径地图说明文件，给我几个应用易用性的建议我来选择应用完善方向」。4 方案中选 A（决策可解释性增强 · 深耕核心价值）。核心动机：决策可信度是用户最关心的，但目前综合指数只给一个数字、决策行动 chip 只给标签、持仓旁边没「按建议加减」对比。新增共享脚本 `static/decision-explainer.js` 提供 4 个工具函数：`renderBreakdown`（综合指数按权加权拆解 + 公式行）+ `compareCard`（按当前建议加减对比卡，`position_ratio=0` 回退到描述性文案不伪造金额）+ `tooltipFor/renderTooltip`（hover 决策行动 chip 弹出 3 行触发条件：综合指数门槛 / PnL 门槛 / 反向信号）+ `dimensionBars`（三维横向条形图共振可视化）+ `attachTooltip`（hover/focus 监听 helper）。synthesis-card.js（C2）：`.syn-action` 加 `de-action` 类 + `data-de-action` + `cursor:help`，syn-bars 后插入 compareCard + renderBreakdown，render 末尾自动 attachTooltip（每次重渲染重新挂载避免 stale 监听）。portfolio.html（C3）：决策面板 `.badge` 加 `de-action` + `cursor:help`，position-rec 后插入 compareCard，buildComposition 后插入 renderBreakdown，loadDecision 末尾 attachTooltip。trend.html 加 `decision-explainer.js` script 加载（synthesis-card.js 依赖）。字段名陷阱保护（V0.75 教训）：`trend_index.components` 缺失显示「— 未计入」绝不渲染 undefined；i18n T(key, fallback) 字典缺 key 时回退中文。3 语 i18n +42 keys（explain_breakdown_title/formula/dim_title + compare_* 12 keys + explain_<9 行动>_line{1,2,3} 27 行 = 42 唯一 keys × 3 = 126 条）。门禁：`check_static_js.py` 15 静态页 + 27 共享脚本全过；`check_cluster_render.mjs` 437/0 无回归；`check_i18n_keys.py` 0 missing；新建 `check_v086.mjs` 36/36（2 页 × 3 语 × 6 断言：de-action + compare + breakdown + i18n + hover 3 行 tooltip）。见 `docs/releases/v0.86.0.md` |
 | V0.86.1 | ✅ 2026-10-11 | 数据健康跳转 404 hotfix：用户报告「主页点击数据健康链接出现 detail not found」。根因：V0.85.0 引入 chip 链接 `<a href="/data-health.html">`，但 `src/app/main.py` 根路径别名列表（/portfolio /central-bank /trades 等）漏注册 `/data-health` 别名 → FastAPI 默认 404。修复：(1) main.py 加 `@app.get('/data-health')` + `'/data-health.html'` 双别名（/data-health 与项目 kebab-url 约定一致；/data-health.html 向后兼容 V0.85 chip 直链 + 外部书签避免升级后老浏览器 404）；(2) health-summary.js + 8 个 HTML 的 chip href 从 /data-health.html 升级到 /data-health（与 /portfolio /central-bank 等其他 chip 风格一致）；(3) sw.js SHELL_ASSETS 加 /data-health 让离线缓存包含该页，VERSION bump v0.86.0→v0.86.1 强制重装 SW 清缓存；(4) check_cluster_render.mjs + check_v085.mjs 断言同步从 /data-health.html 改为 /data-health。版本号 0.86.0→0.86.1。教训：puppeteer 只验证 document.body 渲染不验证 URL 跳转是否 200 → V0.85 全部门禁通过但真实跳转 404 → 考虑 V0.87 加 `scripts/check_routes.py` 扫描 main.py 别名 + curl GET 验证 307/200。门禁：check_static_js.py 15 + 27 全过；check_cluster_render.mjs 437/0；check_i18n_keys.py 0 missing；check_v085.mjs 51/0；check_v086.mjs 36/0；curl GET /data-health → 307 → /static/data-health.html → 200；curl GET /data-health.html → 307 → /static/data-health.html → 200。见 `docs/releases/v0.86.1.md` |
+| V0.87.0 | ✅ 2026-10-11 | `scripts/check_routes.py` HTTP 状态码门禁：V0.86.1 教训的直接产物。`src/app/main.py` 14 个 `@app.get(...)` 别名用 AST 解析 + `urllib` curl GET 验证 200/307，拒绝 5xx / 404 / ConnectionError。集成进 `tests/gates/test_routes_smoke.py` 27 例（`scripts/test_routes_smoke.py` 反射 + 集成混合）。9 业务页 + 5 别名全部 200/307。门禁：check_static_js.py 15 + 27 全过；check_routes.py 14/14 全过；`pytest tests/gates/test_routes_smoke.py` 27/27；`pytest tests/test_services/test_user_isolation.py` 8/8（不回归）。见 `docs/releases/v0.87.0.md` |
+| V0.88.0 | ✅ 2026-10-12 | 维护线 src/ 覆盖率 87→90%+：admin.py 端点层 19 例（owner/409/404 全分支 + 双 token 路径）+ scripts/import_central_bank.py 13 例（含 mock build_full_dataset）+ grams 100% / import_central_bank 98% / admin 90% 三模块基线。**sw.js VERSION 漂移 hotfix**：V0.88.0 漏改 sw.js VERSION 导致缓存陈旧，同 commit 推送修复（`d29d9df`）—— 教训写入 `sw-version-sync-gate` memory 并加 `check_pwa_assets.py` 必跑门禁。**check_routes 双向验证 + 常量同步护栏**：`(expected_status, path)` 表驱动（GET 200 / 307），HTTPX 替换 urllib 支持 session + cookie。门禁：check_routes.py 14/14；check_pwa_assets.py v0.88.0 OK；test_admin.py 19/19；test_import_central_bank.py 13/13；test_routes_smoke.py 27/27。**无新功能纯维护**。见 `docs/releases/v0.88.0.md` |
+| V0.89.0 | ⏭ 跳过 | 10-12 当日无独立交付，并入 V0.90.0 |
+| V0.90.0 | ✅ 2026-10-12 | 版本号 + 发版说明：`pyproject.toml` 0.88.0→0.90.0 + sw.js VERSION + CHANGELOG（4 处同步）+ release notes `docs/releases/v0.90.0.md`。**V0.89 跳过**（双节同日发版合并处理）。无新功能、纯版本号 bump。门禁：check_pwa_assets.py v0.90.0 OK。commit `c4f87f8` |
+| V0.91.0 | ✅ 2026-10-12 | 复盘报告 PDF 一键导出 + 跨页上下文保留：用户提「复盘时能一键导出 PDF」。ReviewReportService 复用 `weasyprint` / `xhtml2pdf` 已有依赖，按 review.html 模板渲染 PDF；保留中央银行购金 / 持仓 / 决策历史 / 数据健康 4 个区块的跨页上下文（page-break-inside: avoid + 章节标题 sticky）。端点 `GET /api/v1/review/pdf?from=&to=` 流式返回 `application/pdf`。UI：review.html 加「📄 导出 PDF」按钮 + loading 态 + 完成 toast。3 语 i18n +3 keys（pdf.export / pdf.exporting / pdf.done）。门禁：check_static_js.py 16 + 27 全过；check_routes.py 14/14；check_i18n_keys.py 0 missing；test_review_pdf.py 6/6（空数据 / 跨月 / 图表占位 / 中文字体 / 大表分页 / 鉴权）。见 `docs/releases/v0.91.0.md` |
+| V0.92.0 | ✅ 2026-10-14 | **历史打分数据汇总 · scoring_daily_wide 物化宽表**：用户提「汇总页能看历史打分走势」。5 段交付：(1) 数据层 `scoring_daily_wide` 物化宽表（26 列 + 3 索引，1 行/日，写时 hook ETL）；(2) 服务层 `ScoringWideService` 4 聚合查询（summary / by-date / hit-stats / by-tag）；(3) 端点 5 个新 API（`/api/v1/scoring/summary` / `/by-date` / `/hit-stats` / `/by-tag` / `/tags`）+ 写时 hook（`capture_today` / `save_today` 触发 `rebuild(today)`）+ 回填 CLI `scripts/backfill_scoring_wide.py`；(4) 视图 `/scoring` 双 Tab（日历 + 表格）+ 顶栏「📊 打分」入口；(5) 维护线 4 处版本同步 + check_routes 12→13 alias + check_pwa_assets + i18n 33 keys。**设计纪律**：V0.78.0 Step D 所有数值列 nullable；V0.79.0 #162 宽表写失败不回滚源表（下次 capture_today 幂等 rebuild）；V0.80.0 #159 所有 query 默认 user_id 过滤；V0.85 教训 check_routes 同步 12→13 alias；V0.88.0 sw.js 4 处同步。**alembic stale revision 恢复**：c027a36 hotfix 补 c4d5e6f7a8b9 no-op 占位 + 链 V0.92.0 真迁移（生产 DB alembic_version 指向不存在 revision，核对 schema 后补 no-op 占位 + 改 down_revision 链接上）。门禁：check_routes.py 13/13；check_pwa_assets.py v0.92.0 OK；check_static_js.py 17+30 OK；check_i18n_keys.py 0 missing；test_scoring_wide.py 14/14；test_backfill_scoring_wide.py 6/6（dry-run / 区间 / 幂等 / 失败容忍 / 数据完整 / CLI 退出码）。见 `docs/releases/v0.92.0.md` |
+| V0.92.1 | ✅ 2026-10-15 | **行级命中筛选 + 是=红 #dc2626**：用户提「打分汇总 4 指数时序表加命中筛选」。summary endpoint 新增 `hit / horizon` Query 参数（`pattern=^(all|hit|miss)$`），service `summary()` 串接 hit 过滤（**默认 `group_by=day + horizon=t1`**，与 V0.93.0 T+0 一起重新校准默认项）。scoring.html 加 `.hit-cell` / `.hit-yes` / `.hit-no` / `.hit-pending` CSS（**语义覆盖：hit=yes → 红 #dc2626；hit=no → 绿；pending → 灰** —— 用户原话"红色的是"是数据语义而非视觉增强）。scoring.js `getParams` / `renderSummaryTable` 注入命中列。i18n 8 keys：hit_filter / hit_filter_all / hit_filter_yes / hit_filter_no / hit_col / hit_col_yes / hit_col_no / hit_col_pending。sw.js SHELL_ASSETS 加 scoring.html（V0.92.0 follow-up：避免 RUNTIME_CACHE 旧 307 持续回放旧 HTML）。puppeteer 视觉验证：4 指数时序表「全部/是/否」3 筛选全通，命中列 颜色符合语义。commit `ac33123`（与 V0.93.0 / V0.94.0 合并提交） |
+| V0.93.0 | ✅ 2026-10-15 | **T+0 outcome 当日尾盘验证 · 快速反馈**：用户提「复盘时想看当天决策的当日结果」。新增迁移 `j6d7e8f9a0b1`：`actual_change_pct_t0` / `hit_t0` 两列（V0.78.0 Step D nullable，老行 = NULL 视为 pending）。`_build_row` 复用 `gold.latest_before()` 取上一交易日收盘 → 当日 close = t0 outcome。summary / hit-stats 全部支持 t0（`pattern=^(t0|t1|t3|t5)$`）。`hit_stats.hit_col` dict: `{0: "hit_t0", 1: "hit_t1", 3: "hit_t3", 5: "hit_t5"}`。ScoringWideRepository.upsert 字段白名单同步加 2 字段（V0.79.0 #162 教训）。i18n 2 keys：hit_rate_t0 / t0_desc（**注明含盘内信息泄露**，定位「快速反馈」非预测评估）。scoring.html 加 T+0 horizon select option；scoring.js 渲染 T+0 命中率列。**horizon 扩展为 t0 / t1 / t3 / t5** 四档。commit `ac33123` |
+| V0.94.0 | ✅ 2026-10-15 | **预测评估卡 verdict card**：用户提「打分汇总顶部加预测评估总览」。scoring.html 顶部加 `<section id="scoringVerdict">`（方向 + 置信度 + 4 horizon ready/pending/missing + 一句话 summary），跟随 `toDate` 联动（onchange 重拉 API 重渲染）。新增 schema `ScoringHorizonVerdict`（单 horizon 三态 ready / pending / missing）。service `summary()` 返回 verdict 块；scoring.js `renderVerdict` 根据 4 horizon 状态组合：4 都 ready → 「🎯 高置信 · 4/4 horizon 已验证」；3/4 ready → 「🟡 中置信 · 3/4 horizon 已验证」；<3 ready → 「⏳ 早期数据 · N/4 horizon 已验证」；含 pending 但无 missing → 「🟢 当日 T+0 实时跟踪中」；全 missing → 「— 数据积累中」。i18n 5 keys：verdict_title / verdict_direction_bullish / verdict_direction_bearish / verdict_direction_neutral / verdict_confidence_high/mid/low。puppeteer 视觉验证：切换 `toDate` verdict 跟随更新。commit `ac33123` |
+| V0.95.0 | ✅ 2026-10-15 | **4 指数时序表「横盘日数」替换为 NY 金美元/盎司收盘**：用户提「把横盘日数改成当日美元的收盘价」（澄清后 = 黄金每盎司 NY 收盘价 USD/oz）。3 commit 链：(1) DB 层 `feat(db): scoring_daily_wide 加 gold_ny_close 列` (`3d38c15`) — migration `k7e8f9a0b1c2`（接 V0.93.0 j6d7e8f9a0b1）+ model Float nullable + repo upsert 白名单加 `gold_ny_close`（V0.79.0 #162 教训）；(2) 后端聚合 `feat(scoring): summary 桶聚合 gold_ny_close + i18n 三语同步` (`af1258d`) — schema ScoringSummaryBucket 删 `sideways_days` 加 `gold_ny_close`；service `_build_row` 末尾取 `gold_base.close`（已经是 ny target，无新查询）；summary 桶聚合 `gold_ny_close = ny_closes[-1] if ny_closes else None`（period-end snapshot）；3 语 i18n + 删 1 加 1 key；(3) 前端 `feat(scoring): 4 指数时序表横盘日数列替换为 NY金美元/盎司收盘` (`aa737c0`) — scoring.js thead / tbody 替换列名 + `fmt2()` 工具函数（千分位 + 2 位小数 `3,350.50`）。**数据补充**：NY 金 1 个月陈旧 9/39 → backfill 28/39 填充（11 剩余 NULL 是周末 + 当日，物理不可能有数据）；`/tmp/backfill_ny.py` 调 `_us_gold_via_subprocess` 绕过 TrendService 链路构造。puppeteer 视觉验证：zh-CN / en-US 两种语言列名 + 数值格式正确。 |
+| V0.95.1 | ✅ 2026-10-15 | **4 指数时序桶排序降序 · 最近→远期自上而下**：用户提「时序排列应该是从最近到远期，从上方向下排」。`summary()` 桶迭代 `sorted(...)` → `sorted(..., reverse=True)`（line 282）；`hit_stats().by_month` 桶迭代同上（line 392）。**多视图一致性**：日历视图（renderCalendar 早就是 `.reverse()` 倒序 line 328），主表与日历排序方向统一，消除 UX 割裂。**period 字符串设计**：day=`YYYY-MM-DD` / week=`YYYY-Wxx` / month=`YYYY-MM` 都是字典序 == 时间序，`reverse=True` 即可无需自定义 comparator。puppeteer 视觉确认 4 指数时序表自上而下从 2026-10-14 排到 2026-09-07。门禁：check_routes.py 14 OK / check_pwa_assets v0.92.0 OK / check_static_js 17+30 OK。commit `2e956d3`。**注：本版未发版本号**（V0.92.0 维护线无 sw.js VERSION 改动需求） |
 
 **维护任务清单**（每小版本至少 1 项）：
 - [ ] `ruff check` 警告清零
@@ -871,60 +885,144 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 
 ---
 
-## 11. V0.87+ Backlog 候选
+## 11. V0.87+ Backlog（已交付 / 转入维护线）
 
-### 候选 1 · `scripts/check_routes.py` HTTP 状态码门禁（V0.87.0 优先级最高）
+> 本节原始规划于 2026-10-11 落地。截至 2026-10-15，**全部 6 项候选已交付或并入 V0.88+ 维护线**。
 
-**目标**：扫描 `src/app/main.py` 所有 `@app.get(...)` 别名 → curl GET 验证 200/307/404/405，拒绝 5xx；纳入 CI。
+| 候选 | 状态 | 落地版本 | 备注 |
+|------|------|---------|------|
+| 候选 1 · `scripts/check_routes.py` HTTP 门禁 | ✅ 已交付 | V0.87.0（10-11） | 见 §6 V0.87.0 |
+| 候选 2 · 决策可解释性补完（三维行下钻 + tooltip 共振 + SW 缓存） | ✅ 已交付 | V0.86.0（10-11） | 见 §6 V0.86.0；SW 缓存 V0.86.0 顺手完成 |
+| 候选 3 · 三市场对照可视化升级 | 🟡 延后 | — | 转入 V0.96+ 候选（见 §12） |
+| 候选 4 · 多账本模板 / 复盘助手 | 🟡 延后 | — | 转入 V0.97+ 候选；账本能力 V0.75+ 已成熟 |
+| 候选 5 · K 项 · 多市场独立校准 | ⏸ 保持延后 | — | V0.98+ 必做；工作量 3-4 周 |
+| 候选 6 · 移动端 PWA 体验优化 | 🟡 延后 | — | 转入 V0.96+ 候选（见 §12） |
 
-**根因（V0.86.1 教训）**：puppeteer 只验证 `document.body` 渲染，不验证 URL 跳转是否 200 → V0.85 全部门禁通过但真实跳转 404。
+**新增交付（V0.92.0+ 不在本节原始规划）**：
+- V0.90.0 · 版本号 + 发版说明（10-12）
+- V0.91.0 · 复盘报告 PDF 一键导出（10-12）
+- V0.92.0 · 历史打分数据汇总（物化宽表 + 汇总页，10-14）
+- V0.92.1 · 行级命中筛选（10-15）
+- V0.93.0 · T+0 outcome（10-15）
+- V0.94.0 · 预测评估卡 verdict card（10-15）
+- V0.95.0 · NY 金美元/盎司收盘（10-15）
+- V0.95.1 · 时序桶排序降序（10-15）
 
-**实施步骤**：
-1. 新建 `scripts/check_routes.py`：
-   - 用 AST 解析 `main.py` 提取 `@app.get("/xxx", include_in_schema=False)` 路径
-   - 用 `requests`（或 httpx）curl GET 每个路径，记录状态码
-   - 预期：200（直链静态）或 307（重定向到 /static/...）→ PASS
-   - 不允许：404 / 5xx / ConnectionError
-2. 集成进 CI（`.github/workflows/ci.yml`）—— 失败时 build fail
-3. 文档同步：`docs/development.md` §10 「CI 门禁清单」加入此门禁
+**维护线累计**（截至 V0.95.1）：
+- 14 个 HTTP alias（V0.87 check_routes 持续护栏）
+- 16 个静态 HTML + 30 个共享 JS（V0.92.0 scoring.html /scoring 入口）
+- src/ 覆盖率 90%+ 基线（V0.88 admin 19 + grams 100% + import_central_bank 98%）
+- 维护线门禁 7 道：check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims / pytest
+
+---
+
+## 12. V0.96+ Backlog 候选（用户体验优化 + 数据深度）
+
+> 物化宽表 V0.92.0 已稳定 + V0.92.1/V0.93.0/V0.94.0/V0.95.x UX 改进系列已落，转向：
+> 1. **数据深度**（V0.96.0）—— 让历史数据说话（命中率分布 / 跨市场对比 / 时段分析）
+> 2. **UX 体验优化**（V0.97.0）—— 减少点击 / 自动刷新 / 移动端 / 错误降级
+> 3. **K 项**（V0.98+）—— 多市场独立校准（parameter-evaluation 11 项中唯一未交付）
+>
+> 候选分 3 类，按用户优先级选择。
+
+### 12.1 数据深度类（V0.96.0 候选）
+
+#### 候选 A · 打分命中率分布可视化（V0.96.0 优先级最高）
+
+**目标**：把 `hit_stats()` 已有数据升级为「一眼看出哪天/哪月策略最准」的可视化。
+
+- scoring.html「命中分析」Tab 加柱状图：x 轴月份，y 轴命中率（t0 / t1 / t3 / t5 四色叠加）
+- 4 horizon 同图对比，看到「短线好 vs 长线好」时序漂移
+- 表格下加 mini 卡：「最近 30 天命中率」+「同比上月」+「最佳 horizon」一句话
+- 服务端：`/api/v1/scoring/hit-stats?granularity=week` 新 granularity（已支持 day/month，加 week）
+
+**工作量**：2-3 天
+**风险**：🟢 0（数据已就绪，纯前端图表）
+**价值**：高（深耕核心价值「决策可信度」+ 时序可视化复用 V0.95.1 降序约定）
+
+#### 候选 B · 4 指数时序表「胜率随 horizon 退化曲线」（V0.96.0 候选）
+
+**目标**：在 verdict card 旁边加 1 张 mini 折线图 —— x 轴 horizon (t0/t1/t3/t5)，y 轴命中率。
+
+- 一眼看到「T+0 → T+5 命中率衰减有多快」
+- 长期观察策略稳定性（衰减越慢越稳）
+- 复用 `dimensionBars`（V0.86.0 decision-explainer.js 已有的横向条形图工具）
 
 **工作量**：1-2 天
-**风险**：🟢 0（只新增门禁，不改业务代码）
-**价值**：高（V0.86.1 hotfix 教训的直接防御层）
+**风险**：🟢 0
+**价值**：中（视觉增强，决策洞察增量有限）
 
-### 候选 2 · 决策可解释性补完（V0.87.0 优先级最高）
+#### 候选 C · 跨市场对照扩展（V0.96.0 候选）
 
-**目标**：把 V0.86.0 已搭钩子的 3 项补完。
-
-1. **三维行可点击下钻**：`static/synthesis-card.js` 的 `.syn-row` 加 `cursor:pointer` + click → 调用 `window.PM_Resonance.openModal(target)` 显示该维度历史 + 命中率
-2. **tooltip 显示共振信号明细**：V0.86.0 tooltip 只显示决策档位触发条件（3 行）；V0.87 增第 4 行「共振：strong_up（技术 vs 消息）」让 hover 同时看到决策 + 共振
-3. **decision-explainer 接入 SW 离线缓存**：`sw.js` SHELL_ASSETS 加 `/static/decision-explainer.js`（已加）
-
-**工作量**：3-5 天
-**风险**：🟢 0（钩子已搭）
-**价值**：高（深耕核心价值「决策可信度」）
-
-### 候选 3 · 三市场对照可视化升级（V0.88.0 候选）
-
-**目标**：纽约金 / 上海金 / 黄金ETF 三市场从纯指数曲线升级为「价 × 涨跌 × 状态」三维可视化。
+**目标**：trend.html 现有「NY / SGE / ETF」对照从纯指数曲线升级为「价 × 涨跌 × 状态」三维。
 
 - 主图保留 3 曲线
-- 加 1 张「市场对照」副图：x 轴时间，y 轴 3 个 marker 一行（NY / SGE / ETF），颜色按涨跌，状态 chip（实时/缓存/演示）嵌入
+- 副图：x 轴时间，y 轴 3 个 marker（NY / SGE / ETF），颜色按涨跌，状态 chip（实时/缓存/演示）嵌入
 - 一眼看到「哪个市场领先」「哪个市场背离」「哪个市场真实行情 vs Mock」
 
 **工作量**：5-7 天
 **风险**：🟡 中（重构 trend.html sge/cmp 区）
-**价值**：中（深化「对照」叙事）
+**价值**：中（深化「对照」叙事，本节原候选 3 顺延）
 
-### 候选 4 · 多账本模板 / 复盘助手（V0.88.0 候选）
+### 12.2 UX 体验优化类（V0.97.0 候选）
 
-**目标**：把账本 V0.75+ 已落地能力包装成模板（家人账户 / 主账户 / 定投实验）+ 复盘助手（每周自动对比账本表现）。
+#### 候选 D · 数据自动刷新（V0.97.0 优先级最高）
 
-**工作量**：5-7 天
-**风险**：🟡 中（涉及账本表 schema 微调）
-**价值**：中（深化「多用户隔离」产品）
+**目标**：scoring / trend / data-health 3 页加智能轮询，**不打扰用户**。
 
-### 候选 5 · K 项 · 多市场独立校准（V0.90+ 必做）
+- 静默刷新：每 5min 自动 GET 一次 API（仅 polling，**不打断当前视图焦点**）
+- 视觉降级：有更新时右下角 toast「🆕 新数据已更新」+ 「点击查看」按钮；无更新不打扰
+- 用户偏好开关：「设置页」加「数据自动刷新」toggle（默认开，关闭后彻底不轮询）
+- 与 V0.83.4 智能退避 60→120→300→600s 复用：失败时不打扰
+
+**工作量**：2-3 天
+**风险**：🟡 中（需尊重 user_id 隔离 + 失败不打扰语义）
+**价值**：高（用户提"应用状态同步"暗示对实时性有期待）
+
+#### 候选 E · 错误降级 UX 重构（V0.97.0 候选）
+
+**目标**：把 9 业务页各自的错误展示统一为「中性灰 toast + 末次数据保留 + 重试按钮」。
+
+- 当前：health-summary.js 已有 60→120→300→600s 退避；其他页错误处理碎片化
+- 新设计：新增 `static/error-toast.js` 共享模块（toast + retry + 末次数据保留），9 业务页接入
+- 与 V0.83.4 freshness 降级 UX 模式一致（amber chip + 中性文案）
+- 错误不再有「❌」红框；最差显示「— 数据暂不可用」+ 灰色重试按钮
+
+**工作量**：3-5 天
+**风险**：🟡 中（涉及 9 页同步改造）
+**价值**：高（消除用户最大痛点"为什么我看到红框"）
+
+#### 候选 F · 移动端 PWA 体验优化（V0.97.0 候选）
+
+**目标**：LAN-only 部署场景下用户大多用手机/平板访问。
+
+- 决策面板可离线看（V0.85 已 cache `/data-health`，V0.92.0 已 cache `/scoring`）
+- 顶 nav 折叠汉堡菜单（移动端 ≤768px 自动切换）
+- 触控目标 ≥44px（V0.83.0 已部分做，全局审计）
+- iOS / Android 主屏图标 + splash
+- PWA manifest 完善（start_url / display / theme_color）
+
+**工作量**：1 周
+**风险**：🟢 0
+**价值**：中（本节原候选 6 顺延）
+
+#### 候选 G · 命中筛选 / T+0 联动快捷键（V0.97.0 候选）
+
+**目标**：scoring 页加键盘快捷键减少点击。
+
+- `1` / `2` / `3` 切 全部 / 是 / 否
+- `Tab` 切 horizon t0 / t1 / t3 / t5
+- `←` / `→` 翻月份
+- `Esc` 关 verdict card 详情弹窗
+- 帮助：`?` 弹快捷键说明
+
+**工作量**：1-2 天
+**风险**：🟢 0
+**价值**：中（高频用户效率提升）
+
+### 12.3 K 项（V0.98+ 必做）
+
+#### 候选 H · 多市场独立校准（K 项 · V0.98.0 必做）
 
 **目标**：parameter-evaluation.md §4.3 · 黄金 / 白银 / ETF 三套独立权重和阈值。11 项改进中**唯一未交付**。
 
@@ -939,30 +1037,20 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 **风险**：🟡 中（数据量大、口径多）
 **价值**：高（11 项里**唯一**未交付的 parameter-evaluation 项）
 
-### 候选 6 · 移动端 PWA 体验优化（V0.89.0 候选）
+### 12.4 维护线（持续）
 
-**目标**：LAN-only 部署场景下用户大多用手机/平板访问。
-- 决策面板可离线看（V0.85 已 cache `/data-health`，V0.87 补 `/static/decision-explainer.js`）
-- 横屏布局 + 触控目标 ≥44px（V0.83.0 已部分做）
-- iOS / Android 主屏图标 + splash
-
-**工作量**：1 周
-**风险**：🟢 0
-**价值**：中
-
-### 候选 7 · 维护线（持续）
-
-每 2 周一个 V0.86.x / V0.87.x 小版本：
+每 2 周一个 V0.95.x / V0.96.x 小版本：
 - **依赖升级**：`uv lock --upgrade` 谨慎（V0.78.2 教训 · sqlalchemy 2.0→2.1 跨大版本有容器启动崩溃前科）
-- **测试扩充**：覆盖率目标 ≥60%（V0.79.2 排期）
-- **门禁维护**：check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims 持续跑
+- **测试扩充**：覆盖率目标 ≥60%（V0.79.2 排期）→ 当前 src/ 90%+ 已超目标，下阶段加 puppeteer 视觉回归
+- **门禁维护**：check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims 持续跑
 - **文档同步**：release notes / README / 内存 pattern 写入
+- **backfill 脚本化**：`/tmp/backfill_ny.py` 临时脚本转正为 `scripts/backfill_ny_gold.py`（V0.95.0 教训：NY 金 1 个月陈旧，scheduler 未自动拉）
 
 ---
 
-**V0.87.0 推荐组合**：候选 1（check_routes.py，1-2 天）+ 候选 2（决策可解释补完，3-5 天）= **1 周内可交付**。
-**V0.88.0 候选**：候选 3 vs 候选 4 由用户选择。
-**V0.90+ 候选**：候选 5（K 项）必做；候选 6 视 PWA 优先级。
+**V0.96.0 推荐组合**：候选 A（命中率分布可视化，2-3 天）+ 候选 B（胜率随 horizon 退化曲线，1-2 天）= **1 周内可交付**。
+**V0.97.0 候选**：候选 D（数据自动刷新）+ 候选 E（错误降级 UX 重构）由用户优先级选择。
+**V0.98.0 候选**：候选 H（K 项）必做；候选 F（移动端 PWA）+ 候选 C（跨市场对照扩展）视优先级。
 
 ---
 
@@ -1001,5 +1089,5 @@ uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
 
 ---
 
-**文档完成时间**：2026-10-11（V0.87+ backlog 落地 + V0.83-V0.86 历史快照补齐 + 多处状态修正）
-**下次更新时机**：V0.87.0 启动时更新「候选 1/2 进度」；V0.88.0 启动时确定「候选 3 vs 4」；K 项评估时更新「V0.90+ 工作量预估」
+**文档完成时间**：2026-10-15（V0.87-V0.95.1 维护线快照补齐 + V0.96+ backlog 落地 + §11 旧候选状态收口）
+**下次更新时机**：V0.96.0 启动时确定「候选 A vs B vs C」；V0.97.0 启动时确定「候选 D vs E」；K 项评估时更新「V0.98+ 工作量预估」
