@@ -144,6 +144,15 @@
   td.hit-cell { text-align: center; font-weight: 600; }
   td.hit-yes { color: #dc2626; }       /* 红 = 命中（用户指定语义） */
   td.hit-no { color: #16a34a; }        /* 绿 = 未命中 */
+
+  /* V0.96.0：第 3 Tab「命中分析」3 mini card 布局 */
+  .hit-mini-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; }
+  .hit-mini { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .hit-mini .label { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .hit-mini .value { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hit-mini .extra { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .hit-mini .value.pos { color: #16a34a; }
+  .hit-mini .value.neg { color: #dc2626; }
   td.hit-pending { color: var(--muted); } /* 灰 = pending（等待 T+1/T+3/T+5 就绪） */
   /* V0.94.0：预测评估卡（scoring 顶部） —— hero 风格 + 4 horizon 网格 */
   .verdict-card { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%);
@@ -269,9 +278,11 @@
     </div>
   </div>
 
-  <!-- Tabs：表格视图 / 日历视图（沿用 login.html role="tablist" 风格）-->
+  <!-- Tabs：表格视图 / 命中分析 / 日历视图（沿用 login.html role="tablist" 风格）-->
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="table" data-i18n="scoring.tab_table">表格视图</button>
+    <!-- V0.96.0：第 3 Tab「命中分析」+ 4 horizon 柱状图 + 3 mini card -->
+    <button role="tab" aria-selected="false" data-tab="hit" data-i18n="scoring.tab_hit">命中分析</button>
     <button role="tab" aria-selected="false" data-tab="calendar" data-i18n="scoring.tab_calendar">日历视图</button>
   </div>
 
@@ -304,9 +315,42 @@
     </div>
   </div>
 
+  <!-- V0.96.0：第 3 Tab「命中分析」+ 4 horizon 柱状图 + 3 mini card -->
+  <div class="tab-panel" id="panel-hit" role="tabpanel">
+    <div class="card">
+      <h2 data-i18n="scoring.hit_chart_title">命中率时序（4 horizon）</h2>
+      <div class="desc" data-i18n="scoring.hit_chart_desc">按月聚合的 t0/t1/t3/t5 4 horizon 命中率柱状图（最近→远期）</div>
+      <div style="height: 320px; position: relative;">
+        <canvas id="hitChart" aria-label="4 horizon 命中率时序柱状图"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="hit-mini-grid">
+        <div class="hit-mini">
+          <div class="label" data-i18n="scoring.hit_mini_30d">最近 30 天</div>
+          <div class="value" id="hitMini30d">—</div>
+          <div class="extra" data-i18n="scoring.hit_mini_30d_desc">最佳 horizon 的命中率</div>
+        </div>
+        <div class="hit-mini">
+          <div class="label" data-i18n="scoring.hit_mini_mom">同比上月</div>
+          <div class="value" id="hitMiniMom">—</div>
+          <div class="extra" data-i18n="scoring.hit_mini_mom_desc">最近 30 天 - 上 30 天</div>
+        </div>
+        <div class="hit-mini">
+          <div class="label" data-i18n="scoring.hit_mini_best">最佳 horizon</div>
+          <div class="value" id="hitMiniBest">—</div>
+          <div class="extra" data-i18n="scoring.hit_mini_best_desc">按 30 天命中率排序</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <footer data-i18n="scoring.footer">© 黄金价格投资辅助工具 · 命中率为历史回测结果，不构成投资建议</footer>
 </div>
 </main>
+<!-- V0.96.0：Chart.js（vendor）+ chart-a11y 包装必须在 scoring.js 之前同步加载 -->
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/chart-a11y.js"></script>
 <script src="/static/scoring.js" defer></script>
   <script src="/static/pwa.js" defer></script>
 <script src="/static/health-summary.js"></script>

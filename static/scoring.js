@@ -3,6 +3,7 @@
 //   - GET /api/v1/scoring/summary?from=&to=&group_by=&tag=
 //   - GET /api/v1/scoring/by-tag?from=&to=
 //   - GET /api/v1/scoring/hit-stats?from=&to=&horizon=
+//   - GET /api/v1/scoring/hit-stats-all?from=&to=  (V0.96.0 · 4 horizon 一次取齐)
 //   - GET /api/v1/scoring  (list 范围，供日历视图取每日 4 指数)
 
 (function () {
@@ -50,6 +51,11 @@
       t.setAttribute('aria-selected', t.dataset.tab === tab ? 'true' : 'false')
     );
     document.querySelectorAll('.tab-panel').forEach((p) => p.classList.toggle('active', p.id === 'panel-' + tab));
+    // V0.96.0：切到「命中分析」Tab 时按当前日期范围加载 1 次
+    if (tab === 'hit') {
+      const p = getParams();
+      loadHitData(p);
+    }
   }
 
   function getParams() {
@@ -103,6 +109,118 @@
   async function loadList(p) {
     const data = await fetchJson(`${API_BASE}?from=${p.from}&to=${p.to}`);
     renderCalendar(data);
+  }
+
+  // V0.96.0：第 3 Tab「命中分析」+ 4 horizon 柱状图 + 3 mini card
+  async function loadHitData(p) {
+    if (!p) p = getParams();
+    const data = await fetchJson(`${API_BASE}/hit-stats-all?from=${p.from}&to=${p.to}`);
+    if (!data || !data.by_horizon) return;
+    renderHitChart(data);
+    renderHitCards(data);
+  }
+
+  function renderHitChart(data) {
+    const canvas = document.getElementById('hitChart');
+    if (!canvas) return;
+
+    // 收集 4 horizon 各自的 by_month，month 集合并集
+    const monthsSet = new Set();
+    const horizonMap = { t0: {}, t1: {}, t3: {}, t5: {} };
+    for (const h of ['t0', 't1', 't3', 't5']) {
+      const arr = (data.by_horizon[h] && data.by_horizon[h].by_month) || [];
+      for (const b of arr) {
+        const m = b.period.slice(0, 7);  // "2026-10"
+        const rate = b[`hit_rate_${h}`];
+        if (rate != null) {
+          horizonMap[h][m] = rate * 100;
+          monthsSet.add(m);
+        }
+      }
+    }
+    // V0.95.1 降序约定：x 轴最近→远期
+    const sortedMonths = Array.from(monthsSet).sort().reverse();
+
+    // 4 色高对比（与 V0.92.1 hit-yes 红 / hit-no 绿不冲突）
+    const colors = {
+      t0: { bg: 'rgba(251, 191, 36, 0.7)',  bd: '#f59e0b' },  // amber
+      t1: { bg: 'rgba(59, 130, 246, 0.7)',  bd: '#2563eb' },  // blue
+      t3: { bg: 'rgba(139, 92, 246, 0.7)',  bd: '#7c3aed' },  // violet
+      t5: { bg: 'rgba(16, 185, 129, 0.7)',  bd: '#059669' },  // green
+    };
+    const datasets = ['t0', 't1', 't3', 't5'].map(h => ({
+      label: T(`scoring.hit_rate_${h}`, `${h.toUpperCase()} 命中率`),
+      data: sortedMonths.map(m => (horizonMap[h][m] != null ? horizonMap[h][m] : null)),
+      backgroundColor: colors[h].bg,
+      borderColor: colors[h].bd,
+      borderWidth: 1,
+    }));
+
+    // 销毁旧实例（V0.95 trendChart 同样模式 line 729）
+    if (window._hitChart) window._hitChart.destroy();
+    window._hitChart = new Chart(canvas, {
+      type: 'bar',
+      data: { labels: sortedMonths, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          y: { beginAtZero: true, max: 100, ticks: { callback: (v) => v + '%' } },
+        },
+        plugins: {
+          legend: { position: 'top' },
+          tooltip: {
+            callbacks: {
+              label: (c) => c.parsed.y != null
+                ? `${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`
+                : `${c.dataset.label}: —`,
+            },
+          },
+        },
+      },
+    });
+
+    // a11y 包装：自动打 role=img + aria-label + 注入 <details> 数据 fallback
+    if (window.ChartA11y) {
+      ChartA11y.wrapChart(canvas, {
+        label: T('scoring.hit_chart_title', '命中率时序（4 horizon）'),
+        table: {
+          columns: ['period', 't0', 't1', 't3', 't5'],
+          rows: sortedMonths.map(m => [m, ...['t0', 't1', 't3', 't5'].map(h =>
+            horizonMap[h][m] != null ? horizonMap[h][m].toFixed(1) + '%' : '—'
+          )]),
+        },
+      });
+    }
+  }
+
+  function renderHitCards(data) {
+    const mc = (data && data.mini_card) || {};
+    const bestH = mc.best_horizon;
+    const el30 = document.getElementById('hitMini30d');
+    const elMom = document.getElementById('hitMiniMom');
+    const elBest = document.getElementById('hitMiniBest');
+    if (!el30 || !elMom || !elBest) return;
+
+    // V0.78.0 NULL 纪律：缺数据时全 None → 显示 "—"
+    if (bestH && mc.last_30d && mc.last_30d[bestH] != null) {
+      el30.textContent = fmtPct(mc.last_30d[bestH]);
+      elBest.textContent = bestH.toUpperCase();
+      if (mc.last_30d_mom && mc.last_30d_mom[bestH] != null) {
+        const mom = mc.last_30d_mom[bestH];
+        const sign = mom > 0 ? '+' : '';
+        elMom.textContent = `${sign}${(mom * 100).toFixed(1)}%`;
+        elMom.className = 'value ' + (mom > 0 ? 'pos' : mom < 0 ? 'neg' : '');
+      } else {
+        elMom.textContent = '—';
+        elMom.className = 'value';
+      }
+    } else {
+      el30.textContent = '—';
+      elMom.textContent = '—';
+      elBest.textContent = '—';
+      elMom.className = 'value';
+    }
   }
 
   // V0.94.0：预测评估卡
