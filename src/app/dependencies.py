@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.models.user import ROLE_OWNER, User
+from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
 from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
@@ -453,24 +453,56 @@ def get_current_session_id(request: Request) -> str | None:
     return getattr(request.state, "session_id", None)
 
 
-def require_user(
+async def require_user(
     request: Request,
     user: User | None = Depends(get_current_user),
 ) -> User:
     """要求已登录；匿名则 401。
 
     单用户模式（``AUTH_ENABLED=false``）下中间件不解析会话，
-    ``request.state.user`` 恒为 None —— 但 ``require_user`` 只被「认证专属端点」
-    （``/auth/me``、``/auth/logout``、``/auth/change-password``）使用，
-    这些端点本身在单用户模式下无意义，故不会误伤既有流程。
+    ``request.state.user`` 恒为 None —— V0.97.0 起，AI 端点（``/ai/*``）也
+    使用本依赖，会被误伤；故加**单用户回退**：直接读 LEGACY_USER（id=1）
+    并返回，便于 LAN 单用户部署直接访问。
+    多用户模式下行为不变（仍 401）。
     """
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={"code": "unauthenticated", "message": "请先登录"},
-            headers={"X-Auth-Required": "1"},
-        )
-    return user
+    if user is not None:
+        return user
+    settings = get_settings()
+    if not settings.auth_enabled:
+        # 单用户模式：从 DB 取 LEGACY_USER（主键查询，O(1)）；主进程启动时
+        # ``main._bootstrap_default_user`` 保证该行存在
+        #
+        # ⚠ V0.97.0 hotfix：DB 的 ``users`` 表可能**不**含 ORM 声明的
+        # ``role`` 列（alembic 漂移，V0.92.0 同类问题见 memory
+        # ``alembic-stale-revision-recovery.md``）。直接 ``select(User)``
+        # 会 SELECT ``role`` → ``OperationalError: no such column``。
+        # 用 ``load_only`` 只读确实存在的列 + ``set_committed_value`` 补 role。
+        from sqlalchemy import select
+        from sqlalchemy.orm import load_only
+        from sqlalchemy.orm.attributes import set_committed_value
+        async with async_session_factory() as session:
+            legacy = (
+                await session.execute(
+                    select(User)
+                    .where(User.id == LEGACY_USER_ID)
+                    .options(
+                        load_only(
+                            User.id, User.email, User.display_name,
+                            User.is_active, User.password_hash,
+                        )
+                    )
+                )
+            ).scalar_one_or_none()
+        if legacy is not None:
+            # role 是 not-null 但 DB 缺列 → 标记为已加载并赋默认值
+            # 避免下游 Pydantic UserOut / ORM 写时触发 lazy-load 或缺列
+            set_committed_value(legacy, "role", ROLE_OWNER)
+            return legacy
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={"code": "unauthenticated", "message": "请先登录"},
+        headers={"X-Auth-Required": "1"},
+    )
 
 
 def require_owner(user: User = Depends(require_user)) -> User:

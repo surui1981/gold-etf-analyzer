@@ -255,6 +255,94 @@ class TestNotFound:
         assert resp.status_code == 404
 
 
+# ──────────────── require_user 单用户模式回退（V0.97.0 hotfix 防回归） ────────────────
+
+
+class TestRequireUserSingleUserFallback:
+    """V0.97.0 hotfix：单用户模式（``auth_enabled=false``）下 ``require_user``
+    必须回退到 LEGACY_USER（id=1），不抛 401。
+
+    触发场景：AI 端点（``/ai/*``）使用 ``Depends(require_user)``，单用户部署
+    走 LAN 直接访问 ``/ask`` 页面时不能被误伤。
+
+    ⚠ 配套历史背景：DB 的 ``users`` 表可能**不**含 ORM 声明的 ``role`` 列
+    （V0.92.0 alembic 漂移同类问题）。本测试用 conftest 默认 DB 验证回退链
+    不会触发 ``no such column: users.role`` 异常。
+    """
+
+    async def test_fallback_returns_legacy_user(self) -> None:
+        """``require_user`` 匿名 + auth_enabled=false → 返回 id=1 的 User。"""
+        from datetime import datetime
+        from sqlalchemy import select
+        from app.dependencies import require_user
+        from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
+        from app.repositories.db import async_session_factory
+
+        # conftest 每个用例前 drop_all → LEGACY_USER 不存在，显式建一行
+        async with async_session_factory() as session:
+            existing = (await session.execute(
+                select(User).where(User.id == LEGACY_USER_ID)
+            )).scalar_one_or_none()
+            if existing is None:
+                session.add(User(
+                    id=LEGACY_USER_ID, email="legacy@test",
+                    display_name="Legacy", password_hash="x",
+                    role=ROLE_OWNER, is_active=True,
+                    created_at=datetime(2026, 1, 1),
+                    last_login_at=datetime(2026, 1, 1),
+                ))
+                await session.commit()
+
+        class _FakeReq:
+            state: type("S", (), {"user": None})  # type: ignore[misc]
+
+        user = await require_user(_FakeReq(), user=None)  # type: ignore[arg-type]
+        assert user is not None
+        assert user.id == LEGACY_USER_ID
+        # role 字段必须已标记为已加载（即便 DB 缺列）
+        assert user.role in ("owner", "member")
+
+    async def test_fallback_survives_role_column_missing(self) -> None:
+        """DB 缺 ``role`` 列时回退仍能成功（不抛 ``OperationalError``）。
+
+        模拟生产 DB 的 alembic 漂移场景：``users`` 表用 ALTER 删掉 ``role``，
+        验证 ``require_user`` 的 ``load_only + set_committed_value`` 兜底链路
+        不会触发 ``no such column`` 或 ``DetachedInstanceError``。
+        """
+        from datetime import datetime
+        from sqlalchemy import select, text
+        from app.dependencies import require_user
+        from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
+        from app.repositories.db import async_session_factory
+
+        # 建 LEGACY_USER + 模拟「role 列漂移」（drop 掉 role 列）
+        async with async_session_factory() as session:
+            async with session.begin():
+                # 先尝试 drop role（容错：本来没有这列就 skip）
+                try:
+                    await session.execute(text("ALTER TABLE users DROP COLUMN role"))
+                except Exception:
+                    pass
+                # 删/建 LEGACY_USER
+                await session.execute(text("DELETE FROM users WHERE id = 1"))
+                # 注意：写时用 ORM User(role=...) 会触发 INSERT role → 缺列会炸
+                # 所以用 raw SQL 显式列出存在的列
+                await session.execute(text(
+                    "INSERT INTO users (id, email, display_name, password_hash, "
+                    "is_active, created_at) VALUES "
+                    "(1, 'legacy@test', 'Legacy', 'x', 1, '2026-01-01 00:00:00')"
+                ))
+
+        class _FakeReq:
+            state: type("S", (), {"user": None})  # type: ignore[misc]
+
+        user = await require_user(_FakeReq(), user=None)  # type: ignore[arg-type]
+        # 即使 DB 没 role 列，函数也必须返回；role 字段用 set_committed_value
+        # 标记为已加载（== ROLE_OWNER）以满足 Pydantic UserOut 序列化
+        assert user.id == LEGACY_USER_ID
+        assert user.role == ROLE_OWNER
+
+
 # ──────────────── SW 路径 bug 回归测试（V0.86.1 hotfix 防回归） ────────────────
 
 
