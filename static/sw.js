@@ -13,7 +13,8 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-const VERSION = "v0.97.0";
+// V0.97.1 UI hotfix：ask.js 工具调用展示调整（tool chip + 中文 label + 数据来源 footer）
+const VERSION = "v0.97.1";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -63,6 +64,7 @@ const SHELL_ASSETS = [
     // V0.97.0：AI 智能分析页（3 pane chat + marked.js markdown 渲染）
     "/ask",
     "/static/ask.html",
+    "/static/ask.js",
     "/static/marked.min.js",
     OFFLINE_URL,
     "/static/manifest.json",

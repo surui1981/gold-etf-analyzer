@@ -117,6 +117,81 @@
     return e;
   }
 
+  // ────────────── Tool 展示（V0.97.0 hotfix）──────────────
+
+  // 英文 tool 名 → 中文友好标签（trace 面板 / chat chip 通用）
+  var TOOL_LABELS = {
+    get_market_overview: '📈 市场概览',
+    get_scoring_summary: '🎯 评分汇总',
+    get_user_portfolio: '💼 持仓查询',
+    get_warning_summary: '⚠️ 警示',
+    get_etf_recent_flows: '💸 ETF 资金流',
+  };
+
+  function toolLabel(name) {
+    return TOOL_LABELS[name] || ('🔧 ' + name);
+  }
+
+  /** 抽取 tool input 的关键展示字段（已知 tool 类型用白名单，其他原样）。 */
+  function summarizeInput(tool, input) {
+    if (!input) return '';
+    if (tool === 'get_scoring_summary') {
+      return (input.from || '?') + ' → ' + (input.to || '?');
+    }
+    if (tool === 'get_etf_recent_flows') {
+      return '近 ' + (input.days || 30) + ' 天';
+    }
+    try { return JSON.stringify(input); } catch (_) { return String(input); }
+  }
+
+  /** 从 tool result JSON 抽取 1-3 个核心字段做摘要（已知 tool 走白名单）。 */
+  function summarizeResult(tool, raw) {
+    if (!raw) return '';
+    var obj;
+    try { obj = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (_) { return truncate(raw, 200); }
+    if (tool === 'get_market_overview' && obj && obj.markets) {
+      // 列出每个市场的最新价
+      var lines = [];
+      Object.keys(obj.markets).forEach(function (k) {
+        var m = obj.markets[k];
+        if (m && m.close != null) lines.push(k + ': ' + m.close + ' (' + (m.change_pct_1d != null ? (m.change_pct_1d > 0 ? '+' : '') + m.change_pct_1d + '%' : '—') + ')');
+      });
+      return lines.join(' · ');
+    }
+    if (tool === 'get_scoring_summary' && obj && obj.mini_card) {
+      var mc = obj.mini_card;
+      var last30 = mc.last_30d || {};
+      return '近 30d T+0/T+1/T+3/T+5: ' +
+        [last30.t0, last30.t1, last30.t3, last30.t5]
+          .map(function (v) { return v == null ? '—' : (Math.round(v * 1000) / 10) + '%'; })
+          .join(' / ') +
+        ' · 最佳: ' + (mc.best_horizon || '—');
+    }
+    if (tool === 'get_user_portfolio' && obj) {
+      return [
+        '成本 ' + (obj.total_cost != null ? obj.total_cost.toFixed(0) : '—'),
+        '市值 ' + (obj.total_invested != null ? obj.total_invested.toFixed(0) : '—'),
+        '浮盈 ' + (obj.unrealized_pnl != null ? (obj.unrealized_pnl > 0 ? '+' : '') + obj.unrealized_pnl.toFixed(0) : '—'),
+        '收益率 ' + (obj.total_return_pct != null ? obj.total_return_pct + '%' : '—'),
+      ].join(' · ');
+    }
+    if (tool === 'get_warning_summary' && obj && obj.markets) {
+      return Object.keys(obj.markets).length + ' 个市场状态';
+    }
+    if (tool === 'get_etf_recent_flows' && obj && obj.bars) {
+      var first = obj.bars[0], last = obj.bars[obj.bars.length - 1];
+      return obj.bars.length + ' 天 · 最近: ' + (last && last.date ? last.date : '—');
+    }
+    // 未知 tool：截断 JSON
+    var s = typeof raw === 'string' ? raw : JSON.stringify(obj);
+    return truncate(s, 200);
+  }
+
+  function truncate(s, n) {
+    s = String(s);
+    return s.length > n ? s.slice(0, n) + '…' : s;
+  }
+
   // ────────────── API ──────────────
 
   function apiGet(url) {
@@ -255,18 +330,29 @@
     }
     streamEl.innerHTML = '';
     var toolCount = 0;
-    state.messages.forEach(function (m) {
+    var lastAsstIdx = -1;
+    state.messages.forEach(function (m, idx) {
       if (m.role === 'user') {
         streamEl.appendChild(renderUserMsg(m));
       } else if (m.role === 'assistant') {
         streamEl.appendChild(renderAssistantMsg(m));
         if (m.tool_name) toolCount++;
+        if (m.content) lastAsstIdx = idx;  // 记下最终 assistant 索引
       } else if (m.role === 'tool') {
-        // tool 消息：以「折叠的 tool 块」附加在主区
-        // （主显示是「assistant text 块」+ 右侧 tool trace）
-        // 已在 tool trace 中渲染，这里不重复
+        // tool 消息：聊天流中以折叠 details 显示（V0.97.0 hotfix）
+        streamEl.appendChild(renderToolMsgInStream(m));
       }
     });
+    // 给最终 assistant 加「📊 数据来源」chip（如果有 tool 调用）
+    if (lastAsstIdx >= 0 && toolCount > 0) {
+      var lastAsstEl = streamEl.children[lastAsstIdx];
+      if (lastAsstEl) {
+        lastAsstEl.appendChild(el('div', {
+          class: 'data-source-chip',
+          text: '📊 基于 ' + toolCount + ' 个工具调用 · 右侧查看详情',
+        }));
+      }
+    }
     updateToolTrace(toolCount);
     // 滚到底
     streamEl.scrollTop = streamEl.scrollHeight;
@@ -286,7 +372,11 @@
     if (m.content) {
       bubble.innerHTML = renderMarkdown(m.content);
     } else if (m.tool_name) {
-      bubble.innerHTML = '<span class="spinner"></span> ' + escapeHtml(t('ai.calling_tool', '正在调用工具：')) + ' <code>' + escapeHtml(m.tool_name) + '</code>…';
+      // 已完成响应的 tool_use 消息：用 chip 显示，不再 spinner
+      bubble.appendChild(el('div', {
+        class: 'tool-chip',
+        text: '🔧 ' + toolLabel(m.tool_name),
+      }));
     }
     var meta = el('div', { class: 'meta', style: 'font-size:10.5px;color:var(--muted);margin-top:4px;display:flex;gap:8px;' });
     if (m.input_tokens != null) meta.appendChild(el('span', { text: '↓ ' + m.input_tokens }));
@@ -301,6 +391,22 @@
       el('div', { class: 'avatar', text: 'AI' }),
       wrap,
     ]);
+  }
+
+  /** tool 消息：聊天流中以折叠 details 显示（默认收，展开看原始 JSON）。 */
+  function renderToolMsgInStream(m) {
+    var summary = summarizeResult(m.tool_name, m.content);
+    var details = el('details', { class: 'tool-result-stream' });
+    var sumNode = el('summary', { class: 'tool-result-summary' }, [
+      el('span', { class: 'tool-name', text: toolLabel(m.tool_name) }),
+      el('span', { class: 'tool-result-text', text: summary || '(无结果)' }),
+    ]);
+    details.appendChild(sumNode);
+    details.appendChild(el('pre', {
+      class: 'tool-result-raw',
+      text: m.content || '',
+    }));
+    return el('div', { class: 'message tool-msg' }, [details]);
   }
 
   function updateToolTrace(count) {
@@ -321,17 +427,28 @@
   function renderToolTraceItem(m) {
     var isErr = m.error_code != null;
     var item = el('div', { class: 'tool-trace-item' + (isErr ? ' is-error' : '') });
-    item.appendChild(el('div', { class: 'name', text: m.tool_name || '?' }));
+    // 头部：工具名（中文 label）+ 角色 chip
+    var name = el('div', { class: 'name' });
+    name.appendChild(el('span', { text: toolLabel(m.tool_name) }));
+    name.appendChild(el('span', {
+      class: 'role-chip',
+      text: m.role === 'assistant' ? '→ 调用' : '← 结果',
+    }));
+    item.appendChild(name);
+    // 输入摘要
     if (m.tool_input) {
-      var inputStr = typeof m.tool_input === 'string' ? m.tool_input : JSON.stringify(m.tool_input);
-      item.appendChild(el('div', { class: 'input-preview', text: inputStr.length > 100 ? inputStr.slice(0, 100) + '…' : inputStr }));
+      var inputText = summarizeInput(m.tool_name, m.tool_input);
+      if (inputText) item.appendChild(el('div', { class: 'input-preview', text: '参数: ' + inputText }));
     }
-    if (m.content) {
-      var summary = m.content.length > 200 ? m.content.slice(0, 200) + '…' : m.content;
-      item.appendChild(el('div', { class: 'summary', text: summary }));
-    }
-    if (m.role === 'tool' && m.tool_call_id) {
-      item.title = 'tool_call_id: ' + m.tool_call_id;
+    // 结果摘要（关键字段抽取）
+    if (m.content && m.role === 'tool') {
+      var resultText = summarizeResult(m.tool_name, m.content);
+      if (resultText) item.appendChild(el('div', { class: 'summary', text: resultText }));
+      // 折叠：原始 JSON
+      var raw = el('details', { class: 'raw-details' });
+      raw.appendChild(el('summary', { text: '原始 JSON' }));
+      raw.appendChild(el('pre', { text: truncate(m.content, 800) }));
+      item.appendChild(raw);
     }
     return item;
   }
