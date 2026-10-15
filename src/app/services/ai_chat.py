@@ -68,6 +68,77 @@ def _sanitize_user_text(text: str, max_chars: int) -> str:
     return out
 
 
+# ────────────── tool_result 兜底（V0.97.0 hotfix）──────────────
+
+
+def _is_tool_result_id_mismatch(exc: LLMError) -> bool:
+    """检测 miniMax 代理的 tool_result id 不匹配错误。
+
+    miniMax 代理报：
+    ``client error 400: {"type":"error","error":{"type":"invalid_request_error",
+    "message":"invalid params, tool result's tool id(call-...) not found (2013)"}}``
+
+    错误码 2013 是 OpenAI 风格；此代理用 OpenAI 风格内部追踪 tool_use_id，
+    但暴露 Anthropic-兼容 API → 跨 round id 匹配失败。
+    """
+    msg = str(exc)
+    return "tool result" in msg and "not found" in msg
+
+
+def _has_tool_result_block(messages: list[dict[str, Any]]) -> bool:
+    """messages 列表最后一条 user 消息是否含 ``tool_result`` block。"""
+    if not messages:
+        return False
+    last = messages[-1]
+    if last.get("role") != "user":
+        return False
+    content = last.get("content")
+    if not isinstance(content, list):
+        return False
+    return any(
+        isinstance(b, dict) and b.get("type") == "tool_result" for b in content
+    )
+
+
+def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """把最后一条 user 消息的 ``tool_result`` blocks 转成纯文本，便于代理理解。
+
+    转换前：
+        ``{"role": "user", "content": [{"type": "tool_result",
+          "tool_use_id": "call-xxx", "content": "..."}]}``
+    转换后：
+        ``{"role": "user", "content": "[Tool get_market_overview returned]:\n..."}``
+
+    返回新列表（不修改入参）。
+    """
+    if not messages:
+        return messages
+    new_messages = list(messages)
+    last = dict(new_messages[-1])  # shallow copy
+    if last.get("role") != "user":
+        return new_messages
+    content = last.get("content")
+    if not isinstance(content, list):
+        return new_messages
+    new_content: list[str] = []
+    for block in content:
+        if isinstance(block, dict) and block.get("type") == "tool_result":
+            tool_use_id = block.get("tool_use_id", "unknown")
+            inner = block.get("content", "")
+            # tool_name 不在 tool_result block 里，只在 tool_use block 里
+            # （前一条 assistant 消息）—— 用 tool_use_id 前 16 字符代指
+            label = f"tool:{tool_use_id[:16]}"
+            new_content.append(f"[{label} returned]:\n{inner}")
+        elif isinstance(block, dict) and block.get("type") == "text":
+            new_content.append(block.get("text", ""))
+        elif isinstance(block, str):
+            new_content.append(block)
+    if new_content:
+        last["content"] = "\n\n".join(new_content)
+    new_messages[-1] = last
+    return new_messages
+
+
 class AIChatService:
     """AI 对话编排服务。"""
 
@@ -171,12 +242,34 @@ class AIChatService:
                     system=system, messages=messages,
                     tools=self._tools.schemas(),
                 )
-            except LLMError:
-                # 失败：user_msg 已入库但 assistant 没出 → 整个 turn 视为失败
-                # ⚠ V0.97 简化：失败时把 user_msg 删掉，避免脏历史
-                #   （V0.98 可加 retry-after 字段）
-                await self._msg.delete(user_msg.id)
-                raise
+            except LLMError as exc:
+                # V0.97.0 hotfix：miniMax 代理在第 2 轮拒收 ``tool_result``，
+                # 报 ``tool result's tool id(call-...) not found (2013)``。
+                # 代理不跨 round 追踪 tool_use_id（OpenAI 风格 stateless 行为），
+                # 但 Anthropic 协议要求 tool_result.tool_use_id 必须配对。
+                # → 检测到这个错误时，把最后一个 user 消息的 tool_result
+                #   blocks 转成纯文本，重试 1 次（不带 tools，避免再次 tool_use）
+                if _is_tool_result_id_mismatch(exc) and _has_tool_result_block(messages):
+                    logger.warning(
+                        "tool_result id mismatch (proxy bug?); falling back to text-only "
+                        "continuation for conversation=%s round=%d",
+                        conversation_id, round_idx,
+                    )
+                    messages = _inline_tool_results_as_text(messages)
+                    try:
+                        response = await self._llm.ask(
+                            system=system, messages=messages, tools=None,
+                        )
+                    except LLMError:
+                        # 文本重试仍失败 → 兜底抛错（让上层 UI 展示）
+                        await self._msg.delete(user_msg.id)
+                        raise
+                else:
+                    # 失败：user_msg 已入库但 assistant 没出 → 整个 turn 视为失败
+                    # ⚠ V0.97 简化：失败时把 user_msg 删掉，避免脏历史
+                    #   （V0.98 可加 retry-after 字段）
+                    await self._msg.delete(user_msg.id)
+                    raise
 
             total_in_tok += response.input_tokens
             total_out_tok += response.output_tokens
