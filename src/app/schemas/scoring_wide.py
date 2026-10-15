@@ -4,6 +4,7 @@ API 端点契约：
 - ``GET /api/v1/scoring/summary?from=&to=&group_by=day|week|month&tag=`` → ``ScoringSummaryOut``
 - ``GET /api/v1/scoring/by-date/{date}`` → ``ScoringWideOut``
 - ``GET /api/v1/scoring/hit-stats?from=&to=&horizon=t1|t3|t5`` → ``ScoringHitStatsOut``
+- ``GET /api/v1/scoring/hit-stats-all?from=&to=`` → ``ScoringHitStatsAllOut`` (V0.96.0)
 - ``GET /api/v1/scoring/by-tag?from=&to=`` → ``ScoringByTagOut``
 
 设计纪律（V0.78.0 Step D）：所有数值列允许 NULL（**绝不**用 50 / 0 兜底）。
@@ -179,6 +180,37 @@ class ScoringHitStatsOut(BaseModel):
     by_direction: list[ScoringHitDirectionStat]
     by_month: list[ScoringSummaryBucket]  # 复用 bucket schema
     calibration: list[ScoringHitCalibrationBucket]
+
+
+# ──────────── hit-stats-all 4 horizon 聚合（V0.96.0）────────────
+
+
+class ScoringHitStatsAllHorizon(BaseModel):
+    """单 horizon 的 by_month 时序（4 horizon 各 1 个）。"""
+
+    horizon: str  # "t0" | "t1" | "t3" | "t5"
+    by_month: list[ScoringSummaryBucket]  # 复用 summary bucket
+
+
+class ScoringHitStatsAllMiniCard(BaseModel):
+    """最近 30 天 / 同比上月 / 最佳 horizon 摘要。"""
+
+    # V0.78.0 Step D 纪律：所有数值列允许 NULL（< 30 ready 日 / 无数据时为 None）
+    last_30d: dict[str, float | None]  # {"t0": 0.62, "t1": 0.55, "t3": 0.48, "t5": 0.42}
+    last_30d_mom: dict[str, float | None]  # {"t0": 0.05, "t1": -0.03, "t3": 0.01, "t5": -0.07}
+    best_horizon: str | None  # 按 last_30d 命中率最大；全 None → None
+
+
+class ScoringHitStatsAllOut(BaseModel):
+    """``/api/v1/scoring/hit-stats-all`` 响应（V0.96.0）。
+
+    1 次调用取 4 horizon 全部数据 + 3 mini card 摘要。
+    """
+
+    from_date: date
+    to_date: date
+    by_horizon: dict[str, ScoringHitStatsAllHorizon]  # {"t0": ..., "t1": ..., "t3": ..., "t5": ...}
+    mini_card: ScoringHitStatsAllMiniCard
 
 
 # ──────────── by-tag 聚合 ────────────

@@ -17,6 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.dependencies import get_scoring_wide_service
 from app.schemas.scoring_wide import (
     ScoringByTagOut,
+    ScoringHitStatsAllOut,
     ScoringHitStatsOut,
     ScoringSummaryOut,
     ScoringVerdictOut,
@@ -121,6 +122,25 @@ async def scoring_hit_stats(
     """按 horizon 聚合命中率（按方向 / 按月 / 校准曲线 3 维）。"""
     _validate_range(from_date, to_date)
     return await service.hit_stats(start=from_date, end=to_date, horizon=horizon)
+
+
+@router.get(
+    "/hit-stats-all",
+    response_model=ScoringHitStatsAllOut,
+    summary="V0.96.0：4 horizon (t0/t1/t3/t5) by_month + mini card 摘要",
+)
+async def scoring_hit_stats_all(
+    from_date: date = Query(..., alias="from"),
+    to_date: date = Query(..., alias="to"),
+    service: ScoringWideService = Depends(get_scoring_wide_service),
+) -> ScoringHitStatsAllOut:
+    """1 次调用取 4 horizon 全部数据 + 3 mini card 摘要（最近 30 天 / MoM / 最佳 horizon）。
+
+    V0.96.0 配套「命中分析」Tab：1 张柱状图 + 3 mini card。
+    旧 ``/hit-stats?horizon=tN`` 单 horizon 端点保留，向后兼容。
+    """
+    _validate_range(from_date, to_date)
+    return await service.hit_stats_all_horizons(start=from_date, end=to_date)
 
 
 @router.get(

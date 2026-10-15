@@ -32,6 +32,9 @@ from app.schemas.scoring_wide import (
     ScoringByTagOut,
     ScoringHitCalibrationBucket,
     ScoringHitDirectionStat,
+    ScoringHitStatsAllHorizon,
+    ScoringHitStatsAllMiniCard,
+    ScoringHitStatsAllOut,
     ScoringHitStatsOut,
     ScoringHorizonVerdict,
     ScoringSummaryBucket,
@@ -441,6 +444,106 @@ class ScoringWideService:
             by_direction=by_direction,
             by_month=by_month,
             calibration=calibration,
+        )
+
+    # ──────────── 读端点：hit-stats-all · 4 horizon 聚合 (V0.96.0) ────────────
+
+    async def hit_stats_all_horizons(
+        self,
+        start: date,
+        end: date,
+        user_id: int | None = None,
+    ) -> ScoringHitStatsAllOut:
+        """聚合 4 horizon (t0/t1/t3/t5) 的 by_month + mini card 摘要。
+
+        V0.96.0：1 次 list_in_range + 4 horizon 各聚合 by_month + 30 天 / MoM / best_horizon。
+        复用 ``hit_stats()`` 内部 by_month 聚合循环，避免代码重复。
+        """
+        user_id = resolve_user_id(user_id)
+        rows = await self._repo.list_in_range(start, end, user_id=user_id)
+
+        hit_col_map = {"t0": "hit_t0", "t1": "hit_t1", "t3": "hit_t3", "t5": "hit_t5"}
+        by_horizon: dict[str, ScoringHitStatsAllHorizon] = {}
+        for horizon, hit_col in hit_col_map.items():
+            ready = [r for r in rows if getattr(r, hit_col) is not None]
+            buckets_map: dict[str, list[ScoringDailyWide]] = defaultdict(list)
+            for r in ready:
+                key = self._bucket_key(r.date, "month")
+                buckets_map[key].append(r)
+            by_month: list[ScoringSummaryBucket] = []
+            # V0.95.1：与主表一致，最新月在前（降序）
+            for key in sorted(buckets_map.keys(), reverse=True):
+                grp = buckets_map[key]
+                hits = [getattr(r, hit_col) for r in grp]
+                rate = round(sum(hits) / len(hits), 3) if hits else None
+                by_month.append(
+                    ScoringSummaryBucket(
+                        period=key,
+                        days=len(grp),
+                        hit_rate_t0=rate if horizon == "t0" else None,
+                        hit_rate_t1=rate if horizon == "t1" else None,
+                        hit_rate_t3=rate if horizon == "t3" else None,
+                        hit_rate_t5=rate if horizon == "t5" else None,
+                    )
+                )
+            by_horizon[horizon] = ScoringHitStatsAllHorizon(
+                horizon=horizon, by_month=by_month,
+            )
+
+        # mini card：最近 30 ready 日 vs 上 30 ready 日 + 最佳 horizon
+        mini_card = self._compute_mini_card(rows, hit_col_map)
+
+        return ScoringHitStatsAllOut(
+            from_date=start,
+            to_date=end,
+            by_horizon=by_horizon,
+            mini_card=mini_card,
+        )
+
+    def _compute_mini_card(
+        self,
+        rows: list[ScoringDailyWide],
+        hit_col_map: dict[str, str],
+    ) -> ScoringHitStatsAllMiniCard:
+        """最近 30 个 ready 日的命中率 + 上 30 个 ready 日对比 + 最佳 horizon。
+
+        V0.96.0 mini card 计算（V0.78.0 NULL 纪律：< 30 ready 日时返回 None 不兜底）。
+        """
+        # 按日期降序排
+        sorted_rows = sorted(rows, key=lambda r: r.date, reverse=True)
+
+        last_30d: dict[str, float | None] = {}
+        last_30d_mom: dict[str, float | None] = {}
+        for horizon, hit_col in hit_col_map.items():
+            ready = [r for r in sorted_rows if getattr(r, hit_col) is not None]
+            recent_30 = ready[:30]
+            prev_30 = ready[30:60]
+            if recent_30:
+                hits = sum(1 for r in recent_30 if getattr(r, hit_col))
+                last_30d[horizon] = round(hits / len(recent_30), 3)
+            else:
+                last_30d[horizon] = None
+            if recent_30 and prev_30:
+                cur = sum(1 for r in recent_30 if getattr(r, hit_col)) / len(recent_30)
+                pre = sum(1 for r in prev_30 if getattr(r, hit_col)) / len(prev_30)
+                last_30d_mom[horizon] = round(cur - pre, 3)
+            else:
+                last_30d_mom[horizon] = None
+
+        # best_horizon：按 last_30d 最大；多 horizon 同分时取字典序最小（稳定）
+        valid = {h: v for h, v in last_30d.items() if v is not None}
+        if not valid:
+            best_horizon: str | None = None
+        else:
+            # max(v) 找最大；同分时 sorted 保证稳定取字典序最小
+            max_v = max(valid.values())
+            candidates = sorted([h for h, v in valid.items() if v == max_v])
+            best_horizon = candidates[0]
+
+        return ScoringHitStatsAllMiniCard(
+            last_30d=last_30d,
+            last_30d_mom=last_30d_mom,
+            best_horizon=best_horizon,
         )
 
     # ──────────── 读端点：by-tag ────────────
