@@ -60,6 +60,8 @@ V083_KEY_PREFIXES = (
     # C3 brand / nav：topnav 整批迁移，沿用既有 namespace（已 3 语覆盖，仅在 HTML 引用）
     "brand.",
     "nav.",
+    # V0.97.0：AI 智能分析页
+    "ai.",
 )
 
 

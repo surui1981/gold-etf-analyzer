@@ -42,6 +42,13 @@
       "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
     },
     {
+      "name": "智能分析",
+      "short_name": "AI",
+      "description": "V0.97.0 · 多轮对话 + 工具只读",
+      "url": "/ask",
+      "icons": [{"src": "/static/icon-192.png", "sizes": "192x192"}]
+    },
+    {
       "name": "复盘报告",
       "short_name": "报告",
       "description": "V0.91.0 · 持仓 + 时间线 + 消息面 + 收益 + 央行购金 5 段 PDF 导出",

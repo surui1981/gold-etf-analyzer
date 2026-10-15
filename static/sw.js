@@ -60,6 +60,10 @@ const SHELL_ASSETS = [
     // V0.92.0 修复：打分汇总页 (V0.92.0 layout 与其他页对齐) — 加进 SHELL_ASSETS
     // 让 SW 重新 install 时 precache 新版，避免 RUNTIME_CACHE 旧 307 持续回放旧 HTML
     "/static/scoring.html",
+    // V0.97.0：AI 智能分析页（3 pane chat + marked.js markdown 渲染）
+    "/ask",
+    "/static/ask.html",
+    "/static/marked.min.js",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",

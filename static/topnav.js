@@ -59,6 +59,7 @@
     { path: "/static/silver.html",      activeFor: ["/static/silver.html"], ico: "🪙", i18n: "nav.silver",       fb: "白银追踪" },
     { path: "/static/backtest.html",    activeFor: ["/static/backtest.html"], ico: "🧪", i18n: "nav.backtest",     fb: "参数回测" },
     { path: "/scoring",                 activeFor: ["/scoring", "/static/scoring.html"], ico: "📊", i18n: "nav.scoring",     fb: "打分汇总" },
+    { path: "/ask",                     activeFor: ["/ask", "/static/ask.html"], ico: "🤖", i18n: "nav.ask",            fb: "智能分析" },
     { path: "/static/data-health.html", activeFor: ["/static/data-health.html"], ico: "🩺", i18n: "nav.health",       fb: "数据健康" },
     { path: "/static/settings.html",    activeFor: ["/static/settings.html"], ico: "🔔", i18n: "nav.settings",     fb: "通知中心" },
   ];
