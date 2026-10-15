@@ -287,6 +287,69 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             gold_repo=GoldPriceRepository(boot_session),
         )
         set_scoring_wide_singleton(wide_svc)
+
+    # V0.97.0：初始化 AI 智能分析（Claude LLM + ToolDispatcher）。
+    # API key 未配时 llm_client=None，前端 /api/v1/ai/health 报 enabled=false，
+    # /ask 页 feature flag 关，避免启动崩溃。
+    from app.services.llm.claude import ClaudeClient
+    from app.services.llm.tools import ToolDispatcher
+
+    if settings.llm_api_key:
+        llm_client = ClaudeClient(
+            api_key=settings.llm_api_key,
+            model=settings.llm_model,
+            timeout=settings.llm_timeout_seconds,
+            max_tokens=settings.llm_max_tokens,
+        )
+        # ToolDispatcher 复用 5 个 services（DI 之外的 service 实例，
+        # 走 lru_cache / 进程单例；这里直接用 dependencies 的 provider 拿
+        # —— 避免在 lifespan 里重建又一对 session）。
+        from app.dependencies import (
+            get_position_service, get_scoring_wide_service_for_etl,
+            get_trend_service, get_freshness_service, get_market_data_repository,
+        )
+        # get_trend_service / get_position_service / get_freshness_service 是
+        # 普通函数，调用会触发生命周期内的 session；为避免在 lifespan 内
+        # 起异步 session，改为用 ``_service_registry`` 兜底
+        # —— ToolDispatcher 接受 duck-typed 5 个 service。
+        from app.services.trend import TrendService
+        from app.repositories.market_data import MarketDataRepository
+        from app.repositories.db import async_session_factory as _asf
+
+        # 用一个独立 session 拼 tool 依赖（lifespan 阶段 session 直接 await 即可）
+        async with _asf() as tool_sess:
+            trend_svc = TrendService(MarketDataRepository(tool_sess), MarketDataRepository(tool_sess))
+            # 其余 4 个 service 注入宽表 + market_data
+            from app.services.scoring_wide import ScoringWideService as _SWS
+            from app.services.position import PositionService
+            from app.services.freshness import FreshnessService
+            from app.repositories.scoring_wide import ScoringWideRepository as _SWR
+            from app.repositories.snapshot import SnapshotRepository as _SSR
+            from app.repositories.news import NewsScoreRepository as _NSR
+            from app.repositories.review import GoldPriceRepository as _GPR
+            from app.repositories.position import PositionRepository as _PR
+            market_repo = MarketDataRepository(tool_sess)
+            scoring_svc = _SWS(
+                repo=_SWR(tool_sess), snapshot_repo=_SSR(tool_sess),
+                news_repo=_NSR(tool_sess), gold_repo=_GPR(tool_sess),
+            )
+            position_svc = PositionService(_PR(tool_sess), market_repo)
+            freshness_svc = FreshnessService(market_repo)
+            tool_dispatcher = ToolDispatcher(
+                trend_service=trend_svc,
+                scoring_service=scoring_svc,
+                position_service=position_svc,
+                freshness_service=freshness_svc,
+                market_data_repository=market_repo,
+            )
+        app.state.llm_client = llm_client
+        app.state.tool_dispatcher = tool_dispatcher
+        logger.info("AI 智能分析已启用（model=%s）", settings.llm_model)
+    else:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        logger.info("AI 智能分析未启用（LLM_API_KEY 未配置）")
+    app.state.settings = settings
     yield
     # V0.92.0：卸载宽表单例
     set_scoring_wide_singleton(None)
@@ -331,6 +394,17 @@ if settings.rate_limit_per_min > 0 and settings.app_env != "test":
         RateLimitMiddleware,
         per_min=settings.rate_limit_per_min,
         skip_static=settings.rate_limit_skip_static,
+    )
+
+# V0.97.0：per-user 限速（仅作用于 /api/v1/ai/* 路径），与 per-IP 叠加。
+# 测试环境自动禁用（与 per-IP 限速同策略）。
+if settings.app_env != "test":
+    from app.middleware.per_user_rate_limit import PerUserRateLimitMiddleware
+
+    app.add_middleware(
+        PerUserRateLimitMiddleware,
+        per_min=settings.llm_per_user_per_minute,
+        daily_quota=settings.llm_daily_token_quota,
     )
 
 # CORS：开发期前端（如本地静态页）可直接跨域调用
@@ -429,6 +503,17 @@ async def scoring_page() -> RedirectResponse:
     ``NewsScoreService.save_today`` 写时 hook 同步 ETL。
     """
     return RedirectResponse("/static/scoring.html")
+
+
+@app.get("/ask", include_in_schema=False)
+async def ask_page() -> RedirectResponse:
+    """AI 智能分析页（V0.97.0）。
+
+    顶栏 🤖 按钮走此 RESTful 别名。背后是 Claude API + 5 个只读 tool。
+    需要 LLM_API_KEY 环境变量配置；未配置时 /ask 页仍可访问但
+    ``/api/v1/ai/health`` 报 ``enabled=false``，前端友好降级。
+    """
+    return RedirectResponse("/static/ask.html")
 
 
 @app.get("/trades", include_in_schema=False)

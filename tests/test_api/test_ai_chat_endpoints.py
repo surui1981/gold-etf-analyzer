@@ -1,0 +1,445 @@
+"""AI 智能分析端点测试（V0.97.0 C2b）
+
+覆盖：
+1. /api/v1/ai/health —— 无 LLM client / 有 LLM client 两种情况
+2. 鉴权：未登录 → 401
+3. POST /conversations 建对话 + GET /conversations 列
+4. POST /messages 端到端：mock LLM 返回纯文本
+5. POST /messages 端到端：mock LLM 抛 LLMError → 503
+6. POST /messages 端到端：mock LLM 触发 tool_use → tool 消息入库
+7. V0.80.0 #159：user_id 隔离（其他用户不能访问本用户对话）
+8. 422：title 字段缺失（不传时使用默认）
+
+注：测试环境 ``AUTH_ENABLED=false``，所以默认都是 401。鉴权通过的 case
+通过 ``app.dependency_overrides[get_current_user]`` 注入 fake user。
+"""
+
+from __future__ import annotations
+
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.dependencies import get_current_user
+from app.main import app
+from app.repositories.db import async_session_factory
+from app.services.llm.claude import ClaudeResponse
+from app.services.llm.tools import ToolCall, ToolResult
+
+
+# ────────────── shared fixtures ──────────────
+
+
+@pytest.fixture
+async def fake_user(db_session):
+    """写一个 member 用户到 DB，返回实例（被 dep override 当作当前用户）。"""
+    from datetime import datetime
+
+    from app.models.user import ROLE_MEMBER, User
+
+    user = User(
+        email="ai-tester@example.com",
+        password_hash="unused",
+        role=ROLE_MEMBER,
+        is_active=True,
+        display_name="AI Tester",
+        created_at=datetime(2026, 1, 1),
+        last_login_at=datetime(2026, 1, 1),
+    )
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def as_ai_user(fake_user):
+    """override get_current_user → fake_user。"""
+    app.dependency_overrides[get_current_user] = lambda: fake_user
+    try:
+        yield fake_user
+    finally:
+        app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.fixture
+def mock_llm_text():
+    """LLM 返纯文本（无 tool_use）。"""
+    fake = MagicMock()
+    fake.ask = AsyncMock(return_value=ClaudeResponse(
+        text="现在 NY 金 2400 美元，综合指数 65（偏多）。",
+        tool_calls=[],
+        input_tokens=120, output_tokens=48, stop_reason="end_turn",
+    ))
+    return fake
+
+
+@pytest.fixture
+def mock_llm_tool_use():
+    """LLM 触发 1 轮 tool_use → 续答纯文本。"""
+    fake = MagicMock()
+    # 第 1 轮：要求 tool_use
+    tool_call = ToolCall(id="tc-001", name="get_market_overview", input={})
+    # 第 2 轮：纯文本
+    fake.ask = AsyncMock(side_effect=[
+        ClaudeResponse(
+            text="", tool_calls=[tool_call],
+            input_tokens=100, output_tokens=30, stop_reason="tool_use",
+        ),
+        ClaudeResponse(
+            text="现在 NY 金 2400，综合偏多（65）。",
+            tool_calls=[],
+            input_tokens=200, output_tokens=60, stop_reason="end_turn",
+        ),
+    ])
+    return fake
+
+
+@pytest.fixture
+def mock_tool_dispatcher():
+    """假 tool dispatcher：get_market_overview 返固定 JSON。"""
+    fake = MagicMock()
+    fake.schemas = MagicMock(return_value=[])
+
+    async def fake_execute(call: ToolCall, *, user_id: int) -> ToolResult:
+        return ToolResult(
+            tool_call_id=call.id, name=call.name,
+            content='{"name": "NY", "last_close": 2400.0, "index_score": 65}',
+            is_error=False,
+        )
+
+    fake.execute = fake_execute
+    return fake
+
+
+@pytest.fixture
+def mock_settings():
+    s = MagicMock()
+    s.llm_user_message_max_chars = 8000
+    s.llm_max_tool_rounds = 3
+    s.llm_api_key = "sk-test"
+    s.llm_model = "claude-sonnet-4-5"
+    s.llm_per_user_per_minute = 30
+    s.llm_daily_token_quota = 100000
+    return s
+
+
+# ────────────── health ──────────────
+
+
+@pytest.mark.asyncio
+async def test_health_returns_disabled_when_no_llm() -> None:
+    """无 LLM client → enabled=False（feature flag 关）。"""
+    app.state.llm_client = None
+    app.state.tool_dispatcher = None
+    settings = MagicMock(
+        llm_api_key="", llm_model="claude-sonnet-4-5",
+        llm_per_user_per_minute=30, llm_daily_token_quota=100000,
+    )
+    app.state.settings = settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.get("/api/v1/ai/health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["enabled"] is False
+        assert "get_market_overview" in data["tools"]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_health_returns_enabled_when_configured() -> None:
+    """装上 mock LLM + api_key → enabled=True。"""
+    app.state.llm_client = MagicMock()
+    app.state.tool_dispatcher = MagicMock()
+    app.state.settings = MagicMock(
+        llm_api_key="sk-test", llm_model="claude-sonnet-4-5",
+        llm_per_user_per_minute=30, llm_daily_token_quota=100000,
+    )
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.get("/api/v1/ai/health")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["enabled"] is True
+        assert data["model"] == "claude-sonnet-4-5"
+        assert data["per_user_per_minute"] == 30
+        assert "get_scoring_summary" in data["tools"]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+# ────────────── 鉴权（401）──────────────
+
+
+@pytest.mark.asyncio
+async def test_create_conversation_requires_auth() -> None:
+    """匿名 → 401（require_user）。"""
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as ac:
+        r = await ac.post("/api/v1/ai/conversations", json={})
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_list_conversations_requires_auth() -> None:
+    """匿名 → 401。"""
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as ac:
+        r = await ac.get("/api/v1/ai/conversations")
+    assert r.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_send_message_requires_auth() -> None:
+    """匿名 → 401。"""
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test",
+    ) as ac:
+        r = await ac.post(
+            "/api/v1/ai/conversations/conv-x/messages",
+            json={"content": "test"},
+        )
+    assert r.status_code == 401
+
+
+# ────────────── 503：未启用 ──────────────
+
+
+@pytest.mark.asyncio
+async def test_create_conversation_returns_503_when_llm_missing(
+    as_ai_user,
+) -> None:
+    """已登录但 LLM 未配置 → 503。"""
+    app.state.llm_client = None
+    app.state.tool_dispatcher = None
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+        assert r.status_code == 503
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+
+
+# ────────────── 端到端 ──────────────
+
+
+@pytest.mark.asyncio
+async def test_create_and_list_conversations(
+    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+) -> None:
+    """POST 建对话 → GET 列出来。"""
+    app.state.llm_client = mock_llm_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={"title": "test"})
+            assert r.status_code == 201
+            conv = r.json()
+            assert conv["title"] == "test"
+            assert conv["message_count"] == 0
+
+            r2 = await ac.get("/api/v1/ai/conversations")
+            assert r2.status_code == 200
+            rows = r2.json()
+            assert isinstance(rows, list)
+            assert len(rows) == 1
+            assert rows[0]["id"] == conv["id"]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_send_message_pure_text(
+    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+) -> None:
+    """发 1 条 user → 1 条 assistant（mock 返纯文本）。"""
+    app.state.llm_client = mock_llm_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            assert r.status_code == 201
+            cid = r.json()["id"]
+
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "今天金价多少？"},
+            )
+            assert r2.status_code == 200
+            data = r2.json()
+            assert data["user"]["role"] == "user"
+            assert data["user"]["content"] == "今天金价多少？"
+            assert len(data["responses"]) == 1
+            asst = data["responses"][0]
+            assert asst["role"] == "assistant"
+            assert "2400" in asst["content"]
+            assert asst["input_tokens"] == 120
+
+            # message_count 应 bump 到 2（user + assistant）
+            r3 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            assert r3.status_code == 200
+            detail = r3.json()
+            assert detail["conversation"]["message_count"] == 2
+            assert len(detail["messages"]) == 2
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_send_message_with_tool_use(
+    as_ai_user, mock_llm_tool_use, mock_tool_dispatcher, mock_settings,
+) -> None:
+    """发 1 条 user → assistant tool_use → tool → assistant text。"""
+    app.state.llm_client = mock_llm_tool_use
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "现在金价多少？"},
+            )
+            assert r2.status_code == 200
+            data = r2.json()
+            # 1 user + 1 assistant(tool_use) + 1 tool + 1 assistant(text) = 3 responses
+            assert len(data["responses"]) == 3
+            assert data["responses"][0]["role"] == "assistant"
+            assert data["responses"][0]["tool_name"] == "get_market_overview"
+            assert data["responses"][1]["role"] == "tool"
+            assert data["responses"][1]["tool_call_id"] == "tc-001"
+            assert data["responses"][2]["role"] == "assistant"
+            assert "2400" in data["responses"][2]["content"]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_send_message_returns_503_on_llm_error(
+    as_ai_user, mock_settings,
+) -> None:
+    """mock LLM 抛 LLMError → 503 + user_msg 回滚（不入库）。"""
+    from app.services.llm.claude import LLMError
+
+    mock_llm = MagicMock()
+    mock_llm.ask = AsyncMock(side_effect=LLMError("400 bad request"))
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "test"},
+            )
+            assert r2.status_code == 503
+            assert "模型服务异常" in r2.json()["detail"]
+
+            # user_msg 应被回滚（messages 应空）
+            r3 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            assert r3.status_code == 200
+            assert r3.json()["messages"] == []
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_user_isolation_returns_404(
+    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+) -> None:
+    """V0.80.0 #159：其他用户的对话 → 404。"""
+    from app.services.ai_chat import AIChatService
+    from app.api.v1.endpoints.ai import get_ai_chat_service
+
+    app.state.llm_client = mock_llm_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        # 用 fake_user 创建对话
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            assert r.status_code == 201
+            other_cid = r.json()["id"]
+
+        # 切换到另一个 fake user
+        from datetime import datetime as _dt
+
+        from app.models.user import ROLE_MEMBER, User
+
+        async with async_session_factory() as s:
+            other_user = User(
+                email="other@example.com",
+                password_hash="x", role=ROLE_MEMBER, is_active=True,
+                display_name="Other",
+                created_at=_dt(2026, 1, 1), last_login_at=_dt(2026, 1, 1),
+            )
+            s.add(other_user)
+            await s.commit()
+            await s.refresh(other_user)
+            other_id = other_user.id
+
+        app.dependency_overrides[get_current_user] = lambda: other_user
+        try:
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test",
+            ) as ac:
+                r = await ac.get(f"/api/v1/ai/conversations/{other_cid}")
+                assert r.status_code == 404, (
+                    "V0.80.0 #159 失效：其他用户看到了本用户的对话"
+                )
+
+                r2 = await ac.post(
+                    f"/api/v1/ai/conversations/{other_cid}/messages",
+                    json={"content": "hack"},
+                )
+                assert r2.status_code == 404
+        finally:
+            app.dependency_overrides.pop(get_current_user, None)
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None

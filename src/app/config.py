@@ -50,6 +50,26 @@ class Settings(BaseSettings):
     # 可选 token：goldapi | sina | etf_history
     xau_fallback_chain: str = "goldapi,sina,etf_history"
 
+    # ===== V0.97.0 · AI 智能分析（Claude LLM）=====
+    # Anthropic API key（None / 空 = AI 入口隐藏，feature flag 关）
+    llm_api_key: str | None = None
+    # 默认模型（claude-sonnet-4-5 性价比最稳，未来可加 Opus）
+    llm_model: str = "claude-sonnet-4-5"
+    # 单次 LLM 响应最大 token（V0.97 默认 2048）
+    llm_max_tokens: int = 2048
+    # 单次 LLM HTTP timeout 秒
+    llm_timeout_seconds: float = 30.0
+    # Per-user 限速：每分钟最多提问次数（per-IP 限速外的叠加层）
+    llm_per_user_per_minute: int = 30
+    # Per-user 每日 token 配额（input + output 合计）
+    llm_daily_token_quota: int = 100_000
+    # 单次对话最多 tool_use 轮数（防 tool 死循环）
+    llm_max_tool_rounds: int = 3
+    # 单 tool result 截断字符数
+    llm_tool_result_max_chars: int = 4000
+    # User message 截断字符数（防 prompt injection）
+    llm_user_message_max_chars: int = 8000
+
     # V0.73.0 N+17：白银实时报价 fallback chain（NY SI 美元/盎司）
     # 可选 token：sina_si | yahoo_spot | history
     # - sina_si：新浪 hf_SI 实时（与 gold hf_GC 1:1 对称，零KEY、稳定）

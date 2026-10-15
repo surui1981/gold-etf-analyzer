@@ -57,7 +57,7 @@ class AIConversationRepository:
             model=model,
         )
         self._session.add(conv)
-        await self._session.flush()
+        await self._session.commit()
         return conv
 
     async def list_for_user(
@@ -104,7 +104,7 @@ class AIConversationRepository:
         if is_archived is not None:
             conv.is_archived = is_archived
         conv.updated_at = datetime.utcnow()
-        await self._session.flush()
+        await self._session.commit()
         return conv
 
     async def bump_stats(
@@ -126,7 +126,7 @@ class AIConversationRepository:
         conv.total_input_tokens = (conv.total_input_tokens or 0) + add_input
         conv.total_output_tokens = (conv.total_output_tokens or 0) + add_output
         conv.message_count = (conv.message_count or 0) + add_messages
-        await self._session.flush()
+        await self._session.commit()
 
     async def count_for_user(
         self, *, user_id: int | None = None, include_archived: bool = False,
@@ -179,7 +179,7 @@ class AIMessageRepository:
             latency_ms=latency_ms,
         )
         self._session.add(msg)
-        await self._session.flush()
+        await self._session.commit()
         return msg
 
     async def list_for_conversation(
@@ -230,3 +230,10 @@ class AIMessageRepository:
             AIMessage.conversation_id == conv_id
         )
         return int((await self._session.execute(stmt)).scalar() or 0)
+
+    async def delete(self, msg_id: str) -> None:
+        """按 id 删 1 条消息（V0.97 LLM 失败时回滚 user_msg 用）。"""
+        msg = await self._session.get(AIMessage, msg_id)
+        if msg is not None:
+            await self._session.delete(msg)
+            await self._session.commit()

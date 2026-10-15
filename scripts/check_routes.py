@@ -66,6 +66,7 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/reset-password",
     "/report",
     "/scoring",
+    "/ask",
 ]
 
 # 期望 status 表：alias → 307，特殊端点 → 各自 status

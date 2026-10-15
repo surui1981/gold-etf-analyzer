@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     account,
     admin,  # V0.75.3 用户管理
     admin_token,  # V0.82 admin session cookie 端点
+    ai,  # V0.97.0 AI 智能分析
     analysis,
     auth,
     backtest,
@@ -48,3 +49,4 @@ api_router.include_router(push.router)  # V0.72.0 P3-b Web Push
 api_router.include_router(admin.router)  # V0.75.3 用户管理
 api_router.include_router(admin_token.router)  # V0.82 admin session cookie
 api_router.include_router(scoring_wide.router)  # V0.92.0 历史打分数据汇总
+api_router.include_router(ai.router)  # V0.97.0 AI 智能分析
