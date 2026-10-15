@@ -5,6 +5,7 @@
 
 from app.models import (  # noqa: F401
     account,
+    ai_chat,
     analysis,
     central_bank,
     daily_macro_factor,
