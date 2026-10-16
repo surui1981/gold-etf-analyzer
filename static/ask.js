@@ -318,9 +318,43 @@
   }
 
   function renderEmptyStream() {
-    streamEl.innerHTML = '<div class="empty-stream">' + escapeHtml(t('ai.empty_state', '还没有对话 — 点左侧「+ 新对话」开始提问')) + '</div>';
-    toolTraceEl.hidden = true;
+    // V0.97.2：保留 #emptyState 节点（welcome 卡片 + 5 个 chip），
+    // 不再 innerHTML 整片擦写 —— 避免 chip 事件丢失 + 重新绑定开销
+    var kids = Array.prototype.slice.call(streamEl.children);
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].id !== 'emptyState') kids[i].remove();
+    }
+    var es = $('emptyState');
+    if (es) es.hidden = false;
+    renderExamplePrompts();
+    setToolsVisible(false);
     toolCountEl.textContent = '(0)';
+  }
+
+  // V0.97.2：welcome 卡片 5 个示例 chip 渲染 + 点击行为
+  // - prompt 文案从 i18n 走（key 在 chip.dataset.promptKey），不内联字符串
+  //   避免 zh-CN fallback 漏改（memory i18n-init-await 教训）
+  // - 点击：填入 textarea + focus + 自动 resize —— 不自动开新对话，
+  //   sendMessage() 内部会处理 activeId 为空的情况（自动 newConversation）
+  function renderExamplePrompts() {
+    var chips = document.querySelectorAll('.example-chip');
+    for (var i = 0; i < chips.length; i++) {
+      var chip = chips[i];
+      var key = chip.getAttribute('data-prompt-key');
+      if (key) chip.dataset.prompt = t(key, '');
+    }
+  }
+  function bindExampleChips() {
+    var chips = document.querySelectorAll('.example-chip');
+    for (var i = 0; i < chips.length; i++) {
+      chips[i].addEventListener('click', function (ev) {
+        var q = ev.currentTarget.dataset.prompt || ev.currentTarget.textContent.trim();
+        inputEl.value = q;
+        inputEl.focus();
+        autoResize();
+        updateCharCount();
+      });
+    }
   }
 
   function renderMessages() {
@@ -328,7 +362,14 @@
       renderEmptyStream();
       return;
     }
-    streamEl.innerHTML = '';
+    // V0.97.2：有消息时隐藏 welcome 卡片（不 innerHTML 擦写，保留节点）
+    var es = $('emptyState');
+    if (es) es.hidden = true;
+    // 清除除 #emptyState 外的旧消息节点
+    var kids = Array.prototype.slice.call(streamEl.children);
+    for (var i = 0; i < kids.length; i++) {
+      if (kids[i].id !== 'emptyState') kids[i].remove();
+    }
     var toolCount = 0;
     var lastAsstIdx = -1;
     state.messages.forEach(function (m, idx) {
@@ -411,10 +452,10 @@
 
   function updateToolTrace(count) {
     if (!count) {
-      toolTraceEl.hidden = true;
+      setToolsVisible(false);
       return;
     }
-    toolTraceEl.hidden = false;
+    setToolsVisible(true);
     toolCountEl.textContent = '(' + count + ')';
     toolTraceListEl.innerHTML = '';
     state.messages.forEach(function (m) {
@@ -422,6 +463,13 @@
         toolTraceListEl.appendChild(renderToolTraceItem(m));
       }
     });
+  }
+
+  // V0.97.2：统一工具栏可见性切换 —— 同步 hidden 属性 + askLayout 的 has-tools 类
+  // （CSS 通过该类把 grid 模板从 2 列切到 3 列，避免右栏 280px 空白）
+  function setToolsVisible(visible) {
+    toolTraceEl.hidden = !visible;
+    askLayout.classList.toggle('has-tools', !!visible);
   }
 
   function renderToolTraceItem(m) {
@@ -588,7 +636,21 @@
 
   function autoResize() {
     inputEl.style.height = 'auto';
-    inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + 'px';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  }
+
+  // V0.97.2：字符计数 —— > 2000 字软提示（> 8000 字 server 截断，client 不可见但给个数字）
+  function updateCharCount() {
+    var n = (inputEl.value || '').length;
+    var el2 = $('charCount');
+    if (!el2) return;
+    if (n > 2000) {
+      el2.hidden = false;
+      el2.textContent = n + ' / 8000';
+      el2.classList.toggle('over', n > 8000);
+    } else {
+      el2.hidden = true;
+    }
   }
 
   // ────────────── 事件 ──────────────
@@ -597,13 +659,16 @@
   sendBtn.addEventListener('click', function () { sendMessage(); });
   renameBtn.addEventListener('click', function () { renameActiveConv(); });
   archiveBtn.addEventListener('click', function () { archiveConv(state.activeId); });
-  inputEl.addEventListener('input', autoResize);
+  inputEl.addEventListener('input', function () { autoResize(); updateCharCount(); });
   inputEl.addEventListener('keydown', function (ev) {
+    // V0.97.2：单 Enter 发送 / Shift+Enter 换行（与 textarea title 文案一致）
     if (ev.key === 'Enter' && !ev.shiftKey && !ev.isComposing) {
       ev.preventDefault();
       sendMessage();
     }
   });
+  // V0.97.2：welcome chip 一次性绑定（renderEmptyStream 不再 innerHTML 擦写，事件不丢）
+  bindExampleChips();
 
   // i18n 语言切换时重渲染依赖文案的字段
   document.addEventListener('i18n:change', function () {
@@ -611,6 +676,8 @@
     else { titleEl.textContent = t('ai.no_conv_selected', '未选择对话'); renderEmptyStream(); }
     sendBtn.textContent = state.sending ? t('ai.sending', '发送中…') : t('ai.send', '发送');
     if (state.health) renderQuota(state.health);
+    // V0.97.2：chip prompt 文本随语言变化（走 t() 取 data-prompt-key）
+    renderExamplePrompts();
   });
 
   // boot

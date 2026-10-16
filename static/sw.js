@@ -13,8 +13,8 @@
  * + Service-Worker-Allowed: / 头实现。
  */
 
-// V0.97.1 UI hotfix：ask.js 工具调用展示调整（tool chip + 中文 label + 数据来源 footer）
-const VERSION = "v0.97.1";
+// V0.97.2 布局 hotfix：/ask 视口感知 + welcome 卡片 + 2/3 栏切换
+const VERSION = "v0.97.2";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
