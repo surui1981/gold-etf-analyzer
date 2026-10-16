@@ -532,3 +532,89 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
         app.state.llm_client = None
         app.state.tool_dispatcher = None
         app.state.settings = None
+
+
+async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
+    as_ai_user, mock_settings,
+) -> None:
+    """V0.97.1 增强：L1（内联 tool_result 重试）也返回 2013 时，L3 用「只发 user 原问题」兜底。
+
+    链路：
+    1. mock LLM 第 1 次返 tool_use
+    2. mock LLM 第 2 次抛 2013 → 触发 L1
+    3. mock LLM 第 3 次（L1，inlined）再抛 2013 → 触发 L3
+    4. mock LLM 第 4 次（L3，fresh-only user_q）返纯文本
+    5. user 仍能看到 assistant 的回答（不是 503）
+    """
+    from app.services.llm.claude import ClaudeResponse, LLMError, ToolUseBlock
+
+    call_count = 0
+
+    async def mock_ask(*, system, messages, tools=None, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            return ClaudeResponse(
+                text="",
+                tool_calls=[ToolUseBlock(
+                    id="call-L1L3-test-id",
+                    name="get_market_overview", input={},
+                )],
+                input_tokens=100, output_tokens=20, stop_reason="tool_use",
+            )
+        # Round 2 / 3: 一直 2013（miniMax 代理深 bug）
+        if call_count in (2, 3):
+            raise LLMError(
+                "client error 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                "\"message\":\"invalid params, tool result's tool id(call-...) not found (2013)\"}}"
+            )
+        # Round 4: L3 fresh-only user_q 成功
+        assert tools is None, "L3 必须 tools=None"
+        assert len(messages) == 1, f"L3 只发 user 原问题，got {len(messages)} messages"
+        assert messages[0]["role"] == "user"
+        return ClaudeResponse(
+            text="（无工具数据）基于系统知识，金价近月高位震荡。",
+            tool_calls=[], input_tokens=50, output_tokens=30, stop_reason="end_turn",
+        )
+
+    mock_llm = MagicMock()
+    mock_llm.ask = mock_ask
+
+    async def mock_execute(tool_call, user_id):
+        return ToolResult(
+            tool_call_id=tool_call.id, name=tool_call.name,
+            content='{"index_score": 65}', is_error=False,
+        )
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+    mock_tool.execute = mock_execute
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "今天金价？"},
+            )
+            assert r2.status_code == 200, r2.text
+            data = r2.json()
+            # responses 至少 3 条：assistant(tool_use) + tool + assistant(text 兜底)
+            assert len(data["responses"]) == 3
+            assert data["responses"][0]["role"] == "assistant"
+            assert data["responses"][0]["tool_name"] == "get_market_overview"
+            assert data["responses"][1]["role"] == "tool"
+            assert data["responses"][2]["role"] == "assistant"
+            # L3 回答应包含「无工具数据」兜底文案
+            assert "无工具数据" in data["responses"][2]["content"]
+            # 4 次 LLM 调用：tool_use / round2-2013 / L1-2013 / L3-ok
+            assert call_count == 4
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None

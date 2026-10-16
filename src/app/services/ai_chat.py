@@ -103,18 +103,23 @@ def _has_tool_result_block(messages: list[dict[str, Any]]) -> bool:
 def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """把最后一条 user 消息的 ``tool_result`` blocks 转成纯文本，便于代理理解。
 
+    V0.97.1 增强：同时把上一条 assistant 消息的 ``tool_use`` 块也转成文本。
+    原因：miniMax 代理在重试时仍可能因"消息里出现 tool_use 但找不到 tool_result"
+    报 2013。彻底平铺 = 整条对话没有 tool_use/tool_result 块，代理无歧义。
+
     转换前：
-        ``{"role": "user", "content": [{"type": "tool_result",
-          "tool_use_id": "call-xxx", "content": "..."}]}``
+        assistant: [{type: "tool_use", id: "call_abc", name: "get_market_overview", input: {}}]
+        user:      [{type: "tool_result", tool_use_id: "call_abc", content: "..."}]
     转换后：
-        ``{"role": "user", "content": "[Tool get_market_overview returned]:\n..."}``
+        assistant: [{type: "text", text: "[Called get_market_overview with {}]"}]
+        user:      "[tool:call_abcdef returned]:\n..."
 
     返回新列表（不修改入参）。
     """
     if not messages:
         return messages
     new_messages = list(messages)
-    last = dict(new_messages[-1])  # shallow copy
+    last = dict(new_messages[-1])
     if last.get("role") != "user":
         return new_messages
     content = last.get("content")
@@ -125,8 +130,6 @@ def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[st
         if isinstance(block, dict) and block.get("type") == "tool_result":
             tool_use_id = block.get("tool_use_id", "unknown")
             inner = block.get("content", "")
-            # tool_name 不在 tool_result block 里，只在 tool_use block 里
-            # （前一条 assistant 消息）—— 用 tool_use_id 前 16 字符代指
             label = f"tool:{tool_use_id[:16]}"
             new_content.append(f"[{label} returned]:\n{inner}")
         elif isinstance(block, dict) and block.get("type") == "text":
@@ -136,6 +139,30 @@ def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[st
     if new_content:
         last["content"] = "\n\n".join(new_content)
     new_messages[-1] = last
+
+    # V0.97.1 增强：上一条 assistant 的 tool_use 块也转成纯文本
+    if len(new_messages) >= 2:
+        prev = new_messages[-2]
+        if isinstance(prev, dict) and prev.get("role") == "assistant":
+            new_prev = dict(prev)
+            prev_content = new_prev.get("content")
+            if isinstance(prev_content, list):
+                new_prev_content: list[Any] = []
+                for block in prev_content:
+                    if isinstance(block, dict) and block.get("type") == "tool_use":
+                        name = block.get("name", "tool")
+                        inp = block.get("input", {})
+                        # tool_use 块带走的语义：调用了哪个 tool + 用了什么参数
+                        new_prev_content.append({
+                            "type": "text",
+                            "text": f"[Called {name} with {json.dumps(inp, ensure_ascii=False)}]",
+                        })
+                    elif isinstance(block, dict) and block.get("type") == "text":
+                        new_prev_content.append(block)
+                    elif isinstance(block, str):
+                        new_prev_content.append({"type": "text", "text": block})
+                new_prev["content"] = new_prev_content
+                new_messages[-2] = new_prev
     return new_messages
 
 
@@ -247,23 +274,43 @@ class AIChatService:
                 # 报 ``tool result's tool id(call-...) not found (2013)``。
                 # 代理不跨 round 追踪 tool_use_id（OpenAI 风格 stateless 行为），
                 # 但 Anthropic 协议要求 tool_result.tool_use_id 必须配对。
-                # → 检测到这个错误时，把最后一个 user 消息的 tool_result
-                #   blocks 转成纯文本，重试 1 次（不带 tools，避免再次 tool_use）
+                # → 3 级降级链路：
+                #   L1：把 tool_result 块转纯文本 + 重试（不带 tools）
+                #   L2：把前一条 assistant 的 tool_use 也转纯文本（彻底平铺对话）
+                #   L3：完全清空历史，只问用户原问题（代理 stateless 也能答）
                 if _is_tool_result_id_mismatch(exc) and _has_tool_result_block(messages):
                     logger.warning(
-                        "tool_result id mismatch (proxy bug?); falling back to text-only "
-                        "continuation for conversation=%s round=%d",
+                        "tool_result id mismatch (proxy 2013); falling back for conv=%s round=%d",
                         conversation_id, round_idx,
                     )
-                    messages = _inline_tool_results_as_text(messages)
+                    # L1：内联 tool_result + 重试（不带 tools）
+                    inlined = _inline_tool_results_as_text(messages)
                     try:
                         response = await self._llm.ask(
-                            system=system, messages=messages, tools=None,
+                            system=system, messages=inlined, tools=None,
                         )
-                    except LLMError:
-                        # 文本重试仍失败 → 兜底抛错（让上层 UI 展示）
-                        await self._msg.delete(user_msg.id)
-                        raise
+                    except LLMError as exc2:
+                        if not _is_tool_result_id_mismatch(exc2):
+                            # 非 2013 错误（4xx 业务错误等）→ 抛
+                            await self._msg.delete(user_msg.id)
+                            raise
+                        # L2：miniMax 代理可能见到 tool_use 残留也拒；L1 已内联 tool_result
+                        # 且把前一条 assistant 的 tool_use 也转成纯文本（在 _inline_ 里），
+                        # 若仍 2013 = 代理对这条历史有更深问题 → L3
+                        logger.warning(
+                            "L1 inlined-retry also 2013; L3 fresh-only for conv=%s",
+                            conversation_id,
+                        )
+                        # L3：只发 user 原始问题（不传历史）—— 代理 stateless 也能答
+                        try:
+                            response = await self._llm.ask(
+                                system=system,
+                                messages=[{"role": "user", "content": user_msg.content}],
+                                tools=None,
+                            )
+                        except LLMError:
+                            await self._msg.delete(user_msg.id)
+                            raise
                 else:
                     # 失败：user_msg 已入库但 assistant 没出 → 整个 turn 视为失败
                     # ⚠ V0.97 简化：失败时把 user_msg 删掉，避免脏历史
