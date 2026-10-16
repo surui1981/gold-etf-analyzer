@@ -16,7 +16,7 @@ Claude tool_use JSON schema 格式：
 - ``get_market_overview`` → ``TrendService.analyze()``（NY 金 + 综合指数）
 - ``get_scoring_summary`` → ``ScoringWideService.hit_stats_all_horizons()``
 - ``get_user_portfolio`` → ``PositionService.equity_curve() + performance()``
-- ``get_warning_summary`` → ``FreshnessService.snapshot()`` 派生
+- ``get_warning_summary`` → ``FreshnessService.report()`` 派生
   （取各数据源的 staleness 状态作为「健康警示」）
 - ``get_etf_recent_flows`` → ``MarketDataRepository.get_etf_history()``
 """
@@ -266,20 +266,29 @@ class ToolDispatcher:
         return ToolResult(call.id, call.name, _truncate(payload))
 
     async def _exec_warnings(self, call: ToolCall) -> ToolResult:
-        """get_warning_summary: 数据健康 stale 状态。"""
-        snap = await self._freshness.snapshot()
+        """get_warning_summary: 数据健康 stale 状态。
+
+        V0.97.1 修复：原先调 ``self._freshness.snapshot()`` —— 该方法在
+        ``FreshnessService`` 上不存在（实际接口是 ``report()``），且字段名
+        ``overall_status / last_update / label / stale_minutes`` 也与
+        ``FreshnessOut / DataFreshnessOut`` schema 不一致（实际是
+        ``markets[*].status / fetched_at / freshness_label / age_minutes``）。
+        现直接调 ``report()`` 并按真实字段映射，输出保持 LLM 友好的扁平结构。
+        """
+        rep = await self._freshness.report()
         payload = {
-            "overall_status": getattr(snap, "overall_status", "unknown"),
-            "degraded": getattr(snap, "degraded", False),
-            "summary": getattr(snap, "summary", ""),
+            "overall_status": "degraded" if rep.degraded else "ok",
+            "degraded": rep.degraded,
+            "summary": rep.summary,
+            "server_time": rep.server_time,
             "markets": {
                 name: {
                     "status": mf.status,
-                    "label": getattr(mf, "label", ""),
-                    "last_update": mf.last_update.isoformat() if getattr(mf, "last_update", None) else None,
-                    "stale_minutes": getattr(mf, "stale_minutes", None),
+                    "label": mf.freshness_label,
+                    "last_update": mf.fetched_at or None,
+                    "stale_minutes": mf.age_minutes if mf.age_minutes >= 0 else None,
                 }
-                for name, mf in (getattr(snap, "markets", {}) or {}).items()
+                for name, mf in (rep.markets or {}).items()
             },
         }
         return ToolResult(call.id, call.name, _truncate(payload))

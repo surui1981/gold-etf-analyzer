@@ -12,6 +12,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -278,11 +279,13 @@ class _FakePosition:
 
 @dataclass
 class _FakeFreshness:
-    async def snapshot(self) -> Any:
+    """V0.97.1 修复：原 fixture 提供 ``snapshot()``，与生产代码不匹配
+    （生产 ``FreshnessService`` 只暴露 ``report()``）。改为暴露 ``report()``
+    即可。"""
+    async def report(self) -> Any:
         from app.schemas.market import (
             DataFreshnessOut, FreshnessLevel, FreshnessOut, MarketSessionOut,
         )
-        from datetime import datetime
         markets = {
             "ny": DataFreshnessOut(
                 market="ny", name="纽约金", status="live",
@@ -343,12 +346,19 @@ async def test_tool_dispatcher_executes_5_tools() -> None:
     assert r3.is_error is False
     assert "open_positions" in r3.content
 
-    # 4. get_warning_summary
+    # 4. get_warning_summary（V0.97.1 回归锁：必须走 report() + 真实字段名）
     r4 = await dispatcher.execute(
         ToolCall(id="t4", name="get_warning_summary", input={}), user_id=1,
     )
     assert r4.is_error is False
-    assert "markets" in r4.content
+    parsed = json.loads(r4.content)
+    assert "overall_status" in parsed
+    assert "markets" in parsed
+    assert "ny" in parsed["markets"]
+    ny = parsed["markets"]["ny"]
+    # V0.97.1：以下字段名与 FreshnessOut/DataFreshnessOut schema 严格一致
+    for k in ("status", "label", "last_update", "stale_minutes"):
+        assert k in ny, f"missing field {k} in warning market entry: {ny}"
 
     # 5. get_etf_recent_flows
     r5 = await dispatcher.execute(
