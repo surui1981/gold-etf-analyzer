@@ -1,4 +1,4 @@
-"""AI 智能分析 API 端点（V0.97.0 · 6 端点）
+"""AI 智能分析 API 端点（V0.97.0 · 6 端点 + V0.98 C5 +1 流式）
 
 挂载在 ``/api/v1/ai`` 前缀下，依赖：
 - ``PerUserRateLimitMiddleware``（per-user 限速 + 配额，仅作用于本前缀）
@@ -7,12 +7,14 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date as date_cls
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sse_starlette.sse import EventSourceResponse
 
 from app.dependencies import get_db_session, require_user
 from app.repositories.ai_chat import AIConversationRepository, AIMessageRepository
@@ -199,3 +201,52 @@ async def send_message(
         user=AIMessageOut.model_validate(user_msg),
         responses=[AIMessageOut.model_validate(m) for m in responses],
     )
+
+
+# ────────────── V0.98 C5 · SSE 流式端点 ──────────────
+
+
+@router.post(
+    "/conversations/{conv_id}/messages/stream",
+    summary="发送 1 条用户消息（SSE 流式返回）",
+)
+async def send_message_stream(
+    conv_id: str,
+    body: AISendMessageIn,
+    request: Request,
+    user=Depends(require_user),
+    svc: AIChatService = Depends(get_ai_chat_service),
+) -> EventSourceResponse:
+    """V0.98 C5：流式返回，每条 event 形如 ``{"event": "...", ...}``。
+
+    Event types: user_saved / text_delta / tool_call_start /
+    tool_call_input_delta / tool_result / message_stop / error。
+
+    客户端断开（``request.is_disconnected()``）→ 立即停止生成 + 关闭 SSE。
+    """
+
+    async def event_generator():
+        try:
+            async for ev in svc.send_message_stream(
+                conversation_id=conv_id, user_id=user.id, user_text=body.content,
+            ):
+                # 检查客户端是否已断开（节省 LLM token）
+                if await request.is_disconnected():
+                    logger.info(
+                        "SSE client disconnected, stopping generation for conv=%s",
+                        conv_id,
+                    )
+                    break
+                # sse_starlette 需要 dict 或 str；用 dict 让它自动序列化为 JSON
+                yield {"event": ev.get("event", "message"), "data": json.dumps(ev, ensure_ascii=False)}
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("SSE generator error: %s", exc)
+            yield {
+                "event": "error",
+                "data": json.dumps(
+                    {"event": "error", "code": "internal", "msg": str(exc)[:200]},
+                    ensure_ascii=False,
+                ),
+            }
+
+    return EventSourceResponse(event_generator())

@@ -19,6 +19,8 @@ dependencies = [
     # repositories/market_providers.py 的 YahooSilverHistoryProvider 亦依赖它。
     # 此前误置于 dev extra，导致生产镜像不含 httpx → notify 导入即 ImportError → 容器启动失败。
     "httpx>=0.27,<1.0",
+    # V0.98 C5：/ask SSE 流式响应（sse-starlette 是 FastAPI 流式标配）
+    "sse-starlette>=2.0,<3.0",
     # V0.72.0 P3-b：告警推送（邮件 SMTP + 微信 Server酱 + Web Push 后端）
     "aiosmtplib>=3.0,<4.0",
     "jinja2>=3.1,<4.0",

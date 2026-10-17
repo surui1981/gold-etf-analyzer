@@ -183,3 +183,242 @@ class ClaudeClient:
             output_tokens=int(usage.get("output_tokens") or 0),
             stop_reason=payload.get("stop_reason", ""),
         )
+
+    # ────────────── V0.98 C5 流式 ──────────────
+
+    async def ask_stream(
+        self,
+        *,
+        system: str,
+        messages: list[dict[str, Any]],
+        tools: Optional[list[dict[str, Any]]] = None,
+        max_tokens: Optional[int] = None,
+    ):
+        """V0.98 C5：流式调用，yield StreamEvent 事件。
+
+        Anthropic SSE 协议（与官方一致，国内代理如 miniMax 走 OpenAI 风格但
+        暴露 Anthropic 兼容 SSE，所以这套解析是普适的）：
+
+        ```
+        event: message_start
+        data: {"type":"message_start","message":{...}}
+
+        event: content_block_start
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"你"}}
+
+        event: content_block_stop
+        data: {"type":"content_block_stop","index":0}
+
+        event: message_delta
+        data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},...}
+
+        event: message_stop
+        data: {"type":"message_stop"}
+        ```
+
+        Yields:
+            StreamEvent 子类（按 type 标签）：MessageStart / TextDelta /
+            ToolUseStart / ToolUseInputDelta / MessageDelta / MessageStop /
+            Error / Ping。
+        """
+        headers = {
+            "x-api-key": self._api_key,
+            "anthropic-version": self.ANTHROPIC_VERSION,
+            "content-type": "application/json",
+            "accept": "text/event-stream",
+        }
+        body: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": max_tokens if max_tokens is not None else self._max_tokens,
+            "system": system,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            body["tools"] = tools
+
+        # 重试用非流式入口（流式 + 重试很复杂，先简单实现；失败抛 LLMError）
+        last_exc: Exception | None = None
+        for attempt, backoff in enumerate((0.0,) + self._RETRY_BACKOFFS):
+            if backoff:
+                await asyncio.sleep(backoff)
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    async with client.stream(
+                        "POST", self._endpoint, json=body, headers=headers,
+                    ) as resp:
+                        if resp.status_code in (429, 500, 502, 503, 504, 529):
+                            await resp.aread()
+                            last_exc = LLMRetryable(resp.status_code, resp.text)
+                            continue
+                        if 400 <= resp.status_code < 500:
+                            await resp.aread()
+                            raise LLMError(
+                                f"client error {resp.status_code}: {resp.text[:200]}"
+                            )
+                        resp.raise_for_status()
+                        # 进入流式 yield
+                        async for ev in self._iter_sse(resp):
+                            yield ev
+                        return
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                last_exc = exc
+                continue
+
+        raise LLMError(f"upstream exhausted: {last_exc}")
+
+    @staticmethod
+    async def _iter_sse(resp: httpx.Response):
+        """从 Anthropic SSE 响应里逐事件 yield StreamEvent。"""
+        current_event: str = ""
+        current_data: list[str] = []
+        tool_block_ids: dict[int, str] = {}  # index → tool_use_id
+        async for raw_line in resp.aiter_lines():
+            if not raw_line:
+                # 空行 = 一个 SSE 事件结束
+                if current_data:
+                    data_str = "\n".join(current_data)
+                    try:
+                        payload = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        current_event, current_data = "", []
+                        continue
+                    ev_type = payload.get("type", current_event or "unknown")
+                    yielded = _parse_sse_event(ev_type, payload, tool_block_ids)
+                    if yielded is not None:
+                        yield yielded
+                current_event, current_data = "", []
+                continue
+            if raw_line.startswith(":"):
+                # 注释行（ping 等），跳过
+                continue
+            if raw_line.startswith("event:"):
+                current_event = raw_line[6:].strip()
+            elif raw_line.startswith("data:"):
+                current_data.append(raw_line[5:].lstrip())
+        # 流末尾如果还有未提交的事件，flush
+        if current_data:
+            try:
+                payload = json.loads("\n".join(current_data))
+                ev_type = payload.get("type", current_event or "unknown")
+                yielded = _parse_sse_event(ev_type, payload, tool_block_ids)
+                if yielded is not None:
+                    yield yielded
+            except json.JSONDecodeError:
+                pass
+
+
+def _parse_sse_event(
+    ev_type: str, payload: dict[str, Any],
+    tool_block_ids: dict[int, str],
+):
+    """把单个 SSE payload 解析成 StreamEvent。返回 None = 跳过。"""
+    if ev_type == "ping":
+        return StreamPing()
+    if ev_type == "message_start":
+        msg = payload.get("message") or {}
+        usage = msg.get("usage") or {}
+        return StreamMessageStart(
+            input_tokens=int(usage.get("input_tokens") or 0),
+            model=msg.get("model", ""),
+        )
+    if ev_type == "content_block_start":
+        block = payload.get("content_block") or {}
+        index = int(payload.get("index", 0))
+        btype = block.get("type")
+        if btype == "tool_use":
+            tid = block.get("id", "")
+            tool_block_ids[index] = tid
+            return StreamToolUseStart(
+                index=index, id=tid, name=block.get("name", ""),
+            )
+        # text block start 不显式 yield（text_delta 即可）
+        return None
+    if ev_type == "content_block_delta":
+        delta = payload.get("delta") or {}
+        dtype = delta.get("type")
+        index = int(payload.get("index", 0))
+        if dtype == "text_delta":
+            return StreamTextDelta(index=index, text=delta.get("text", ""))
+        if dtype == "input_json_delta":
+            return StreamToolUseInputDelta(
+                index=index,
+                partial_json=delta.get("partial_json", ""),
+            )
+        return None
+    if ev_type == "content_block_stop":
+        return None  # 不显式 yield（由 message_stop 收尾）
+    if ev_type == "message_delta":
+        delta = payload.get("delta") or {}
+        usage = payload.get("usage") or {}
+        return StreamMessageDelta(
+            stop_reason=delta.get("stop_reason", ""),
+            output_tokens=int(usage.get("output_tokens") or 0),
+        )
+    if ev_type == "message_stop":
+        return StreamMessageStop()
+    if ev_type == "error":
+        err = payload.get("error") or {}
+        return StreamError(
+            err_type=err.get("type", "unknown"),
+            message=err.get("message", ""),
+        )
+    return None  # 未知事件类型
+
+
+# ────────────── V0.98 C5 流式事件 dataclass ──────────────
+
+
+@dataclass
+class StreamEvent:
+    """SSE 事件基类。"""
+
+
+@dataclass
+class StreamPing(StreamEvent):
+    pass
+
+
+@dataclass
+class StreamMessageStart(StreamEvent):
+    input_tokens: int = 0
+    model: str = ""
+
+
+@dataclass
+class StreamTextDelta(StreamEvent):
+    index: int = 0
+    text: str = ""
+
+
+@dataclass
+class StreamToolUseStart(StreamEvent):
+    index: int = 0
+    id: str = ""
+    name: str = ""
+
+
+@dataclass
+class StreamToolUseInputDelta(StreamEvent):
+    index: int = 0
+    partial_json: str = ""
+
+
+@dataclass
+class StreamMessageDelta(StreamEvent):
+    stop_reason: str = ""
+    output_tokens: int = 0
+
+
+@dataclass
+class StreamMessageStop(StreamEvent):
+    pass
+
+
+@dataclass
+class StreamError(StreamEvent):
+    err_type: str = ""
+    message: str = ""

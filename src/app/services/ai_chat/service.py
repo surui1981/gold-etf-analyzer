@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import json
 import uuid
 from datetime import datetime
 from typing import Any, Optional
@@ -265,3 +266,242 @@ class AIChatService:
                 )
 
         return user_msg, all_msgs[1:]  # 跳过 user_msg，只返 assistant+tool
+
+    # ────────────── V0.98 C5 流式 send_message_stream ──────────────
+
+    async def send_message_stream(
+        self, *, conversation_id: str, user_id: int, user_text: str,
+    ):
+        """V0.98 C5：流式发送，yield 形如 ``{"event": ..., ...}`` 的 dict。
+
+        与 :meth:`send_message` 行为一致（多轮 + 3 级降级），但 yield 增量
+        事件供 SSE endpoint 透传给前端。
+
+        Event types (yield dict shape):
+          - ``{"event": "user_saved", "msg_id": "..."}``
+          - ``{"event": "text_delta", "delta": "..."}``  (循环)
+          - ``{"event": "tool_call_start", "id": "...", "name": "..."}``
+          - ``{"event": "tool_call_input_delta", "id": "...", "delta": "..."}``
+          - ``{"event": "tool_result", "id": "...", "name": "...", "content": "..."}``
+          - ``{"event": "message_stop", "usage": {...}}``
+          - ``{"event": "error", "code": "...", "msg": "..."}``  (终态)
+        """
+        if not user_text or not user_text.strip():
+            yield {"event": "error", "code": "empty_input", "msg": "user_text is empty"}
+            return
+
+        conv = await self._conv.get(conversation_id, user_id=user_id)
+        if conv is None:
+            yield {"event": "error", "code": "conv_not_found", "msg": "conversation not found or access denied"}
+            return
+
+        # 1. 持久化 user message
+        sanitized = _sanitize_user_text(user_text, self._user_msg_max)
+        user_msg = await self._msg.insert(
+            msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
+            user_id=user_id, role=ROLE_USER, content=sanitized,
+        )
+        yield {"event": "user_saved", "msg_id": user_msg.id}
+
+        # 2. 拼历史（最近 50 条）
+        history = await self._msg.list_recent(conversation_id, limit=50)
+        messages = _to_claude_messages(history)
+        system = _build_system_prompt(conv.model)
+
+        # 3. 多轮流式循环（含 3 级降级）
+        all_msgs: list[AIMessage] = [user_msg]
+        total_in_tok = 0
+        total_out_tok = 0
+        start_ts = datetime.utcnow()
+        final_text = ""
+        final_tool_calls: list[dict[str, Any]] = []
+        had_error = False
+
+        for round_idx in range(self._max_tool_rounds):
+            tools = self._tools.schemas()
+            inlined = False
+            fresh_only = False
+
+            try:
+                events = self._llm.ask_stream(
+                    system=system, messages=messages, tools=tools,
+                )
+                async for ev in events:
+                    if hasattr(ev, "text"):  # StreamTextDelta
+                        final_text += ev.text
+                        yield {"event": "text_delta", "delta": ev.text}
+                    elif ev.__class__.__name__ == "StreamToolUseStart":
+                        final_tool_calls.append({"id": ev.id, "name": ev.name, "input_json": ""})
+                        yield {"event": "tool_call_start", "id": ev.id, "name": ev.name}
+                    elif ev.__class__.__name__ == "StreamToolUseInputDelta":
+                        # 累积 partial_json 到对应 tool_use
+                        for tc in final_tool_calls:
+                            if not tc.get("input_json_done") and tc.get("id"):
+                                tc["input_json"] = (tc.get("input_json") or "") + ev.partial_json
+                                yield {
+                                    "event": "tool_call_input_delta",
+                                    "id": tc["id"],
+                                    "delta": ev.partial_json,
+                                }
+                                break
+                    elif ev.__class__.__name__ == "StreamMessageStart":
+                        total_in_tok = ev.input_tokens
+                    elif ev.__class__.__name__ == "StreamMessageDelta":
+                        total_out_tok = ev.output_tokens
+                    elif ev.__class__.__name__ == "StreamError":
+                        raise LLMError(
+                            f"sse error: type={ev.err_type} msg={ev.message[:200]}"
+                        )
+                # 流正常结束
+            except LLMError as exc:
+                # V0.97.2 hotfix：3 级降级
+                if _is_tool_result_id_mismatch(exc) and _has_tool_result_block(messages) and not inlined and not fresh_only:
+                    logger.warning(
+                        "stream: tool_result id mismatch (proxy 2013); L1 inlined retry for conv=%s round=%d",
+                        conversation_id, round_idx,
+                    )
+                    inlined = True
+                    inlined_messages = _inline_tool_results_as_text(messages)
+                    try:
+                        events = self._llm.ask_stream(
+                            system=system, messages=inlined_messages, tools=None,
+                        )
+                        async for ev in events:
+                            if hasattr(ev, "text"):
+                                final_text += ev.text
+                                yield {"event": "text_delta", "delta": ev.text}
+                            elif ev.__class__.__name__ == "StreamMessageStart":
+                                total_in_tok = ev.input_tokens
+                            elif ev.__class__.__name__ == "StreamMessageDelta":
+                                total_out_tok = ev.output_tokens
+                            elif ev.__class__.__name__ == "StreamError":
+                                raise LLMError(
+                                    f"sse L1 error: type={ev.err_type} msg={ev.message[:200]}"
+                                )
+                    except LLMError as exc2:
+                        if not _is_tool_result_id_mismatch(exc2):
+                            had_error = True
+                            yield {"event": "error", "code": "llm_failed", "msg": str(exc2)[:200]}
+                            break
+                        # L3：只发 user 原问题
+                        logger.warning(
+                            "stream: L1 also 2013; L3 fresh-only for conv=%s",
+                            conversation_id,
+                        )
+                        fresh_only = True
+                        try:
+                            events = self._llm.ask_stream(
+                                system=system,
+                                messages=[{"role": "user", "content": user_msg.content}],
+                                tools=None,
+                            )
+                            async for ev in events:
+                                if hasattr(ev, "text"):
+                                    final_text += ev.text
+                                    yield {"event": "text_delta", "delta": ev.text}
+                                elif ev.__class__.__name__ == "StreamMessageStart":
+                                    total_in_tok = ev.input_tokens
+                                elif ev.__class__.__name__ == "StreamMessageDelta":
+                                    total_out_tok = ev.output_tokens
+                                elif ev.__class__.__name__ == "StreamError":
+                                    raise LLMError(
+                                        f"sse L3 error: type={ev.err_type} msg={ev.message[:200]}"
+                                    )
+                        except LLMError as exc3:
+                            had_error = True
+                            yield {"event": "error", "code": "llm_failed", "msg": str(exc3)[:200]}
+                            break
+                else:
+                    had_error = True
+                    yield {"event": "error", "code": "llm_failed", "msg": str(exc)[:200]}
+                    break
+
+            # 累积 tool_use 的最终 input（拼 partial_json）
+            for tc in final_tool_calls:
+                if not tc.get("input_json_done"):
+                    tc["input_json_done"] = True
+                    try:
+                        tc["input"] = json.loads(tc.get("input_json") or "{}")
+                    except (json.JSONDecodeError, ValueError):
+                        tc["input"] = {}
+
+            # 持久化 assistant 消息
+            asst_msg = await self._msg.insert(
+                msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
+                user_id=user_id, role=ROLE_ASSISTANT,
+                content=final_text,
+                tool_name=final_tool_calls[0]["name"] if final_tool_calls else None,
+                tool_input=final_tool_calls[0].get("input") if final_tool_calls else None,
+                input_tokens=total_in_tok,
+                output_tokens=total_out_tok,
+                latency_ms=int((datetime.utcnow() - start_ts).total_seconds() * 1000),
+            )
+            all_msgs.append(asst_msg)
+
+            if not final_tool_calls:
+                # 终态：end_turn，无 tool
+                break
+
+            # 有 tool_use：执行 + 拼回 messages
+            tool_results: list[tuple[Any, Any]] = []  # (tc, ToolResult)
+            for tc in final_tool_calls:
+                # 构造 ToolCall 给 tool dispatcher
+                from app.services.llm.tools import ToolCall
+                tool_call = ToolCall(id=tc["id"], name=tc["name"], input=tc.get("input", {}))
+                result = await self._tools.execute(tool_call, user_id=user_id)
+                tool_results.append((tool_call, result))
+                # 持久化 tool 消息
+                tool_msg = await self._msg.insert(
+                    msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
+                    user_id=user_id, role=ROLE_TOOL,
+                    content=result.content, tool_name=result.name,
+                    tool_call_id=tc["id"],
+                )
+                all_msgs.append(tool_msg)
+                yield {
+                    "event": "tool_result",
+                    "id": tc["id"],
+                    "name": result.name,
+                    "content": result.content[:200],  # 流式预览截断
+                }
+                # 拼回 Claude 格式 messages
+                messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tc["id"],
+                        "content": result.content,
+                    }],
+                })
+
+            # 重置 per-round 累加器，进入下一轮
+            final_text = ""
+            final_tool_calls = []
+        else:
+            logger.warning(
+                "stream: conversation %s hit max_tool_rounds=%d without end_turn",
+                conversation_id, self._max_tool_rounds,
+            )
+
+        # 终态 message_stop
+        yield {
+            "event": "message_stop",
+            "usage": {"input_tokens": total_in_tok, "output_tokens": total_out_tok},
+        }
+
+        # 5. 更新会话统计
+        await self._conv.bump_stats(
+            conversation_id,
+            last_message_at=datetime.utcnow(),
+            add_input=total_in_tok,
+            add_output=total_out_tok,
+            add_messages=len(all_msgs),
+        )
+
+        # 6. 首次发送时如果 title 为空，自动派生
+        if not conv.title and user_msg.content:
+            derived = _derive_title(user_msg.content)
+            if derived:
+                await self._conv.update(
+                    conversation_id, user_id=user_id, title=derived,
+                )

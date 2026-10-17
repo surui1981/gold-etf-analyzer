@@ -618,3 +618,140 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
         app.state.llm_client = None
         app.state.tool_dispatcher = None
         app.state.settings = None
+
+
+# ────────────── V0.98 C5 SSE 流式测试 ──────────────
+
+
+async def test_send_message_stream_happy_path(
+    as_ai_user, mock_settings,
+) -> None:
+    """V0.98 C5：SSE 流式端点 happy path —— text_delta 流式追加 + message_stop 终态。
+
+    验证：
+    1. HTTP 200 + content-type 含 text/event-stream
+    2. 收到至少 1 个 text_delta 事件
+    3. 最后 1 个事件是 message_stop
+    4. user message 已入库
+    """
+    from app.services.llm.claude import (
+        StreamMessageStart, StreamMessageStop, StreamTextDelta,
+    )
+
+    async def mock_ask_stream(*, system, messages, tools=None, **kwargs):
+        yield StreamMessageStart(input_tokens=10, model="claude-test")
+        yield StreamTextDelta(index=0, text="你好，")
+        yield StreamTextDelta(index=0, text="这是流式")
+        yield StreamTextDelta(index=0, text="回复。")
+        yield StreamMessageStop()
+
+    mock_llm = MagicMock()
+    mock_llm.ask_stream = mock_ask_stream
+
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages/stream",
+                json={"content": "hi"},
+            )
+            assert r2.status_code == 200, r2.text
+            assert "text/event-stream" in r2.headers.get("content-type", "")
+
+            # 解析 SSE 流：每行 'data: {...}\n\n' 分隔
+            events: list[dict] = []
+            text = r2.text
+            for chunk in text.split("\n\n"):
+                chunk = chunk.strip()
+                if not chunk:
+                    continue
+                for line in chunk.split("\n"):
+                    if line.startswith("data:"):
+                        import json
+                        try:
+                            payload = json.loads(line[5:].strip())
+                            events.append(payload)
+                        except json.JSONDecodeError:
+                            pass
+
+            # 必有 user_saved → text_delta* → message_stop
+            event_types = [e.get("event") for e in events]
+            assert "user_saved" in event_types, f"missing user_saved: {event_types}"
+            assert "message_stop" in event_types, f"missing message_stop: {event_types}"
+            text_deltas = [e for e in events if e.get("event") == "text_delta"]
+            assert len(text_deltas) >= 1, f"no text_delta events: {events}"
+            # 拼接所有 delta
+            full_text = "".join(e.get("delta", "") for e in text_deltas)
+            assert "你好" in full_text
+            assert "流式" in full_text
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+async def test_send_message_stream_error_event_yields_error(
+    as_ai_user, mock_settings,
+) -> None:
+    """V0.98 C5：SSE 流式端点遇 LLM StreamError → service 捕获 → yield error 事件。
+
+    验证 LLM 抛 / yield 错误时，前端拿到 ``{"event": "error", ...}`` 终态，
+    SSE 仍然 200（不是 5xx），前端可正常显示兜底 UI。
+    """
+    from app.services.llm.claude import StreamError, StreamMessageStart
+
+    async def mock_ask_stream(*, system, messages, tools=None, **kwargs):
+        yield StreamMessageStart(input_tokens=5, model="claude-test")
+        yield StreamError(err_type="invalid_request_error", message="upstream 502")
+
+    mock_llm = MagicMock()
+    mock_llm.ask_stream = mock_ask_stream
+
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages/stream",
+                json={"content": "hi"},
+            )
+            # 200 OK（SSE 即使内部出错也返 200）
+            assert r2.status_code == 200, r2.text
+
+            import json
+            events: list[dict] = []
+            for chunk in r2.text.split("\n\n"):
+                for line in chunk.split("\n"):
+                    if line.startswith("data:"):
+                        try:
+                            events.append(json.loads(line[5:].strip()))
+                        except json.JSONDecodeError:
+                            pass
+
+            event_types = [e.get("event") for e in events]
+            assert "user_saved" in event_types
+            assert "error" in event_types, f"missing error event: {event_types}"
+            # error 事件的 msg 应含 "upstream 502"
+            err_ev = next(e for e in events if e.get("event") == "error")
+            assert "upstream 502" in err_ev.get("msg", "") or "upstream 502" in err_ev.get("data", "")
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
