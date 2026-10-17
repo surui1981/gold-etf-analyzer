@@ -88,7 +88,13 @@ class FakeMarketRepo:
         return type(
             "Q",
             (),
-            {"symbol": symbol, "price_usd": 2.45, "change_pct": 1.2, "updated_at": date.today()},
+            {
+                "symbol": symbol,
+                "price_usd": 2.45,
+                "change_pct": 1.2,
+                "updated_at": date.today(),
+                "data_source_note": None,  # V0.99：默认无 LOF 代理标记
+            },
         )()
 
     async def get_silver_ny_quote(self, symbol: str = "SI"):

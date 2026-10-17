@@ -343,7 +343,12 @@ class SilverQuoteOut(BaseModel):
 
 
 class SilverEtfQuoteOut(BaseModel):
-    """白银 ETF 场内报价输出（562800 易方达白银 ETF，人民币元/份）。"""
+    """白银 ETF 场内报价输出（562800 易方达白银 ETF，人民币元/份）。
+
+    V0.99：eastmoney 频繁 RemoteDisconnected 时，仓储层降级到 sina sz161226「白银基金 LOF」
+    作为白银价格代理。LOF 与 562800 是**不同基金**但同标的白银，价格强相关。
+    此时 ``data_source_note`` 字段标 "lof_proxy" 让前端 UI 提示用户。
+    """
 
     symbol: str
     price: float = Field(..., gt=0, description="最新价，元/份")
@@ -351,6 +356,10 @@ class SilverEtfQuoteOut(BaseModel):
     unit: str = Field("元/份", description="计价单位")
     change_pct: float = Field(..., description="涨跌幅 %")
     updated_at: datetime
+    data_source_note: str | None = Field(
+        default=None,
+        description='V0.99：数据源备注。"lof_proxy" = eastmoney 失败时降级到 sz161226 白银基金 LOF；None = 真实 562800 ETF',
+    )
 
 
 class SilverGramQuoteOut(BaseModel):
@@ -450,3 +459,60 @@ class SilverCompareOut(BaseModel):
     leader: str = Field(..., description="区间表现领先者 silver_etf/silver_ny/tie")
     lead_gap: float = Field(..., description="涨跌幅差（百分点）")
     summary: str
+
+
+# ───────────────────── V0.99：SGE 上海银基准价（Ag99.99） ─────────────────────
+
+
+class SilverSgeQuoteOut(BaseModel):
+    """SGE 上海银基准价（Ag99.99）报价（V0.99 新增）。
+
+    单位：CNY/kg（人民币元 / 千克）。
+    数据源：上海黄金交易所基准价（ak.spot_silver_benchmark_sge()）。
+    与 ``silver_etf``（元/份）、``silver_ny``（美元/盎司）口径严格区分。
+    """
+
+    symbol: str = Field(default="Ag99.99", description="合约标识（SGE Ag99.99）")
+    name: str = Field(default="SGE 上海银基准价", description="中文名")
+    price_cny_per_kg: float = Field(..., description="基准价 CNY/kg")
+    currency: str = Field(default="CNY", description="计价币种")
+    unit: str = Field(default="元/千克", description="单位")
+    change_pct: float = Field(default=0.0, description="当日涨跌幅（百分点）")
+    updated_at: datetime
+
+
+class SilverSgeTrendPoint(BaseModel):
+    """SGE 上海银 K 线单点（V0.99 新增，与 SilverTrendPoint 同形态）。"""
+
+    date: date
+    open: float
+    close: float
+    high: float
+    low: float
+    volume: float = 0.0
+
+
+class SilverSgeTrendMetrics(BaseModel):
+    """SGE 上海银趋势指标（V0.99 新增，与 SilverTrendMetrics 同形态）。"""
+
+    ma20: float | None = None
+    ma40: float | None = None
+    direction: str = "neutral"
+    tech_index: float = 50.0
+    macro_index: float = 50.0
+    news_index: float = 50.0
+    trend_index: float = 50.0
+    index_level: str = "neutral"
+
+
+class SilverSgeTrendOut(BaseModel):
+    """SGE 上海银历史 K 线 + 趋势指标（V0.99 新增）。"""
+
+    target: str = Field(default="silver_sge", description="固定标识")
+    symbol: str = Field(default="Ag99.99", description="合约标识")
+    unit: str = Field(default="元/千克", description="单位")
+    klines: list[SilverSgeTrendPoint]
+    metrics: SilverSgeTrendMetrics
+    data_sources: dict[str, str] = Field(
+        default_factory=dict, description="数据源状态 key → live/mock"
+    )

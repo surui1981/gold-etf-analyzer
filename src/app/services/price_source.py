@@ -33,6 +33,7 @@ _TARGET_TO_MARKET_KEY: dict[str, tuple[str, ...]] = {
     "silver_ny": ("ny", "silver_ny"),
     "silver_etf": ("etf", "silver_etf"),
     "silver_gram": ("etf", "silver_gram"),
+    "silver_sge": ("sge_silver",),  # V0.99：SGE 上海银基准价（Ag99.99）
 }
 
 # 可写入价格日历的数据源白名单。

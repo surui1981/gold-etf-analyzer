@@ -21,6 +21,10 @@ from app.schemas.market import (
     SilverEtfQuoteOut,
     SilverGramQuoteOut,
     SilverQuoteOut,
+    SilverSgeQuoteOut,
+    SilverSgeTrendMetrics,
+    SilverSgeTrendOut,
+    SilverSgeTrendPoint,
     SilverTrendMetrics,
     SilverTrendOut,
     SilverTrendPoint,
@@ -226,7 +230,11 @@ async def silver_quote(
 async def silver_etf_quote(
     repo: MarketDataRepository = Depends(get_market_data_repository),
 ) -> SilverEtfQuoteOut:
-    """562800 易方达白银 ETF 最新成交价（人民币元/份）。"""
+    """562800 易方达白银 ETF 最新成交价（人民币元/份）。
+
+    V0.99：当 ``data_source_note="lof_proxy"`` 时，表示数据来自 sz161226「白银基金 LOF」
+    （eastmoney 失败后的代理源），前端应展示「数据来源：白银基金 LOF（新浪代理）」备注。
+    """
     quote = await repo.get_silver_etf_quote()
     return SilverEtfQuoteOut(
         symbol=quote.symbol,
@@ -235,6 +243,7 @@ async def silver_etf_quote(
         unit="元/份",
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
+        data_source_note=quote.data_source_note,
     )
 
 
@@ -387,6 +396,75 @@ async def silver_compare(
             f"{'白银ETF 领先' if leader == 'silver_etf' else '纽约白银领先' if leader == 'silver_ny' else '两者持平'}。"
             "（注：ETF 与 NY 计价单位不同，归一化仅展示相对涨跌走势，不直接做绝对价位对照。）"
         ),
+    )
+
+
+# ───────────────────── V0.99：SGE 上海银基准价 2 端点 ─────────────────────
+
+
+@router.get(
+    "/silver/sge-quote",
+    response_model=SilverSgeQuoteOut,
+    summary="SGE 上海银 Ag99.99 基准价（CNY/kg，V0.99 新增）",
+)
+async def silver_sge_quote(
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverSgeQuoteOut:
+    """SGE 上海银（上海黄金交易所 Ag99.99）基准价最新报价（CNY/kg）。
+
+    与 ``/market/silver/etf-quote``（562800 元/份）口径严格区分：
+    - 本端点：CNY/kg（每千克人民币），数据源 SGE 基准价
+    - etf-quote：CNY/份（每份人民币），数据源 562800 ETF
+    - silver/quote：USD/oz（每盎司美元），数据源 NY COMEX SI
+    """
+    quote = await repo.get_silver_sge_quote()
+    if quote is None:
+        raise HTTPException(status_code=503, detail="SGE silver 报价取数失败")
+    return SilverSgeQuoteOut(
+        price_cny_per_kg=quote.price_usd,  # SilverQuote.price_usd 字段承载任意单位价格
+        change_pct=quote.change_pct,
+        updated_at=quote.updated_at,
+    )
+
+
+@router.get(
+    "/silver/sge-trend",
+    response_model=SilverSgeTrendOut,
+    summary="SGE 上海银历史 K 线（V0.99 新增）",
+)
+async def silver_sge_trend(
+    days: int = Query(60, ge=20, le=750, description="历史天数"),
+    repo: MarketDataRepository = Depends(get_market_data_repository),
+) -> SilverSgeTrendOut:
+    """SGE 上海银 Ag99.99 基准价连续 N 天历史 K 线（CNY/kg）。"""
+    klines = await repo.get_silver_sge_history(days=days)
+    if not klines:
+        raise HTTPException(status_code=503, detail="SGE silver 历史取数失败")
+    # 简单趋势指标：MA20/MA40 复用既有逻辑（如果 TrendService 支持 silver_sge target）
+    closes = [k.close for k in klines]
+    ma20 = sum(closes[-20:]) / min(len(closes), 20) if len(closes) >= 20 else None
+    ma40 = sum(closes[-40:]) / min(len(closes), 40) if len(closes) >= 40 else None
+    direction = "neutral"
+    if ma20 is not None and len(closes) >= 2:
+        if closes[-1] > ma20 > (closes[-2] if len(closes) >= 2 else ma20):
+            direction = "up"
+        elif closes[-1] < ma20:
+            direction = "down"
+    metrics = SilverSgeTrendMetrics(ma20=ma20, ma40=ma40, direction=direction)
+    return SilverSgeTrendOut(
+        klines=[
+            SilverSgeTrendPoint(
+                date=k.date,
+                open=k.open,
+                close=k.close,
+                high=k.high,
+                low=k.low,
+                volume=k.volume,
+            )
+            for k in klines
+        ],
+        metrics=metrics,
+        data_sources={"sge_silver": "live" if not repo.source_status().get("sge_silver") == "mock" else "mock"},
     )
 
 

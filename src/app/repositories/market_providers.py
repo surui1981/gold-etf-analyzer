@@ -949,6 +949,10 @@ class AkshareSilverHistoryProvider:
         # V0.73.0 N+17：与 YahooSilverHistoryProvider 对齐 _last_was_fallback 契约
         # —— 本 provider 失败时由仓储层走 mock 兜底，不在这里静默降级。
         self._last_was_fallback: bool = False
+        # V0.99：标记本次是否走了 sz161226「白银基金 LOF」代理源。
+        # 与 _last_was_fallback=False 兼容：数据本身是真实 sina 行情，
+        # 但与 562800 ETF 真实价存在微小差异，需要前端展示提示。
+        self._last_was_lof_proxy: bool = False
 
     async def get_silver_history(
         self,
@@ -1011,9 +1015,11 @@ class AkshareSilverHistoryProvider:
         # 子进程隔离避开 sina ETF 接口的 V8 风险
         sub = await asyncio.to_thread(_sina_etf_via_subprocess, "sz161226", days)
         if sub:
-            # 标 _last_was_fallback=True：这是「白银基金 LOF」代理，**不是 562800**
-            # 仓储层会标 source="loa_proxy"，前端 freshness 角标显示「代理源」
-            self._last_was_fallback = True
+            # ⚠ sz161226 是「白银基金 LOF」**与 562800 是不同基金**但同标的白银，
+            # **数据本身是真实 sina 行情**。_last_was_fallback 保持 False，让仓储层
+            # 标 source="live"，但通过 _last_was_lof_proxy=True 让仓储层知道
+            # 这是「代理源」并把 data_source_note 传给前端。
+            self._last_was_lof_proxy = True
             return sub
         errors.append("sina lof (sz161226) empty")
 

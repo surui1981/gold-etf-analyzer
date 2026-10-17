@@ -105,12 +105,19 @@ class GoldKline:
 
 @dataclass(frozen=True)
 class SilverQuote:
-    """白银报价（数据源无关；与 GoldQuote 同结构）。"""
+    """白银报价（数据源无关；与 GoldQuote 同结构）。
+
+    V0.99：加 ``data_source_note`` 字段。
+    - ``None``：默认（来自 562800 真实 ETF 行情）
+    - ``"lof_proxy"``：sina sz161226「白银基金 LOF」代理源（eastmoney 失败时降级）
+    - ``"sge_silver"``：SGE 上海银基准价（CNY/kg）
+    """
 
     symbol: str
     price_usd: float
     change_pct: float
     updated_at: datetime
+    data_source_note: str | None = None
 
 
 @dataclass(frozen=True)
@@ -316,6 +323,17 @@ class MarketDataRepository:
             return True
         # 向后兼容：未声明契约的 provider 默认视为真数据
         return True
+
+    def _detect_silver_etf_data_source_note(self) -> str | None:
+        """V0.99：检测 silver ETF 数据源是否走了 sz161226「白银基金 LOF」代理源。
+
+        当 eastmoney 失败时，``AkshareSilverHistoryProvider`` 会通过 sina sz161226
+        （白银基金 LOF）作白银价格代理。返回 ``"lof_proxy"`` 让仓储层传给前端
+        显示「数据来源：白银基金 LOF（新浪代理）」备注。
+        """
+        provider = self._bundle.silver_history
+        is_lof = getattr(provider, "_last_was_lof_proxy", False)
+        return "lof_proxy" if is_lof else None
 
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。
@@ -736,6 +754,8 @@ class MarketDataRepository:
         V0.73.x+：优先尝试 ``YahooSilverHistoryProvider.get_silver_spot()``
         （最小请求 ``range=2d``，拿到今天日内增量 bar），失败再走 history 兜底。
         这样即使当日 K 线 Yahoo 已生成（盘中有 tick 更新），``updated_at`` 就是今天。
+
+        V0.99：当 history 来自 sz161226「白银基金 LOF」代理源时，``data_source_note="lof_proxy"``。
         """
         cache_key = ("quote_silver_etf", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
@@ -762,6 +782,8 @@ class MarketDataRepository:
                 prev = klines[-2] if len(klines) >= 2 else last
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
                 self._mark("silver_etf", True)
+                # V0.99：检测 provider 是否走了 sz161226 LOF 代理源
+                note = self._detect_silver_etf_data_source_note()
                 quote = SilverQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 3),
@@ -769,6 +791,7 @@ class MarketDataRepository:
                     updated_at=datetime.combine(
                         last.date, datetime.min.time(), tzinfo=timezone.utc
                     ),
+                    data_source_note=note,
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -1077,3 +1100,113 @@ class MarketDataRepository:
         from app.repositories.market_providers import _mock_silver_ny_history
 
         return _mock_silver_ny_history(days=days)
+
+    # ───────────────────── V0.99：SGE 上海银基准价接口 ─────────────────────
+
+    async def get_silver_sge_quote(self) -> SilverQuote | None:
+        """SGE 上海银 Ag99.99 基准价（CNY/kg）最新报价（V0.99 新增）。
+
+        数据源：``bundle.sge_silver_history`` 最后一根 K 线的 close（即「晚盘价」，
+        最贴近 T+0 现货价）。
+        与 ``silver_etf_quote``（元/份）、``silver_ny_quote``（美元/盎司）口径严格区分。
+        """
+        cache_key = ("quote_silver_sge",)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        sge_provider = getattr(self._bundle, "sge_silver_history", None)
+        if sge_provider is None:
+            logger.warning("sge_silver_history provider 未配置")
+            return SilverQuote(
+                symbol="Ag99.99",
+                price_usd=0.0,
+                change_pct=0.0,
+                updated_at=datetime.now(timezone.utc),
+            )
+        try:
+            klines = await sge_provider.get_sge_silver_history(days=3)
+            if klines:
+                last = klines[-1]
+                prev = klines[-2] if len(klines) >= 2 else last
+                change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
+                ok = self._is_silver_data_real(sge_provider)
+                self._mark("sge_silver", ok, last_date=last.date)
+                # ⚠ SilverQuote.price_usd 字段实际承载任意单位价格（元/千克 也是用这个字段）。
+                # 仓储层统一结构（避免在 dataclass 加字段破坏旧 schema）。
+                quote = SilverQuote(
+                    symbol="Ag99.99",
+                    price_usd=round(last.close, 2),
+                    change_pct=round(change_pct, 2),
+                    updated_at=datetime.combine(
+                        last.date, datetime.min.time(), tzinfo=timezone.utc
+                    ),
+                )
+                _cache_set(cache_key, quote)
+                return quote
+        except Exception as exc:
+            logger.warning("SGE silver 报价取数失败: %s", exc)
+
+        self._mark("sge_silver", False)
+        # Mock 兜底：13600 元/kg（V0.99 锚定 2026-10 现实）
+        return SilverQuote(
+            symbol="Ag99.99",
+            price_usd=13600.0,
+            change_pct=0.0,
+            updated_at=datetime.now(timezone.utc),
+        )
+
+    async def get_silver_sge_history(self, days: int = 60) -> list[SilverKline]:
+        """SGE 上海银 Ag99.99 基准价历史日 K（CNY/kg，V0.99 新增）。
+
+        失败时返回确定性 Mock 序列。
+        """
+        cache_key = ("silver_sge", days)
+        cached = _cache_get(cache_key, ttl=self._cache_ttl)
+        if cached is not None:
+            return cached
+        sge_provider = getattr(self._bundle, "sge_silver_history", None)
+        if sge_provider is None:
+            logger.warning("sge_silver_history provider 未配置")
+            return self._mock_sge_silver_history(days=days)
+        try:
+            klines = await sge_provider.get_sge_silver_history(days=days)
+            if klines:
+                silver_klines = [
+                    SilverKline(
+                        date=k.date,
+                        open=k.open,
+                        close=k.close,
+                        high=k.high,
+                        low=k.low,
+                        volume=k.volume,
+                    )
+                    for k in klines
+                ]
+                _cache_set(cache_key, silver_klines)
+                ok = self._is_silver_data_real(sge_provider)
+                self._mark("sge_silver", ok, last_date=silver_klines[-1].date)
+                return silver_klines
+            raise RuntimeError("empty SGE silver history")
+        except Exception as exc:
+            logger.warning("SGE silver history failed (%s), fallback to mock", exc)
+            self._mark("sge_silver", False)
+            return self._mock_sge_silver_history(days=days)
+
+    @staticmethod
+    def _mock_sge_silver_history(days: int) -> list[SilverKline]:
+        """确定性 Mock SGE 上海银基准价序列（13600 元/kg 锚定 2026-10 现实）。"""
+        from app.repositories.market_providers import _mock_sge_silver_history
+
+        raw = _mock_sge_silver_history(days=days)
+        return [
+            SilverKline(
+                date=k.date,
+                open=k.open,
+                close=k.close,
+                high=k.high,
+                low=k.low,
+                volume=k.volume,
+            )
+            for k in raw
+        ]
+
