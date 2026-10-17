@@ -12,20 +12,20 @@
 
 ### Added
 
-- 🏠 场景化首页（/home）
-- ⚡ /ask SSE 流式响应
-- 🔗 URL 状态化（6 页）
-- 📦 全局 toast 系统 + 断网检测
-- 📥 PWA 安装体验完善
-- 📚 CHANGELOG.md + docs/releases 索引
+- 🏠 场景化首页（/home）— 5 大场景卡（决策 / 持仓 / 情报 / 配置 / AI） — **C4 已完成** ✅
+- ⚡ /ask SSE 流式响应 — **C5 待实施**（最大风险项）
+- 🔗 URL 状态化（6 页）+ 跨页链接器 + 跨 tab 同步 — **C6 部分完成** ✅（helper 已加；6 页接入留 V0.98.x）
+- 📦 全局 toast 系统 + 断网检测 — **C3 已完成** ✅
+- 📥 PWA 安装体验完善 — **C3 已完成** ✅
+- 📚 CHANGELOG.md + docs/releases 索引 — **C1 已完成** ✅
 
 ### Changed
 
-- `ai_chat.py` 428 行 → 4 文件拆分（service / prompts / serializers / proxy_fallbacks）
+- `ai_chat.py` 428 行 → 4 文件拆分（service / prompts / serializers / proxy_fallbacks） — **C2 已完成** ✅
 
 ### Dependencies
 
-- `+ sse-starlette ^2.0.0`
+- `+ sse-starlette ^2.0.0` — **C5 待加**
 
 ### Fixed
 
