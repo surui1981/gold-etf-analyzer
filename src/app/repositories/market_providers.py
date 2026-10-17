@@ -112,15 +112,30 @@ class SilverLiveQuoteProvider(Protocol):
     async def get_silver_spot(self, symbol: str = "SI") -> float | None: ...
 
 
+class SgeSilverHistoryProvider(Protocol):
+    """SGE 上海银基准价历史 K 线 Provider 接口（V0.99 新增）。
+
+    数据源：ak.spot_silver_benchmark_sge()（上海黄金交易所 Ag99.99 基准价，CNY/kg）
+    数据模型：复用 GoldKline（OHLC + volume），调用方在仓储层包装为 SilverKline 输出。
+    字段约定：open=早盘价 / close=晚盘价 / high=max(早盘,晚盘) / low=min(早盘,晚盘) / volume=0
+    """
+
+    async def get_sge_silver_history(self, days: int = 60) -> list[GoldKline]: ...
+
+
 @dataclass(frozen=True)
 class MarketProviderBundle:
-    """Provider 五件套打包（V0.73.0 N+17 起含白银实时源），便于按名一次性注入。"""
+    """Provider 六件套打包（V0.99 起含 SGE 上海银历史源）。
+
+    字段顺序：gold 三件套 + silver 三件套（ETF/NY 实时 + SGE 历史）
+    """
 
     history: GoldHistoryProvider
     live: GoldLiveQuoteProvider
     treasury: TreasuryYieldProvider
     silver_history: SilverHistoryProvider | None = None  # V0.71.0 新增
     silver_live: SilverLiveQuoteProvider | None = None  # V0.73.0 N+17 新增
+    sge_silver_history: SgeSilverHistoryProvider | None = None  # V0.99 新增
 
 
 # ───────────────────── AKShare 子进程隔离模板 ─────────────────────
@@ -817,6 +832,105 @@ class MockSilverLiveQuoteProvider:
         return self.NY_MOCK_PRICE
 
 
+# ───────────────────── V0.99：SGE 上海银基准价 Provider ─────────────────────
+
+
+def _mock_sge_silver_history(days: int) -> list[GoldKline]:
+    """确定性 Mock SGE 上海银基准价序列（约 13600 元/kg 锚定 2026-10 现实）。"""
+    base = 13600.0
+    today = date.today()
+    points: list[GoldKline] = []
+    for i in range(days, 0, -1):
+        day = today - timedelta(days=i)
+        if day.weekday() >= 5:
+            continue
+        progress = (days - i) / days
+        wave = 0.05 * (1 - abs(progress - 0.6) / 0.6)
+        close = round(base * (1 + 0.04 * progress - 0.02 * (progress**2)) * (1 + wave), 0)
+        open_p = round(close * 0.998, 0)
+        points.append(
+            GoldKline(
+                date=day,
+                open=open_p,
+                close=close,
+                high=max(open_p, close),
+                low=min(open_p, close),
+                volume=0.0,
+            )
+        )
+    return points
+
+
+class MockSgeSilverHistoryProvider:
+    """纯内存 SGE 上海银基准价 Provider：返回确定性 Mock 序列（V0.99 silver_sge_mock 模式默认）。
+
+    V0.99：声明 ``_last_was_fallback=True`` 契约，让仓储层 ``_is_silver_data_real()``
+    自动识别这是 mock 数据（前端 freshness 角标不会误标为 live）。
+    """
+
+    _last_was_fallback: bool = True  # 始终 mock
+
+    async def get_sge_silver_history(self, days: int = 60) -> list[GoldKline]:
+        return _mock_sge_silver_history(days=days)
+
+
+class AkshareSgeSilverHistoryProvider:
+    """AKShare SGE 上海银基准价数据源（V0.99 新增）。
+
+    端点：``ak.spot_silver_benchmark_sge()``
+    字段：交易时间 / 晚盘价 / 早盘价
+    映射：
+      - open = 早盘价（当日第一个报价）
+      - close = 晚盘价（当日最后报价，最贴近 T+0 现货价）
+      - high = max(早盘, 晚盘)
+      - low = min(早盘, 晚盘)
+      - volume = 0（SGE 基准价不返回成交手数）
+
+    单位：CNY/kg
+    历史：1700+ 行（2019-10 至今，零 V8 / 零 KEY / 稳定）
+
+    任一源失败 → 抛 ``RuntimeError``，由仓储层标记 mock 并降级到内置 Mock 序列。
+    """
+
+    def __init__(self, settings: Settings | None = None) -> None:
+        self._settings = settings or get_settings()
+        # V0.99：与 silver 既有契约一致（_last_was_fallback）
+        self._last_was_fallback: bool = False
+
+    async def get_sge_silver_history(self, days: int = 60) -> list[GoldKline]:
+        try:
+            import akshare as ak
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError("akshare 未安装") from exc
+
+        def _fetch() -> list[GoldKline]:
+            df = ak.spot_silver_benchmark_sge()
+            if df is None or df.empty:
+                raise RuntimeError("ak.spot_silver_benchmark_sge empty")
+            df = df.tail(days)
+            points: list[GoldKline] = []
+            for _, row in df.iterrows():
+                early = float(row["早盘价"])
+                late = float(row["晚盘价"])
+                points.append(
+                    GoldKline(
+                        date=_parse_date(row["交易时间"]),
+                        open=early,
+                        close=late,
+                        high=max(early, late),
+                        low=min(early, late),
+                        volume=0.0,
+                    )
+                )
+            return points
+
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
+        except Exception as exc:
+            self._last_was_fallback = True
+            raise RuntimeError(f"SGE silver fetch failed: {exc}")
+
+
 class AkshareSilverHistoryProvider:
     """AKShare 白银数据源（V0.73.0 N+17 完整实现，V0.99 加新浪 sz161226 备援）。
 
@@ -1108,6 +1222,7 @@ def _bundle_history(history: GoldHistoryProvider) -> MarketProviderBundle:
         live=AkshareLiveQuoteProvider(),
         treasury=AkshareTreasuryYieldProvider(),
         silver_history=MockSilverHistoryProvider(),  # V0.71.0：默认 silver_mock 兜底
+        sge_silver_history=MockSgeSilverHistoryProvider(),  # V0.99：默认 SGE mock 兜底
     )
 
 
@@ -1118,6 +1233,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),  # V0.73.0 N+17：完整实现
         silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17：Sina hf_SI 实时
+        sge_silver_history=AkshareSgeSilverHistoryProvider(s),  # V0.99：SGE 上海银基准价
     ),
     "mock": lambda s: MarketProviderBundle(
         history=MockGoldHistoryProvider(),
@@ -1125,6 +1241,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=MockTreasuryYieldProvider(),
         silver_history=MockSilverHistoryProvider(),  # V0.71.0：mock 模式白银 mock
         silver_live=MockSilverLiveQuoteProvider(),  # V0.73.0 N+17
+        sge_silver_history=MockSgeSilverHistoryProvider(),  # V0.99：SGE mock
     ),
     "eastmoney_only": lambda s: MarketProviderBundle(
         history=EastmoneyOnlyHistoryProvider(s),
@@ -1132,6 +1249,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
         silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
+        sge_silver_history=AkshareSgeSilverHistoryProvider(s),  # V0.99
     ),
     "sina_only": lambda s: MarketProviderBundle(
         history=SinaOnlyHistoryProvider(s),
@@ -1139,6 +1257,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
         silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
+        sge_silver_history=AkshareSgeSilverHistoryProvider(s),  # V0.99
     ),
     # V0.71.0：白银专用 provider 名（不影响 gold 行为，仅 silver_history 走对应实现）
     "silver_mock": lambda s: MarketProviderBundle(
@@ -1147,6 +1266,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=MockSilverHistoryProvider(),
         silver_live=MockSilverLiveQuoteProvider(),  # V0.73.0 N+17
+        sge_silver_history=MockSgeSilverHistoryProvider(),  # V0.99
     ),
     "silver_akshare": lambda s: MarketProviderBundle(
         history=AkshareGoldHistoryProvider(s),
@@ -1154,6 +1274,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=AkshareSilverHistoryProvider(),
         silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17
+        sge_silver_history=AkshareSgeSilverHistoryProvider(s),  # V0.99
     ),
     # V0.73.x+：白银 Yahoo Finance（实时数据 + 自动 fallback mock）
     "silver_yahoo": lambda s: MarketProviderBundle(
@@ -1162,6 +1283,7 @@ PROVIDER_REGISTRY: dict[str, Callable[[Settings], MarketProviderBundle]] = {
         treasury=AkshareTreasuryYieldProvider(s),
         silver_history=YahooSilverHistoryProvider(),
         silver_live=AkshareSilverLiveProvider(s),  # V0.73.0 N+17：Yahoo 失败时 sina 兜底
+        sge_silver_history=AkshareSgeSilverHistoryProvider(s),  # V0.99
     ),
 }
 
