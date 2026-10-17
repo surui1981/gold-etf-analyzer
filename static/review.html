@@ -150,6 +150,26 @@
   .status-panel .warn-dismiss input { accent-color: var(--accent); cursor: pointer; }
   /* 老 .warn-footer / .topnav-meta 全部弃用（不留兼容） */
   @media (max-width: 760px) { .day-body { grid-template-columns:1fr; } .bar-row { grid-template-columns:80px 1fr 104px; } }
+  /* V0.98 C7 · 双层导航底 row（sub-tabs；与中央 topnav 同源） */
+  .subnav { background: var(--card, #ffffff); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 10px; margin-bottom: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .subnav .subnav-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .subnav .subnav-label { font-size: 12px; color: var(--muted);
+    padding: 0 8px 0 4px; border-right: 1px solid var(--border); font-weight: 600;
+    white-space: nowrap; }
+  .subnav .subnav-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+  .subnav a { display: inline-flex; align-items: center; gap: 5px;
+    color: var(--text, #1f2329); text-decoration: none; font-size: 13px;
+    padding: 5px 11px; border-radius: 6px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .subnav a .sub-ico { font-size: 13px; opacity: .85; }
+  .subnav a:hover { background: rgba(0,0,0,.06); border-color: rgba(0,0,0,.04); }
+  [data-theme="dark"] .subnav a:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.06); }
+  .subnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+  .subnav a.active .sub-ico { opacity: 1; }
+
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
@@ -164,6 +184,7 @@
 <div class="wrap">
   <!-- V0.83.2 · 共享顶 nav（topnav.js 同步注入，roadmap §4.1 M）：brand + 11 链接 + 时效/警示 meta -->
   <div id="topnav-mount"></div>
+  <div id="subnav-mount"></div>
   <script src="/static/topnav.js"></script>
   <!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
   <script src="/static/nav-context.js"></script>

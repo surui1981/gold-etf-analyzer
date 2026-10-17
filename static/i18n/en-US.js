@@ -39,6 +39,10 @@ window.PM_I18N_en_US = {
   "nav.backtest": "Backtest",
   "nav.health": "Data Health",
   "nav.settings": "Notifications",
+  "nav.scene_decision": "Decisions",
+  "nav.scene_portfolio": "Portfolio",
+  "nav.scene_intel": "Intel",
+  "nav.scene_config": "Config",
 
   /* ── Time relative format ── */
   "time.just_now": "Just now",

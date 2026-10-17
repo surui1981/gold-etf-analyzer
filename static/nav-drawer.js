@@ -114,7 +114,9 @@
       btn.innerHTML = '☰';
       btn.addEventListener('click', toggle);
       // 紧贴品牌右侧（在 .links 之前）
-      nav.insertBefore(btn, linksEl);
+      // 注意：.links 是 .topnav-row 的子节点（不是 .topnav 的直接子节点），
+      // 必须插到 linksEl.parentNode 而不是 nav，否则 NotFoundError。
+      linksEl.parentNode.insertBefore(btn, linksEl);
     }
 
     // 2. 抽屉 + 遮罩

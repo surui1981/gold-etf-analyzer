@@ -40,6 +40,10 @@ window.PM_I18N_zh_TW = {
   "nav.backtest": "參數回測",
   "nav.health": "資料健康",
   "nav.settings": "通知中心",
+  "nav.scene_decision": "決策",
+  "nav.scene_portfolio": "持倉",
+  "nav.scene_intel": "情報",
+  "nav.scene_config": "配置",
 
   /* ── 時間相對格式 ── */
   "time.just_now": "剛剛",

@@ -39,6 +39,10 @@ window.PM_I18N_ZH_CN = {
   "nav.backtest": "参数回测",
   "nav.health": "数据健康",
   "nav.settings": "通知中心",
+  "nav.scene_decision": "决策",
+  "nav.scene_portfolio": "持仓",
+  "nav.scene_intel": "情报",
+  "nav.scene_config": "配置",
 
   /* ── 时间相对格式 ── */
   "time.just_now": "刚刚",
