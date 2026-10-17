@@ -1189,4 +1189,17 @@ window.PM_I18N_zh_TW = {
   "home.news_section_title": "今日要聞",
   "home.news_empty": "暫無最近消息面打分",
   "home.news_load_fail": "今日要聞載入失敗",
+  /* V0.99 C5：白銀頁 3-market 選擇器 + 升貼水表 i18n */
+  "silver.headline_title_3market": "📊 白銀即時評估摘要 · 趨勢指數 × 三市場報價",
+  "silver.market_etf": "ETF（562800）",
+  "silver.market_ny": "NY SI",
+  "silver.market_sge": "SGE Ag99.99",
+  "silver.premium_table_title": "📐 多市場升貼水表（以 SGE 為錨）",
+  "silver.premium_anchor": "以 SGE 為錨",
+  "silver.premium_etf_formula": "ETF × 1000",
+  "silver.premium_ny_formula": "USD/oz × 31.1035 × 7.1",
+  "silver.premium_sge_formula": "現貨基準",
+  "silver.sge_quote_title": "SGE 上海銀 Ag99.99",
+  "silver.sge_unit": "元/千克",
+  "silver.market_label": "市場：",
 };

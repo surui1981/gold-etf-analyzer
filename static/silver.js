@@ -28,6 +28,34 @@
     M: "月 K · 聚合至年月界（24 月 ≈ 2 交易年）",
   };
 
+  // V0.99 C5：主图市场选择器（默认 ETF，与 V0.98 行为一致；点 SGE 走 /silver/sge-trend）
+  let currentMarket = "etf";
+  const MARKET_SUB = {
+    etf: "白银 ETF（562800）· 元/份",
+    ny: "纽约白银（COMEX SI）· 美元/盎司",
+    sge: "SGE 上海银 Ag99.99 · 元/千克",
+  };
+  const MARKET_ENDPOINT = {
+    etf: (days, interval) => `/api/v1/market/silver/trend?days=${days}&interval=${interval}`,
+    ny: (days) => `/api/v1/market/silver/ny-trend?days=${days}`,
+    sge: (days) => `/api/v1/market/silver/sge-trend?days=${days}`,
+  };
+  const MARKET_TREND_FIELD = {
+    etf: "points", // SilverTrendOut.points
+    ny: "points", // SilverNyTrendOut 同形态
+    sge: "klines", // SilverSgeTrendOut 用 klines 字段
+  };
+  const MARKET_TREND_CLOSE = {
+    etf: (p) => p.close,
+    ny: (p) => p.close,
+    sge: (k) => k.close,
+  };
+  const MARKET_NAME = {
+    etf: "白银 ETF 562800",
+    ny: "纽约白银 SI",
+    sge: "SGE Ag99.99",
+  };
+
   async function fetchJSON(url, timeoutMs = 40000) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -58,16 +86,20 @@
     if (window.console && console.warn) console.warn("silver trend load failed:", e);
   }
 
-  async function loadTrend(days = 60, interval = "D") {
+  async function loadTrend(days = 60, interval = "D", market = currentMarket) {
     currentKlineInterval = interval;
-    document.getElementById("trendSub").textContent = INTERVAL_SUB[interval] || INTERVAL_SUB.D;
+    currentMarket = market;
+    const subEl = document.getElementById("trendSub");
+    // V0.99 C5：主图副标题 = 市场标签 + 区间标签（市场切换时刷新）
+    const subMarket = MARKET_SUB[market] || "";
+    const subInterval = INTERVAL_SUB[interval] || INTERVAL_SUB.D;
+    if (subEl) subEl.textContent = subMarket + " · " + subInterval;
     try {
-      const data = await fetchJSON(
-        API_BASE + `/api/v1/market/silver/trend?days=${days}&interval=${interval}`
-      );
+      const endpoint = MARKET_ENDPOINT[market] || MARKET_ENDPOINT.etf;
+      const data = await fetchJSON(API_BASE + endpoint(days, interval));
       lastTrend = data;
       renderSourceBar(data);
-      renderMain(data);
+      renderMain(data, market);
       loadAlerts();
     } catch (e) {
       showTrendError(e);
@@ -78,9 +110,10 @@
 
   async function loadCards() {
     try {
-      const [etf, ny] = await Promise.all([
+      const [etf, ny, sge] = await Promise.all([
         fetchJSON(API_BASE + "/api/v1/market/silver/etf-quote"),
         fetchJSON(API_BASE + "/api/v1/market/silver/quote"),
+        fetchJSON(API_BASE + "/api/v1/market/silver/sge-quote"),
       ]);
       const items = [
         {
@@ -88,17 +121,27 @@
           value: etf.price.toFixed(3) + " 元/份",
           extra: (etf.change_pct >= 0 ? "+" : "") + etf.change_pct.toFixed(2) + "%",
           color: etf.change_pct >= 0 ? "up" : "down",
+          // V0.99：LOF 代理源时给前端一个可见提示（eastmoney 失败后回退 sina sz161226）
+          sourceNote: etf.data_source_note === "lof_proxy" ? "（LOF 代理）" : "",
         },
         {
           label: "纽约白银 SI",
           value: ny.price_usd.toFixed(2) + " 美元/盎司",
           extra: (ny.change_pct >= 0 ? "+" : "") + ny.change_pct.toFixed(2) + "%",
           color: ny.change_pct >= 0 ? "up" : "down",
+          sourceNote: "",
+        },
+        {
+          label: "SGE 上海银 Ag99.99",
+          value: sge.price_cny_per_kg.toFixed(2) + " 元/千克",
+          extra: (sge.change_pct >= 0 ? "+" : "") + sge.change_pct.toFixed(2) + "%",
+          color: sge.change_pct >= 0 ? "up" : "down",
+          sourceNote: "",
         },
         {
           label: "数据源",
           value: etf.unit || "场内",
-          extra: "ETF+NY 同步",
+          extra: "ETF + NY + SGE 三市场同步",
         },
         {
           label: "评估指数",
@@ -112,16 +155,84 @@
       <div class="card">
         <div class="label">${i.label}</div>
         <div class="value ${i.color || ""}">${i.value}</div>
-        <div class="extra">${i.extra}</div>
+        <div class="extra">${i.extra}${i.sourceNote ? " " + i.sourceNote : ""}</div>
       </div>`
         )
         .join("");
+
+      // 顺手把 3-market 报价存到状态机，给升贴水表 + 趋势选择器复用
+      window._silverQuotes = { etf, ny, sge };
+
+      // V0.99 C5：渲染 3-market 升贴水表（以 SGE 为锚）
+      renderPremiumTable(etf, ny, sge);
     } catch (e) {
       document.getElementById("cards").innerHTML =
         '<div class="card"><div class="label">报价</div><div class="value">加载失败</div><div class="extra">' +
         e.message +
         "</div></div>";
     }
+  }
+
+  /**
+   * V0.99 C5 · 3-market 升贴水表（以 SGE 现货基准价为锚）
+   *
+   * 折算口径：
+   *   - 562800 ETF：1 份 ≈ 1000 g 白银现货 → 元/份 × 1000 = 元/千克
+   *   - NY SI：USD/oz → 1 oz = 31.1035 g → × 31.1035 × 7.1 = 元/千克（7.1 = CNY/USD 固定参考）
+   *   - SGE Ag99.99：CNY/kg 现货基准
+   *
+   * 升贴水 = (折算价 - SGE) / SGE × 100%
+   * SGE 列 = 0%（锚定）
+   */
+  function renderPremiumTable(etf, ny, sge) {
+    const el = document.getElementById("premiumTable");
+    if (!el) return;
+    // 容错：任一报价缺失就降级
+    if (!etf || !ny || !sge) {
+      el.innerHTML = '<div style="padding:8px;color:var(--muted);font-size:12px">报价未就绪，暂无法计算升贴水</div>';
+      return;
+    }
+    const ETF_G_PER_SHARE = 1000.0;
+    const OZ_TO_G = 31.1035;
+    const CNY_PER_USD = 7.1; // V0.99 固定参考汇率
+    const etfPerKg = etf.price * ETF_G_PER_SHARE;
+    const nyPerKg = ny.price_usd * OZ_TO_G * CNY_PER_USD;
+    const sgePerKg = sge.price_cny_per_kg;
+    const premEtf = ((etfPerKg - sgePerKg) / sgePerKg) * 100;
+    const premNy = ((nyPerKg - sgePerKg) / sgePerKg) * 100;
+    const premSge = 0.0;
+    const fmt = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
+    const col = (n) => (n > 0.5 ? "up" : n < -0.5 ? "down" : "");
+    el.innerHTML = `
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead>
+          <tr style="background:var(--card)">
+            <th style="padding:8px;text-align:left">指标</th>
+            <th style="padding:8px;text-align:right">562800 ETF</th>
+            <th style="padding:8px;text-align:right">NY SI 折算</th>
+            <th style="padding:8px;text-align:right;background:#e8f7ee">SGE Ag99.99</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:6px">折算口径</td>
+              <td style="padding:6px;text-align:right">元/份 × 1000</td>
+              <td style="padding:6px;text-align:right">USD/oz × 31.1035 × 7.1</td>
+              <td style="padding:6px;text-align:right;background:#f5fbfa">现货基准</td></tr>
+          <tr><td style="padding:6px">最新价</td>
+              <td style="padding:6px;text-align:right">${etfPerKg.toFixed(0)}</td>
+              <td style="padding:6px;text-align:right">${nyPerKg.toFixed(0)}</td>
+              <td style="padding:6px;text-align:right;background:#f5fbfa;font-weight:600">${sgePerKg.toFixed(0)}</td></tr>
+          <tr><td style="padding:6px">升贴水（以 SGE 为锚）</td>
+              <td style="padding:6px;text-align:right" class="${col(premEtf)}">${fmt(premEtf)}</td>
+              <td style="padding:6px;text-align:right" class="${col(premNy)}">${fmt(premNy)}</td>
+              <td style="padding:6px;text-align:right;background:#f5fbfa;font-weight:600">${fmt(premSge)}</td></tr>
+        </tbody>
+      </table>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
+        📐 升贴水 = (折算价 - SGE 基准) / SGE 基准 × 100%。SGE 列为锚定（0%）。
+        汇率 CNY/USD = 7.1（固定参考，实时汇率请参考专门汇率工具）。
+      </div>
+    `;
   }
 
   async function loadCompare() {
@@ -240,7 +351,7 @@
     el.innerHTML = html;
   }
 
-  function renderMain(data) {
+  function renderMain(data, market = currentMarket) {
     const lvl = data.index?.level || "—";
     const numEl = document.getElementById("idxNum");
     numEl.textContent = data.index?.score?.toFixed(1) ?? "--";
@@ -333,12 +444,22 @@
 
     document.getElementById("loadBar").style.display = "none";
 
-    // 主图
-    const labels = data.points.map((p) => p.date);
-    const closes = data.points.map((p) => p.close);
-    const ma5 = data.points.map((p) => p.ma5);
-    const ma20 = data.points.map((p) => p.ma20);
-    const ma40 = data.points.map((p) => p.ma40);
+    // 主图（V0.99 C5：3-market 自适应 — ETF/NY 用 data.points，SGE 用 data.klines）
+    const fieldName = MARKET_TREND_FIELD[market] || "points";
+    const points = data[fieldName] || [];
+    const labelOf = (p) => p.date;
+    const closeOf = MARKET_TREND_CLOSE[market] || ((p) => p.close);
+    // V0.99：SGE klines 没有 ma5/ma20/ma40 字段（端点不返回均线），用 undefined 占位
+    const hasMA = market === "etf" || market === "ny";
+    const ma5Of = (p) => p.ma5;
+    const ma20Of = (p) => p.ma20;
+    const ma40Of = (p) => p.ma40;
+
+    const labels = points.map(labelOf);
+    const closes = points.map(closeOf);
+    const ma5 = hasMA ? points.map(ma5Of) : points.map(() => null);
+    const ma20 = hasMA ? points.map(ma20Of) : points.map(() => null);
+    const ma40 = hasMA ? points.map(ma40Of) : points.map(() => null);
 
     const area = document.getElementById("chartArea");
     area.innerHTML = '<canvas id="trendCanvas"></canvas>';
@@ -355,17 +476,18 @@
       trendChart.destroy();
       trendChart = null;
     }
+    const marketName = MARKET_NAME[market] || data.name || "白银";
+    const datasets = [
+      { label: marketName, data: closes, borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", tension: 0.2, fill: false, pointRadius: 0 },
+    ];
+    if (hasMA) {
+      datasets.push({ label: "MA5", data: ma5, borderColor: "#f59f00", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 });
+      datasets.push({ label: "MA20", data: ma20, borderColor: "#946300", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 });
+      datasets.push({ label: "MA40", data: ma40, borderColor: "#c92a2a", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 });
+    }
     trendChart = new Chart(ctx, {
       type: "line",
-      data: {
-        labels,
-        datasets: [
-          { label: data.name || "白银", data: closes, borderColor: "#1d4ed8", backgroundColor: "rgba(29,78,216,0.1)", tension: 0.2, fill: false, pointRadius: 0 },
-          { label: "MA5", data: ma5, borderColor: "#f59f00", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
-          { label: "MA20", data: ma20, borderColor: "#946300", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
-          { label: "MA40", data: ma40, borderColor: "#c92a2a", borderDash: [4, 4], tension: 0, fill: false, pointRadius: 0 },
-        ],
-      },
+      data: { labels, datasets },
       options: {
         responsive: true,
         plugins: { legend: { position: "top" } },
@@ -373,7 +495,7 @@
       },
     });
     ChartA11y.wrapChart(canvas, {
-      label: "白银趋势主图（收盘价 + MA5/MA20/MA40，近 " + labels.length + " 个交易日）",
+      label: marketName + " 趋势主图（收盘价" + (hasMA ? " + MA5/MA20/MA40，" : "，") + "近 " + labels.length + " 个交易日）",
     });
 
     document.getElementById("summary").innerHTML = data.metrics?.summary || "";
@@ -387,7 +509,32 @@
       if (!btn) return;
       document.querySelectorAll("#klineRangeBtns .range-btn").forEach((b) => b.classList.remove("active"));
       btn.classList.add("active");
-      loadTrend(parseInt(btn.dataset.days, 10), btn.dataset.interval);
+      const days = parseInt(btn.dataset.days, 10);
+      const interval = btn.dataset.interval;
+      // V0.99 C5：SGE/NY 不接 interval 参数（端点不带 interval），按 days 即可
+      if (currentMarket === "sge" || currentMarket === "ny") {
+        loadTrend(days, "D", currentMarket);
+      } else {
+        loadTrend(days, interval, currentMarket);
+      }
+    });
+  }
+
+  function bindMarketSelector() {
+    const wrap = document.getElementById("marketSelector");
+    if (!wrap) return;
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest(".market-btn");
+      if (!btn) return;
+      const newMarket = btn.dataset.market;
+      if (!newMarket || newMarket === currentMarket) return;
+      document.querySelectorAll("#marketSelector .market-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      // 切换市场时取当前 range-btn 的 days（默认 60D）
+      const activeRange = document.querySelector("#klineRangeBtns .range-btn.active");
+      const days = activeRange ? parseInt(activeRange.dataset.days, 10) : 60;
+      const interval = activeRange ? activeRange.dataset.interval : "D";
+      loadTrend(days, interval, newMarket);
     });
   }
 
@@ -424,13 +571,15 @@
   }
 
   async function init() {
-    await loadTrend(60, "D");
+    // V0.99 C5：默认 60D · ETF；market 切换后由 market-btn 状态决定 currentMarket
+    await loadTrend(60, "D", currentMarket);
     await loadCards();
     await loadCompare();
   }
 
   function onReady() {
     bindRangeButtons();
+    bindMarketSelector();
     bindRefresh();
     mountResonanceCard();
     mountHealthSummary();

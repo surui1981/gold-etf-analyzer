@@ -1285,4 +1285,17 @@ window.PM_I18N_en_US = {
   "home.news_section_title": "Today's Headlines",
   "home.news_empty": "No recent news scores",
   "home.news_load_fail": "Failed to load today's headlines",
+  /* V0.99 C5: silver page 3-market selector + premium table i18n */
+  "silver.headline_title_3market": "📊 Silver Real-time Assessment · Trend Index × 3 Markets",
+  "silver.market_etf": "ETF (562800)",
+  "silver.market_ny": "NY SI",
+  "silver.market_sge": "SGE Ag99.99",
+  "silver.premium_table_title": "📐 Multi-Market Premium/Discount Table (SGE as Anchor)",
+  "silver.premium_anchor": "SGE as anchor",
+  "silver.premium_etf_formula": "ETF × 1000",
+  "silver.premium_ny_formula": "USD/oz × 31.1035 × 7.1",
+  "silver.premium_sge_formula": "Spot benchmark",
+  "silver.sge_quote_title": "SGE Shanghai Silver Ag99.99",
+  "silver.sge_unit": "CNY/kg",
+  "silver.market_label": "Market: ",
 };

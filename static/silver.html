@@ -170,6 +170,12 @@
   .range-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s; }
   .range-btn.active { background: #1d4ed8; color: #fff; border-color: #1d4ed8; }
   .range-btn:hover:not(.active) { background: rgba(29, 78, 216, 0.08); }
+  /* V0.99 C5 · 主图市场选择器（ETF / NY / SGE） */
+  .market-btn { background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 12px; font-size: 12px; color: var(--muted); cursor: pointer; transition: background .15s;
+    font-weight: 500; }
+  .market-btn.active { background: #0e7490; color: #fff; border-color: #0e7490; }
+  .market-btn:hover:not(.active) { background: rgba(14, 116, 144, 0.10); }
   /* V0.98 C7 · 双层导航底 row（sub-tabs；与中央 topnav 同源） */
   .subnav { background: var(--card, #ffffff); border: 1px solid var(--border);
     border-radius: 10px; padding: 6px 10px; margin-bottom: 12px;
@@ -260,7 +266,7 @@
 
   <!-- 白银实时评估摘要 -->
   <section class="headline" aria-label="白银实时评估摘要">
-    <div class="headline-title" data-i18n="silver.headline_title">📊 白银实时评估摘要 · 趋势指数 × 双市场报价</div>
+    <div class="headline-title" data-i18n="silver.headline_title_3market">📊 白银实时评估摘要 · 趋势指数 × 三市场报价</div>
     <div class="index-panel">
       <div class="index-score">
         <div class="num" id="idxNum">--</div>
@@ -302,14 +308,28 @@
     <div class="summary" id="cmpSummary"></div>
   </div>
 
+  <!-- V0.99 C5 · 多市场升贴水表（以 SGE 上海银 Ag99.99 为锚定） -->
+  <div class="panel" style="margin-bottom:16px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:8px" data-i18n="silver.premium_table_title">📐 多市场升贴水表（以 SGE 为锚）</div>
+    <div id="premiumTable" style="min-height:40px"></div>
+  </div>
+
   <!-- 白银趋势主图 -->
   <div class="panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:12px;flex-wrap:wrap">
       <div style="font-size:15px;font-weight:600" data-i18n="silver.main_chart_title">📈 白银趋势主图 <span style="font-weight:400;font-size:12px;color:var(--muted)" id="trendSub" data-i18n="common.loading">加载中…</span></div>
-      <div id="klineRangeBtns" style="display:flex;gap:6px" title="V0.71.0 多时间框架">
-        <button class="range-btn active" data-days="60" data-interval="D" type="button">60D</button>
-        <button class="range-btn" data-days="365" data-interval="W" type="button">52W</button>
-        <button class="range-btn" data-days="730" data-interval="M" type="button">24M</button>
+      <div style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+        <!-- V0.99 C5 · 主图市场选择器（ETF / NY / SGE） -->
+        <div id="marketSelector" style="display:flex;gap:4px" title="主图市场切换（V0.99 C5）">
+          <button class="market-btn active" data-market="etf" type="button" data-i18n="silver.market_etf">ETF（562800）</button>
+          <button class="market-btn" data-market="ny" type="button" data-i18n="silver.market_ny">NY SI</button>
+          <button class="market-btn" data-market="sge" type="button" data-i18n="silver.market_sge">SGE Ag99.99</button>
+        </div>
+        <div id="klineRangeBtns" style="display:flex;gap:6px" title="V0.71.0 多时间框架">
+          <button class="range-btn active" data-days="60" data-interval="D" type="button">60D</button>
+          <button class="range-btn" data-days="365" data-interval="W" type="button">52W</button>
+          <button class="range-btn" data-days="730" data-interval="M" type="button">24M</button>
+        </div>
       </div>
     </div>
     <div id="chartArea"><div class="loading" data-i18n="silver.chart_loading">正在加载白银行情数据…</div></div>

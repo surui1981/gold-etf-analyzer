@@ -1285,4 +1285,17 @@ window.PM_I18N_ZH_CN = {
   "home.news_section_title": "今日要闻",
   "home.news_empty": "暂无最近消息面打分",
   "home.news_load_fail": "今日要闻加载失败",
+  /* V0.99 C5：白银页 3-market 选择器 + 升贴水表 i18n */
+  "silver.headline_title_3market": "📊 白银实时评估摘要 · 趋势指数 × 三市场报价",
+  "silver.market_etf": "ETF（562800）",
+  "silver.market_ny": "NY SI",
+  "silver.market_sge": "SGE Ag99.99",
+  "silver.premium_table_title": "📐 多市场升贴水表（以 SGE 为锚）",
+  "silver.premium_anchor": "以 SGE 为锚",
+  "silver.premium_etf_formula": "ETF × 1000",
+  "silver.premium_ny_formula": "USD/oz × 31.1035 × 7.1",
+  "silver.premium_sge_formula": "现货基准",
+  "silver.sge_quote_title": "SGE 上海银 Ag99.99",
+  "silver.sge_unit": "元/千克",
+  "silver.market_label": "市场：",
 };
