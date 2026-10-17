@@ -4,7 +4,8 @@
  * 6 端点并发拉（Promise.allSettled 一个挂不影响其他）：
  * 1. /api/v1/market/gold → hero 金价 chip
  * 2. /api/v1/market/freshness → hero 时效 chip
- * 3. /api/v1/news/history?limit=3 → 底部今日要闻 Top 3
+ * 3. /api/v1/news-score/history?limit=3 → 底部今日要闻 Top 3
+ *    ⚠ 实际路由 prefix 是 news-score（不是 news）；前者会 404
  *
  * 设计纪律（memory）：
  * - i18n-init-await：等待 i18n.ready 后再渲染（防 undefined 注入）
@@ -44,6 +45,8 @@
   });
 
   // ── 3. 并发拉 3 个端点（allSettled = 一个挂不影响其他） ──
+  // 注意：新闻端点实际挂在 /api/v1/news-score/*（router prefix = "news-score"），
+  // 不是 /api/v1/news/*。后者是 HTML 页静态路径（/static/news.html），已弃用。
   const [gold, fresh, news] = await Promise.allSettled([
     fetch('/api/v1/market/gold', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
@@ -51,7 +54,7 @@
     fetch('/api/v1/market/freshness', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
-    fetch('/api/v1/news/history?limit=3', { headers: { accept: 'application/json' } })
+    fetch('/api/v1/news-score/history?limit=3', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]);
