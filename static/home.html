@@ -35,19 +35,31 @@
 <script src="/static/i18n.js" defer></script>
 <script src="/static/auth.js" defer></script>
 <style>
-  /* V0.98 C4 场景化首页 —— 5 大场景卡 */
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: var(--bg); color: var(--text); min-height: 100vh; }
-  .home-main { max-width: 1240px; margin: 0 auto; padding: 16px 18px 32px; width: 100%; }
+  /* V0.98 C4 场景化首页 —— 5 大场景卡
+   * 设计纪律：与 central_bank / portfolio / ask 等页共用 .wrap + .hero 容器
+   * （memory scoring-page-css-block-tech-debt）。仅本页独有的 5 卡布局 CSS 留本地。
+   * ⚠ body / :root 变量 / .topnav 等共享样式由 theme.css + 各页 <style> 提供，
+   *   本页不重写。.wrap / .hero 与 central_bank.html 对齐（max-width 1240px，
+   *   与 ask.html 一致以容纳 5 卡 + AI 跨列卡）。
+   */
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 18px 32px; width: 100%; }
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%);
+    border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px;
+    margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  [data-theme="dark"] .hero { background: linear-gradient(135deg, #2a2419 0%, #1f2329 60%, #1a1d22 100%);
+    border-color: #4a3d22; }
+  .hero h1 { font-size: 25px; letter-spacing: .5px; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 820px; }
+  [data-theme="dark"] .hero .intro { color: #c8cdd3; }
+  .hero .notice { font-size: 11px; color: var(--muted); margin-top: 8px; }
 
-  /* hero */
-  .home-hero { padding: 32px 16px 24px; text-align: center; }
-  .home-title { font-size: 28px; font-weight: 700; margin: 0 0 8px; }
-  .home-subtitle { color: var(--muted); font-size: 15px; margin: 0 0 16px; }
-  .home-hero-chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
-  .home-chip { padding: 4px 12px; background: var(--card); border: 1px solid var(--border);
-    border-radius: 16px; font-size: 13px; color: var(--text); }
+  /* hero 内 chips 行（首页独有：3 个状态 chip 圆角胶囊） */
+  .home-hero-chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .home-chip { padding: 4px 12px; background: rgba(255,255,255,0.6);
+    border: 1px solid var(--border); border-radius: 16px; font-size: 13px;
+    color: var(--text); }
+  [data-theme="dark"] .home-chip { background: rgba(0,0,0,0.25); }
   .home-chip.is-loading { opacity: 0.6; }
 
   /* 5 卡 grid */
@@ -93,15 +105,10 @@
 
   /* 移动端 */
   @media (max-width: 768px) {
-    .home-hero { padding: 20px 8px 16px; }
-    .home-title { font-size: 22px; }
-    .home-subtitle { font-size: 13px; }
     .home-scenes { grid-template-columns: 1fr; gap: 12px; }
     .home-scene.scene-ai { flex-direction: column; align-items: flex-start; }
     .home-scene.scene-ai .scene-ico { font-size: 36px; }
   }
-
-  /* dark mode 兼容：toast.css 已经处理，home 自身靠 var(--card)/var(--border) 自适应 */
 </style>
 </head>
 <body>
@@ -109,10 +116,15 @@
 <div id="topnav-mount"></div>
 <script src="/static/topnav.js" defer></script>
 
-<main class="home-main">
-  <section class="home-hero">
-    <h1 class="home-title" data-i18n="home.title">黄金 ETF 投资辅助</h1>
-    <p class="home-subtitle" data-i18n="home.subtitle">决策 · 持仓 · 情报 · 一屏掌控</p>
+<div class="wrap">
+  <section class="hero">
+    <h1 data-i18n="home.title">黄金 ETF 投资辅助</h1>
+    <div class="tagline" data-i18n="home.subtitle">决策 · 持仓 · 情报 · 一屏掌控</div>
+    <div class="intro" data-i18n="home.intro">
+      三市场对照（纽约金 / 上海金 / 黄金 ETF）+ 综合趋势评估指数（技术 / 宏观 / 消息面），
+      一站完成 ETF 购买决策、持仓跟踪、复盘优化。
+    </div>
+    <div class="notice" data-i18n="home.notice">仅供研究参考，不构成投资建议</div>
     <div class="home-hero-chips" aria-label="状态">
       <span class="home-chip is-loading" id="homeGoldPrice" data-i18n="home.chip_gold_loading">金价 --</span>
       <span class="home-chip is-loading" id="homeFreshness" data-i18n="home.chip_fresh_loading">时效 --</span>
@@ -183,7 +195,7 @@
       <li class="home-news-skeleton">--</li>
     </ul>
   </section>
-</main>
+</div>
 
 <script src="/static/nav-drawer.js" defer></script>
 <script src="/static/pwa.js" defer></script>

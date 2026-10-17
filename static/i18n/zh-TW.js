@@ -1154,6 +1154,8 @@ window.PM_I18N_zh_TW = {
   // V0.98 C4：場景化首頁
   "home.title": "黃金 ETF 投資輔助",
   "home.subtitle": "決策 · 持倉 · 情報 · 一屏掌控",
+  "home.intro": "三市場對照（紐約金 / 上海金 / 黃金 ETF）+ 綜合趨勢評估指數（技術 / 宏觀 / 消息面），一站完成 ETF 購買決策、持倉追蹤、復盤優化。",
+  "home.notice": "僅供研究參考，不構成投資建議",
   "home.chip_gold_loading": "金價 --",
   "home.chip_fresh_loading": "時效 --",
   "home.chip_quota_loading": "AI --",

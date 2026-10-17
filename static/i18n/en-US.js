@@ -1250,6 +1250,8 @@ window.PM_I18N_en_US = {
   // V0.98 C4: Scene-based home page
   "home.title": "Gold ETF Investment Assistant",
   "home.subtitle": "Decisions · Portfolio · Intel · at a glance",
+  "home.intro": "Three-market comparison (COMEX gold / Shanghai gold / Gold ETFs) plus a composite trend index (technical / macro / news). ETF decision, position tracking, and post-trade review — all in one place.",
+  "home.notice": "For research only. Not investment advice.",
   "home.chip_gold_loading": "Gold --",
   "home.chip_fresh_loading": "Freshness --",
   "home.chip_quota_loading": "AI --",

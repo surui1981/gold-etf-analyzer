@@ -1250,6 +1250,8 @@ window.PM_I18N_ZH_CN = {
   // V0.98 C4：场景化首页
   "home.title": "黄金 ETF 投资辅助",
   "home.subtitle": "决策 · 持仓 · 情报 · 一屏掌控",
+  "home.intro": "三市场对照（纽约金 / 上海金 / 黄金 ETF）+ 综合趋势评估指数（技术 / 宏观 / 消息面），一站完成 ETF 购买决策、持仓跟踪、复盘优化。",
+  "home.notice": "仅供研究参考，不构成投资建议",
   "home.chip_gold_loading": "金价 --",
   "home.chip_fresh_loading": "时效 --",
   "home.chip_quota_loading": "AI --",
