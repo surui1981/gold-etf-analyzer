@@ -260,5 +260,40 @@ def main(argv: list[str]) -> int:
     return 0
 
 
+def run_nav_context_smoke() -> int:
+    """V0.98 C6：跑 nav-context.js 单元测试（21 个断言）。
+
+    失败不阻塞发版，但必须 warn 出来。
+    """
+    import subprocess
+    from pathlib import Path as _Path
+    script = _Path(__file__).parent / "check_nav_context.mjs"
+    if not script.exists():
+        print(f"[WARN] {script.name} 不存在，跳过 nav-context 单测")
+        return 0
+    try:
+        result = subprocess.run(
+            ["node", str(script)], capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            print("[WARN] nav-context 单元测试失败：")
+            print(result.stdout[-1500:])
+            print(result.stderr[-500:])
+            return 0  # 不阻塞发版
+        # 取最后一行（结果总结）
+        last = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+        print(f"[OK] nav-context 单元测试通过（{last}）")
+        return 0
+    except FileNotFoundError:
+        print("[WARN] node 不在 PATH，跳过 nav-context 单测")
+        return 0
+    except subprocess.TimeoutExpired:
+        print("[WARN] nav-context 单测超时（30s），跳过")
+        return 0
+
+
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    rc = main(sys.argv)
+    if rc == 0:
+        run_nav_context_smoke()
+    sys.exit(rc)

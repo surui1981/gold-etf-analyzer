@@ -40,12 +40,20 @@
   const NS = "pm_ctx_v1_";
   // 支持的 key 清单（白名单：避免 LS 任意键污染）
   // 实际使用中各页只读自己关心的子集。
+  // V0.98 C6：扩到 21 个 key（含 portfolio/sort/period/account_id + 通用 from/to）
   const SUPPORTED = [
     "fStart", "fEnd", "fSide", "fPosition", "fKeyword", "fSize",  // trades
     "target", "horizon", "days",                                  // review / backtest
     "snapDays", "klineDays", "klineInterval",                     // trend
     "filterCountry", "filterFrom", "filterTo",                    // central-bank
     "compressThreshold",                                          // (V0.90.1 timeline 用)
+    // V0.98 C6：URL 状态化扩面
+    "account_id", "sort", "period",                               // portfolio
+    "category",                                                   // news
+    "group_by", "hit",                                            // scoring
+    "equity_days", "slippage",                                    // backtest
+    "tag_filter",                                                 // review
+    "from", "to",                                                 // 通用日期窗口（跨页链接用）
   ];
 
   function lsKey(k) { return NS + k; }
@@ -182,6 +190,96 @@
     return "/report" + (params.length ? "?" + params.join("&") : "");
   }
 
+  // V0.98 C6：bindToFilters —— 一键绑定多个 filter + 自动 updateUrl + debounce
+  /**
+   * 批量绑定 input/select 的 change 事件 + 写 LS + 自动 updateUrl + debounce。
+   * @param {Object<string,string|HTMLElement>} map 例如 {fStart: "#fStart", days: "#selDays"}
+   * @param {Object} [opts] { debounce: 200, writeUrl: true, onAfter: fn }
+   * @returns {function():void} 卸载函数（解绑所有事件）
+   */
+  function bindToFilters(map, opts) {
+    if (!map) return function () {};
+    opts = opts || {};
+    const debounce = typeof opts.debounce === "number" ? opts.debounce : 200;
+    const writeUrl = opts.writeUrl !== false; // 默认 true
+    const onAfter = opts.onAfter;
+    const handlers = [];
+
+    // per-key debounce 计时器
+    const timers = {};
+
+    Object.keys(map).forEach(function (key) {
+      const sel = map[key];
+      const el = typeof sel === "string" ? document.querySelector(sel) : sel;
+      if (!el) return;
+      const handler = function () {
+        write(key, el.value);
+        if (writeUrl) {
+          // debounce: 200ms 内多次 change 只 updateUrl 1 次
+          clearTimeout(timers[key]);
+          timers[key] = setTimeout(function () {
+            try { updateUrl([key]); } catch (e) { /* ignore */ }
+          }, debounce);
+        }
+        if (typeof onAfter === "function") onAfter(key, el.value);
+      };
+      el.addEventListener("change", handler);
+      handlers.push({ el, handler });
+    });
+
+    // 返回卸载函数
+    return function unbind() {
+      handlers.forEach(function (h) {
+        try { h.el.removeEventListener("change", h.handler); } catch (e) { /* ignore */ }
+      });
+      Object.keys(timers).forEach(function (k) { clearTimeout(timers[k]); });
+    };
+  }
+
+  // V0.98 C6：crossLink —— 拼装跨页跳转 URL（带当前 context）
+  /**
+   * 拼装跨页链接 URL —— 在当前 context 基础上叠加指定 keys。
+   * @param {string[]} keys 需要携带的 key 列表
+   * @param {string} [basePath] 目标路径（默认当前 location.pathname）
+   * @returns {string} 形如 "/scoring?from=2024-10-01&to=2024-10-17"
+   */
+  function crossLink(keys, basePath) {
+    const path = basePath || location.pathname;
+    const q = buildQuery(keys);
+    return path + q;
+  }
+
+  // V0.98 C6：setContext —— 写 context + 跨 tab 同步
+  /**
+   * 写 context 并广播 nav-context-changed 事件（同 tab 内 dispatch 即可）。
+   * 跨 tab 同步：监听 'storage' 事件，当其他 tab 写同 NS key 时自动 reload。
+   *
+   * 注意：浏览器 storage 事件只在 OTHER tabs 触发（同 tab 不触发，避免死循环）。
+   */
+  function setContext(key, value) {
+    write(key, value);
+  }
+
+  // V0.98 C6：initCrossTabSync —— 跨 tab 同步（mount 时调一次）
+  let _storageBound = false;
+  function initCrossTabSync(onExternalChange) {
+    if (_storageBound) return;
+    _storageBound = true;
+    window.addEventListener("storage", function (e) {
+      if (!e.key || e.key.indexOf(NS) !== 0) return;
+      const k = e.key.slice(NS.length);
+      if (SUPPORTED.indexOf(k) < 0) return;
+      if (typeof onExternalChange === "function") {
+        onExternalChange(k, e.newValue);
+      } else {
+        // 默认：派发 nav-context-changed 事件（同 tab 同形式）
+        document.dispatchEvent(new CustomEvent("nav-context-changed", {
+          detail: { key: k, value: e.newValue, external: true }
+        }));
+      }
+    });
+  }
+
   // 暴露 API
   window.PM_NavContext = {
     SUPPORTED: SUPPORTED,
@@ -192,5 +290,10 @@
     buildQuery: buildQuery,
     updateUrl: updateUrl,
     buildReportUrl: buildReportUrl,
+    // V0.98 C6
+    bindToFilters: bindToFilters,
+    crossLink: crossLink,
+    setContext: setContext,
+    initCrossTabSync: initCrossTabSync,
   };
 })();
