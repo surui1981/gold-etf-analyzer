@@ -818,9 +818,13 @@ class MockSilverLiveQuoteProvider:
 
 
 class AkshareSilverHistoryProvider:
-    """AKShare 白银数据源（V0.73.0 N+17 完整实现，替代 V0.71.0 stub）。
+    """AKShare 白银数据源（V0.73.0 N+17 完整实现，V0.99 加新浪 sz161226 备援）。
 
-    - ETF（562800）：``fund_etf_hist_em``（与 518880 完全同路径，不依赖 V8，主进程直调）；
+    - ETF（562800 易方达白银 ETF）：``fund_etf_hist_em``（主）+ 新浪 ``sz161226``（备援）。
+      V0.99 修复：eastmoney 经常 ``RemoteDisconnected``，加新浪链兜底。
+      ⚠ **sina 562800 是错的**——sina 的 562800 = 稀有金属ETF嘉实（非白银 ETF）。
+      新浪上正确的白银基金是 ``sz161226 白银基金``（LOF），价格与 562800 强相关但口径不同。
+      备援时 **用 sz161226** 并标 ``_last_was_fallback=True``（伪代源，谨慎使用）。
     - NY SI：``futures_foreign_hist(symbol="SI")``（与 GC 同路径，可能触发 V8 → 子进程隔离）。
 
     任一源失败 → 抛 ``RuntimeError``，由仓储层标记 mock 并降级到内置 Mock 序列。
@@ -843,13 +847,23 @@ class AkshareSilverHistoryProvider:
         return await self._fetch_etf_silver(symbol, days)
 
     async def _fetch_etf_silver(self, symbol: str, days: int) -> list[GoldKline]:
-        """ETF 路径：fund_etf_hist_em（与 AkshareGoldHistoryProvider 完全对称）。"""
+        """ETF 路径：em 主 + 新浪 sz161白银基金 备援（V0.99 修复 eastmoney RemoteDisconnected）。
+
+        em 成功即返回；失败则走 sz161226「白银基金 LOF」作白银价格代理。
+        ⚠ sz161226 与 562800 是**不同基金**（LOF vs ETF）但同标的白银，价格强相关。
+        前端需要通过 ``_last_was_fallback=True`` 识别这是「代理源」并显示备注。
+
+        ⚠ sina 562800 = 稀有金属ETF嘉实（非白银 ETF），**绝不能用**。
+        """
         try:
             import akshare as ak
         except ImportError as exc:  # pragma: no cover
             raise RuntimeError("akshare 未安装") from exc
 
-        def _fetch() -> list[GoldKline]:
+        errors: list[str] = []
+
+        # 主源：东方财富（不依赖 V8，主进程直调）
+        def _fetch_em() -> list[GoldKline]:
             end = datetime.now()
             start = end - timedelta(days=days * 2)
             df = ak.fund_etf_hist_em(
@@ -874,7 +888,24 @@ class AkshareSilverHistoryProvider:
                 for _, row in df.iterrows()
             ]
 
-        return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
+        try:
+            return await asyncio.wait_for(asyncio.to_thread(_fetch_em), timeout=30)
+        except Exception as exc:
+            errors.append(f"em: {type(exc).__name__}: {exc}")
+
+        # 备援：白银基金 LOF sz161226（新浪独有白银基金，**非 562800**）
+        # 子进程隔离避开 sina ETF 接口的 V8 风险
+        sub = await asyncio.to_thread(_sina_etf_via_subprocess, "sz161226", days)
+        if sub:
+            # 标 _last_was_fallback=True：这是「白银基金 LOF」代理，**不是 562800**
+            # 仓储层会标 source="loa_proxy"，前端 freshness 角标显示「代理源」
+            self._last_was_fallback = True
+            return sub
+        errors.append("sina lof (sz161226) empty")
+
+        raise RuntimeError(
+            f"all silver ETF sources failed for {symbol}: {'; '.join(errors)}"
+        )
 
     async def _fetch_ny_silver(self, days: int) -> list[GoldKline]:
         """NY 路径：futures_foreign_hist 子进程隔离（与 GC 同路径）。"""
