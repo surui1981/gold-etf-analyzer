@@ -430,6 +430,12 @@ async def index() -> RedirectResponse:
     return RedirectResponse("/static/trend.html")
 
 
+@app.get("/home", include_in_schema=False)
+async def home_page() -> RedirectResponse:
+    """场景化首页（V0.98 C4）—— 5 大场景卡。"""
+    return RedirectResponse("/static/home.html")
+
+
 @app.get("/portfolio", include_in_schema=False)
 async def portfolio_page() -> RedirectResponse:
     """个人交易跟踪与购买决策页。"""

@@ -54,6 +54,7 @@ from typing import Callable
 # V0.91.0 新增 /report —— 复盘报告 PDF 导出页；V0.92.0 新增 /scoring —— 打分汇总）
 EXPECTED_ALIAS_PATHS: list[str] = [
     "/",
+    "/home",
     "/portfolio",
     "/weights",
     "/news",

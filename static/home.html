@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="home.title">黄金 ETF 投资辅助</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" data-i18n="home.title" content="黄金 ETF 投资辅助">
+<link rel="stylesheet" href="/static/print.css" media="print">
+<link rel="stylesheet" href="/static/toast.css">
+<link rel="stylesheet" href="/static/pwa.css">
+<script src="/static/theme.js" defer></script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
+<script src="/static/auth.js" defer></script>
+<style>
+  /* V0.98 C4 场景化首页 —— 5 大场景卡 */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh; }
+  .home-main { max-width: 1240px; margin: 0 auto; padding: 16px 18px 32px; width: 100%; }
+
+  /* hero */
+  .home-hero { padding: 32px 16px 24px; text-align: center; }
+  .home-title { font-size: 28px; font-weight: 700; margin: 0 0 8px; }
+  .home-subtitle { color: var(--muted); font-size: 15px; margin: 0 0 16px; }
+  .home-hero-chips { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+  .home-chip { padding: 4px 12px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; font-size: 13px; color: var(--text); }
+  .home-chip.is-loading { opacity: 0.6; }
+
+  /* 5 卡 grid */
+  .home-scenes { display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px; margin-bottom: 24px; }
+  .home-scene { display: flex; flex-direction: column; padding: 20px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    text-decoration: none; color: inherit; transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s; }
+  .home-scene:hover { transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08); border-color: var(--accent, #2563eb); }
+  .home-scene:focus-visible { outline: 2px solid var(--accent, #2563eb); outline-offset: 2px; }
+  .scene-ico { font-size: 32px; margin-bottom: 8px; line-height: 1; }
+  .scene-title { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .scene-desc { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  .scene-links { list-style: none; padding: 0; margin: 0;
+    display: flex; gap: 6px; flex-wrap: wrap; }
+  .scene-links li { padding: 3px 10px; background: var(--bg); border-radius: 8px;
+    font-size: 12px; color: var(--muted); }
+
+  /* AI 场景卡占满 + 渐变 */
+  .home-scene.scene-ai { grid-column: 1 / -1;
+    background: linear-gradient(135deg, var(--card) 0%, color-mix(in srgb, var(--accent, #2563eb) 12%, var(--card)) 100%);
+    flex-direction: row; align-items: center; gap: 20px; }
+  .home-scene.scene-ai .scene-ico { font-size: 48px; margin-bottom: 0; }
+  .home-scene.scene-ai .scene-body { flex: 1; }
+  .home-ai-cta { display: inline-block; padding: 10px 20px;
+    background: var(--accent, #2563eb); color: #fff; border-radius: 8px;
+    font-weight: 500; text-decoration: none; white-space: nowrap; }
+  .home-ai-cta:hover { filter: brightness(1.1); }
+
+  /* 底部要闻 */
+  .home-bottom { padding: 16px 20px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 12px; }
+  .home-bottom h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+  .home-news-list { list-style: none; padding: 0; margin: 0; }
+  .home-news-list li { padding: 10px 0; border-bottom: 1px solid var(--border);
+    font-size: 13px; line-height: 1.5; }
+  .home-news-list li:last-child { border-bottom: none; }
+  .home-news-list .home-news-date { color: var(--muted); font-size: 12px; margin-right: 8px; }
+  .home-news-skeleton { color: var(--muted); }
+  .home-news-error { color: var(--muted); font-style: italic; }
+
+  /* 移动端 */
+  @media (max-width: 768px) {
+    .home-hero { padding: 20px 8px 16px; }
+    .home-title { font-size: 22px; }
+    .home-subtitle { font-size: 13px; }
+    .home-scenes { grid-template-columns: 1fr; gap: 12px; }
+    .home-scene.scene-ai { flex-direction: column; align-items: flex-start; }
+    .home-scene.scene-ai .scene-ico { font-size: 36px; }
+  }
+
+  /* dark mode 兼容：toast.css 已经处理，home 自身靠 var(--card)/var(--border) 自适应 */
+</style>
+</head>
+<body>
+
+<header class="topnav-placeholder"></header>
+
+<main class="home-main">
+  <section class="home-hero">
+    <h1 class="home-title" data-i18n="home.title">黄金 ETF 投资辅助</h1>
+    <p class="home-subtitle" data-i18n="home.subtitle">决策 · 持仓 · 情报 · 一屏掌控</p>
+    <div class="home-hero-chips" aria-label="状态">
+      <span class="home-chip is-loading" id="homeGoldPrice" data-i18n="home.chip_gold_loading">金价 --</span>
+      <span class="home-chip is-loading" id="homeFreshness" data-i18n="home.chip_fresh_loading">时效 --</span>
+      <span class="home-chip is-loading" id="homeQuota" data-i18n="home.chip_quota_loading">AI --</span>
+    </div>
+  </section>
+
+  <section class="home-scenes">
+    <a class="home-scene scene-decision" href="/scoring">
+      <div class="scene-ico">📊</div>
+      <h2 class="scene-title" data-i18n="home.scene_decision">决策</h2>
+      <p class="scene-desc" data-i18n="home.scene_decision_desc">评分 · 趋势 · 回测</p>
+      <ul class="scene-links">
+        <li data-i18n="home.scene_decision_1">今日评分</li>
+        <li data-i18n="home.scene_decision_2">趋势追踪</li>
+        <li data-i18n="home.scene_decision_3">参数回测</li>
+      </ul>
+    </a>
+
+    <a class="home-scene scene-portfolio" href="/portfolio">
+      <div class="scene-ico">💼</div>
+      <h2 class="scene-title" data-i18n="home.scene_portfolio">持仓</h2>
+      <p class="scene-desc" data-i18n="home.scene_portfolio_desc">决策 · 流水 · 复盘</p>
+      <ul class="scene-links">
+        <li data-i18n="home.scene_portfolio_1">持仓与决策</li>
+        <li data-i18n="home.scene_portfolio_2">交易历史</li>
+        <li data-i18n="home.scene_portfolio_3">复盘报告</li>
+      </ul>
+    </a>
+
+    <a class="home-scene scene-intel" href="/news">
+      <div class="scene-ico">📰</div>
+      <h2 class="scene-title" data-i18n="home.scene_intel">情报</h2>
+      <p class="scene-desc" data-i18n="home.scene_intel_desc">新闻 · 复盘 · 央行 · 健康</p>
+      <ul class="scene-links">
+        <li data-i18n="home.scene_intel_1">消息面评估</li>
+        <li data-i18n="home.scene_intel_2">研判复盘</li>
+        <li data-i18n="home.scene_intel_3">央行购金</li>
+        <li data-i18n="home.scene_intel_4">数据健康</li>
+      </ul>
+    </a>
+
+    <a class="home-scene scene-config" href="/weights">
+      <div class="scene-ico">⚙️</div>
+      <h2 class="scene-title" data-i18n="home.scene_config">配置</h2>
+      <p class="scene-desc" data-i18n="home.scene_config_desc">权重 · 通知</p>
+      <ul class="scene-links">
+        <li data-i18n="home.scene_config_1">权重配置</li>
+        <li data-i18n="home.scene_config_2">通知中心</li>
+      </ul>
+    </a>
+
+    <a class="home-scene scene-ai" href="/ask">
+      <div class="scene-ico">🤖</div>
+      <div class="scene-body">
+        <h2 class="scene-title" data-i18n="home.scene_ai">AI 智能分析</h2>
+        <p class="scene-desc" data-i18n="home.scene_ai_desc">基于实时数据的对话式辅助</p>
+      </div>
+      <span class="home-ai-cta" data-i18n="home.scene_ai_btn">进入 AI 助手</span>
+    </a>
+  </section>
+
+  <section class="home-bottom">
+    <h3 data-i18n="home.news_section_title">今日要闻</h3>
+    <ul class="home-news-list" id="homeNewsList" aria-live="polite">
+      <li class="home-news-skeleton">--</li>
+      <li class="home-news-skeleton">--</li>
+      <li class="home-news-skeleton">--</li>
+    </ul>
+  </section>
+</main>
+
+<script src="/static/topnav.js" defer></script>
+<script src="/static/nav-drawer.js" defer></script>
+<script src="/static/pwa.js" defer></script>
+<script src="/static/toast.js" defer></script>
+<script src="/static/net-status.js" defer></script>
+<script src="/static/home.js" defer></script>
+</body>
+</html>

@@ -66,6 +66,10 @@ const SHELL_ASSETS = [
     "/static/ask.html",
     "/static/ask.js",
     "/static/marked.min.js",
+    // V0.98 C4：场景化首页（5 大场景卡）
+    "/home",
+    "/static/home.html",
+    "/static/home.js",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",

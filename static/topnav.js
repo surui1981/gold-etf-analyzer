@@ -44,11 +44,12 @@
 (function () {
   "use strict";
 
-  // 11 个链接 + 各自 i18n key + emoji + zh-CN 兜底文本
+  // 14 个链接 + 各自 i18n key + emoji + zh-CN 兜底文本
   // 顺序 = 显示顺序（不可调）
   // `activeFor` 列出路徑在哪些 pathname 下應點亮（解決 `/portfolio` → `/static/portfolio.html`
   // redirect 後 location.pathname 變 `/static/portfolio.html` 但 link.path 仍是 `/portfolio`）
   var NAV_LINKS = [
+    { path: "/home",                    activeFor: ["/home", "/static/home.html"], ico: "🏠", i18n: "nav.home",         fb: "首页" },
     { path: "/static/trend.html",       activeFor: ["/static/trend.html", "/", ""], ico: "📈", i18n: "nav.trend",        fb: "趋势追踪" },
     { path: "/portfolio",               activeFor: ["/portfolio", "/static/portfolio.html"], ico: "💼", i18n: "nav.portfolio",    fb: "持仓与决策" },
     { path: "/trades",                  activeFor: ["/trades", "/static/trades.html"], ico: "📜", i18n: "nav.trades",       fb: "交易历史" },
