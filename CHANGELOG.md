@@ -14,7 +14,38 @@
 
 ---
 
-## [V0.98.0] · 2026-10-17
+## [V0.99.0] · 2026-10-18
+
+`白银数据修复 + SGE 上海银跟踪 + 页面重构` — 6 件大项 / 6 个 commit
+
+### Added
+
+- 🥈 SGE 上海银基准价 2 端点（`/silver/sge-quote` + `/silver/sge-trend`，CNY/kg） — **C3 ✅**
+- 📊 白银页 3-market 视角：ETF（562800）+ NY SI + SGE Ag99.99，5 张卡渲染 — **C5 ✅**
+- 📐 多市场升贴水表（以 SGE 为锚；ETF × 1000 / NY × 31.1035 × 7.1 / SGE 0%） — **C5 ✅**
+- 🔀 主图市场选择器（3 market-btn：ETF / NY / SGE） + SGE-only 收盘价曲线 — **C5 ✅**
+- 🌐 SGE 端点 schema：SilverSgeQuoteOut / SilverSgeTrendOut / SilverSgeTrendMetrics — **C3 ✅**
+- 🔄 AkshareSgeSilverHistoryProvider（ak.spot_silver_benchmark_sge，1700+ 行历史） — **C2 ✅**
+- 🏷️ SilverQuote.data_source_note 字段：eastmoney 失败时显示「LOF 代理」备注 — **C1 ✅**
+
+### Changed
+
+- ♻️ silver.html 655 行 → silver.html 332 行 + silver.js 445 行（IIFE 包装 + 7 模块函数 + DOMContentLoaded 入口） — **C4 ✅**
+- 📊 562800 ETF 历史 K 线：em→sina sz161226（白银基金 LOF）双源降级，与 518880 黄金 ETF 对齐 — **C1 ✅**
+- 🎨 headline 标题改 3-market（headline_title_3market） — **C5 ✅**
+- 🏷️ sw.js SHELL_ASSETS 加 `/static/silver.js` — **C4 ✅**
+- 🌐 i18n +12 silver.* keys × 3 langs = 36 条翻译 — **C5 ✅**
+
+### Fixed
+
+- 🐛 562800 ETF 历史 K 线静默走 mock（eastmoney `RemoteDisconnected`）→ em+sina 双源 — **C1 ✅**
+- 🐛 silver.js TDZ bug（`techComposeBadge` 在使用之后才声明） — **C4 修**
+- 🐛 renderMain 漏传 market 参数导致切 SGE 抛 `ReferenceError: market is not defined` — **C5 修**
+- 🐛 SGE klines 无 ma5/ma20/ma40 字段 → hasMA 守卫只画 1 条收盘价 — **C5 修**
+
+[详情](docs/releases/v0.99.0.md)
+
+---
 
 `体验重塑 + 结构清偿` — 7 件大项 / 11 个 commit
 
@@ -214,7 +245,8 @@
 
 ---
 
-[Unreleased]: https://example.com/compare/v0.98.0...HEAD
+[Unreleased]: https://example.com/compare/v0.99.0...HEAD
+[V0.99.0]: docs/releases/v0.99.0.md
 [V0.98.0]: docs/releases/v0.98.0.md
 [V0.97.2 hotfix]: docs/releases/v0.97.2-hotfix.md
 [V0.97.2]: docs/releases/v0.97.2.md
