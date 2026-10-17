@@ -8,28 +8,46 @@
 
 ---
 
-## [Unreleased] · V0.98
+## [Unreleased]
+
+（暂无）
+
+---
+
+## [V0.98.0] · 2026-10-17
+
+`体验重塑 + 结构清偿` — 7 件大项 / 11 个 commit
 
 ### Added
 
-- 🏠 场景化首页（/home）— 5 大场景卡（决策 / 持仓 / 情报 / 配置 / AI） — **C4 已完成** ✅
-- ⚡ /ask SSE 流式响应 — **C5 待实施**（最大风险项）
-- 🔗 URL 状态化（6 页）+ 跨页链接器 + 跨 tab 同步 — **C6 部分完成** ✅（helper 已加；6 页接入留 V0.98.x）
-- 📦 全局 toast 系统 + 断网检测 — **C3 已完成** ✅
-- 📥 PWA 安装体验完善 — **C3 已完成** ✅
-- 📚 CHANGELOG.md + docs/releases 索引 — **C1 已完成** ✅
+- 🏠 场景化首页（/home）— 5 大场景卡（决策 / 持仓 / 情报 / 配置 / AI） — **C4 ✅**
+- ⚡ /ask SSE 流式响应（`/api/v1/ai/conversations/{id}/messages/stream`） — **C5 ✅**
+- 🔗 URL 状态化（6 页）+ 跨页链接器 + 跨 tab 同步 — **C6 ✅**
+- 📦 全局 toast 系统（`window.PM_Toast`）+ 断网检测 — **C3 ✅**
+- 📥 PWA 安装体验完善（`appinstalled` 监听 + iOS 引导 + 7 天 TTL + manifest 完善） — **C3 ✅**
+- 🧭 双层导航 7 顶场景 + 4 子场景 sub-tabs（首页/决策/持仓/情报/配置/AI/健康） — **C7 ✅**
+- 📚 CHANGELOG.md + docs/releases 索引 — **C1 ✅**
 
 ### Changed
 
-- `ai_chat.py` 428 行 → 4 文件拆分（service / prompts / serializers / proxy_fallbacks） — **C2 已完成** ✅
+- ♻️ `ai_chat.py` 428 行 → 4 文件拆分（service / prompts / serializers / proxy_fallbacks） — **C2 ✅**
+- 🏠 主页布局对齐 `.wrap` + `.hero` 标准模式（commit `94adce4`）
+- 🏠 topnav 「🏠 首页」tab 加在最前
 
 ### Dependencies
 
-- `+ sse-starlette ^2.0.0` — **C5 待加**
+- `+ sse-starlette ^2.0.0`（SSE 流式依赖） — **C5 ✅**
 
 ### Fixed
 
-（暂无）
+- 🐛 home 新闻加载失败（端点 URL 修正 `/api/v1/news-score/history`） — **C4 hotfix `83a0025`**
+- 🐛 home topnav mount 缺失（占位符 → `<div id="topnav-mount">`） — **C4 hotfix `83a0025`**
+- 🐛 home topnav CSS 缺失（字体/链接与其他业务页对齐） — **C4 hotfix `7434cda`**
+- 🐛 nav-drawer.js:117 `insertBefore` 抛 NotFoundError（pre-existing，`.links` 是 `.topnav-row` 子节点） — **C7 顺手修**
+
+[详情](docs/releases/v0.98.0.md)
+
+---
 
 ---
 
@@ -196,7 +214,8 @@
 
 ---
 
-[Unreleased]: https://example.com/compare/v0.97.2-hotfix...HEAD
+[Unreleased]: https://example.com/compare/v0.98.0...HEAD
+[V0.98.0]: docs/releases/v0.98.0.md
 [V0.97.2 hotfix]: docs/releases/v0.97.2-hotfix.md
 [V0.97.2]: docs/releases/v0.97.2.md
 [V0.97.1]: docs/releases/v0.97.1.md

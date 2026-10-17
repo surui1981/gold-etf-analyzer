@@ -14,7 +14,7 @@
  */
 
 // V0.97.2 布局 hotfix：/ask 视口感知 + welcome 卡片 + 2/3 栏切换
-const VERSION = "v0.97.2";
+const VERSION = "v0.98.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
