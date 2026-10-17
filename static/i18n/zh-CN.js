@@ -225,6 +225,17 @@ window.PM_I18N_ZH_CN = {
   "toast.account_created": "已创建账本",
   "toast.account_archived": "已归档账本",
   "toast.lang_changed": "已切换至 {lang}",
+  // V0.98 C3 · 断网 toast
+  "toast.net_lost": "网络异常，请检查连接",
+  "toast.net_restored": "网络已恢复",
+
+  /* ── V0.98 C3 · PWA 安装引导 + 断网 banner ── */
+  "pwa.install_title": "添加到主屏",
+  "pwa.install_desc": "离线浏览 · 主屏启动 · 实时通知",
+  "pwa.install_btn": "安装",
+  "pwa.install_dismiss": "稍后再说",
+  "pwa.installed_toast": "已添加到主屏，享受原生体验",
+  "net.banner_text": "📡 网络异常，部分功能暂不可用",
 
   /* ── 主题（V0.69.0）── */
   "theme.light": "浅色模式",

@@ -1,0 +1,114 @@
+/* V0.98 C3：从 pwa.js 内联 style 抽出的 PWA 安装引导样式
+ * ─────────────────────────────────────────────────────
+ * pm-install-banner + pm-ios-hint，视觉与原 inline style 一致；
+ * 暗色风格与 toast.css / theme.css 协调。
+ */
+
+.pm-install-banner {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #1f2329;
+  color: #e5e7eb;
+  padding: 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 14px/1.4 -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}
+.pm-install-banner-text {
+  flex: 1;
+}
+.pm-install-banner-title {
+  font-weight: 600;
+  color: #d4a857;
+}
+.pm-install-banner-desc {
+  font-size: 12px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+.pm-install-banner-btn {
+  background: #d4a857;
+  color: #1f2329;
+  border: 0;
+  padding: 8px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  font-family: inherit;
+}
+.pm-install-banner-btn:hover {
+  opacity: 0.9;
+}
+.pm-install-banner-btn:focus-visible {
+  outline: 2px solid #d4a857;
+  outline-offset: 1px;
+}
+.pm-install-banner-dismiss {
+  background: transparent;
+  color: #9ca3af;
+  border: 0;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  font-family: inherit;
+}
+.pm-install-banner-dismiss:hover {
+  color: #e5e7eb;
+}
+
+.pm-ios-hint {
+  position: fixed;
+  bottom: 24px;
+  left: 24px;
+  right: 24px;
+  max-width: 480px;
+  margin: 0 auto;
+  background: #1f2329;
+  color: #e5e7eb;
+  padding: 14px 18px;
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+}
+.pm-ios-hint-title {
+  font-weight: 600;
+  color: #d4a857;
+  margin-bottom: 6px;
+}
+.pm-ios-hint-body {
+  font-size: 13px;
+  color: #9ca3af;
+}
+.pm-ios-hint-body strong {
+  color: #e5e7eb;
+}
+.pm-ios-hint-body em {
+  color: #e5e7eb;
+  font-style: normal;
+}
+.pm-ios-hint-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  color: #9ca3af;
+  border: 0;
+  font-size: 18px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.pm-ios-hint-dismiss:hover {
+  color: #e5e7eb;
+}

@@ -99,6 +99,11 @@ const SHELL_ASSETS = [
     "/static/synthesis-card.js",
     // V0.76.0 首页内嵌消息面打分器：宿在首页顶部，离线打开时必须能渲染
     "/static/news-score-widget.js",
+    // V0.98 C3：全局 toast / 断网检测 / PWA 安装引导样式（离线打开页面时也要能渲染）
+    "/static/toast.css",
+    "/static/pwa.css",
+    "/static/toast.js",
+    "/static/net-status.js",
 ];
 
 // ─── install：precache shell + skipWaiting ─────────────────────

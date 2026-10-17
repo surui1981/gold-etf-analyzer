@@ -127,6 +127,8 @@
 <link rel="stylesheet" href="/static/help.css">
 <!-- V0.91.0：print 模板（A4 + 隐藏 chrome + 链接 URL 展开） -->
 <link rel="stylesheet" href="/static/print.css" media="print">
+<link rel="stylesheet" href="/static/toast.css">
+<link rel="stylesheet" href="/static/pwa.css">
 </head>
 <body>
 <!-- V0.69.0 skip-link -->
@@ -493,7 +495,11 @@ async function resetAll() {
 </script>
   <script src="/static/health-summary.js"></script>
   <script src="/static/warning.js"></script>
+
+  <script src="/static/toast.js" defer></script>
   <script src="/static/pwa.js" defer></script>
+
+  <script src="/static/net-status.js" defer></script>
 <script src="/static/help.js" defer></script>
 <script src="/static/account.js"></script>
   <!-- V0.68.0 客户端埋点 + 导航折叠 + 全局搜索（不破坏既有加载顺序） -->

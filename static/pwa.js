@@ -1,7 +1,12 @@
 /* V0.72.0 P3-b：PWA install banner + Service Worker 注册 + Web Push 订阅
  * ─────────────────────────────────────────────────────────────
+ * V0.98 C3 更新：
+ *   - 内联 style → pwa.css 外部样式（更易维护 / cache 不破规则）
+ *   - 加 appinstalled 监听 → PM_Toast.success 庆祝
+ *   - dismiss 改 TTL：pm_pwa_install_dismissed_until（7 天）
+ *   - install / iOS 文案走 i18n（pwa.install_* 三个 key）
  * 模式：IIFE + window.PM_PWA 命名空间
- * 依赖：telemetry.js（埋点）/ help.js（HELP 引用）
+ * 依赖：telemetry.js（埋点）/ help.js（HELP 引用）/ PM_Toast（可选）/ PM_I18N（可选）
  *
  * 不依赖 jQuery / 任何打包工具（项目无构建步骤）。
  */
@@ -13,7 +18,40 @@
 
     const VERSION = "v0.73.0";
     const LS_SEEN = "pm_pwa_seen_version";
-    const LS_DISMISSED = "pm_pwa_install_dismissed";
+    const LS_DISMISSED_UNTIL = "pm_pwa_install_dismissed_until";
+    const LS_INSTALLED = "pm_pwa_installed";
+    const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 天
+
+    function t_(key, fallback) {
+        if (key && typeof window.PM_I18N !== "undefined"
+            && window.PM_I18N
+            && typeof window.PM_I18N.t === "function") {
+            try {
+                const v = window.PM_I18N.t(key);
+                if (v && v !== key) return v;
+            } catch (_) { /* 静默 */ }
+        }
+        return fallback;
+    }
+
+    function isDismissed() {
+        try {
+            const until = localStorage.getItem(LS_DISMISSED_UNTIL);
+            if (!until) return false;
+            const ts = Date.parse(until);
+            if (Number.isNaN(ts)) return false;
+            return Date.now() < ts;
+        } catch (_) {
+            return false;
+        }
+    }
+
+    function markDismissed() {
+        try {
+            const until = new Date(Date.now() + DISMISS_TTL_MS).toISOString();
+            localStorage.setItem(LS_DISMISSED_UNTIL, until);
+        } catch (_) { /* 隐私模式 */ }
+    }
 
     // ── 1. SW 注册 ────────────────────────────────────────
     navigator.serviceWorker
@@ -78,7 +116,7 @@
         e.preventDefault();
         deferredPrompt = e;
         if (localStorage.getItem(LS_SEEN) === VERSION) return;
-        if (localStorage.getItem(LS_DISMISSED) === "1") return;
+        if (isDismissed()) return;
         showInstallBanner();
     });
 
@@ -88,22 +126,40 @@
 
         const banner = document.createElement("div");
         banner.id = "pmPwaBanner";
-        banner.style.cssText =
-            "position:fixed;bottom:24px;left:24px;right:24px;max-width:480px;margin:0 auto;" +
-            "background:#1f2329;color:#e5e7eb;padding:14px 18px;border-radius:10px;" +
-            "box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;gap:12px;" +
-            "font:14px/1.4 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;";
-        banner.innerHTML = `
-            <div style="flex:1">
-                <div style="font-weight:600;color:#d4a857">📱 安装到桌面</div>
-                <div style="font-size:12px;color:#9ca3af;margin-top:2px">离线也能用，自动接收档位告警</div>
-            </div>
-            <button id="pmPwaInstall" style="background:#d4a857;color:#1f2329;border:0;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px">安装</button>
-            <button id="pmPwaDismiss" style="background:transparent;color:#9ca3af;border:0;font-size:20px;cursor:pointer;padding:0 4px">×</button>
-        `;
+        banner.className = "pm-install-banner";
+        banner.setAttribute("role", "dialog");
+        banner.setAttribute("aria-live", "polite");
+
+        const textWrap = document.createElement("div");
+        textWrap.className = "pm-install-banner-text";
+        const title = document.createElement("div");
+        title.className = "pm-install-banner-title";
+        title.textContent = "📱 " + t_("pwa.install_title", "添加到主屏");
+        const desc = document.createElement("div");
+        desc.className = "pm-install-banner-desc";
+        desc.textContent = t_("pwa.install_desc", "离线浏览 · 主屏启动 · 实时通知");
+        textWrap.appendChild(title);
+        textWrap.appendChild(desc);
+
+        const installBtn = document.createElement("button");
+        installBtn.id = "pmPwaInstall";
+        installBtn.type = "button";
+        installBtn.className = "pm-install-banner-btn";
+        installBtn.textContent = t_("pwa.install_btn", "安装");
+
+        const dismissBtn = document.createElement("button");
+        dismissBtn.id = "pmPwaDismiss";
+        dismissBtn.type = "button";
+        dismissBtn.className = "pm-install-banner-dismiss";
+        dismissBtn.setAttribute("aria-label", "close");
+        dismissBtn.textContent = "×";
+
+        banner.appendChild(textWrap);
+        banner.appendChild(installBtn);
+        banner.appendChild(dismissBtn);
         document.body.appendChild(banner);
 
-        document.getElementById("pmPwaInstall").onclick = async () => {
+        installBtn.onclick = async () => {
             if (!deferredPrompt) return;
             deferredPrompt.prompt();
             const { outcome } = await deferredPrompt.userChoice;
@@ -114,9 +170,9 @@
             localStorage.setItem(LS_SEEN, VERSION);
         };
 
-        document.getElementById("pmPwaDismiss").onclick = () => {
+        dismissBtn.onclick = () => {
             banner.remove();
-            localStorage.setItem(LS_DISMISSED, "1");
+            markDismissed();
             localStorage.setItem(LS_SEEN, VERSION);
         };
 
@@ -133,21 +189,45 @@
 
         const card = document.createElement("div");
         card.id = "pmIosHint";
-        card.style.cssText =
-            "position:fixed;bottom:24px;left:24px;right:24px;max-width:480px;margin:0 auto;" +
-            "background:#1f2329;color:#e5e7eb;padding:14px 18px;border-radius:10px;" +
-            "box-shadow:0 6px 20px rgba(0,0,0,0.5);z-index:9999;" +
-            "font:14px/1.5 -apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;";
-        card.innerHTML = `
-            <div style="font-weight:600;color:#d4a857;margin-bottom:6px">📱 iOS 用户</div>
-            <div style="font-size:13px;color:#9ca3af">
-                点击底部分享按钮 <strong style="color:#e5e7eb">⬆️</strong> → <em style="color:#e5e7eb">添加到主屏</em>，安装后可接收档位告警
-            </div>
-            <button id="pmIosDismiss" style="position:absolute;top:8px;right:8px;background:transparent;color:#9ca3af;border:0;font-size:18px;cursor:pointer">×</button>
-        `;
+        card.className = "pm-ios-hint";
+        card.setAttribute("role", "dialog");
+        card.setAttribute("aria-live", "polite");
+
+        const title = document.createElement("div");
+        title.className = "pm-ios-hint-title";
+        title.textContent = "📱 " + t_("pwa.install_title", "添加到主屏");
+
+        const body = document.createElement("div");
+        body.className = "pm-ios-hint-body";
+        // iOS hint 文本与 banner desc 共用，文案窄就 i18n 友好。
+        body.textContent = t_("pwa.install_desc", "离线浏览 · 主屏启动 · 实时通知");
+
+        const dismissBtn = document.createElement("button");
+        dismissBtn.id = "pmIosDismiss";
+        dismissBtn.type = "button";
+        dismissBtn.className = "pm-ios-hint-dismiss";
+        dismissBtn.setAttribute("aria-label", "close");
+        dismissBtn.textContent = "×";
+
+        card.appendChild(title);
+        card.appendChild(body);
+        card.appendChild(dismissBtn);
         document.body.appendChild(card);
-        document.getElementById("pmIosDismiss").onclick = () => card.remove();
+        dismissBtn.onclick = () => card.remove();
     }
+
+    // ── 5. appinstalled 监听 → toast 庆祝 ─────────────────
+    window.addEventListener("appinstalled", () => {
+        try { localStorage.setItem(LS_INSTALLED, "1"); } catch (_) { /* 隐私模式 */ }
+        if (window.PM_Toast && typeof window.PM_Toast.success === "function") {
+            try {
+                window.PM_Toast.success(
+                    t_("pwa.installed_toast", "已添加到主屏，享受原生体验"),
+                    { duration: 6000, i18n: "pwa.installed_toast" }
+                );
+            } catch (_) { /* 静默 */ }
+        }
+    });
 
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isStandalone = window.matchMedia("(display-mode: standalone)").matches;
@@ -159,6 +239,6 @@
         }
     }
 
-    // ── 5. 暴露 API ──────────────────────────────────────
+    // ── 6. 暴露 API ──────────────────────────────────────
     window.PM_PWA = { ensurePushSubscribed, VERSION };
 })();

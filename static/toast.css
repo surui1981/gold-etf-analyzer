@@ -1,0 +1,167 @@
+/* V0.98 C3：全局 toast 系统（顶部居中 stacked，最多 3 个）
+ * ─────────────────────────────────────────────────────
+ * 4 个级别（info/success/warn/err），slide-down + fade 入场，
+ * 支持 prefers-color-scheme 暗色主题覆盖。
+ * 与 .pm-net-banner 共存：toast z-index 99999，banner 99998。
+ */
+:root {
+  --toast-info-bg: #dbeafe;
+  --toast-info-fg: #1e40af;
+  --toast-info-border: #93c5fd;
+  --toast-success-bg: #dcfce7;
+  --toast-success-fg: #166534;
+  --toast-success-border: #86efac;
+  --toast-warn-bg: #fef3c7;
+  --toast-warn-fg: #92400e;
+  --toast-warn-border: #fcd34d;
+  --toast-err-bg: #fee2e2;
+  --toast-err-fg: #991b1b;
+  --toast-err-border: #fca5a5;
+}
+
+.pm-toast-container {
+  position: fixed;
+  top: env(safe-area-inset-top, 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(480px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.pm-toast {
+  pointer-events: auto;
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  animation: pm-toast-slide-in 0.2s ease-out;
+  font: 14px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+}
+
+.pm-toast-info {
+  background: var(--toast-info-bg);
+  color: var(--toast-info-fg);
+  border: 1px solid var(--toast-info-border);
+}
+.pm-toast-success {
+  background: var(--toast-success-bg);
+  color: var(--toast-success-fg);
+  border: 1px solid var(--toast-success-border);
+}
+.pm-toast-warn {
+  background: var(--toast-warn-bg);
+  color: var(--toast-warn-fg);
+  border: 1px solid var(--toast-warn-border);
+}
+.pm-toast-err {
+  background: var(--toast-err-bg);
+  color: var(--toast-err-fg);
+  border: 1px solid var(--toast-err-border);
+}
+
+.pm-toast-msg {
+  flex: 1 1 auto;
+  word-break: break-word;
+}
+
+.pm-toast-action {
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+}
+.pm-toast-action:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.pm-toast-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.pm-toast-close {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 4px;
+  font-family: inherit;
+}
+.pm-toast-close:hover {
+  opacity: 0.7;
+}
+.pm-toast-close:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+  border-radius: 2px;
+}
+
+@keyframes pm-toast-slide-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --toast-info-bg: #1e3a8a;
+    --toast-info-fg: #dbeafe;
+    --toast-info-border: #2563eb;
+    --toast-success-bg: #14532d;
+    --toast-success-fg: #dcfce7;
+    --toast-success-border: #16a34a;
+    --toast-warn-bg: #78350f;
+    --toast-warn-fg: #fef3c7;
+    --toast-warn-border: #d97706;
+    --toast-err-bg: #7f1d1d;
+    --toast-err-fg: #fee2e2;
+    --toast-err-border: #dc2626;
+  }
+}
+
+/* 断网 banner：固定顶部全宽红条（不动布局），toast 浮在它下面 */
+.pm-net-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--toast-err-bg, #fee2e2);
+  color: var(--toast-err-fg, #991b1b);
+  border-bottom: 1px solid var(--toast-err-border, #fca5a5);
+  font: 13px/1 -apple-system, BlinkMacSystemFont, "PingFang SC",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+  z-index: 99998;
+  pointer-events: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .pm-net-banner {
+    background: #7f1d1d;
+    color: #fee2e2;
+    border-bottom-color: #dc2626;
+  }
+}

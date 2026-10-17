@@ -168,6 +168,23 @@ window.PM_I18N_zh_TW = {
   "portfolio.holdings_empty": "暫無持倉，請至「交易歷史」頁面新增首筆交易",
   "portfolio.btn_export_csv": "匯出 CSV",
 
+  /* ── V0.98 C3 · 全域 toast + PWA 安裝 + 斷網 banner ── */
+  "toast.position_created": "已開倉",
+  "toast.position_closed": "已平倉",
+  "toast.trade_added": "已加倉",
+  "toast.trade_reduced": "已減倉",
+  "toast.account_created": "已建立帳本",
+  "toast.account_archived": "已封存帳本",
+  "toast.lang_changed": "已切換至 {lang}",
+  "toast.net_lost": "網絡異常，請檢查連接",
+  "toast.net_restored": "網絡已恢復",
+  "pwa.install_title": "添加到主螢",
+  "pwa.install_desc": "離線瀏覽 · 主螢啟動 · 即時通知",
+  "pwa.install_btn": "安裝",
+  "pwa.install_dismiss": "稍後再說",
+  "pwa.installed_toast": "已添加到主螢，享受原生體驗",
+  "net.banner_text": "📡 網絡異常，部分功能暫不可用",
+
   /* ── 趨勢（trend.html）chrome ── */
   "trend.h1": "黃金趨勢追蹤（紐約黃金基準）",
   "trend.range_label": "區間",

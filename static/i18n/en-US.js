@@ -226,6 +226,17 @@ window.PM_I18N_en_US = {
   "toast.account_created": "Account created",
   "toast.account_archived": "Account archived",
   "toast.lang_changed": "Switched to {lang}",
+  // V0.98 C3 · net status toasts
+  "toast.net_lost": "Network error, check your connection",
+  "toast.net_restored": "Network restored",
+
+  /* ── V0.98 C3 · PWA install + offline banner ── */
+  "pwa.install_title": "Install to Home Screen",
+  "pwa.install_desc": "Offline browse · Home launch · Real-time alerts",
+  "pwa.install_btn": "Install",
+  "pwa.install_dismiss": "Maybe later",
+  "pwa.installed_toast": "Added to home screen · enjoy native UX",
+  "net.banner_text": "📡 Network error, some features unavailable",
 
   /* ── Theme (V0.69.0) ── */
   "theme.light": "Light",
