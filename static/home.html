@@ -36,13 +36,35 @@
 <script src="/static/auth.js" defer></script>
 <style>
   /* V0.98 C4 场景化首页 —— 5 大场景卡
-   * 设计纪律：与 central_bank / portfolio / ask 等页共用 .wrap + .hero 容器
+   * 设计纪律：与 central_bank / portfolio / ask 等页共用 .wrap + .hero + .topnav 容器
    * （memory scoring-page-css-block-tech-debt）。仅本页独有的 5 卡布局 CSS 留本地。
-   * ⚠ body / :root 变量 / .topnav 等共享样式由 theme.css + 各页 <style> 提供，
-   *   本页不重写。.wrap / .hero 与 central_bank.html 对齐（max-width 1240px，
-   *   与 ask.html 一致以容纳 5 卡 + AI 跨列卡）。
+   * ⚠ body / :root 变量由 theme.css 提供；topnav 块（每页必带）从 central_bank.html
+   *   copy，确保 brand + 链接 + active 状态与全站一致。
    */
-  .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 18px 32px; width: 100%; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px; }
+
+  /* 顶部导航（统一）· V0.83 C3：双行布局 */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #f5d97a; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand .brand-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#806014);
+    box-shadow:0 0 8px rgba(245,217,122,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+
+  .wrap { max-width: 1240px; margin: 0 auto; }
   .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%);
     border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px;
     margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
