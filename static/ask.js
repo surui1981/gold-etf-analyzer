@@ -521,7 +521,7 @@
       });
   }
 
-  // ────────────── 发消息 ──────────────
+  // ────────────── 发消息（V0.98 C5 · SSE 流式）──────────────
 
   function sendMessage() {
     if (state.sending) return;
@@ -537,22 +537,316 @@
     state.sending = true;
     sendBtn.disabled = true;
     sendBtn.textContent = t('ai.sending', '发送中…');
-    // 清空流，加 user msg
+    // 先把 user 消息入栈（流式开始前已确定）
     var userMsg = { role: 'user', content: text, created_at: new Date().toISOString() };
     state.messages.push(userMsg);
-    renderMessages();
+    // 构造占位 assistant 消息（用于流式累积 + 右栏 chip 计数）
     var placeholderAsst = { role: 'assistant', content: '', tool_name: null };
     state.messages.push(placeholderAsst);
     renderMessages();
     inputEl.value = '';
     autoResize();
 
+    // 起流（SSE /messages/stream）；失败时降级到 /messages 同步端点
+    return sendMessageStream(text, placeholderAsst)
+      .catch(function (err) {
+        // SSE 端点不可用（404 / 405 / 网络层）→ 降级到同步端点
+        console.warn('SSE stream failed, falling back to sync /messages', err);
+        return sendMessageSyncFallback(text, placeholderAsst);
+      })
+      .then(function () {
+        state.sending = false;
+        sendBtn.disabled = false;
+        sendBtn.textContent = t('ai.send', '发送');
+        inputEl.focus();
+      })
+      .catch(function (err) {
+        // 同步端点也失败 → 移除占位 + 提示
+        state.messages = state.messages.slice(0, -2);
+        if (err && err.status === 429) {
+          showBanner('warn', t('ai.error_rate_limit', '提问太频繁，请稍后再试'));
+        } else if (err && err.status === 503) {
+          showBanner('err', t('ai.error_llm', '模型服务异常：') + (err.message || ''));
+        } else {
+          showBanner('err', t('ai.error_network', '网络异常：') + (err && err.message || ''));
+        }
+        renderMessages();
+        state.sending = false;
+        sendBtn.disabled = false;
+        sendBtn.textContent = t('ai.send', '发送');
+        inputEl.focus();
+      });
+  }
+
+  // V0.98 C5：SSE 流式发送主路径
+  //  - 调 /api/v1/ai/conversations/{id}/messages/stream
+  //  - 逐事件更新 placeholderAsst.content / tool_name / tool_input
+  //  - 终态把 placeholder 替换为 [asst, tool?, asst?, ...] 整轮结果
+  function sendMessageStream(text, placeholderAsst) {
+    var url = '/api/v1/ai/conversations/' + state.activeId + '/messages/stream';
+    // 当前正在流式累积的「buffer」：一个临时 DOM 节点 + 一个 tool 列表
+    var liveBubble = null;   // 当前 assistant 的 .bubble 元素（markdown 渲染目标）
+    var liveMsgWrap = null;  // 当前 assistant 的 .message.assistant 包裹
+    var pendingText = '';    // 累积的纯文本
+    var pendingToolChips = []; // [{ id, name, inputPreview, result, resultNode, chipNode }]
+    var inputDebounceTs = 0; // 限频：tool_call_input_delta
+    var lastRenderTs = 0;    // 限频：text_delta 渲染 markdown
+
+    function flushBubble(force) {
+      var now = Date.now();
+      if (!force && now - lastRenderTs < 80) return; // 80ms 节流
+      lastRenderTs = now;
+      if (liveBubble && window.marked && window.marked.parse) {
+        try {
+          liveBubble.innerHTML = renderMarkdown(pendingText);
+        } catch (e) {
+          liveBubble.textContent = pendingText;
+        }
+      } else if (liveBubble) {
+        liveBubble.textContent = pendingText;
+      }
+    }
+
+    function attachLiveAssistant() {
+      // 找到刚刚 renderMessages 后的最后一个 assistant message 节点
+      var kids = Array.prototype.slice.call(streamEl.children);
+      for (var i = kids.length - 1; i >= 0; i--) {
+        if (kids[i].classList && kids[i].classList.contains('assistant')) {
+          liveMsgWrap = kids[i];
+          // 它的结构是 [avatar, wrap[bubble, meta?]]，取 bubble（class="bubble"）
+          var bub = liveMsgWrap.querySelector('.bubble');
+          liveBubble = bub;
+          // 初始化为 streaming 态
+          if (liveBubble) {
+            liveBubble.classList.add('streaming');
+            liveBubble.innerHTML = '<span class="streaming-cursor">▍</span>';
+          }
+          return;
+        }
+      }
+    }
+
+    function upsertToolChip(tc) {
+      // 找到已存在的 chip，否则新建并插到 liveMsgWrap 后面
+      var existing = pendingToolChips.find(function (x) { return x.id === tc.id; });
+      if (existing) {
+        if (tc.delta != null) {
+          existing.inputPreview = (existing.inputPreview || '') + tc.delta;
+          // 节流：更新 input 预览（每 200ms 一次）
+          var now = Date.now();
+          if (now - inputDebounceTs > 200 || tc.delta.indexOf('}') >= 0) {
+            inputDebounceTs = now;
+            if (existing.chipNode) {
+              existing.chipNode.querySelector('.tool-input-preview').textContent = existing.inputPreview;
+            }
+          }
+        }
+        if (tc.content != null) {
+          existing.result = tc.content;
+          if (existing.chipNode) {
+            var resEl = existing.chipNode.querySelector('.tool-result-text');
+            if (resEl) resEl.textContent = tc.content;
+            existing.chipNode.classList.add('done');
+          }
+        }
+        return;
+      }
+      // 新建 chip
+      var details = el('details', { class: 'tool-result-stream streaming-chip', 'data-tc-id': tc.id });
+      var sum = el('summary', { class: 'tool-result-summary' });
+      sum.appendChild(el('span', { class: 'tool-name', text: '🔧 ' + toolLabel(tc.name) }));
+      sum.appendChild(el('span', { class: 'tool-input-preview streaming-input', text: tc.delta || '' }));
+      sum.appendChild(el('span', { class: 'tool-result-text', text: tc.content || t('ai.streaming', '调用中…') }));
+      details.appendChild(sum);
+      // 插到 liveMsgWrap 之后（chat 流里在 text 之后）
+      if (liveMsgWrap && liveMsgWrap.parentNode) {
+        liveMsgWrap.parentNode.insertBefore(details, liveMsgWrap.nextSibling);
+      }
+      pendingToolChips.push({ id: tc.id, name: tc.name, inputPreview: tc.delta || '', result: tc.content || null, chipNode: details });
+    }
+
+    return fetch(url, {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream' },
+      body: JSON.stringify({ content: text }),
+    }).then(function (resp) {
+      if (!resp.ok) {
+        // 把 HTTP 错误抛给 .catch 走降级路径
+        var err = new Error('SSE HTTP ' + resp.status);
+        err.status = resp.status;
+        err._sse = true;
+        throw err;
+      }
+      if (!resp.body || !resp.body.getReader) {
+        var err2 = new Error('SSE unsupported (no ReadableStream)');
+        err2._sse = true;
+        throw err2;
+      }
+
+      // 拼装 SSE parser 状态机
+      var reader = resp.body.getReader();
+      var decoder = new TextDecoder('utf-8');
+      var buf = '';
+      var curEvent = '';
+      var curData = '';
+      // 已确认的 round 列表（流式多轮 tool_use）
+      var committedMsgs = [];
+      // 当前 round 的临时缓冲
+      var currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: 0, outputTokens: 0 };
+
+      function commitRoundToState() {
+        // 把 currentRound 推到 placeholderAsst 之前（即 state.messages 的最后
+        // 一个 assistant 槽位），并清空 currentRound
+        var idx = state.messages.indexOf(placeholderAsst);
+        if (idx < 0) return;
+        var assistant = {
+          role: 'assistant',
+          content: currentRound.text,
+          tool_name: currentRound.toolName,
+          tool_input: currentRound.toolInput,
+          input_tokens: currentRound.inputTokens || null,
+          output_tokens: currentRound.outputTokens || null,
+          latency_ms: currentRound.latencyMs || null,
+        };
+        state.messages.splice(idx, 1, assistant);
+        // 找已 commit 的 tool 消息（在 chat 流中已渲染），它们也属于这一轮
+        // 简化：把 committedMsgs 中 role==='tool' 的也 push
+        committedMsgs.forEach(function (m) {
+          if (m.role === 'tool') state.messages.push(m);
+        });
+        committedMsgs = [];
+        currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: 0, outputTokens: 0 };
+        pendingText = '';
+        pendingToolChips = [];
+      }
+
+      function parseLine(line) {
+        if (!line) {
+          // 事件边界
+          if (curData) {
+            var payload;
+            try { payload = JSON.parse(curData); } catch (e) { curEvent = ''; curData = ''; return; }
+            handleEvent(curEvent || (payload.event || 'message'), payload);
+          }
+          curEvent = ''; curData = '';
+          return;
+        }
+        if (line[0] === ':') return; // 注释 / ping
+        var ci = line.indexOf(':');
+        var field = ci < 0 ? line : line.slice(0, ci);
+        var value = ci < 0 ? '' : line.slice(ci + 1).replace(/^ /, '');
+        if (field === 'event') curEvent = value;
+        else if (field === 'data') curData += (curData ? '\n' : '') + value;
+      }
+
+      function handleEvent(name, payload) {
+        // payload 形态是后端塞进 data 的 dict：{ event: '...', ...extra }
+        var type = payload.event || name;
+        switch (type) {
+          case 'user_saved':
+            // 关联 user_msg id；前端不影响展示
+            userMsg.id = payload.msg_id;
+            break;
+          case 'text_delta':
+            if (!liveMsgWrap) attachLiveAssistant();
+            pendingText += payload.delta || '';
+            flushBubble(false);
+            break;
+          case 'tool_call_start':
+            if (!liveMsgWrap) attachLiveAssistant();
+            upsertToolChip({ id: payload.id, name: payload.name });
+            currentRound.toolName = payload.name;
+            break;
+          case 'tool_call_input_delta':
+            upsertToolChip({ id: payload.id, delta: payload.delta });
+            currentRound.toolInputJson = (currentRound.toolInputJson || '') + (payload.delta || '');
+            break;
+          case 'tool_result':
+            upsertToolChip({ id: payload.id, name: payload.name, content: payload.content });
+            // 同步累积 tool 消息到 state（多轮也支持）
+            committedMsgs.push({
+              role: 'tool',
+              content: payload.content || '',
+              tool_name: payload.name,
+              tool_call_id: payload.id,
+            });
+            // 解析累积的 input JSON
+            if (currentRound.toolName && currentRound.toolInput == null) {
+              try { currentRound.toolInput = JSON.parse(currentRound.toolInputJson || '{}'); }
+              catch (e) { currentRound.toolInput = {}; }
+            }
+            // 当前 round 完成 → 推入 state.messages，并起新 round
+            commitRoundToState();
+            // 下一轮的 live 节点暂未创建（要等下一批 text_delta）；重置 liveBubble
+            liveBubble = null;
+            liveMsgWrap = null;
+            // 重新走 renderMessages 刷新（让右栏 tool trace 同步）
+            renderMessages();
+            break;
+          case 'message_stop':
+            // 最终 message_stop：把最后一轮（end_turn）也 commit
+            if (currentRound.text || currentRound.toolName) {
+              commitRoundToState();
+            }
+            // 移除所有 chip 的 streaming 态
+            pendingToolChips.forEach(function (tc) {
+              if (tc.chipNode) tc.chipNode.classList.remove('streaming-chip');
+            });
+            // 清掉 bubble 的 streaming-cursor
+            if (liveBubble) liveBubble.classList.remove('streaming');
+            // 触发 conv 列表 last_message_at 刷新
+            var conv = state.conversations.find(function (c) { return c.id === state.activeId; });
+            if (conv) {
+              conv.message_count = state.messages.length;
+              conv.last_message_at = new Date().toISOString();
+              state.conversations.sort(function (a, b) { return (b.last_message_at || '').localeCompare(a.last_message_at || ''); });
+              renderConvList();
+            }
+            renderMessages();
+            break;
+          case 'error':
+            // 401/403/404 通常 HTTP 状态先报错；此处处理 200 + error 事件
+            showBanner('err', (payload.code || 'stream_error') + ': ' + (payload.msg || ''));
+            break;
+          default:
+            // 忽略 ping / 其它
+            break;
+        }
+      }
+
+      function pump() {
+        return reader.read().then(function (r) {
+          if (r.done) {
+            // flush 残余
+            if (curData) parseLine('');
+            return;
+          }
+          buf += decoder.decode(r.value, { stream: true });
+          // 按 \n 切行；保留末尾不完整行
+          var lines = buf.split('\n');
+          buf = lines.pop() || '';
+          for (var i = 0; i < lines.length; i++) {
+            // SSE 行用 \r\n 时去掉尾部 \r
+            var ln = lines[i].replace(/\r$/, '');
+            parseLine(ln);
+          }
+          return pump();
+        });
+      }
+
+      return pump();
+    });
+  }
+
+  // 同步端点降级（V0.98 C5 后端 /messages 仍保留）
+  function sendMessageSyncFallback(text, placeholderAsst) {
     return apiSend('/api/v1/ai/conversations/' + state.activeId + '/messages', 'POST', { content: text })
       .then(function (turn) {
-        // 替换 placeholder + 加 responses
-        state.messages = state.messages.slice(0, -1).concat(turn.responses || []);
+        var idx = state.messages.indexOf(placeholderAsst);
+        if (idx >= 0) {
+          state.messages = state.messages.slice(0, idx).concat(turn.responses || []);
+        }
         renderMessages();
-        // bump conv 列表 last_message_at
         var conv = state.conversations.find(function (c) { return c.id === state.activeId; });
         if (conv) {
           conv.message_count = (conv.message_count || 0) + 1 + (turn.responses ? turn.responses.length - 1 : 0);
@@ -560,24 +854,6 @@
           state.conversations.sort(function (a, b) { return (b.last_message_at || '').localeCompare(a.last_message_at || ''); });
           renderConvList();
         }
-      })
-      .catch(function (err) {
-        // 移除 placeholder，保留 user_msg（也滚回）
-        state.messages = state.messages.slice(0, -2);
-        if (err.status === 429) {
-          showBanner('warn', t('ai.error_rate_limit', '提问太频繁，请稍后再试'));
-        } else if (err.status === 503) {
-          showBanner('err', t('ai.error_llm', '模型服务异常：') + (err.message || ''));
-        } else {
-          showBanner('err', t('ai.error_network', '网络异常：') + err.message);
-        }
-        renderMessages();
-      })
-      .then(function () {
-        state.sending = false;
-        sendBtn.disabled = false;
-        sendBtn.textContent = t('ai.send', '发送');
-        inputEl.focus();
       });
   }
 

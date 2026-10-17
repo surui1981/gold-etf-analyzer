@@ -248,6 +248,16 @@
   .data-source-chip { display: inline-block; font-size: 10.5px; color: var(--muted);
     background: var(--bg); border: 1px dashed var(--border); border-radius: 6px;
     padding: 3px 9px; margin-top: 6px; }
+  /* V0.98 C5：SSE 流式光标 + 工具 chip 渐变占位 */
+  .bubble.streaming { min-height: 22px; }
+  .bubble.streaming .streaming-cursor { display: inline-block; color: var(--accent);
+    animation: pm-blink 1s steps(2, end) infinite; font-weight: 700; }
+  @keyframes pm-blink { 50% { opacity: 0; } }
+  .tool-result-stream.streaming-chip { border-left: 2px solid var(--accent); }
+  .tool-result-stream.streaming-chip > summary .tool-input-preview { color: var(--muted);
+    font-family: var(--mono, monospace); font-size: 11px; }
+  .tool-result-stream.streaming-chip > summary .tool-input-preview.streaming-input { opacity: 0.6; }
+  .tool-result-stream.streaming-chip.done { border-left-color: #5cb85c; }
   /* 错误提示 */
   .err-banner { padding: 10px 14px; border-radius: 8px; font-size: 12.5px; line-height: 1.6;
     background: rgba(220, 100, 100, .10); color: #c14a4a; border: 1px solid rgba(220, 100, 100, .25); }
