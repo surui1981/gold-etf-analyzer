@@ -1,12 +1,14 @@
-// V0.102 · 今日要闻（readhub 财经新闻流）
+// V0.102 / V0.104 · 今日要闻（readhub 财经新闻流）
 // 入口：DOMContentLoaded → init() → 拉 status / sites / languages / items
-// 4 渲染区：status chip（last_refresh + total + 24h）+ toolbar（range / site / lang）
+// 4 渲染区：status chip（last_refresh + total + 24h）+ toolbar（range / site / lang / V0.104 日期导航）
 //          + 日分组卡片（day-label → N news-card）+ 手动 refresh 按钮
 //
 // 关键设计：
 // - V0.84 freshness 降级：refresh 失败 → 保留末次数据 + status chip 转 amber，不抛错到 UI
 // - 拉数失败时显示「加载失败」+ amber chip，但已加载的卡片继续展示（V0.77.1 失败态不再伪装正常）
-// - 所有日期按 BJT 渲染（readhub publishDate 是本地 +08:00，转换后分组）
+// - 所有日期按浏览器本地时区渲染（readhub publishDate 是 UTC ISO，转本地后分组）
+// - V0.104 单日模式：currentDate 非空时 API 改用 date=YYYY-MM-DD + tz_offset_minutes，
+//   与 1/7/30 天范围互斥；响应多 3 字段（current_date/has_older/has_newer）翻页用
 
 (function () {
   "use strict";
@@ -15,8 +17,28 @@
 
   // 状态
   let currentDays = 7;
+  let currentDate = "";     // V0.104：YYYY-MM-DD；空串 = 走 days 模式
   let currentSite = "";
   let currentLang = "";
+
+  // V0.104 · 工具函数（时区 / 日期）
+  function todayLocal() {
+    // 浏览器本地今天的 YYYY-MM-DD
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+  function tzOffsetMinutes() {
+    // JS getTimezoneOffset 返回 WEST 偏移（分钟），东八区 = -480；反转后 = +480
+    return -new Date().getTimezoneOffset();
+  }
+  function addDaysIso(yyyyMmDd, n) {
+    // YYYY-MM-DD 加 N 天（按浏览器本地日期），返回新 YYYY-MM-DD
+    const parts = yyyyMmDd.split("-");
+    if (parts.length !== 3) return todayLocal();
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    d.setDate(d.getDate() + n);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
 
   async function fetchJSON(url, opts = {}) {
     const ctrl = new AbortController();
@@ -269,7 +291,13 @@
     try {
       // 并发 3 个只读端点（status / sites / languages）+ 1 个 list
       const url = new URL(API_BASE + "/api/v1/news-feed/items", location.origin);
-      url.searchParams.set("days", currentDays);
+      if (currentDate) {
+        // V0.104 单日模式：date + tz_offset_minutes（date 优先于 days）
+        url.searchParams.set("date", currentDate);
+        url.searchParams.set("tz_offset_minutes", String(tzOffsetMinutes()));
+      } else {
+        url.searchParams.set("days", String(currentDays));
+      }
       url.searchParams.set("limit", "100");
       if (currentSite) url.searchParams.set("site_name", currentSite);
       if (currentLang) url.searchParams.set("language", currentLang);
@@ -284,9 +312,37 @@
       renderSiteOptions(sites);
       renderLangOptions(langs);
       renderItems(list.items);
+      // V0.104 单日模式：根据 has_older/has_newer 翻页按钮 disabled
+      if (currentDate) {
+        const prev = document.getElementById("btnPrevDay");
+        const next = document.getElementById("btnNextDay");
+        const today = document.getElementById("btnToday");
+        if (prev) prev.disabled = !list.has_older;
+        if (next) next.disabled = !list.has_newer;
+        if (today) today.hidden = (currentDate === todayLocal());
+      }
     } catch (e) {
       console.warn("headlines loadAll failed:", e);
       renderError(e.message || String(e));
+    }
+  }
+
+  // V0.104 · 同步 dateNav UI 与 currentDate
+  function refreshDateNav() {
+    const nav = document.getElementById("dateNav");
+    const dp = document.getElementById("datePicker");
+    const today = document.getElementById("btnToday");
+    if (currentDate) {
+      // 单日模式：显示 dateNav，datePicker 同步 currentDate
+      if (nav) nav.hidden = false;
+      if (dp) dp.value = currentDate;
+      // 「回到今日」仅在非今日时显示（与 loadAll 中 has_older/has_newer 独立；这里保证 loadAll 失败时也对）
+      if (today) today.hidden = (currentDate === todayLocal());
+    } else {
+      // 范围模式：隐藏 dateNav，datePicker 复位到今天
+      if (nav) nav.hidden = true;
+      if (dp) dp.value = todayLocal();
+      if (today) today.hidden = true;  // 范围模式永远不需要「回到今日」
     }
   }
 
@@ -327,8 +383,10 @@
         const d = parseInt(btn.getAttribute("data-days"), 10);
         if (isNaN(d) || d === currentDays) return;
         currentDays = d;
+        currentDate = "";  // V0.104：点范围按钮 = 退出单日模式
         for (const b of ranges.querySelectorAll("button")) b.classList.remove("active");
         btn.classList.add("active");
+        refreshDateNav();
         loadAll();
       });
     }
@@ -344,6 +402,39 @@
     });
     const btn = document.getElementById("refreshBtn");
     if (btn) btn.addEventListener("click", refresh);
+
+    // V0.104 · 日期导航 4 控件
+    const prevBtn = document.getElementById("btnPrevDay");
+    const nextBtn = document.getElementById("btnNextDay");
+    const todayBtn = document.getElementById("btnToday");
+    const datePicker = document.getElementById("datePicker");
+
+    // 进入单日模式：清空所有 rangeBtns active
+    function enterDateMode(date) {
+      currentDays = 0;  // 标记（让 rangeBtns active 都不亮）
+      currentDate = date;
+      const ranges = document.getElementById("rangeBtns");
+      if (ranges) {
+        for (const b of ranges.querySelectorAll("button")) b.classList.remove("active");
+      }
+      refreshDateNav();
+      loadAll();
+    }
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (currentDate === "") return;
+      enterDateMode(addDaysIso(currentDate, -1));
+    });
+    if (nextBtn) nextBtn.addEventListener("click", () => {
+      if (currentDate === "") return;
+      enterDateMode(addDaysIso(currentDate, 1));
+    });
+    if (todayBtn) todayBtn.addEventListener("click", () => {
+      enterDateMode(todayLocal());
+    });
+    if (datePicker) datePicker.addEventListener("change", (e) => {
+      const v = e.target.value;
+      if (v) enterDateMode(v);
+    });
   }
 
   // ── 初始化 ──

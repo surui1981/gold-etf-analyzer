@@ -1331,6 +1331,10 @@ window.PM_I18N_en_US = {
   "headlines.today": "Today",
   "headlines.yesterday": "Yesterday",
   "headlines.footer": "gold-etf-analyzer · Headlines · source readhub",
+  // V0.104 · single-day mode date navigation
+  "headlines.btn_today": "Back to today",
+  "headlines.btn_prev_day_title": "Previous day",
+  "headlines.btn_next_day_title": "Next day",
   "nav.favorites": "My Favorites",
   "brand.favorites": "⭐ My Favorites · Gold ETF",
   "favorites.page_title": "My Favorites · Gold ETF Assistant",

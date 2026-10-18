@@ -1235,6 +1235,10 @@ window.PM_I18N_zh_TW = {
   "headlines.today": "今日",
   "headlines.yesterday": "昨日",
   "headlines.footer": "gold-etf-analyzer · 今日要聞 · 資料源 readhub",
+  // V0.104 · 單日模式日期導航
+  "headlines.btn_today": "回到今日",
+  "headlines.btn_prev_day_title": "前一天",
+  "headlines.btn_next_day_title": "後一天",
   "nav.favorites": "我的收藏",
   "brand.favorites": "⭐ 我的收藏 · 黃金 ETF",
   "favorites.page_title": "我的收藏 · 黃金 ETF 投資輔助",

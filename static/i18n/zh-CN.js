@@ -1331,6 +1331,10 @@ window.PM_I18N_ZH_CN = {
   "headlines.today": "今日",
   "headlines.yesterday": "昨日",
   "headlines.footer": "gold-etf-analyzer · 今日要闻 · 数据源 readhub",
+  // V0.104 · 单日模式日期导航
+  "headlines.btn_today": "回到今日",
+  "headlines.btn_prev_day_title": "前一天",
+  "headlines.btn_next_day_title": "后一天",
   "nav.favorites": "我的收藏",
   "brand.favorites": "⭐ 我的收藏 · 黄金 ETF",
   "favorites.page_title": "我的收藏 · 黄金 ETF 投资辅助",
