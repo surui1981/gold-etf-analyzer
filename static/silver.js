@@ -368,6 +368,34 @@
       badge.style.display = "none";
     }
 
+    // V0.100：消息面未打分 → 综合指数显示「pending」chip + 数字透明度降级
+    // 复用 freshness.js 的 fsh-chip fsh-warn 样式（琥珀色 + ▲ 三角）
+    const newsForPending = data.news || {};
+    const newsPendingSilver = newsForPending.scored === false;
+    const existingPendingSilver = document.getElementById("idxPendingChip");
+    if (existingPendingSilver) existingPendingSilver.remove();
+    if (newsPendingSilver && data.index?.score != null) {
+      const chip = document.createElement("span");
+      chip.id = "idxPendingChip";
+      chip.className = "fsh-chip fsh-warn fsh-stale-chip";
+      chip.title =
+        window.I18n && typeof window.I18n.t === "function"
+          ? window.I18n.t(
+              "trend.pending_tooltip",
+              "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）",
+            )
+          : "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）";
+      chip.textContent =
+        "▲ " +
+        (window.I18n && typeof window.I18n.t === "function"
+          ? window.I18n.t("trend.pending_chip", "消息面 pending")
+          : "消息面 pending");
+      badge.insertAdjacentElement("afterend", chip);
+      numEl.style.opacity = "0.55";  // V0.83 fsh-stale 同模式视觉降级
+    } else {
+      numEl.style.opacity = "1";
+    }
+
     document.getElementById("idxSummary").innerHTML = data.index?.summary || "";
     document.getElementById("snapTime").textContent = "快照于 " + (data.served_at || "").slice(0, 16).replace("T", " ");
 
@@ -416,8 +444,44 @@
       .join("");
 
     const news = data.news || {};
-    document.getElementById("newsInfo").textContent = news.score != null ? `综合 ${news.score?.toFixed(1)} / 100` : "";
-    document.getElementById("newsFactor").innerHTML = news.summary || (news.scored ? `已打分 ${news.score}` : "未打分 · 按 50 中性");
+    // V0.100：未打分时显式「— · 今日未打分」（替代旧「未打分 · 按 50 中性」表述）
+    const newsInfoEl = document.getElementById("newsInfo");
+    if (news.scored) {
+      newsInfoEl.textContent = news.score != null ? `综合 ${news.score.toFixed(1)} / 100` : "";
+    } else {
+      newsInfoEl.textContent =
+        window.I18n && typeof window.I18n.t === "function"
+          ? window.I18n.t("trend.news_unscored_label", "消息面指数 — · 今日未打分")
+          : "消息面指数 — · 今日未打分";
+    }
+    const newsFactorEl = document.getElementById("newsFactor");
+    if (news.summary) {
+      newsFactorEl.innerHTML = news.summary;
+    } else if (news.scored) {
+      newsFactorEl.innerHTML = `已打分 ${news.score}`;
+    } else {
+      // V0.100：未打分时显式 chip + 提示文案
+      const unscoredChipText =
+        window.I18n && typeof window.I18n.t === "function"
+          ? window.I18n.t("trend.news_unscored_chip", "未打分 · pending")
+          : "未打分 · pending";
+      const pendingHintText =
+        window.I18n && typeof window.I18n.t === "function"
+          ? window.I18n.t(
+              "trend.news_pending_hint",
+              "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价",
+            )
+          : "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价";
+      newsFactorEl.innerHTML = `<div class="macro-row">
+      <span class="nm">消息面打分</span>
+      <span class="val" style="color:var(--muted)">—</span>
+      <span class="bar"><i style="width:0%;background:var(--muted)"></i></span>
+      <span class="dt"><span class="fsh-chip fsh-warn fsh-stale-chip" style="font-size:10px">${unscoredChipText}</span></span>
+    </div>
+    <div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">
+      💬 ${pendingHintText}
+    </div>`;
+    }
 
     document.getElementById("indicators").innerHTML = (data.indicators || [])
       .map((i) => {
