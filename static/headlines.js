@@ -1,6 +1,6 @@
-// V0.102 / V0.104 · 今日要闻（readhub 财经新闻流）
-// 入口：DOMContentLoaded → init() → 拉 status / sites / languages / items
-// 4 渲染区：status chip（last_refresh + total + 24h）+ toolbar（range / site / lang / V0.104 日期导航）
+// V0.102 / V0.104 / V0.105 · 今日要闻（readhub 财经新闻流）
+// 入口：DOMContentLoaded → init() → 拉 status / sites / languages / categories / items
+// 4 渲染区：status chip（last_refresh + total + 24h）+ toolbar（range / site / lang / V0.105 category / V0.104 日期导航）
 //          + 日分组卡片（day-label → N news-card）+ 手动 refresh 按钮
 //
 // 关键设计：
@@ -9,17 +9,23 @@
 // - 所有日期按浏览器本地时区渲染（readhub publishDate 是 UTC ISO，转本地后分组）
 // - V0.104 单日模式：currentDate 非空时 API 改用 date=YYYY-MM-DD + tz_offset_minutes，
 //   与 1/7/30 天范围互斥；响应多 3 字段（current_date/has_older/has_newer）翻页用
+// - V0.105 类目筛选：currentCategory 非空时 API 加 ?category=X；与 date/days/site/language 正交叠加
+//   类目下拉动态从 GET /api/v1/news-feed/categories 取（distinct + 频次降序），启动过渡期可能为空 → 仅显示「全部」
 
 (function () {
   "use strict";
 
   const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
 
+  // V0.105：5 类固定标签（与后端 news_classifier.CATEGORIES 保持一致；启动 backfill 后下拉数据来自 DB）
+  const FIXED_CATEGORIES = ["财经", "科技", "创投", "商业", "其他"];
+
   // 状态
   let currentDays = 7;
   let currentDate = "";     // V0.104：YYYY-MM-DD；空串 = 走 days 模式
   let currentSite = "";
   let currentLang = "";
+  let currentCategory = "";  // V0.105："" = 全部（不限）
 
   // V0.104 · 工具函数（时区 / 日期）
   function todayLocal() {
@@ -125,6 +131,33 @@
     }
     sel.innerHTML = html;
     sel.value = currentLang;
+  }
+
+  // V0.105 · 类目下拉：合并「DB 现有类目 + 固定 5 类兜底」并去重，保证 5 类一定可选
+  function renderCategoryOptions(dbCats) {
+    const sel = document.getElementById("categorySel");
+    if (!sel) return;
+    const placeholder = (window.I18n && I18n.t("headlines.site_all")) || "全部";
+    // 合并：DB 频次降序 + 固定 5 类（去重 + 保持 5 类顺序）
+    const set = new Set();
+    const ordered = [];
+    for (const c of dbCats || []) {
+      if (!set.has(c)) { set.add(c); ordered.push(c); }
+    }
+    for (const c of FIXED_CATEGORIES) {
+      if (!set.has(c)) { set.add(c); ordered.push(c); }
+    }
+    let html = `<option value="">${escapeHtml(placeholder)}</option>`;
+    for (const c of ordered) {
+      const i18nKey = "headlines.cat_" + ({
+        "财经": "finance", "科技": "tech", "创投": "vc",
+        "商业": "business", "其他": "other",
+      }[c] || c);
+      const label = (window.I18n && I18n.t(i18nKey)) || c;
+      html += `<option value="${escapeHtml(c)}">${escapeHtml(label)}</option>`;
+    }
+    sel.innerHTML = html;
+    sel.value = currentCategory;
   }
 
   // ── 列表渲染（日分组）──
@@ -289,7 +322,7 @@
 
   async function loadAll() {
     try {
-      // 并发 3 个只读端点（status / sites / languages）+ 1 个 list
+      // 并发 4 个只读端点（status / sites / languages / V0.105 categories）+ 1 个 list
       const url = new URL(API_BASE + "/api/v1/news-feed/items", location.origin);
       if (currentDate) {
         // V0.104 单日模式：date + tz_offset_minutes（date 优先于 days）
@@ -301,16 +334,19 @@
       url.searchParams.set("limit", "100");
       if (currentSite) url.searchParams.set("site_name", currentSite);
       if (currentLang) url.searchParams.set("language", currentLang);
+      if (currentCategory) url.searchParams.set("category", currentCategory);  // V0.105
 
-      const [status, sites, langs, list] = await Promise.all([
+      const [status, sites, langs, cats, list] = await Promise.all([
         fetchJSON(API_BASE + "/api/v1/news-feed/status"),
         fetchJSON(API_BASE + "/api/v1/news-feed/sites"),
         fetchJSON(API_BASE + "/api/v1/news-feed/languages"),
+        fetchJSON(API_BASE + "/api/v1/news-feed/categories").catch(() => []),  // V0.105：启动过渡期可能 404
         fetchJSON(url.toString()),
       ]);
       renderStatus(status);
       renderSiteOptions(sites);
       renderLangOptions(langs);
+      renderCategoryOptions(cats);  // V0.105
       renderItems(list.items);
       // V0.104 单日模式：根据 has_older/has_newer 翻页按钮 disabled
       if (currentDate) {
@@ -398,6 +434,12 @@
     const langSel = document.getElementById("langSel");
     if (langSel) langSel.addEventListener("change", () => {
       currentLang = langSel.value;
+      loadAll();
+    });
+    // V0.105 · 类目筛选（与 date/days/site/language 正交叠加，不清其他 state）
+    const catSel = document.getElementById("categorySel");
+    if (catSel) catSel.addEventListener("change", () => {
+      currentCategory = catSel.value;
       loadAll();
     });
     const btn = document.getElementById("refreshBtn");
