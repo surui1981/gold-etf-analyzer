@@ -155,7 +155,7 @@
 
 | 层 | 选型 |
 |----|------|
-| 后端 | Python 3.11+ · FastAPI · Pydantic v2 · SQLAlchemy · Alembic · bcrypt（V0.75.0 新） |
+| 后端 | Python 3.13+ · FastAPI · Pydantic v2 · SQLAlchemy · Alembic · bcrypt（V0.75.0 新） |
 | 存储 | SQLite（默认）/ PostgreSQL 可换 · Redis 可选 |
 | 数据源 | AKShare · WGC Gold Demand Trends · mock 降级 |
 | 前端 | 纯静态 HTML + 内联 `<script>` + Chart.js · **无构建步骤** |
@@ -165,7 +165,7 @@
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（V0.74.0 已首次真实构建成功并通过 smoke test，镜像体积仍未记录））+ docker-compose + Nginx + Certbot |
 | 测试 | pytest 972 · ruff check / format · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁）· check_cluster_render.mjs（前端渲染行为门禁）· check_pwa_assets.py（PWA 资源门禁）· check_links.py（死链与锚点门禁）· check_deps.py（依赖声明门禁） |
-| CI | GitHub Actions · Python 3.11/3.12 matrix · uv 缓存 |
+| CI | GitHub Actions · Python 3.13 matrix · uv 缓存 |
 
 ## 快速开始
 

@@ -5,7 +5,7 @@ name = "gold-etf-analyzer"
 version = "0.100.0"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115,<1.0",
     "uvicorn[standard]>=0.32,<1.0",
@@ -61,7 +61,7 @@ testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
@@ -72,7 +72,7 @@ ignore = [
     "RUF003",
     "B008",    # FastAPI 依赖注入 Depends(...) 作为默认参数是官方推荐写法
     "BLE001",  # 行情源失败降级需捕获宽泛异常（设计意图，见 repositories/market_data.py）
-    "UP017",   # timezone.utc 在 py311 下依然有效，暂不做 datetime.UTC 现代化
+    "UP017",   # timezone.utc 仍有效，datetime.UTC 现代化留待单独 commit（V0.101.x 候选）
 ]
 
 [tool.ruff.format]
