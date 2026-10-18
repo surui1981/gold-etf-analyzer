@@ -79,6 +79,10 @@ const SHELL_ASSETS = [
     "/headlines",
     "/static/headlines.html",
     "/static/headlines.js",
+    // V0.103：我的收藏（今日要闻「收藏 / 永久存储 / 档案管理」）
+    "/favorites",
+    "/static/favorites.html",
+    "/static/favorites.js",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",
@@ -152,11 +156,13 @@ self.addEventListener("activate", (event) => {
             // 同样清掉 RUNTIME_CACHE 里 307 旧条目。
             // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice / limit / 骨架数），
             // 同样按上述模式清 RUNTIME_CACHE 旧 /home + /static/home.html。
+            // V0.103：/favorites 同模式（新页进入 SHELL_ASSETS 时旧 RUNTIME_CACHE 里的 307 旧入口需清掉）。
             .then(async () => {
                 const rt = await caches.open(RUNTIME_CACHE);
                 const stale = [
                     "/scoring", "/static/scoring.html",
                     "/home", "/static/home.html",
+                    "/favorites", "/static/favorites.html",
                 ];
                 for (const url of stale) {
                     const hit = await rt.match(url);

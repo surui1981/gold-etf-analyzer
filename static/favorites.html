@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="favorites.page_title">我的收藏 · 黄金 ETF 投资辅助</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
+<!-- V0.75.0：认证客户端（CSRF 头注入 + 会话门禁） -->
+<script src="/static/auth.js" defer></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .layout { max-width: 1280px; margin: 0 auto; display: grid; grid-template-columns: 1fr 280px; gap: 18px; }
+  .layout .main-col { min-width: 0; }
+  .layout .stats-col { min-width: 0; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+  h1 { font-size: 22px; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  .toolbar {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 14px; margin-bottom: 14px;
+  }
+  .toolbar label { font-size: 12px; color: var(--muted); margin-right: 4px; }
+  .toolbar select, .toolbar button {
+    font-size: 13px; padding: 4px 10px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .toolbar .range-btns { display: inline-flex; gap: 4px; }
+  .toolbar .range-btns button.active {
+    background: var(--accent, #1d4ed8); color: #fff; border-color: var(--accent, #1d4ed8);
+  }
+  .toolbar .spacer { flex: 1; }
+
+  .status-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; font-size: 12px; }
+  .status-chip {
+    background: var(--card); border: 1px solid var(--border); border-radius: 999px;
+    padding: 4px 12px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .status-chip .lbl { color: var(--muted); }
+  .status-chip .val { font-weight: 600; }
+
+  .fav-list { display: flex; flex-direction: column; gap: 12px; }
+  .fav-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; transition: box-shadow .15s, transform .15s; position: relative;
+  }
+  .fav-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+  .fav-card .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .fav-card .site {
+    display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px;
+    border-radius: 999px; background: #e8eefc; color: #1d4ed8;
+  }
+  .fav-card .time { font-size: 11px; color: var(--muted); }
+  .fav-card .imp {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 12px; font-weight: 700; padding: 2px 8px;
+    border-radius: 999px;
+  }
+  .fav-card .imp.s1 { background: #f3f4f6; color: #6b7280; }
+  .fav-card .imp.s2 { background: #fff7e6; color: #b45309; }
+  .fav-card .imp.s3 { background: #fee2e2; color: #b91c1c; }
+  .fav-card h3 { font-size: 15px; line-height: 1.5; margin: 6px 0 4px; }
+  .fav-card h3 a {
+    color: var(--text); text-decoration: none; border-bottom: 1px solid transparent;
+  }
+  .fav-card h3 a:hover { border-bottom-color: var(--accent, #1d4ed8); }
+  .fav-card .summary { font-size: 13px; color: var(--muted); line-height: 1.65; }
+  .fav-card .tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  .fav-card .tag-chip {
+    font-size: 11px; padding: 1px 8px; background: #ecfdf5; color: #047857;
+    border: 1px solid #a7f3d0; border-radius: 999px; cursor: pointer;
+  }
+  .fav-card .tag-chip:hover { background: #d1fae5; }
+  .fav-card .meta { font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .fav-card .actions {
+    position: absolute; top: 10px; right: 10px; display: flex; gap: 6px;
+  }
+  .fav-card .actions button {
+    font-size: 12px; padding: 3px 9px; border: 1px solid var(--border);
+    border-radius: 6px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .fav-card .actions button:hover { background: rgba(0,0,0,0.04); }
+  .fav-card .actions .unarchive { color: #b91c1c; }
+  .fav-card .actions .unarchive:hover { background: #fee2e2; }
+  .fav-card .note-area {
+    margin-top: 8px; padding: 8px 10px; background: var(--bg);
+    border: 1px dashed var(--border); border-radius: 6px;
+  }
+  .fav-card .note-area textarea {
+    width: 100%; min-height: 60px; padding: 6px;
+    font-family: inherit; font-size: 13px; line-height: 1.55;
+    border: 1px solid var(--border); border-radius: 4px;
+    background: var(--card); color: var(--text); resize: vertical;
+  }
+  .fav-card .note-area .note-row { display: flex; gap: 6px; justify-content: flex-end; margin-top: 6px; }
+  .fav-card .note-area .note-row button {
+    font-size: 12px; padding: 3px 10px; border: 1px solid var(--border);
+    border-radius: 5px; background: var(--card); color: var(--text); cursor: pointer;
+  }
+  .fav-card .note-area .note-row .save { background: var(--accent, #1d4ed8); color: #fff; border-color: var(--accent, #1d4ed8); }
+
+  .empty-state { text-align: center; color: var(--muted); padding: 60px 0; }
+  .error-state { text-align: center; padding: 40px 0; color: var(--up, #c92a2a); }
+
+  /* 侧栏统计 */
+  .stats-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 12px;
+  }
+  .stats-card h3 { font-size: 13px; font-weight: 600; margin-bottom: 8px; color: var(--muted); letter-spacing: .5px; }
+  .stats-card .row { display: flex; justify-content: space-between; align-items: baseline; padding: 3px 0; font-size: 12px; }
+  .stats-card .row .name { color: var(--text); }
+  .stats-card .row .count { font-weight: 600; color: var(--accent, #1d4ed8); font-variant-numeric: tabular-nums; }
+  .stats-card .bar { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; margin: 2px 0 4px; }
+  .stats-card .bar-fill { height: 100%; background: var(--accent, #1d4ed8); transition: width .25s; }
+  .stats-card .kpi { font-size: 22px; font-weight: 700; color: var(--accent, #1d4ed8); margin: 2px 0 6px; }
+
+  /* topnav 复用同款 */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #f5d97a; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand .brand-dot { width:8px; height:8px; border-radius:50; background:var(--accent,#806014);
+    box-shadow:0 0 8px rgba(245,217,122,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div id="topnav-mount"></div>
+<div id="subnav-mount"></div>
+<main>
+<div class="layout">
+  <div class="main-col">
+    <header>
+      <div>
+        <h1 data-i18n="favorites.h1">⭐ 我的收藏</h1>
+        <div class="sub" data-i18n="favorites.subtitle">从今日要闻中永久保存 · 独立于源数据 · 仅供研究参考</div>
+      </div>
+    </header>
+
+    <div class="status-row" id="statusRow">
+      <span class="status-chip">
+        <span class="lbl" data-i18n="favorites.chip_total">总数</span>
+        <span class="val" id="valTotal">--</span>
+      </span>
+      <span class="status-chip">
+        <span class="lbl" data-i18n="favorites.chip_3star">★3</span>
+        <span class="val" id="val3Star">--</span>
+      </span>
+      <span class="status-chip">
+        <span class="lbl" data-i18n="favorites.chip_7d">7 天新增</span>
+        <span class="val" id="val7d">--</span>
+      </span>
+      <span class="status-chip">
+        <span class="lbl" data-i18n="favorites.chip_sites">来源站</span>
+        <span class="val" id="valSites">--</span>
+      </span>
+    </div>
+
+    <div class="toolbar">
+      <label data-i18n="favorites.filter_range">时间</label>
+      <span class="range-btns" id="rangeBtns">
+        <button type="button" data-days="1" data-i18n="favorites.range_today">今日</button>
+        <button type="button" data-days="7" class="active" data-i18n="favorites.range_7d_lbl">7 天</button>
+        <button type="button" data-days="30" data-i18n="favorites.range_30d">30 天</button>
+        <button type="button" data-days="0" data-i18n="favorites.range_all">全部</button>
+      </span>
+      <label for="siteSel" data-i18n="favorites.filter_site">来源</label>
+      <select id="siteSel"><option value="" data-i18n="favorites.site_all">全部</option></select>
+      <label for="tagSel" data-i18n="favorites.filter_tag">标签</label>
+      <select id="tagSel"><option value="" data-i18n="favorites.tag_all">全部</option></select>
+      <label for="impSel" data-i18n="favorites.filter_importance">重要度</label>
+      <select id="impSel">
+        <option value="0" data-i18n="favorites.importance_all">全部</option>
+        <option value="1" data-i18n="favorites.importance_1plus">★1+</option>
+        <option value="2" data-i18n="favorites.importance_2plus">★2+</option>
+        <option value="3" data-i18n="favorites.importance_3">★3</option>
+      </select>
+      <label for="sortSel" data-i18n="favorites.filter_sort">排序</label>
+      <select id="sortSel">
+        <option value="recent" data-i18n="favorites.sort_recent">最近收藏</option>
+        <option value="importance" data-i18n="favorites.sort_importance">重要度</option>
+        <option value="publish" data-i18n="favorites.sort_publish">发布时间</option>
+      </select>
+      <span class="spacer"></span>
+    </div>
+
+    <div id="favList" class="fav-list">
+      <div class="empty-state" data-i18n="favorites.loading">加载中…</div>
+    </div>
+  </div>
+
+  <aside class="stats-col">
+    <div class="stats-card" id="statsImportance">
+      <h3 data-i18n="favorites.stats_by_importance">按重要度</h3>
+    </div>
+    <div class="stats-card" id="statsTag">
+      <h3 data-i18n="favorites.stats_by_tag">按标签</h3>
+    </div>
+    <div class="stats-card" id="statsSite">
+      <h3 data-i18n="favorites.stats_by_site">按来源站</h3>
+    </div>
+    <div class="stats-card" id="statsMonth">
+      <h3 data-i18n="favorites.stats_by_month">按月归档</h3>
+    </div>
+    <div class="stats-card" id="statsKpi">
+      <h3 data-i18n="favorites.stats_kpi">最近 30 天热度</h3>
+      <div class="kpi" id="kpi30d">--</div>
+      <div class="sub" data-i18n="favorites.stats_kpi_sub">新增收藏数</div>
+    </div>
+  </aside>
+</div>
+
+<footer data-i18n="favorites.footer">gold-etf-analyzer · 我的收藏 · 数据源 readhub</footer>
+</main>
+
+<script src="/static/topnav.js" defer></script>
+<script src="/static/favorites.js" defer></script>
+<script src="/static/toast.js" defer></script>
+<script src="/static/pwa.js" defer></script>
+<script src="/static/net-status.js" defer></script>
+</body>
+</html>

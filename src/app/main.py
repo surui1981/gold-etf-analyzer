@@ -481,6 +481,12 @@ async def headlines_page() -> RedirectResponse:
     return RedirectResponse("/static/headlines.html")
 
 
+@app.get("/favorites", include_in_schema=False)
+async def favorites_page() -> RedirectResponse:
+    """我的收藏页（V0.103）—— 今日要闻「收藏 / 永久存储 / 档案管理」。"""
+    return RedirectResponse("/static/favorites.html")
+
+
 @app.get("/data-health", include_in_schema=False)
 async def data_health_page() -> RedirectResponse:
     """数据健康摘要页（V0.85.0）—— 6 数据源实时状态完整披露。

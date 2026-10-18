@@ -155,6 +155,80 @@
       html += `</div>`;
     }
     list.innerHTML = html;
+    // V0.103 ⭐ 收藏按钮 + 检查已收藏状态
+    bindFavButtons();
+    void markArchivedFavs();
+  }
+
+  // V0.103 ⭐ 收藏按钮：点击 POST /favorites/items；重复 → 409 → 提示「已收藏」
+  function bindFavButtons() {
+    const $list = document.getElementById("newsList");
+    if (!$list) return;
+    $list.querySelectorAll(".fav-btn").forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "1";
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const extId = parseInt(btn.dataset.ext, 10);
+        if (btn.classList.contains("archived")) {
+          // 已收藏 → 跳到 /favorites 页（避免误以为点了会取消）
+          location.href = "/favorites";
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await fetchJSON(
+            `${API_BASE}/api/v1/favorites/items`,
+            { method: "POST", body: { news_external_id: extId }, timeoutMs: 10000 }
+          );
+          btn.classList.add("archived");
+          btn.textContent = "★";
+          if (window.PMToast) window.PMToast.show(t("favorites.toast_archived", "已收藏"), "success");
+        } catch (err) {
+          // 409 = 已收藏（幂等）
+          if (err.message && err.message.includes("409")) {
+            btn.classList.add("archived");
+            btn.textContent = "★";
+            if (window.PMToast) window.PMToast.show(t("favorites.toast_archived", "已收藏"), "success");
+          } else {
+            if (window.PMToast) window.PMToast.show("收藏失败: " + err.message, "error");
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  }
+
+  // V0.103 幂等：批量 GET /favorites/exists/{ext} 检查当前列表哪些已收藏
+  async function markArchivedFavs() {
+    const $list = document.getElementById("newsList");
+    if (!$list) return;
+    const extIds = Array.from($list.querySelectorAll(".fav-btn"))
+      .map((b) => parseInt(b.dataset.ext, 10))
+      .filter((n) => !isNaN(n));
+    if (extIds.length === 0) return;
+    // 并发查每个 external_id 是否已收藏（最多 50 个，超过会慢但用并发）
+    await Promise.all(
+      extIds.map(async (ext) => {
+        try {
+          const data = await fetchJSON(
+            `${API_BASE}/api/v1/favorites/exists/${ext}?source=readhub`,
+            { timeoutMs: 8000 }
+          );
+          if (data && data.id) {
+            const btn = $list.querySelector(`.fav-btn[data-ext="${ext}"]`);
+            if (btn) {
+              btn.classList.add("archived");
+              btn.textContent = "★";
+            }
+          }
+        } catch (_) {
+          // 静默失败（拉失败不影响列表渲染）
+        }
+      })
+    );
   }
 
   function renderCard(it) {
@@ -169,7 +243,9 @@
     const langTag = it.language
       ? `<span class="meta"> · ${escapeHtml(it.language)}</span>`
       : "";
-    return `<article class="news-card">
+    // V0.103 ⭐ 收藏按钮：外置用 `data-ext` 给 fetchJSON 复用
+    return `<article class="news-card" data-ext="${it.external_id}">
+      <button type="button" class="fav-btn" data-ext="${it.external_id}" title="收藏">☆</button>
       <div class="head">
         <span class="site">${site}</span>
         <span class="time">${escapeHtml(time)}</span>

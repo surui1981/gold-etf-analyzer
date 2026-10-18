@@ -142,6 +142,60 @@
         li.appendChild(timeSpan);
         li.appendChild(siteSpan);
         li.appendChild(titleAnchor);
+
+        // V0.103 ⭐ 收藏按钮
+        const favBtn = document.createElement('button');
+        favBtn.type = 'button';
+        favBtn.className = 'home-news-fav';
+        favBtn.textContent = '☆';
+        favBtn.title = '收藏';
+        favBtn.dataset.ext = String(item.external_id);
+        favBtn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (favBtn.classList.contains('archived')) {
+            location.href = '/favorites';
+            return;
+          }
+          favBtn.disabled = true;
+          try {
+            const resp = await fetch('/api/v1/favorites/items', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ news_external_id: item.external_id }),
+              credentials: 'same-origin',
+            });
+            if (resp.ok) {
+              favBtn.classList.add('archived');
+              favBtn.textContent = '★';
+              if (window.PMToast) window.PMToast.show('已收藏', 'success');
+            } else if (resp.status === 409) {
+              favBtn.classList.add('archived');
+              favBtn.textContent = '★';
+              if (window.PMToast) window.PMToast.show('已收藏', 'success');
+            } else {
+              const err = await resp.text().catch(() => '');
+              if (window.PMToast) window.PMToast.show('收藏失败: HTTP ' + resp.status, 'error');
+              console.warn('fav failed', err);
+            }
+          } catch (err) {
+            if (window.PMToast) window.PMToast.show('收藏失败: ' + err.message, 'error');
+          } finally {
+            favBtn.disabled = false;
+          }
+        });
+        // 幂等：先查一次是否已收藏
+        fetch(`/api/v1/favorites/exists/${item.external_id}?source=readhub`, { credentials: 'same-origin' })
+          .then((r) => r.ok ? r.json() : null)
+          .then((d) => {
+            if (d && d.id) {
+              favBtn.classList.add('archived');
+              favBtn.textContent = '★';
+            }
+          })
+          .catch(() => {});
+        li.appendChild(favBtn);
+
         newsListEl.appendChild(li);
       });
     } else {

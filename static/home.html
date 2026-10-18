@@ -145,6 +145,14 @@
     flex: 1; min-width: 200px; }
   .home-news-list .home-news-title:hover { color: var(--accent, #1d4ed8);
     text-decoration: underline; }
+  /* V0.103 ⭐ 收藏按钮 */
+  .home-news-list .home-news-fav {
+    background: var(--card); border: 1px solid var(--border); border-radius: 6px;
+    padding: 2px 8px; font-size: 13px; cursor: pointer; color: var(--muted);
+    transition: all .15s; flex-shrink: 0;
+  }
+  .home-news-list .home-news-fav:hover { color: #f59e0b; border-color: #f59e0b; }
+  .home-news-list .home-news-fav.archived { color: #f59e0b; border-color: #f59e0b; background: #fff8e6; }
   .home-news-skeleton { color: var(--muted); }
   .home-news-error { color: var(--muted); font-style: italic; }
 
