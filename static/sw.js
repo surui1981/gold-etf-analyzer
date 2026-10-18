@@ -72,6 +72,10 @@ const SHELL_ASSETS = [
     "/home",
     "/static/home.html",
     "/static/home.js",
+    // V0.102：今日要闻（readhub 财经新闻流；与 silver.html 同样拆出 headlines.js）
+    "/headlines",
+    "/static/headlines.html",
+    "/static/headlines.js",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",

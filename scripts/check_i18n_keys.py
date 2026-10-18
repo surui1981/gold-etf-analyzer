@@ -65,6 +65,8 @@ V083_KEY_PREFIXES = (
     # V0.100：消息面未打分 → 综合指数 pending（trend.html + silver.html 共用 trend.* namespace）
     "trend.",
     "silver.",
+    # V0.102：今日要闻页（readhub 财经新闻流；nav + headlines.* 全 3 语覆盖）
+    "headlines.",
 )
 
 
