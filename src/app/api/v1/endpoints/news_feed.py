@@ -48,6 +48,11 @@ async def list_items(
         max_length=8,
         description="按语种精确筛选（zh-cn / en）",
     ),
+    category: str | None = Query(
+        None,
+        max_length=16,
+        description="V0.105 按分类精确筛选（财经/科技/创投/商业/其他）；与 date/days/site_name/language 正交叠加",
+    ),
     limit: int = Query(50, ge=1, le=200, description="返回上限（默认 50，保护 UI）"),
     service: NewsFeedService = Depends(get_news_feed_service),
 ) -> NewsFeedListOut:
@@ -57,6 +62,7 @@ async def list_items(
     - 单日模式（``date=YYYY-MM-DD``）：取那一天的新闻；响应里多 3 字段
       （``current_date`` / ``has_older`` / ``has_newer``）供前端翻页按钮
     - 两个模式互斥，date 优先
+    - V0.105 ``category`` 与上述模式**正交叠加**，独立过滤
     """
     return await service.list_items(
         days=days,
@@ -64,6 +70,7 @@ async def list_items(
         tz_offset_minutes=tz_offset_minutes,
         site_name=site_name,
         language=language,
+        category=category,
         limit=limit,
     )
 
@@ -90,6 +97,23 @@ async def list_languages(
 ) -> list[str]:
     """语种筛选下拉数据源（按字母序）。"""
     return await service.list_languages()
+
+
+@router.get(
+    "/categories",
+    response_model=list[str],
+    summary="V0.105 DB 内已分类的类目（去重 + 频次降序）",
+)
+async def list_categories(
+    service: NewsFeedService = Depends(get_news_feed_service),
+) -> list[str]:
+    """类目筛选下拉数据源（按频次降序）。仅返回已分类（``category IS NOT NULL``）行。
+
+    - 启动后 ``_backfill_news_categories()`` 一次性补齐历史 NULL 行
+    - 新条目由 ``readhub_fetcher._normalize()`` 入库即分类
+    - 启动过渡期可能返回空 list（等待 backfill 完成）；前端下拉此时仅显示「全部」+ 固定 5 类兜底
+    """
+    return await service.list_categories()
 
 
 @router.get(

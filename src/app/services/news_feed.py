@@ -44,6 +44,7 @@ def _to_out(it) -> NewsFeedItemOut:
         publish_date=it.publish_date,
         fetched_at=it.fetched_at,
         source=it.source,
+        category=getattr(it, "category", None),  # V0.105：未分类时 None
     )
 
 
@@ -102,6 +103,7 @@ class NewsFeedService:
         tz_offset_minutes: int = 0,
         site_name: str | None = None,
         language: str | None = None,
+        category: str | None = None,  # V0.105
         limit: int = 50,
     ) -> NewsFeedListOut:
         """按筛选取列表（单次返回，UI 单次渲染）。
@@ -110,7 +112,7 @@ class NewsFeedService:
             days: 窗口模式（UTC cutoff），与 date 互斥
             date: 单日模式（浏览器本地日期），与 days 互斥
             tz_offset_minutes: 时区偏移（带符号），仅 date 模式用
-            site_name/language/limit: 透传仓储
+            site_name/language/category/limit: 透传仓储
 
         Returns:
             NewsFeedListOut；date 模式时多 3 字段：current_date/has_older/has_newer
@@ -121,6 +123,7 @@ class NewsFeedService:
             tz_offset_minutes=tz_offset_minutes,
             site_name=site_name,
             language=language,
+            category=category,
             limit=limit,
         )
 
@@ -150,6 +153,10 @@ class NewsFeedService:
 
     async def list_languages(self) -> list[str]:
         return await self._repo.list_languages()
+
+    async def list_categories(self) -> list[str]:
+        """V0.105：DB 中已分类的类目（去重 + 频次降序）。"""
+        return await self._repo.list_categories()
 
     async def get_status(self) -> NewsFeedStatusOut:
         status = await self._repo.get_status()

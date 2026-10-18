@@ -27,6 +27,11 @@ class NewsFeedItemOut(BaseModel):
     publish_date: datetime = Field(..., description="新闻发布时间（UTC，readhub 给定）")
     fetched_at: datetime = Field(..., description="本地入库时间（scheduler 6h 一次刷新）")
     source: str = Field(default="readhub", description="数据源标识（预留多源）")
+    # V0.105：分类（财经/科技/创投/商业/其他）；None=未分类（启动 backfill 过渡期）
+    category: str | None = Field(
+        default=None,
+        description="V0.105 分类（财经/科技/创投/商业/其他）；启动 backfill_categories() 一次性补齐历史，None = 未分类",
+    )
 
 
 class NewsFeedListOut(BaseModel):
