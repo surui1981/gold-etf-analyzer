@@ -16,6 +16,7 @@ from app.repositories.macro_factor_history import MacroFactorHistoryRepository  
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.market_providers import build_provider_bundle
 from app.repositories.news import NewsScoreRepository
+from app.repositories.news_feed import NewsFeedRepository  # V0.102 今日要闻
 from app.repositories.position import PositionRepository
 from app.repositories.review import GoldPriceRepository
 from app.repositories.settings import SettingRepository
@@ -34,6 +35,7 @@ from app.services.freshness import FreshnessService
 from app.services.macro import MacroFactorService  # V0.79.0 Step E
 from app.services.macro_thresholds import MacroThresholdCalculator  # V0.79.0 Step E
 from app.services.news import NewsScoreService
+from app.services.news_feed import NewsFeedService  # V0.102 今日要闻
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
 from app.services.resonance import ResonanceService
@@ -193,6 +195,23 @@ def get_news_score_service(
 ) -> NewsScoreService:
     """消息面评估服务依赖。"""
     return NewsScoreService(repo)
+
+
+# V0.102 ── 今日要闻（readhub 财经新闻流）
+
+
+async def get_news_feed_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> NewsFeedRepository:
+    """readhub 财经新闻仓储依赖。"""
+    return NewsFeedRepository(session)
+
+
+def get_news_feed_service(
+    repo: NewsFeedRepository = Depends(get_news_feed_repository),
+) -> NewsFeedService:
+    """readhub 财经新闻业务服务依赖。"""
+    return NewsFeedService(repo=repo)
 
 
 def get_trend_service(
