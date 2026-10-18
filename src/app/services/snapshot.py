@@ -90,7 +90,9 @@ class DailySnapshotService:
             direction=m.direction.value,
             tech_index=tech_index,
             macro_index=macro.score,
-            news_index=trend.news.score,
+            # V0.100：消息面未打分时 trend.news.score=None；快照表 NOT NULL 兜底为 50.0，
+            # 配合 scored 字段（落 macro_detail JSON）让客户事后可知当日未打分
+            news_index=trend.news.score if trend.news.score is not None else 50.0,
             trend_index=trend.index.score,
             index_level=trend.index.level.value,
             macro_detail=macro_detail,
@@ -101,7 +103,7 @@ class DailySnapshotService:
         )
         await self._repo.upsert(snapshot)
         logger.info(
-            "Snapshot captured: %s, close=%.3f, trend=%.1f (%s), tech=%.1f, macro=%.1f, news=%.1f",
+            "Snapshot captured: %s, close=%.3f, trend=%.1f (%s), tech=%.1f, macro=%.1f, news=%s",
             snapshot.snapshot_date,
             snapshot.close,
             snapshot.trend_index,

@@ -492,9 +492,9 @@ class TrendService:
             )
         macro_index = await self._macro.evaluate()
 
-        # 消息面：客户当日打分（未打分 → 中性 50）
-        news_score = 50.0
-        news_direction = DirectionSignal.NEUTRAL
+        # 消息面：客户当日打分（未打分 → None，进剔整面分支）
+        news_score: float | None = None
+        news_direction: DirectionSignal | None = None
         news_note, news_scored = "", False
         if self._news is not None:
             news_out = await self._news.get_today()
@@ -507,8 +507,9 @@ class TrendService:
         # V0.78.0 Step D：任一面不可用（技术面 5 维度全部数据不足）时**剔除该面**，
         # 剩余面权重按 Σ有效权重 归一化，而不是让缺失面以中性 50 稀释结论。
         # 三面全有效时 Σ有效权重 恰为 1.0 → 与旧实现逐位相同。
-        # 宏观与消息面结构上恒有值（宏观有静态参考兜底、消息面未打分为 50），故
-        # combined 在可达路径上恒为数值；None 分支属防御性保留。
+        # V0.100：消息面未打分 → news_score=None；同样走 faces tuple + valid_faces
+        # 剔整面（与 tech=None 同形），自动按剩余权重归一化（剔 news 后 macro 0.4/0.7=57.1%）。
+        # combined 在消息面或技术面至少一面有效时仍为数值。
         faces: tuple[tuple[str, float | None, float], ...] = (
             ("tech", tech_index.score, tech_w),
             ("macro", macro_index.score, macro_w),
@@ -535,10 +536,16 @@ class TrendService:
             notes: list[str] = []
             missing_dims = [i.name for i in indicators if i.score is None]
             if dropped:
-                notes.append(
-                    f"{'、'.join(_FACE_LABELS[k] for k in dropped)} 不可用，"
-                    "已剔除并按剩余面权重归一化"
-                )
+                # V0.100：仅消息面被剔 → 用 i18n 文案标识「pending」语义
+                if set(dropped) == {"news"}:
+                    notes.append(
+                        "消息面未打分，综合指数待定；已剔除并按剩余面权重归一化"
+                    )
+                else:
+                    notes.append(
+                        f"{'、'.join(_FACE_LABELS[k] for k in dropped)} 不可用，"
+                        "已剔除并按剩余面权重归一化"
+                    )
             elif missing_dims:
                 notes.append(f"技术面 {'、'.join(missing_dims)} 数据不足，已按有效权重归一化")
             if tech_note:  # W/M 旁路：数值保留 50，但必须让客户看见这是一句说明
@@ -561,10 +568,13 @@ class TrendService:
             direction=news_direction,
             note=news_note,
             scored=news_scored,
+            pending_reason=(
+                "今日尚未打分（消息面不参与综合指数）" if not news_scored else None
+            ),
         )
         logger.info(
             "Trend analyzed: interval=%s %s bars, %s (%+.2f%%), index=%s"
-            " (tech=%s×%.0f%%, macro=%.1f×%.0f%%, news=%.1f×%.0f%%)",
+            " (tech=%s×%.0f%%, macro=%.1f×%.0f%%, news=%s×%.0f%%)",
             interval,
             len(klines),
             direction.value,
@@ -574,7 +584,7 @@ class TrendService:
             tech_w * 100,
             macro_index.score,
             macro_w * 100,
-            news_score,
+            _fmt_score(news_score),
             news_w * 100,
         )
         status = getattr(self._repo, "source_status", None)

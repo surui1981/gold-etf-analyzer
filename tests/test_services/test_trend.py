@@ -7,6 +7,7 @@ import pytest
 from app.repositories.market_data import GoldKline
 from app.schemas.common import DirectionSignal
 from app.schemas.market import MacroIndexOut, TrendDirection, TrendIndexLevel
+from app.schemas.news import NewsScoreOut
 from app.services.trend import (
     GROUP_MAPPING,
     GROUP_WEIGHTS,
@@ -43,9 +44,48 @@ class FakeMacroFixed:
         )
 
 
-def _service(klines: list[GoldKline], macro_score: float | None = None) -> TrendService:
+class FakeNewsNone:
+    """假消息面服务：未打分返回 score=None（V0.100 新口径）。"""
+
+    async def get_today(self) -> NewsScoreOut:
+        return NewsScoreOut(
+            score_date=date.today(),
+            score=None,
+            direction=None,
+            notes="",
+            scored=False,
+            weighted=False,
+            slots=[],
+            used_slots=0,
+        )
+
+
+class FakeNewsFixed:
+    """假消息面服务：固定打分分数（用于验证 news 正常参与合成）。"""
+
+    def __init__(self, score: float) -> None:
+        self._score = score
+
+    async def get_today(self) -> NewsScoreOut:
+        return NewsScoreOut(
+            score_date=date.today(),
+            score=self._score,
+            direction=DirectionSignal.NEUTRAL,
+            notes="",
+            scored=True,
+            weighted=False,
+            slots=[],
+            used_slots=1,
+        )
+
+
+def _service(
+    klines: list[GoldKline],
+    macro_score: float | None = None,
+    news: object | None = None,
+) -> TrendService:
     macro = FakeMacro() if macro_score is None else FakeMacroFixed(macro_score)
-    return TrendService(FakeRepo(klines), macro=macro)
+    return TrendService(FakeRepo(klines), macro=macro, news=news)
 
 
 class FakeRepo:
@@ -153,14 +193,17 @@ async def test_trend_index_components() -> None:
     assert len(result.indicators) == 5
     assert result.index.score >= 55
     assert result.index.level in (TrendIndexLevel.UP, TrendIndexLevel.STRONG_UP)
-    # 技术面维度贡献求和 = 技术面分；综合指数 = 技术×0.3 + 宏观×0.4 + 消息面×0.3（未打分中性50）
+    # V0.100：消息面未打分 → news_score=None；剔 news 后归一化（tech×0.3/0.7 + macro×0.4/0.7）
     tech_sum = sum(i.contribution for i in result.indicators)
     assert tech_sum == pytest.approx(98.5, abs=0.5)
-    assert result.index.score == pytest.approx(tech_sum * 0.3 + 50.0 * 0.4 + 50.0 * 0.3, abs=0.5)
+    assert result.index.score == pytest.approx(
+        tech_sum * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.5
+    )
     # 宏观参考 + 消息面
     assert result.macro.score == 50.0
-    assert result.news.score == 50.0
+    assert result.news.score is None  # V0.100：未打分 = None（非中性 50）
     assert result.news.scored is False
+    assert result.news.pending_reason  # V0.100：未打分必带 pending_reason
     # 全部维度分数在 0-100
     assert all(0 <= i.score <= 100 for i in result.indicators)
 
@@ -216,9 +259,10 @@ async def test_v064_analyze_interval_w_aggregates_and_skips_indicators() -> None
     # W 模式下 indicators 旁路（空列表 + 技术面按中性 50）
     assert result.indicators == []
     assert result.index.components.get("tech") == 50.0
-    # 宏观 + 消息面仍正常合成（默认 50）
+    # 宏观 + 消息面仍正常合成（V0.100：消息面未打分 → score=None）
     assert result.macro.score == 50.0
-    assert result.news.score == 50.0
+    assert result.news.score is None
+    assert result.news.scored is False
     # 摘要反映「周 K」口径
     assert "近 1 年" in result.metrics.summary
 
@@ -450,13 +494,18 @@ async def test_trend_combined_re_normalize_when_partial() -> None:
 
 
 async def test_combined_summary_notes_excluded_dims() -> None:
-    """综合指数文案须说明「哪几维数据不足、已归一化」——客户不能把它当常态口径。"""
+    """综合指数文案须说明「哪几维数据不足、已归一化」——客户不能把它当常态口径。
+
+    V0.100：20 根 K 时技术面 5 维全有效，但默认 news=None（V0.100 新口径）
+    → dropped 仅含 news → 走「消息面未打分」pending 文案。
+    """
     closes = [round(100 + i * 0.5, 3) for i in range(20)]
     result = await _service(_mk_klines(closes)).analyze(days=20)
 
     summary = result.index.summary
-    assert "结构" in summary and "动量" in summary
+    assert "消息面未打分" in summary
     assert "归一化" in summary
+    assert result.news.scored is False
 
 
 async def test_trend_combined_none_when_all_insufficient() -> None:
@@ -472,10 +521,11 @@ async def test_trend_combined_none_when_all_insufficient() -> None:
     assert all(i.score is None for i in result.indicators)
     assert all(i.contribution is None for i in result.indicators)
     # 关键：不给技术面塞一个中性 50 占位，而是整面消失
+    # V0.100：news 也未打分（默认 None），components 仅含 macro
     assert "tech" not in result.index.components
-    assert set(result.index.components) == {"macro", "news"}
-    # 归一化：(80×0.4 + 50×0.3) / (0.4+0.3) = 67.14 → 不再被 50×0.3 稀释成 62.0
-    assert result.index.score == pytest.approx((80.0 * 0.4 + 50.0 * 0.3) / 0.7, abs=0.05)
+    assert set(result.index.components) == {"macro"}
+    # 归一化：tech 与 news 都缺 → 仅剩 macro 单独，face_w=0.4 → combined=80.0
+    assert result.index.score == pytest.approx(80.0, abs=0.05)
     assert "技术面" in result.index.summary and "归一化" in result.index.summary
 
 
@@ -484,12 +534,16 @@ async def test_trend_combined_keeps_tech_when_all_dims_valid() -> None:
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
     result = await _service(_mk_klines(closes)).analyze(days=60)
 
-    assert set(result.index.components) == {"tech", "macro", "news"}
+    # V0.100：消息面未打分 → news 缺席 components；剔 news 后归一化
+    assert set(result.index.components) == {"tech", "macro"}
     assert result.index.score == pytest.approx(
-        result.index.components["tech"] * 0.3 + 50.0 * 0.4 + 50.0 * 0.3, abs=0.15
+        result.index.components["tech"] * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.15
     )
     assert all(i.score is not None and i.reason is None for i in result.indicators)
-    assert "归一化" not in result.index.summary, "全维度有效时不应出现任何归一化说明"
+    # V0.100：消息面默认未打分 → news 缺席 components → 走「消息面未打分」pending 文案
+    # 故"归一化"在 summary 中出现（剔 news 整面）是 V0.100 的预期行为
+    assert "消息面未打分" in result.index.summary
+    assert "归一化" in result.index.summary
 
 
 async def test_w_and_m_interval_discloses_neutral_tech_in_summary() -> None:
@@ -702,3 +756,74 @@ async def test_settings_none_falls_back_to_grouped_default() -> None:
     )
     result = await service.analyze(days=60)
     assert result.tech_composed_by == "grouped"
+
+
+# ─── V0.100：消息面未打分 → 综合指数 pending ──────────────────────────
+
+
+async def test_trend_combined_pending_news_renormalizes() -> None:
+    """V0.100：消息面未打分 → news 缺席 components；剔 news 后按 tech+macro 归一化。
+
+    与「tech=None 时剔 tech」同形：faces tuple 中 news_score=None 时 valid_faces
+    过滤掉 news，face_w=0.7（tech 0.3 + macro 0.4），macro 自动按 0.4/0.7=57.1% 加权。
+    """
+    closes = [round(1 + i * 0.01, 3) for i in range(60)]
+    svc = _service(_mk_klines(closes), macro_score=60.0, news=FakeNewsNone())
+    result = await svc.analyze(days=60)
+
+    # 消息面输出符合 V0.100 新契约
+    assert result.news.scored is False
+    assert result.news.score is None
+    assert result.news.direction is None
+    assert result.news.pending_reason  # V0.100：未打分必带 pending_reason
+
+    # 综合指数仍为数值（剔 news 后按 tech+macro 加权）
+    assert result.index.score is not None
+    tech_score = result.index.components["tech"]
+    assert result.index.score == pytest.approx(tech_score * 0.3 / 0.7 + 60.0 * 0.4 / 0.7, abs=0.15)
+
+    # news 不在 components 中
+    assert "news" not in result.index.components
+    assert set(result.index.components) == {"tech", "macro"}
+
+    # summary 含 pending 文案（区别于 V0.99「不可用」）
+    assert "消息面未打分" in result.index.summary
+    assert "归一化" in result.index.summary
+
+
+async def test_trend_pending_news_when_tech_also_none() -> None:
+    """V0.100：tech 整面缺失 + news 未打分 → 仅剩 macro；summary 用通用「不可用」表述。
+
+    9 根 K 线时技术面 5 维全缺失 + 默认 news=None → components={macro}，
+    combined=macro_score（face_w=0.4 单独），summary 同时点出 tech 与 news 不可用。
+    当多面同时被剔时（dropped 不止 news）走通用文案，与 V0.78.0 行为一致。
+    """
+    closes = [round(100 + i * 0.5, 3) for i in range(9)]
+    svc = _service(_mk_klines(closes), macro_score=70.0, news=FakeNewsNone())
+    result = await svc.analyze(days=9)
+
+    assert all(i.score is None for i in result.indicators)
+    assert set(result.index.components) == {"macro"}
+    assert result.index.score == pytest.approx(70.0, abs=0.05)
+    # 多面同时被剔 → 走通用「不可用」文案（不专门标 pending）
+    assert "技术面" in result.index.summary
+    assert "消息面" in result.index.summary
+    assert "不可用" in result.index.summary
+
+
+async def test_trend_news_scored_normalizes_with_full_weight() -> None:
+    """V0.100 回归保护：消息面已打分 → news 正常参与合成（权重 0.3 不被剔）。"""
+    closes = [round(1 + i * 0.01, 3) for i in range(60)]
+    svc = _service(_mk_klines(closes), macro_score=60.0, news=FakeNewsFixed(70.0))
+    result = await svc.analyze(days=60)
+
+    assert result.news.scored is True
+    assert result.news.score == 70.0
+    # news 进入 components，三面全有效
+    assert set(result.index.components) == {"tech", "macro", "news"}
+    tech_score = result.index.components["tech"]
+    assert result.index.score == pytest.approx(
+        tech_score * 0.3 + 60.0 * 0.4 + 70.0 * 0.3, abs=0.15
+    )
+    # summary 不应出现「消息面未打分」pending 文案
+    assert "消息面未打分" not in result.index.summary
