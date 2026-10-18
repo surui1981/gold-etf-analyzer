@@ -20,11 +20,12 @@ def _svc(db: AsyncSession) -> NewsScoreService:
 
 
 async def test_default_neutral_without_history(db_session: AsyncSession) -> None:
-    """未打分且无历史 → 中性 50，scored=False，槽位全空。"""
+    """未打分且无历史 → score=None（V0.100 不再伪装中性 50），scored=False，槽位全空。"""
     out = await _svc(db_session).get_today()
 
     assert out.scored is False
-    assert out.score == 50.0
+    assert out.score is None
+    assert out.direction is None
     assert out.slots == []
     assert out.used_slots == 0
     assert out.remaining_slots == 3

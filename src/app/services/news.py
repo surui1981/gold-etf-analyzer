@@ -33,7 +33,8 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-NEUTRAL_SCORE = 50.0  # 未打分时的中性参考
+# V0.100：未打分 → None（不参与综合指数）；V0.99 以前的中性 50 兜底删除
+# （与 trend.py faces tuple + valid_faces 归一化算法联动，消息面被剔整面）
 
 # 槽位权重：越晚权重越高（第 1/2/3 次 → 1/2/3）
 SLOT_WEIGHTS: dict[int, int] = {n: n for n in range(1, MAX_DAILY_SLOTS + 1)}
@@ -43,11 +44,14 @@ BULLISH_THRESHOLD = float(DirectionThreshold.BULLISH)  # 55.0
 BEARISH_THRESHOLD = float(DirectionThreshold.BEARISH)  # 45.0
 
 
-def direction_of(score: float) -> DirectionSignal:
+def direction_of(score: float | None) -> DirectionSignal | None:
     """按分值判定方向：>55 看多、<45 看空、其余中性。
 
     V0.78.0：阈值改读 DirectionThreshold（行为零变化——仍是严格不等号）。
+    V0.100：score=None 时返回 None（未打分不强行标 neutral，避免与「中性 50」混淆）。
     """
+    if score is None:
+        return None
     if score > BULLISH_THRESHOLD:
         return DirectionSignal.BULLISH
     if score < BEARISH_THRESHOLD:
@@ -76,14 +80,17 @@ def dump_basis(tags) -> str:
     return json.dumps(cleaned, ensure_ascii=False) if cleaned else ""
 
 
-def aggregate_slots(records: list) -> tuple[float, str, bool]:
+def aggregate_slots(records: list) -> tuple[float | None, str, bool]:
     """按槽位权重合成当日有效分值 → (分值, 算式说明, 是否加权合成)。
 
     复盘服务（``services/review.py``）复用本函数，保证「当日有效分值」
     在打分页与复盘页口径完全一致。
+
+    V0.100：records=[] 时返回 ``(None, "", False)`` —— 未打分不再用中性 50 兜底，
+    由 ``TrendService`` 把消息面整面剔除（与 ``tech=None`` 同等体量）。
     """
     if not records:
-        return NEUTRAL_SCORE, "", False
+        return None, "", False
     total_w = sum(SLOT_WEIGHTS.get(r.slot, 1) for r in records)
     acc = sum(SLOT_WEIGHTS.get(r.slot, 1) * float(r.score) for r in records)
     effective = round(acc / total_w, 1)

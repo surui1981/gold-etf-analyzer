@@ -191,12 +191,21 @@ class MacroIndexOut(BaseModel):
 
 
 class NewsIndexOut(BaseModel):
-    """消息面指数（客户对投行黄金展望的评估打分）。"""
+    """消息面指数（客户对投行黄金展望的评估打分）。
 
-    score: float = Field(..., ge=0, le=100, description="消息面指数 0-100（>55 看多）")
-    direction: DirectionSignal
+    V0.100：``score`` 可为 ``None``（今日未打分时）；``pending_reason`` 给出
+    不可参与综合指数的原因（供前端展示与审计追溯）。``scored`` 仍为单一真源。
+    """
+
+    score: float | None = Field(
+        None, ge=0, le=100, description="消息面指数 0-100（>55 看多）；None=今日未打分"
+    )
+    direction: DirectionSignal | None = None
     note: str = Field("", description="客户研判备注")
-    scored: bool = Field(False, description="今日是否已打分")
+    scored: bool = Field(False, description="今日是否已打分（前端 pending chip 触发依据）")
+    pending_reason: str | None = Field(
+        None, description="V0.100：消息面 pending 的原因（如「今日尚未打分」）"
+    )
 
 
 class FreshnessLevel(StrEnum):

@@ -84,10 +84,11 @@ class NewsScoreOut(BaseModel):
 
     score_date: date
     # —— 当日有效分值（多次打分加权合成；单次时即该次分值）——
-    score: float
-    direction: DirectionSignal
+    # V0.100：未打分时为 None（替代原中性 50 兜底）；由 TrendService 剔整面
+    score: float | None
+    direction: DirectionSignal | None
     notes: str
-    # 是否已打分（未打分时 score 为中性参考 50）
+    # 是否已打分（未打分时 score=None、direction=None）
     scored: bool = True
     # 是否由多次打分加权合成
     weighted: bool = False
