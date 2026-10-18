@@ -14,6 +14,40 @@
 
 ---
 
+## [V0.100.0] · 2026-10-18
+
+`消息面未打分 → 综合指数 pending` — 5 件大项 / 5 个 commit
+
+### Added
+
+- ⏳ 综合指数 pending chip（trend.html + silver.html）—— 消息面未打分时数字降级透明度 0.55 + 「▲ 消息面 pending」chip（复用 freshness.js fsh-warn 样式） — **C3 + C4 ✅**
+- 🏷️ NewsIndexOut.pending_reason 字段（中文「今日尚未打分（消息面不参与综合指数）」） — **C1 ✅**
+- 🌐 i18n +6 trend.* key × 3 语 = 18 条翻译（pending_chip / pending_tooltip / news_unscored_label / news_unscored_chip / news_pending_hint / combined_pending_news） — **C3 ✅**
+
+### Changed
+
+- 🔄 NewsScoreOut.score / direction：`float` → `float | None`（未打分时 None，替代中性 50 兜底） — **C1 ✅**
+- 🔄 NewsIndexOut.score：`float` → `float | None` + 新增 pending_reason — **C1 ✅**
+- ♻️ aggregate_slots()：records=[] 返回 `(None, "", False)`（替代 NEUTRAL_SCORE 兜底） — **C1 ✅**
+- 📊 综合指数文案分支：`if set(dropped) == {"news"}` → 「消息面未打分，综合指数待定」pending 表述；多面被剔时沿用通用「不可用」 — **C2 ✅**
+- 🛠️ snapshot.py news=None 兜底 50.0（DB NOT NULL；配合 macro_detail JSON 保持审计追溯） — **C2 ✅**
+
+### Fixed
+
+- 🐛 后端综合指数不再被「未打分消息面」以中性 50 稀释（剔整面归一化后 macro 自动按 0.4/0.7=57.1% 加权） — **C2 ✅**
+- 🐛 test_main_app.ROOT_ALIASES 13 → 15 同步（V0.97.0 /ask + V0.98 /home 后预存漂移） — **C5 ✅**
+- 🐛 check_routes / check_routes_test 3 处硬断言同步（14/13/16 → 16/15/18） — **C5 ✅**
+
+### Discipline
+
+- 「剔整面 + 归一化」算法（trend.py:517-524）**保留不动**（V0.78.0 Step D 实测覆盖）
+- 既有 `combined is None` 防御分支仍保留（unreachable 兜底）
+- `#idxMethod` 运算方法描述**不变**（×30% + ×40% + ×30% 公式维持口径；pending 仅 chip + summary 披露）
+
+[详情](docs/releases/v0.100.0.md)
+
+---
+
 ## [V0.99.0] · 2026-10-18
 
 `白银数据修复 + SGE 上海银跟踪 + 页面重构` — 6 件大项 / 6 个 commit
