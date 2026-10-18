@@ -4,7 +4,7 @@
  * 4 端点并发拉（Promise.allSettled 一个挂不影响其他）：
  * 1. /api/v1/market/gold        → hero 金价 chip
  * 2. /api/v1/market/freshness   → hero 时效 chip
- * 3. /api/v1/news-feed/items?days=2&limit=5 → 底部今日要闻 Top 5（V0.102 readhub 财经流）
+ * 3. /api/v1/news-feed/items?days=2&limit=20 → 底部今日要闻 Top 20（V0.102 readhub 财经流）
  * 4. /api/v1/news-feed/status   → 今日要闻标题旁 chip（last_refresh + 24h 新增）
  *
  * 设计纪律（memory）：
@@ -55,7 +55,7 @@
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
     // V0.102：今日要闻换为 readhub 财经新闻流（最近 2 天 + 5 条）
-    fetch('/api/v1/news-feed/items?days=2&limit=5', { headers: { accept: 'application/json' } })
+    fetch('/api/v1/news-feed/items?days=2&limit=20', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
     fetch('/api/v1/news-feed/status', { headers: { accept: 'application/json' } })
@@ -109,7 +109,7 @@
       headlines.value.items.length > 0
     ) {
       newsListEl.textContent = ''; // 清空 skeleton
-      headlines.value.items.slice(0, 5).forEach((item) => {
+      headlines.value.items.slice(0, 20).forEach((item) => {
         const li = document.createElement('li');
 
         // 时间（HH:MM BJT）

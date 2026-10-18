@@ -16,7 +16,8 @@
 // V0.97.2 布局 hotfix：/ask 视口感知 + welcome 卡片 + 2/3 栏切换
 // V0.100.1 hotfix：home.html 今日要闻改 readhub 后，旧 SW 缓存里仍是 news-score 旧版（含 score 字段），
 //   bump VERSION 让 activate 阶段按 cache name 删旧 SHELL/RUNTIME，浏览器重 precache 新 home.html
-const VERSION = "v0.100.1";
+// V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice(0,5)→slice(0,20)、limit=5→limit=20、3 骨架→5 骨架）
+const VERSION = "v0.100.2";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -149,6 +150,8 @@ self.addEventListener("activate", (event) => {
             // V0.100.1 hotfix：/home 同问题（首页底部 今日要闻 改 readhub 后，浏览器 SW 缓存里仍是
             // 旧版 home.html + home.js，渲染时仍走 /api/v1/news-score/history 显分值；用户报告「没显示新闻标题」），
             // 同样清掉 RUNTIME_CACHE 里 307 旧条目。
+            // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice / limit / 骨架数），
+            // 同样按上述模式清 RUNTIME_CACHE 旧 /home + /static/home.html。
             .then(async () => {
                 const rt = await caches.open(RUNTIME_CACHE);
                 const stale = [
