@@ -3,6 +3,8 @@
 > 黄金 ETF 投资辅助 · 完整发版历史
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
+>
+> 能力 × 版本对照（"哪个能力在哪个版本落地"）见 [docs/releases/index.md](docs/releases/index.md)
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/) 规范。
 

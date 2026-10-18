@@ -1,10 +1,10 @@
 # API 参考与核心模型
 
+> **目标读者**：用户 + 开发者（核心契约）｜ **状态**：活跃 ｜ **最近更新**：2026-10-18
+>
 > 本指南已拆分为 5 部分，本文件包含 **API 参考（§5）+ 核心模型（§6）**。
 > 其他部分：[overview](overview.md) · [getting-started](getting-started.md) ·
 > [architecture](architecture.md) · [development](development.md)
->
-> 完整索引见 [application-guide.md](application-guide.md)。
 
 ## 5. API 参考
 

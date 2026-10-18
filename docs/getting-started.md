@@ -1,10 +1,10 @@
 # 快速开始与配置
 
+> **目标读者**：用户为主（开发者也用）｜ **状态**：活跃 ｜ **最近更新**：2026-10-18
+>
 > 本指南已拆分为 5 部分，本文件包含 **快速开始（§4）+ 配置说明（§8）**。
 > 其他部分：[overview](overview.md) · [architecture](architecture.md) ·
 > [api-reference](api-reference.md) · [development](development.md)
->
-> 完整索引见 [application-guide.md](application-guide.md)。
 
 ## 4. 快速开始
 
@@ -23,7 +23,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 867 用例（离线回归 823 passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0）
+python -m pytest -v          # 866+ 用例（离线回归 822+ passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0）
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```

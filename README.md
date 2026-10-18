@@ -2,22 +2,31 @@
 
 > 面向**个人黄金投资者**的一站式数据参考平台：汇聚**纽约金 / 上海金 / 黄金ETF 三大市场**价格，融合**技术面 · 宏观面 · 消息面**给出 0-100 量化多空指数，搭配**个人持仓盈亏管理**、**ETF 买卖决策**与**每日评估快照本地历史**——全部数据留在你自己的机器上。
 
+> **目标读者**：用户 + 开发者（首屏）｜ **状态**：活跃 ｜ **最近更新**：2026-10-18
+
 | | |
 |---|---|
-| **当前版本** | **V0.80.0**（2026-10-07）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | **986 用例**（67 个测试模块）· 离线口径 **942 passed**（按文件名排除 2 个联网 fetcher 文件 44 用例）；全量含联网 fetcher = 986 collected |
-| **页面** | 13 个静态页 · 67 个 REST 路径（76 个端点） |
+| **当前版本** | **V0.100.0**（2026-10-18）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | **866+ 用例**（16+ 个测试目录，含 5 个脚本门禁）· 离线口径 822+ passed（按文件名排除 2 个联网 fetcher 文件 44 用例） |
+| **页面 / 路由** | **19 个静态页** · **16+ alias** · **18 条 REST 路由**（核心契约见 [docs/api-reference.md](docs/api-reference.md)） |
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
-> 📖 **使用文档**（按内容拆分为 5 文件，按需查阅）：
-> [overview](docs/overview.md) · [getting-started](docs/getting-started.md) ·
-> [architecture](docs/architecture.md) · [api-reference](docs/api-reference.md) ·
-> [development](docs/development.md)
-> · 完整索引见 [application-guide.md](docs/application-guide.md)
-> 🧭 [docs/improvement-path.md](docs/improvement-path.md) · 易用性改善路径与版本规划
-> 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) · UX 与应用能力路线（V0.68.0 → V0.78.0）
-> ✅ [docs/feature-alignment.md](docs/feature-alignment.md) · README ↔ 代码 ↔ 文档三方对账
-> 🚀 [docs/deployment.md](docs/deployment.md) · 公开部署 runbook（Nginx + HTTPS + Docker）
+> 📖 **使用文档**（按目标读者标注，按需查阅）：
+> - [docs/overview.md](docs/overview.md) — 项目概述 + 功能清单（**双方**）
+> - [docs/getting-started.md](docs/getting-started.md) — 快速开始 + 配置说明（**用户**为主，开发者也用）
+> - [docs/architecture.md](docs/architecture.md) — 技术架构 + 数据源（**开发者**）
+> - [docs/api-reference.md](docs/api-reference.md) — API 参考 + 核心模型（**双方**）
+> - [docs/development.md](docs/development.md) — 测试 + 改进计划 + 备注（**开发者**）
+> - [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（**用户/运维**）
+>
+> 🗺️ **项目路线与历史**：
+> - [docs/roadmap.md](docs/roadmap.md) — **活跃路线图**（V0.78 → V0.100 历史里程碑 + V0.101+ 推进主线 + 维护线 + 风险）
+> - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（"哪个能力在哪个版本落地"的单源）
+> - [CHANGELOG.md](CHANGELOG.md) — Keep-a-Changelog 发版条目（发行节点）
+> - [docs/ux-roadmap.md](docs/ux-roadmap.md) — **已归档**（V0.68-V0.77 UX 全部已交付）
+> - [docs/improvement-path.md](docs/improvement-path.md) — **已归档**（V0.50-V0.72 改进路径全部已交付）
+> - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 11 项参数评估（K 项 = V0.102 唯一未交付项，**活跃**）
+> - [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
 
 ---
 
@@ -164,7 +173,7 @@
 | 认证 | 服务端 sessions 表 + HttpOnly cookie + CSRF 双提交（V0.75.0）· 兼容开关 `AUTH_ENABLED` |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段（镜像大小 1.2GB → 280MB **为设计目标、尚未实测**（V0.74.0 已首次真实构建成功并通过 smoke test，镜像体积仍未记录））+ docker-compose + Nginx + Certbot |
-| 测试 | pytest 972 · ruff check / format · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁）· check_cluster_render.mjs（前端渲染行为门禁）· check_pwa_assets.py（PWA 资源门禁）· check_links.py（死链与锚点门禁）· check_deps.py（依赖声明门禁） |
+| 测试 | pytest 866+ · ruff check / format · check_static_js.py（前端内联 JS 门禁）· check_docs_claims.py（文档声明门禁）· check_cluster_render.mjs（前端渲染行为门禁）· check_pwa_assets.py（PWA 资源门禁）· check_links.py（死链与锚点门禁）· check_deps.py（依赖声明门禁） |
 | CI | GitHub Actions · Python 3.13 matrix · uv 缓存 |
 
 ## 快速开始
@@ -196,7 +205,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试
 
 ```bash
-python -m pytest -v                                      # 全量 972 用例；离线口径 928（按文件名排除 2 个联网 fetcher）
+python -m pytest -v                                      # 全量 866+ 用例；离线口径 822+（按文件名排除 2 个联网 fetcher）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 python scripts/check_static_js.py                        # 前端内联 JS 门禁（语法 / 未定义调用 / DOM id）
@@ -392,17 +401,21 @@ python scripts/check_deps.py                             # 依赖声明门禁（
 
 ## 文档
 
-- 📖 **使用文档**（按内容拆分为 5 文件）：
-  - [docs/overview.md](docs/overview.md) — 项目概述 / 功能清单
-  - [docs/getting-started.md](docs/getting-started.md) — 快速开始 / 配置说明
-  - [docs/architecture.md](docs/architecture.md) — 技术架构 / 数据源
-  - [docs/api-reference.md](docs/api-reference.md) — API 参考 / 核心模型
-  - [docs/development.md](docs/development.md) — 测试 / 版本历史 / 改进计划 / 备注
-  · 完整索引见 [docs/application-guide.md](docs/application-guide.md)
-- 🧭 [docs/improvement-path.md](docs/improvement-path.md) — 易用性改善路径（P0-P3 改善方案）
-- 🎨 [docs/ux-roadmap.md](docs/ux-roadmap.md) — UX 路线（**V0.68.0 → V0.76.0**：仪表盘自定义 / 通知偏好 / 首页综合研判结论卡 / 首页内嵌消息面打分器 / 多用户登录 + 数据隔离）
-- ✅ [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账报告
-- 🚀 [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（HTTPS + Nginx + Docker）
+- 📖 **使用文档**（按目标读者标注）：
+  - [docs/overview.md](docs/overview.md) — 项目概述 / 功能清单（**双方**）
+  - [docs/getting-started.md](docs/getting-started.md) — 快速开始 / 配置说明（**用户**为主）
+  - [docs/architecture.md](docs/architecture.md) — 技术架构 / 数据源（**开发者**）
+  - [docs/api-reference.md](docs/api-reference.md) — API 参考 / 核心模型（**双方**）
+  - [docs/development.md](docs/development.md) — 测试 / 改进计划 / 备注（**开发者**）
+  - [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（**用户/运维**）
+- 🗺️ **项目路线与历史**：
+  - [docs/roadmap.md](docs/roadmap.md) — **活跃路线图**（V0.78 → V0.100 历史 + V0.101+ 推进主线）
+  - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（单源）
+  - [CHANGELOG.md](CHANGELOG.md) — 发版条目
+  - [docs/ux-roadmap.md](docs/ux-roadmap.md) — **已归档**（V0.68-V0.77）
+  - [docs/improvement-path.md](docs/improvement-path.md) — **已归档**（V0.50-V0.72）
+  - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 11 项参数评估（K 项 V0.102 唯一未交付）
+  - [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
 
 ## 许可
 

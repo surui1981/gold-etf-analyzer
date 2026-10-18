@@ -1,418 +1,502 @@
-# 开发版本推进线路图（V0.78.0 → V0.96+）
+# 开发与产品路线图
 
 > **配套文档**：
-> - [parameter-evaluation.md](parameter-evaluation.md) — **8 项参数问题诊断 + 推荐新值**（本路线图的输入）
-> - [development.md](development.md) §11 改进计划 — **P0-P3 大路线 + 状态补遗**
-> - [ux-roadmap.md](ux-roadmap.md) — **应用 / UX 路线**（V0.68.0 → V0.77.2 已完成）
+> - [parameter-evaluation.md](parameter-evaluation.md) — 参数评估（11 项改进需求与诊断，10/11 已交付）
+> - [development.md §11](development.md) — 历史改进计划 / P1-P3 大路线（已全部落地）
+> - [ux-roadmap.md](ux-roadmap.md) — V0.68-V0.76 UX 应用/能力路线（**整份已交付，作为历史档案保留**）
+> - [improvement-path.md](improvement-path.md) — 改进路径 + 部署状态 + 验收度量（**大部分已交付**，保留作历史档案与部署速查）
+> - [docs/reports/](reports/) — 阶段性分析报告（版本差距 / UX 评估 / 推进路线 / 内部复盘）
 
-> **本文件范围**：把 parameter-evaluation.md 的改进项 + 其他后台任务排进具体版本，给出**每版本的实施步骤、commit 切分、测试与文档同步**。
-
-> **基线版本**：V0.95.1（commit `2e956d3`，2026-10-15） —— 本路线图据此规划。
-> **已交付总览**：V0.78.0（10-05 · 阈值口径统一 + 决策补全）→ V0.78.1（10-05 · SW 缓存脱钩 + 依赖声明 + 8 道门禁）→ V0.79.0（10-07 · 阈值动态化 + 回测增强 + Step G/E/F/H 全部完成）→ V0.80.0（10-07 · 决策网格化 + 仓位结合）→ V0.81.0/81.1（10-08 · V0.75.3 认证收尾 + token 横幅）→ V0.82.0（10-09 · LAN 多终端 admin token 双通道）→ V0.83.0（10-10 · 主页 UI 改版 + 8 页警示合并）→ V0.83.1（10-10 · 110 个 zh-TW 翻译 gap 修复）→ V0.83.2（10-10 · 共享 topnav 抽离）→ V0.83.3（10-10 · 限速中间件 /static/ bypass + 120→600/min）→ V0.83.4（10-10 · freshness 降级 UX 重设计 + sig() dict bug 修复）→ V0.84.0（10-10 · 状态条方案 C 数据时效 + 警示合并）→ V0.85.0（10-11 · 数据时效迁移到 /data-health + 主页版面优化）→ V0.86.0（10-11 · 决策可解释性增强拆解 + 对比 + tooltip）→ V0.86.1（10-11 · 数据健康跳转 404 hotfix）→ V0.87.0（10-11 · `scripts/check_routes.py` HTTP 门禁 + main.py 路由冒烟 27 例）→ V0.88.0（10-12 · admin.py 19 例 + import_central_bank.py 13 例 · 维护线 src/ 87→90%+）→ V0.90.0（10-12 · 版本号 + 发版说明）→ V0.91.0（10-12 · 复盘报告 PDF 一键导出 + 跨页上下文保留）→ V0.92.0（10-14 · 历史打分数据汇总 · scoring_daily_wide 物化宽表 26 列 + 5 端点 + 双 Tab 视图）→ V0.92.1（10-15 · 行级命中筛选 + 是=红 #dc2626）→ V0.93.0（10-15 · T+0 outcome 当日尾盘验证）→ V0.94.0（10-15 · 预测评估卡 verdict card）→ V0.95.0（10-15 · 4 指数时序表「横盘日数」替换为 NY 金美元/盎司收盘）→ V0.95.1（10-15 · 4 指数时序桶排序降序 · 最近→远期自上而下）。
-> **当前焦点**：V0.96+ backlog（见 §12）—— 物化宽表已稳定，转向「数据深度」+「UX 体验优化」两条线。
-
----
-
-## 0. 路线图总览（一图）
-
-```
-                          2026-10-中下旬         2026-11          2026-12+
-V0.95.1 ──┬───────────┬───────────┬───────────┬───────────▶ 持续
-(基线)    │           │           │           │
-          ▼           ▼           ▼           ▼
-       V0.96.0     V0.97.0     V0.98.0     V0.99+
-       "数据深度"   "UX 优化"   "K 项"      "K+"
-       1 周        1-2 周      1 周        3-4 周
-       ─────────────────────────────────────
-       并行线:
-       维护线 V0.95.x / V0.96.x ── hotfix / 依赖升级 / 测试扩充（每 2 周 1 个）
-       K 项（多市场独立校准）── 推迟到 V0.98+，需 3-4 周投入
-```
-
-**历史快照（已交付）**：
-```
-V0.78.0 (10-05) → V0.78.1 (10-05) → V0.79.0 (10-07) → V0.80.0 (10-07) →
-V0.81.0 (10-08) → V0.81.1 (10-08) → V0.82.0 (10-09) → V0.83.0 (10-10) →
-V0.83.1 (10-10) → V0.83.2 (10-10) → V0.83.3 (10-10) → V0.83.4 (10-10) →
-V0.84.0 (10-10) → V0.85.0 (10-11) → V0.86.0 (10-11) → V0.86.1 (10-11) →
-V0.87.0 (10-11) → V0.88.0 (10-12) → V0.90.0 (10-12) → V0.91.0 (10-12) →
-V0.92.0 (10-14) → V0.92.1 (10-15) → V0.93.0 (10-15) → V0.94.0 (10-15) →
-V0.95.0 (10-15) → V0.95.1 (10-15)
-```
-
-**关键决策（V0.96+ 方向）**：
-- **物化宽表已稳定（V0.92.0）** —— 历史打分数据汇总页可生产用，转向「数据深度」（更多维度/跨市场对比/复盘分析）。
-- **UX 体验深化**——V0.92.1 命中筛选、V0.93.0 T+0 快速反馈、V0.94.0 预测评估卡、V0.95.x 桶排序 + NY 金收盘价 都是「让用户更快看到结果」的 UX 改进；V0.96+ 沿这个方向继续。
-- **维护线持续运转**——bugfix / 依赖升级 / 测试扩充不阻塞主版本，每 2 周一个 V0.95.x 小版本。
-- **K 项（多市场独立校准）继续推迟**——parameter-evaluation 11 项中唯一未交付；评估 V0.98+ 投入 3-4 周完成。
+> **本文件范围**：把前三份文档的活跃内容**聚类重组**到一处 —— 单一历史里程碑表 + 当前焦点 + 推进主线 + V0.96+ backlog + 维护线。
+>
+> **基线版本**：**V0.100.0**（commit `5c1eeef`，2026-10-17）
+> **当前焦点**：V0.101 Python 3.13 迁移收口（C1-C3a 已落，C3b/C4 待 commit）
+> **历史链已在 §1 收敛到一处** —— 文中其它位置不再重复列举版本号。
 
 ---
 
-## 1. V0.78.0 · 阈值口径统一 + 决策补全
+## §0 一页总览
 
-**主题**：**一致性收口**——把所有"55 是 UP 还是中性"的口径冲突解决，让方向判定在 5 个模块里口径一致。
-**预计时间**：5 天（2026-10-08 至 2026-10-13）
-**预计 commit 数**：4-6 个
+```
+                            2026-10              2026-11              2026-12+
+V0.100.0  ──┬────────────┬────────────┬─────────────────────▶ 持续
+(基线)      │            │            │
+            ▼            ▼            ▼
+        V0.101        V0.102        V0.103+
+       "Python 3.13    "K 项 ·       持续维护
+        迁移收口"       多市场独立校准"
+        1 周内         3-4 周         持续
+        ──────────────────────────────────────
+        并行线:
+        维护线 V0.100.x / V0.101.x ── hotfix / 依赖升级 / 测试扩充（每 2 周 1 个）
+        AI 助手深化 / 移动端 PWA 深化 ── 按用户优先级
+```
 
-### 1.1 改进项
+### 关键决策
+- **V0.78-V0.100 全部交付**：参数口径统一、决策矩阵、回测异步、银 / 多市场、AI 助手、双层导航、SSE 流式、消息面 pending、Python 3.13 迁移中。详见 §1。
+- **K 项（多市场独立校准）仍是 P3 唯一未交付项**：[`parameter-evaluation.md` §4.3](parameter-evaluation.md) 评估投入 3-4 周；详见 §3 K 项。
+- **维护线持续运转**：bugfix / 依赖升级 / 测试扩充不阻塞主版本。
 
-| ID | 改进 | 优先级 | 工作量 | 来自 parameter-evaluation.md |
-|----|------|--------|--------|----------------------------|
-| A | 统一阈值常量 | P0 | 0.5 天 | §3.1 | ✅ 已实现 2026-10-05 |
-| B | 决策矩阵档位补全 | P0 | 1-2 天 | §3.4 | ✅ 已实现 2026-10-05 |
-| C | 共振信号扩展反向 | P1 | 0.5 天 | §3.5 | ✅ 已实现 2026-10-05 |
-| D | 兜底策略差异化 | P0 | 1 天 | §3.7 | ✅ 已实现 2026-10-05 |
+---
 
-### 1.2 详细实施步骤
+## §1 历史里程碑（截至 V0.100.0）
 
-#### Step A · 统一阈值常量（Day 1 上午）
+**单一权威来源** —— 文中其它章节仅引用本表，不重复列举版本号。
 
-**目标**：建 `schemas/thresholds.py`，把 5/45/55/60/70 五个常量从代码里抽出来集中管理。
+### 工程化阶段（V0.50-V0.77）
 
-**状态**：✅ 已实现（2026-10-05 收口）。**收口时的关键结论 —— 硬编码不是一种语义，
-是四种**，本节模板只列了 5 个模块的替换位置，实际执行时按语义分了三类处理：
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| V0.50 | 2026-08-末 | P0 稳定可信 + P1 高频 + P2 快照自动捕获 |
+| V0.51 | | 投资指引基准切换为纽约金（COMEX） |
+| V0.51.1 | | 启动健壮性修复（Alembic 子进程化 + WAL checkpoint） |
+| V0.52-V0.55 | | 易用性 P3（时效条 + 响应式 + 决策可解释 + 操作防错 + 主动提醒） |
+| V0.57.0 | | 央行购金数据化与自动化 |
+| V0.58.0 | | 新手引导与帮助体系（tour + glossary + 15 项 inline tooltip） |
+| V0.59.0 | | 行情源配置化（4 provider） |
+| V0.60.0 | | 行情实时性增强（缓存 TTL + 日内 4 时点刷新） |
+| V0.61.0 | | 交易闭环 + 业绩分析（收益曲线 / 获利分析） |
+| V0.62.0 | | 单用户多账本 + 交易历史查询页 |
+| V0.62.1 | | 收益回放口径修复 |
+| V0.63.0 | | 评估指数历史曲线升级（4 条线 + 区间切换） |
+| V0.64.0 | | 多时间框架（60D / 52W / 24M + ISO 周界 / 年月聚合） |
+| V0.65.0 | | 消息面每日 3 次打分（1:2:3 加权） |
+| V0.66.0 | | 研判复盘与准确率校准（T+1/T+3/T+5 + 校准曲线） |
+| V0.67.0 | | 框架基础补齐（CI/CD + X-Request-ID + 价格 schema 校验） |
+| V0.68.0 | | UX 启动版：导航折叠 + ⌘K 命令面板 + telemetry 埋点底座 |
+| V0.69.0 | | 4 主题切换（light / dark / auto / hc）+ 键盘导航 + 价格日历扩窗 |
+| V0.70.0 | | 共振信号卡（4 类）+ 克数持仓 + 双口径收益曲线 |
+| V0.71.0 | | 白银 K 线 + 回测可视化（3 维权重网格 + 阈值带扫描） |
+| V0.72.0 | | 推送渠道（SMTP + Server酱 + Web Push）+ PWA + 公开部署 |
+| V0.73.0 | | i18n 繁中全量 61.2% + 后端国家名解耦 |
+| V0.74.0 | | 仪表盘自定义（拖拽）+ 告警规则 CRUD（🟡 PDF 导出未做） |
+| V0.75.0-V0.75.3 | | 多用户登录 + 数据隔离 + 找回密码（3 段递进） |
+| V0.76.0 | | 首页内嵌消息面打分器（增补） |
+| V0.77.0 | | 界面聚类分组（13 页审计 23 处→ 5 处改造 + 3 处修复） |
+| V0.77.1 | | 信任修复：失败态不再伪装正常（/data-health 全绿 → 「—」未知） |
+| V0.77.2 | | 数据不丢与交互安全（basis / review_note 补齐 + 输入不清空 + 二次确认） |
 
-| 类别 | 位置 | 处理 |
-|------|------|------|
-| 单维度方向 60/40 | `macro.py` + `scoring._to_signal`（两处完全相同） | 复用 `DirectionThreshold.NEUTRAL_HIGH/LOW` |
-| 仓位档位 75/55/45/25 | `decision._suggest_position` | 复用 `LevelThreshold`（与 `trend._to_level` 同源） |
-| 投资窗口 70/55/40 | `scoring._to_window` / `_summarize` | 语义独立 → **新增** `OpportunityWindowThreshold` |
-| 指数着色 55/40 | `decision._build_reason_items` | **有意保留**：显示层着色，40 故意不同于 `BEARISH`(45) 以更早示警，属产品语义决策 |
+### 一致性收口 + 决策补全（V0.78-V0.80）
 
-另新增 `tests/test_services/test_thresholds.py`（25 例，本节模板要求的「约 15 例」
-一直缺失），其中以 **AST 遍历**机械保证「服务层判定逻辑不再出现裸阈值字面量」——
-用 AST 而非 grep，因 grep 会命中 docstring 与注释、也扛不住行号漂移。
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| **V0.78.0** | 2026-10-05 | **阈值口径统一 + 决策补全**（Step A-D：阈值常量四组 IntEnum + 决策 9 档 + 共振反向识别 + 兜底差异化） |
+| V0.78.1 | 2026-10-05 | SW 缓存版本脱钩 + PWA 门禁 + 3 道机械门禁 |
+| V0.78.2 | 2026-10-05 | 门禁可信度修复（CI 八道门禁 + 14 例常驻回归） |
+| **V0.79.0** | 2026-10-07 | **阈值动态化 + 回测增强**（Step G/E/F/H：WeightGrid 嵌套 + 异步回测 + 技术面组内平均 + 样本阈值分层） |
+| **V0.80.0** | 2026-10-08 | 决策网格化 + 仓位结合（暂存为 P3 #12 待闭环） |
 
-模板下方那段「校验：预期只剩 `schemas/thresholds.py` 一处定义」**未达成且不打算达成**：
-剩余字面量分属不同语义（`win_rate >= 50` 胜率、`len(closes) < 40` 交易日根数、
-`payload keys > 50` 安全上限）与有意保留项，不属于本枚举要收口的对象。
+### UX 与可信度持续打磨（V0.81-V0.86）
 
-**文件改动**：
-1. 新建 `src/app/schemas/thresholds.py`：
-   ```python
-   """集中管理 0-100 分制下的方向/等级/决策阈值常量。"""
-   from enum import IntEnum
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| V0.80.1 / V0.81.0-V0.82.0 | 2026-10-08 至 09 | admin token 双通道 + LAN 多终端（V0.82 主题由「多市场」调整为 LAN 痛点） |
+| V0.83.0-V0.83.4 | 2026-10-10 | 主页 UI 改版 + 共享 topnav + i18n 110 gap + 限速 + freshness 降级 |
+| V0.84.0 | 2026-10-10 | 状态条方案 C · 数据时效 + 警示合并 1 行 disclosure |
+| V0.85.0 | 2026-10-11 | 时效迁移 /data-health + 健康摘要 chip + 主页紧凑化 |
+| V0.86.0 | 2026-10-11 | 决策可解释性增强（拆解 + 对比 + tooltip 三件套） |
+| V0.86.1 | 2026-10-11 | 数据健康跳转 404 hotfix |
 
-   class DirectionThreshold(IntEnum):
-       """方向判定阈值（与 0-100 分制对齐）"""
-       STRONG_BULLISH = 70   # 强多（决策 BUY_HEAVY 触发）
-       BULLISH = 55          # 看多（消息面 > 55、共振 ≥ 55、单维度 ≥ 60 中性偏多）
-       NEUTRAL_HIGH = 60     # 中性偏上（单维度方向判定）
-       NEUTRAL_LOW = 40      # 中性偏下
-       BEARISH = 45          # 看空
-       STRONG_BEARISH = 25   # 弱势下降（综合指数 STRONG_DOWN 触发）
+### 维护线 + 测试扩充（V0.87-V0.92）
 
-   class LevelThreshold(IntEnum):
-       """综合指数等级阈值（含端点）"""
-       STRONG_UP = 75
-       UP = 55
-       SIDEWAYS = 45
-       DOWN = 25
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| V0.87.0 | 2026-10-11 | `scripts/check_routes.py` HTTP 门禁 + 27 例路由冒烟 |
+| V0.88.0 | 2026-10-12 | 维护线 src/ 87→90%+（admin 19 例 + grams 100% + import_central_bank 98%） |
+| V0.90.0 | 2026-10-12 | 版本号 bump（V0.89 跳过） |
+| V0.91.0 | 2026-10-12 | 复盘报告 PDF 一键导出 |
+| V0.92.0 | 2026-10-14 | 历史打分数据汇总 · scoring_daily_wide 物化宽表 + 5 端点 |
 
-   class DecisionThreshold(IntEnum):
-       """决策矩阵档位阈值"""
-       BUY_HEAVY = 75        # ≥ 75 重仓买入（80%）
-       BUY = 65              # ≥ 65 普通买入（60%）
-       BUY_LIGHT = 55        # ≥ 55 轻仓试仓（30%）
-       HOLD = 50             # ≥ 50 持有
-       HOLD_LOW = 40         # ≥ 40 观望持有
-       REDUCE = 40           # < 40 减仓
-   ```
+### Scoring 与多市场深化（V0.92.1-V0.95.1）
 
-2. **替换硬编码**（按出现位置）：
-   - `src/app/services/news.py:40-41` → `DirectionThreshold.BULLISH.value` / `BEARISH.value`
-   - `src/app/services/trend.py:645-651` → `DirectionThreshold.NEUTRAL_HIGH/LOW.value`
-   - `src/app/services/trend.py:654-664` → `LevelThreshold.*`
-   - `src/app/services/decision.py:118-159` → `DecisionThreshold.*`
-   - `src/app/services/resonance.py:38-39` → `DirectionThreshold.BULLISH/BEARISH.value`
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| V0.92.1 | 2026-10-15 | 行级命中筛选（hit=yes 红 #dc2626） + T+0 outcome + verdict card |
+| V0.93.0 | | |
+| V0.94.0 | | |
+| V0.95.0 | 2026-10-15 | 4 指数时序表「横盘日数」→「NY 金美元/盎司收盘」 + backfill 28/39 |
+| V0.95.1 | 2026-10-15 | 4 指数时序桶排序降序（最近→远期自上而下） |
 
-3. **校验**：
+### 后向能力大爆发（V0.96-V0.100）
+
+| 版本 | 日期 | 主题 |
+|---|---|---|
+| **V0.96.0** | 2026-10-16 | 命中分析 Tab + /hit-stats-all + 4 horizon 1 次取 + 4 dataset 柱状图 + 3 mini card |
+| **V0.97.0** | 2026-10-XX | AI 智能分析页（/ask 3 pane chat + 5 tool 只读 + ClaudeClient httpx） |
+| V0.97.1 / V0.97.2 | | 3 级降级兜底（miniMax proxy_fallbacks + L1 同时平铺 tool_use/tool_result） |
+| **V0.98.0** | 2026-10-XX | 双层导航 7 顶场景 + 4 子场景 + /ask SSE 流式（sse-starlette + EventSource） |
+| **V0.99.0** | 2026-10-XX | 白银 SGE + 3-market 页面重构（em+sina 备援 + SGE provider + 3 端点 + silver.js 拆 + 升贴水表） |
+| **V0.100.0** | 2026-10-17 | 消息面未打分 → 综合指数 pending（NewsScoreOut.score=None 替代 50 兜底，trend.html / silver.html 参数分两栏 + pending chip） |
+
+### 当前（V0.101，迁移收口）
+
+| 版本 | 进度 | 主题 |
+|---|---|---|
+| **V0.101** | C1-C3a 已落 | **Python 3.13 迁移**（pyproject requires-python + ruff target py313 + CI 矩阵收口 + Dockerfile 3.13-slim）；C3b/C4 待 commit |
+
+> 完整技术实现细节（V0.78 Step A-D、Step G/E/F/H、V0.80 决策网格化等）见 [附录 E 历史实现细节](#附录-e--历史实现细节v078-v080)。
+
+---
+
+## §2 推进主线（V0.101+ 主动作）
+
+按"必须做 vs 可选择"分级。
+
+### 2.1 V0.101 · Python 3.13 迁移收口（in progress, 1 周内）
+
+**主题**：让生产环境跑在 Python 3.13，与 2026 年官方维护窗口对齐。
+
+**已完成（4 commit 已落）**：
+- C1 `21f9fc5`：`pyproject.toml` requires-python 升 3.13 + ruff target py313 + README 同步
+- C2 `a20d881`：CI 矩阵收口（删除 3.11/3.12，只跑 3.13）
+- C3a `84a0f34`：Dockerfile 双 stage 基础镜像 3.12-slim → 3.13-slim
+
+**待落（C3b / C4）**：
+- C3b：本地启动验证（`MARKET_PROVIDER=mock`） + 离线回归 100% 通过
+- C4：CHANGELOG + release notes + 5 处版本号同步（pyproject / sw.js VERSION / main.py / README / docs/）
+
+**风险**：
+- 🟡 0.13 与 0.12 之间的 asyncio / pydantic / typing-deprecated 变更点需要在测试中暴露
+- 🟢 7 道门禁（check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims / pytest）足以拦截
+
+### 2.2 V0.102 · K 项 · 多市场独立校准（3-4 周）
+
+**主题**：parameter-evaluation.md §4.3 唯一未交付项 —— 黄金 / 白银 / ETF 三套独立权重与阈值。
+
+**前置**：V0.101 落定。
+
+**实施步骤（概览）**：
+1. `schemas/settings.py`：权重 / 阈值配置改为 `target_keyed: dict[target, WeightConfig]`
+2. `services/trend.py` / `services/macro.py`：参数解析按 target 取值
+3. 回测支持 cross-market 验证（NY vs SGE vs ETF 共 3×3=9 组对照）
+4. UI：`static/weights.html` 加 target 切换 tab
+5. 文档同步：parameter-evaluation.md §4.3 验证结论
+
+**风险**：
+- 🟡 数据量大（已有 3 market × 至少 730 天 × 5 维技术面 + 5 因子宏观 = ~21,900 条评估基线）
+- 🟢 物化宽表 V0.92.0 + 回测引擎 V0.79 已就绪
+
+**价值**：
+- 高 —— 11 项 parameter-evaluation 项里**唯一**未交付
+- 中 —— 用户可见性低（仅在 settings 与回测页有入口），但"参数可信度"本身就是该工具核心价值
+
+### 2.3 V0.103+ 候选（按用户优先级选择）
+
+详见 [§3 V0.96+ Backlog](#3-v096-backlog) —— 候选 B-G 中尚未交付的项目继续推进。
+
+---
+
+## §3 V0.96+ Backlog
+
+> V0.92.0 物化宽表已稳定 + V0.92.1/V0.93.0/V0.94.0/V0.95.x UX 改进系列已落，按"数据深度 + UX 深化 + K 项"三条线展开。
+>
+> **2026-10 已交付**：候选 A（V0.96.0 命中分析） / 候选 H 部分（V0.97.0 AI / V0.98.0 双层导航 + SSE / V0.99.0 多市场重构）。
+> **剩余**：候选 B-G 中尚未交付的项目 + K 项正式化。
+
+### 3.1 数据深度类
+
+#### 候选 A · 打分命中率分布可视化 ✅ 已交付 V0.96.0
+
+> 见 [docs/releases/v0.96.0.md](releases/v0.96.0.md) —— 4 dataset 柱状图（4 horizon × 5 dataset）+ 3 mini card（最近 30 天 / MoM / 最佳 horizon）。
+
+#### 候选 B · 胜率随 horizon 退化曲线（V0.96+ 候选）
+
+**目标**：verdict card 旁边 1 张 mini 折线图 —— x 轴 horizon (t0/t1/t3/t5)，y 轴命中率。
+
+- 一眼看到"T+0 → T+5 命中率衰减有多快" → 策略稳定性度量
+- 复用 V0.86.0 decision-explainer.js 的 `dimensionBars` 横向条形图组件
+
+**工作量**：1-2 天 ｜ **风险**：🟢 0 ｜ **价值**：中
+
+#### 候选 C · 跨市场对照扩展
+
+**目标**：trend.html「NY / SGE / ETF」对照从纯指数曲线升级为"价 × 涨跌 × 状态"三维。
+
+- 主图保留 3 曲线
+- 副图：x 时间，y marker（NY / SGE / ETF），颜色按涨跌，状态 chip（实时/缓存/演示）
+
+**工作量**：5-7 天 ｜ **风险**：🟡 中（重构 trend.html sge/cmp 区）｜ **价值**：中
+
+### 3.2 UX 体验深化类
+
+#### 候选 D · 移动端 PWA 体验收口
+
+**状态**：V0.72.0 基础 PWA 已就绪，V0.83.0 触控 ≥44px 部分达成；剩余缺口：
+
+- [ ] 顶栏移动端汉堡菜单全局审计（V0.83.2 topnav 抽离后未补 ≤768px 折叠）
+- [ ] iOS / Android 主屏图标 + splash 验证（Android Chrome 实际安装测试）
+- [ ] PWA manifest `start_url` / `display` / `theme_color` 字段完整化
+- [ ] SW `SHELL_ASSETS` 已含 9 个业务页（V0.92.0 补 scoring.html），确认 /home /ask 也入内
+
+**工作量**：1 周 ｜ **风险**：🟢 0 ｜ **价值**：中
+
+#### 候选 E · AI 助手深化（V0.97.0 后的延伸）
+
+**状态**：V0.97.0 /ask 已上线 5 tool 只读 + ClaudeClient httpx + SSE 流式。剩余可深化方向：
+
+- 写操作前置审查（tool 增加建议写入，但需用户确认）
+- 多轮对话的 session 持久化（目前每次刷新重置）
+- 跨页上下文带过去（目前只 snapshot 当前 trend）
+
+**工作量**：1-2 周 ｜ **风险**：🟡 中（影响 trust 边界）｜ **价值**：高
+
+#### 候选 F · 错误降级 UX 收口
+
+**状态**：V0.77.1 / V0.83.4 / V0.85.0 / V0.100.0 已有零散修复。剩余：
+
+- [ ] `static/error-toast.js` 共享模块（toast + retry + 末次数据保留）9 业务页统一接入
+- [ ] `check_cluster_render.mjs` 加"失败态渲染"断言扩展（V0.77.1 的 §7 已起步）
+
+**工作量**：3-5 天 ｜ **风险**：🟡 中 ｜ **价值**：高（消除用户最大痛点"为什么我看到红框"）
+
+#### 候选 G · 命中筛选 / T+0 联动快捷键（V0.92.1 / V0.93.0 后续）
+
+**目标**：scoring 页键盘快捷键减少点击。
+
+- `1` / `2` / `3` 切 全部/是/否（V0.92.1 已实现 UI，可补键盘）
+- `Tab` 切 horizon t0 / t1 / t3 / t5
+- `←` / `→` 翻月份
+- `Esc` 关 verdict card 详情弹窗
+
+**工作量**：1-2 天 ｜ **风险**：🟢 0 ｜ **价值**：中
+
+### 3.3 K 项（候选 H → V0.102 正式版）
+
+见 [§2.2 V0.102](#22-v0102--k-项--多市场独立校准3-4-周)。
+
+---
+
+## §4 维护线（每 2 周一个补丁版）
+
+### 4.1 已建立的维护节奏
+
+| 周期 | 主题 | 来源 |
+|---|---|---|
+| **每 2 周** | hotfix / 依赖升级 / 测试扩充 / backfill 脚本化 | 历史（V0.78.x-V0.95.x） |
+| **每 4 周** | sw.js VERSION + 4 处同步清单（pyproject / main.py / CHANGELOG / README）+ pwa_assets 门禁 | V0.88.0 教训 + 4 处同步清单 memory（`sw-version-sync-gate`）|
+| **持续** | 7 道机械门禁维护 | 见 §6 门禁清单 |
+
+### 4.2 维护任务清单（每小版本至少 1 项）
+
+- [ ] `ruff check` 警告清零
+- [ ] 依赖升级：`uv lock --upgrade` → 跑全量回归（**谨慎**：V0.78.2 sqlalchemy 2.0→2.1 跨大版本崩溃前科）
+- [ ] 测试扩充：新功能 PR 至少 +10 测试
+- [ ] 文档同步：版本号、页数、端点数刷新
+- [ ] 静态门禁：JS + 渲染 + 文档声明 三关全绿
+- [ ] 检查 `pwa_assets` / `check_routes` 清单是否需要同步
+- [ ] 检查 `feature-alignment.md` 是否已登记本次偏差
+
+### 4.3 维护线累计护栏（截至 V0.100.0）
+
+- 14+ HTTP alias（V0.87 check_routes 持续护栏；V0.99 / /home /ask /scoring /central-bank /silver /data-health 等新增 alias）
+- 16+ 静态 HTML + 30+ 共享 JS（V0.92.0 scoring.html / V0.98.0 /home /ask /central-bank-page 等）
+- src/ 覆盖率 90%+ 基线（V0.88 admin 19 + grams 100% + import_central_bank 98%）
+- 7 道门禁：check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims / pytest
+
+---
+
+## §5 风险与缓解
+
+### 5.1 跨版持续风险
+
+| 风险 | 概率 | 影响 | 缓解 |
+|---|---|---|---|
+| **sw.js VERSION 与 pyproject 漂移** | 中 | 高（用户长期"HTML 新 + JS 旧"） | `sw-version-sync-gate` memory + `pwa_assets.py` 必跑 + 4 处同步清单 |
+| **文档声明与代码漂移** | 中 | 中（误用/调试找不到 key） | `check_docs_claims.py` 必跑 +390+ 处自动校验；feature-alignment.md SKIP_FILES 例外处理 |
+| **维护线覆盖率萎缩** | 低 | 中 | V0.79.2 目标 ≥60%，V0.88 已 90%+，下阶段加 puppeteer 视觉回归 |
+| **i18n 繁中同步再次掉队** | 低 | 中 | V0.73.0 zh-TW 覆盖率 10.9%→61.2%，V0.83.1 110 gap 修复；`check_i18n_keys` 0 missing 持续护栏 |
+| **行号漂移导致审计报告失准** | 中 | 低（仅跨文档比对时） | 报告中标注"[○] 子代理审计" vs "[✓] 亲自复核"；下次审计时重新定位 |
+| **CI matrix 与本地 Python 版本不一致** | 中 | 中（dev 能跑，CI 挂） | V0.101 C2 已收口为 3.13 only |
+
+### 5.2 主动作风险
+
+| 主动作 | 风险 | 缓解 |
+|---|---|---|
+| **V0.101 Python 3.13 迁移** | 🟡 asyncio / pydantic typing 弃用警告洪水 | ruff 全绿 + 离线回归 100% 通过方可发版 |
+| **V0.102 K 项** | 🟡 数据量大回测慢 | 复用 V0.92.0 物化宽表 + V0.79 5min 节流 cache |
+| **候选 E AI 写操作** | 🟡 trust 边界 | 默认 review-only；要"建议写入"必须显式用户确认 |
+
+---
+
+## §6 立即可启动的下一步
+
+**今天（2026-10-18）可做**：
+
+### V0.101 收口（C3b / C4）
+
+1. **本地启动验证**（V0.101 C3b）：
    ```bash
-   grep -rnE "(55\.0|45\.0|>55|<45|>= 55|>= 45)" src/app/services/ \
-     | grep -v test_ | grep -v __pycache__
+   uv run python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py \
+     --ignore=tests/test_services/test_h15_fetcher.py
    ```
-   预期输出：只剩 `schemas/thresholds.py` 一处定义。
+   预期：V0.100.0 离线基线 866+ 用例 0 failed，3.13 下应同等。
 
-**测试改动**：
-- `tests/test_services/test_thresholds.py`（新增，约 15 例）
-- 验证：所有现有决策 / 共振 / 消息面 / 单维度方向测试**零修改通过**（验证抽常量不改变行为）。
+2. **手测 mock provider**：
+   ```bash
+   MARKET_PROVIDER=mock uv run uvicorn app.main:app --port 8899
+   ```
+   验证：GET /api/v1/health 200，访问 /portfolio /trend /scoring /ask /central-bank 均不报错。
 
-**commit 切分**：1 个 commit `refactor(schemas): 统一阈值常量到 schemas/thresholds.py`
+3. **5 处版本号同步**（V0.101 C4）：
+   - `pyproject.toml` `version = "0.101.0"`
+   - `static/sw.js` `const VERSION = "v0.101.0"`
+   - `static/manifest.json`（如有版本字段）
+   - `README.md` 当前版本徽章
+   - `docs/CHANGELOG.md` 新增条目
+
+4. **发版说明**：`docs/releases/v0.101.0.md` 写 4 commit 链 + 门禁快照 + 验证步骤。
+
+5. **commit 链**（建议 1 个 PR）：
+   ```
+   test(python): V0.101 C3b · Python 3.13 离线回归全绿
+   chore(release): V0.101 C4 · 5 处版本同步 + release notes
+   ```
+
+### V0.102 准备（K 项，如本周 V0.101 落定后启动）
+
+按 [§2.2](#22-v0102--k-项--多市场独立校准3-4-周) 步骤估算工作量，但不立即开始 —— 等 V0.101 tag 推送 + 镜像验证通过再启动。
 
 ---
 
-#### Step B · 决策矩阵档位补全（Day 1 下午 ~ Day 2）
+## 附录 A · parameter-evaluation.md 对账
 
-**目标**：BUY 拆 3 档（30% / 60% / 80%），消除 [60, 70) × [-10%, +15%] 卡死区，新增 idx [40, 45) HOLD 缓冲档。
+| parameter-evaluation 项 | 状态 | 落地版本 |
+|---|---|---|
+| A 统一阈值常量 | ✅ | V0.78.0 Step A |
+| B 决策矩阵档位补全 | ✅ | V0.78.0 Step B |
+| C 共振信号扩展反向 | ✅ | V0.78.0 Step C |
+| D 兜底策略差异化 | ✅ | V0.78.0 Step D |
+| E 动态化宏观阈值 | ✅ | V0.79.0 Step E |
+| F 技术面 5 维度重构 | ✅ | V0.79.0 Step F |
+| G 回测权重嵌套扩展 | ✅ | V0.79.0 Step G |
+| H 样本阈值分层 | ✅ | V0.79.0 Step H |
+| I 阈值带自适应 | ✅（部分，V0.80.0 Step I） | V0.80.0 |
+| J 决策矩阵网格化 + 仓位结合 | 🟡 半成品 | V0.80.0 Step J（待闭环）|
+| **K 多市场独立校准** | ❌ 未交付 | **V0.102 正式项** |
 
-**文件改动**：
-1. `src/app/schemas/decision.py`：
-   ```python
-   class DecisionAction(str, Enum):
-       BUY_HEAVY = "buy_heavy"   # 80% 仓位
-       BUY = "buy"               # 60% 仓位
-       BUY_LIGHT = "buy_light"   # 30% 仓位
-       ADD = "add"
-       HOLD = "hold"
-       HOLD_CAUTIOUS = "hold_cautious"   # 新增：观望持有（idx [40, 45)）
-       REDUCE = "reduce"
-       SELL = "sell"
-       WAIT = "wait"
-   ```
-
-2. `src/app/services/decision.py:_decide()`：
-   - **无持仓分支**（`decision.py:139-146` 替换为）：
-     ```python
-     if idx >= DecisionThreshold.BUY_HEAVY:  # ≥ 75
-         return BUY_HEAVY, "high"
-     elif idx >= DecisionThreshold.BUY:  # ≥ 65
-         return BUY, "high"
-     elif idx >= DecisionThreshold.BUY_LIGHT:  # ≥ 55
-         return BUY_LIGHT, "medium"
-     elif idx >= DecisionThreshold.HOLD:  # ≥ 50
-         return WAIT, "low"
-     else:
-         return WAIT, "medium"
-     ```
-   - **有持仓分支**（`decision.py:148-159` 替换为）：
-     ```python
-     if pnl_pct >= 15 and idx < 60:
-         return SELL, "high"
-     elif pnl_pct <= -10 and idx < 40:
-         return REDUCE, "high"
-     elif idx >= DecisionThreshold.BUY_HEAVY:  # ≥ 75
-         return ADD, "high"
-     elif idx >= DecisionThreshold.BUY_LIGHT:  # ≥ 55
-         return HOLD, "medium"
-     elif idx >= DecisionThreshold.HOLD_LOW:  # ≥ 40
-         return HOLD_CAUTIOUS, "low"   # 新增缓冲档
-     else:
-         return REDUCE, "medium"
-     ```
-
-3. `src/app/api/v1/endpoints/portfolio.py`：决策接口返回 `BUY_LIGHT` / `HOLD_CAUTIOUS` 等新动作，前端 `static/portfolio.html` 决策面板加对应中文映射（轻仓买入 / 观望持有）。
-
-4. **回测联动**：`services/backtest.py` 的 action 统计表增 3 个新动作。
-
-**测试改动**：
-- `tests/test_services/test_decision.py`：
-  - 删除 6 个旧测试，替换为 12 个新测试覆盖 50 格决策矩阵的关键 12 个分支
-  - 新增 `test_decision_no_dead_zone_*`（消除卡死区）
-  - 新增 `test_decision_buy_light_*`（轻仓买入触发）
-
-**commit 切分**：1 个 commit `feat(decision): 决策矩阵档位补全 + BUY 拆 3 档`
+**11 项中 10 项已交付**，K 项为唯一未交付。
 
 ---
 
-#### Step C · 共振信号扩展反向（Day 3 上午）
+## 附录 B · development.md §11 改进计划对账
 
-**目标**：DIVERGENT = 「任意两维反向幅度 ≥ 15」，新增 `news_vs_macro` / `news_vs_tech` 子类。
-
-**状态**：✅ 已实现（2026-10-05）。实现与本节模板的**两处有意偏差**，照抄本节会踩：
-
-1. **取幅度最大的达标对，而非 `_DIVERGENT_PAIRS` 中首个达标**。本节模板的 `for` + `return`
-   会在宏观落于中性区时选 tech-macro 的 15 分差，从而掩盖 tech-news 可能存在的
-   30 分显著背离 —— 而后者才是 §3.5 关心的场景。复现：`tech=35, macro=50, news=65`。
-2. **`DivergentSubtype` 用 `StrEnum`**，不是 `str, Enum`（ruff UP042 会拒），
-   与 `DecisionAction` 保持同一约定。
-
-**文件改动**：
-1. `src/app/services/resonance.py:38-40` 加常量：
-   ```python
-   _DIVERGENT_THRESHOLD = 15   # 反向幅度阈值
-   ```
-
-2. `src/app/services/resonance.py:89-95` 替换为：
-   ```python
-   # DIVERGENT：任意两维反向幅度 ≥ 15
-   pairs = [
-       ("tech_macro", tech, macro),
-       ("tech_news", tech, news),
-       ("macro_news", macro, news),
-   ]
-   for name, a, b in pairs:
-       if abs(a - b) >= _DIVERGENT_THRESHOLD:
-           return SignalResult(
-               signal="divergent",
-               subtype=name,
-               confidence=clip((max(a, b) - min(a, b)) * 0.5, 0, 100),
-               ...
-           )
-   ```
-
-3. `src/app/schemas/resonance.py`：`DivergentSubtype` 枚举增 `tech_news` / `macro_news`。
-
-4. `static/synthesis-card.js`：结论卡显示 `divergent` 时附 subtype（如「技术 vs 消息面反向」）。
-
-**测试改动**：
-- `tests/test_services/test_resonance.py`：增 6 例
-  - `test_resonant_tech_vs_news_divergent`
-  - `test_resonant_macro_vs_news_divergent`
-  - `test_resonant_divergent_confidence_formula`
-  - 边界：幅度 = 14（不触发）、= 15（触发）
-
-**commit 切分**：1 个 commit `feat(resonance): 扩展 DIVERGENT 识别 + subtype`
+| development.md §11 项 | 状态 | 路线图覆盖 |
+|---|---|---|
+| P1 #1-6（CI / Alembic / 行情源 / 多账户） | ✅ | — |
+| P2 #7-11（共振 / 克数 / 多时间框架 / 回测 / 多品种） | ✅ | — |
+| P3 #12 仓位推荐 | 🟡 半成品 | V0.80.0 Step J 闭环 |
+| P3 #13 模拟交易 | 🟡 半成品 | 暂缓（V0.84.0+ 排期） |
+| P3 #14 指数曲线 | ✅ | — |
+| P3 #15 监控告警 | 🟡 | 维护线排期 |
+| P3 #16 公开部署 | 🟡 | 待用户提供域名 + 证书 |
+| 6.5 个性化与上下文记忆 | 🟡 | V0.79.0 Step F 部分 |
+| 6.9 加载与离线 | ✅ | V0.72.0 PWA |
+| 6.11 研判复盘 | ✅ | V0.66.0 |
+| V0.75.0 认证 | 🟡 第①步 | V0.75.0-V0.75.3 |
+| V0.75.1 结论卡 | ✅ | V0.75.1 |
+| V0.76.0 消息面打分器 | ✅ | V0.76.0 |
+| V0.100.0 消息面 pending | ✅ | V0.100.0 |
 
 ---
 
-#### Step D · 兜底策略差异化（Day 3 下午 ~ Day 4）
+## 附录 C · 不变项（Invariants，源自 ux-roadmap.md §四）
 
-**目标**：技术面 5 维度 score 改 `Optional[float]`，数据不足显示 `—` 占位。
-
-**状态**：✅ 已实现（2026-10-05）。实现与本节模板的**三处有意偏差**：
-
-1. **本节模板只点出了「50 兜底」这一种，实际是两种，且第二种更隐蔽**：
-   `_alignment_score` 在均线不足时返回 `50 + "均线数据不足"`，与「均线交叉整理」的
-   **真实** 50 分**完全同形** —— 页面与接口都看不出区别。故本版把「数据不足」与
-   「真实中性」的区别落在**返回类型**上（`None` vs `50.0`），而非依赖文案区分。
-   `_rsi` 同理：不足时由 `50.0` 改 `None`，否则页面显示「RSI(14) = 50.0」，
-   与「RSI 真的是 50」无法区分。
-2. **最低数据量集中为 `services/trend.py::DIM_MIN_BARS`**（结构 40 / 动量 21 / 支撑 20 /
-   动能 15 / 回撤 10），而不是各维度函数里各写一遍 `if len(closes) < N`；并有测试断言
-   该常量表的键集合与 `TREND_WEIGHTS` 一致（防将来加维度时漏给门槛）。
-   顺带修掉一个会误导的口径：**动量**原本在不足 21 根时**静默退化为「与首根比较」
-   却仍标注「近20日」**，本版改为不足即 `None`。`动能` 的门槛不写进常量表，而由
-   `_rsi` 自身返回 `None` 实现 —— 避免同一条件在两处漂移。
-3. **W/M 多时间框架的技术面旁路仍按中性 50 计**（**未**改成 `None`），但**补上了披露**。
-   保留 50 的理由有二：① 「口径不适用」与「数据不足」不是同一类问题，后者才是本步的对象；
-   ② 丢掉技术面会让 52W/24M 的指数相对 60D 出现**结构性**（非市场）落差，破坏跨周期可比性。
-   改动它属产品决策，需与「是否在聚合序列上重算技术面」一并评估。
-   **⚠ 立项时发现一处既有缺陷**：原代码把「已按中性 50 处理」写在 `tech_index.summary` 里，
-   而 `_build_index` 返回的 `tech_index` 除 `.score` 外**从不进入响应**（实测其全部引用点
-   都只读 `.score`）⇒ **那句话等于从未披露**，52W/24M 视图上的 50 是沉默的假中性。
-   本版把披露落到**对外可见的 `index.summary`**（新增 `tech_note`），并修掉趋势页
-   `idxMethod` 在该视图下输出「技术面 = 。」的半句话。由
-   `test_w_and_m_interval_discloses_neutral_tech_in_summary` 断言**响应里可见的那句话**。
-
-4. **顺带修掉一个既有崩溃（本步实测发现，非模板内容）**：`_rsi` 的守卫写
-   `len(closes) <= period`，而循环最低要读 `closes[-(period + 2)]` ⇒ **恰好 15 根收盘价时
-   IndexError 冒泡成 HTTP 500**，而该维度本应判「数据不足」。改为 `< period + 2` 即归入
-   `None`，由 `test_rsi_returns_none_when_insufficient` 锁住（把曾经的崩溃点写成断言）。
-   同时发现该函数循环 `range(-period - 1, -1)` **不含 -1** ⇒ **最新一根的涨跌不参与计算**
-   （RSI 实为截至前一根的值、滞后一根，已实测比对确认）。此项**只记录不修改**：修它会让
-   所有 RSI 值变化并传导至动能分、综合指数、决策与历史快照，属口径变更，须先做三维回测
-   交叉验证；现状由 `test_rsi_ignores_latest_bar_is_known_not_accidental` 锁死，
-   属**显式记录**而非默默保留。
-
-**下游耦合（本版未处理，留待 V0.79.0）**：`services/resonance.py::compute_resonance`
-对缺失维度按中性 `50.0` 兜底（其原设计如此），故「技术面整面被剔除」时共振信号仍按
-50 参与。当前仅在「K 线少于 15 根」这一极边角场景触发（现有标的均 ≥ 42 根），故未改动
-Step C 刚校准过的共振口径；若要改，须与 §3.5 的背离阈值一并回归。
-
-**文件改动**：
-1. `src/app/schemas/trend.py`：
-   ```python
-   class DimensionScore(BaseModel):
-       name: str           # 结构 / 动量 / ...
-       value: Optional[float]   # None 表示数据不足
-       reason: Optional[str] = None   # 数据不足时的原因说明
-   ```
-
-2. `src/app/services/trend.py:501-595`：5 维度计算函数改返回 `Optional[float]`，数据不足时返回 `(None, "数据不足：< 14 个交易日")`。
-
-3. `src/app/services/trend.py:354-359`：综合指数合成改为：
-   ```python
-   valid_dims = [(name, v) for name, v in dims.items() if v is not None]
-   if not valid_dims:
-       combined = None   # 整张图数据不足
-   else:
-       total_w = sum(TREND_WEIGHTS[n] for n, _ in valid_dims)
-       combined = sum(TREND_WEIGHTS[n] * v for n, v in valid_dims) / total_w
-   ```
-
-4. `static/trend.html`：5 维度展示改 `value === null ? '—' : value.toFixed(0)`，鼠标悬停显示 `reason`。
-
-5. `static/synthesis-card.js`：结论卡若 `combined === null`，显示「数据不足，结论待补」。
-
-**测试改动**：
-- `tests/test_services/test_trend.py`：增 4 例
-  - `test_trend_dim_insufficient_returns_none`
-  - `test_trend_combined_re_normalize_when_partial`
-  - `test_trend_combined_none_when_all_insufficient`
-  - `test_trend_dim_reason_populated`
-
-**commit 切分**：1 个 commit `feat(trend): 兜底差异化 · 数据不足显示占位 + 综合指数归一化`
+| # | 不变项 |
+|---|---|
+| 1 | **基线只增不减**：路线图制定时是 7 页 + 40 端点 + 454 测试；**V0.100.0 实测 16+ 静态 HTML + 16+ alias + 30+ 共享 JS + 866+ 测试**（每次迭代只许新增，既有的页面 / 端点 / 用例不得因新功能失效） |
+| 2 | **数据表只读扩展**（`gold_price_daily` / `daily_snapshots` / `news_scores` / `accounts` / `positions` / `trades` / `scoring_daily_wide` —— 只加列，不改主键） |
+| 3 | **现有 JS 资产不重写只扩展**（命名空间稳定；新资产通过 `window.PM_xxx` IIFE 自注入） |
+| 4 | **`pm_help_seen_version` 升级强制重看行为保留**（V0.58.0 帮助体系） |
+| 5 | **Chart.js 4.4.x 本地 vendor + 无新框架 / 构建工具**（保持"纯静态 + 内联 JS"原则） |
+| 6 | **`freshness.js` / `health-summary.js` 三态时效条静默语义保留**（主题切换不得破坏降级角标） |
+| 7 | **`gold_account_id` localStorage 键名不变**（V0.62.0 起向后兼容） |
+| 8 | **telemetry 数据本地落库、不外发**（单机部署隐私；埋点只在 `telemetry_events` 表，`sendBeacon` 走同源） |
+| 9 | **`AUTH_ENABLED=false` 单用户模式行为零回归**（V0.75.0 后所有中间件短路；多用户模式需显式 ENV 开启） |
+| 10 | **消息面 pending 兜底**：未打分时 `NewsScoreOut.score = None`，绝不再静默回退到中性 50（V0.100.0 设计纪律） |
 
 ---
 
-### 1.3 发布前 Checklist
+## 附录 D · 部署状态速查（源自 improvement-path.md §五）
 
-```bash
-# 1. 全量回归
-uv run python -m pytest -q --ignore=tests/test_services/test_irfcl_fetcher.py \
-  --ignore=tests/test_services/test_h15_fetcher.py
-# 预期：864+ collected, 0 failed（V0.77.2 是 823 离线 + ~40 新增）
+**截至 V0.100.0 / V0.101 in progress**：
 
-# 2. ruff
-ruff check src tests
-ruff format --check src tests
+| 项 | 状态 | 入口 |
+|---|---|---|
+| 监听地址 | 默认 `127.0.0.1` 或 LAN `0.0.0.0:8889`（用户偏好 LAN-only，192.168.0.204） | `lan-only-deployment` memory |
+| 三市场支持 | NY / SGE / ETF / 白银 ETF + SGE + NY | V0.99.0 |
+| REST 接口面 | 16+ alias（健康 / 行情 / 复盘 / scoring / ask / push / auth） | `app.openapi()['paths']` |
+| src/ 覆盖率 | 90%+ | V0.88.0 |
+| 离线回归 | 866+ 用例 / 离线 ~822 passed / 0 failed | `pytest --ignore=…irfcl --ignore=…h15` |
+| 公开部署 | 🟡 Docker + Nginx 模板已就绪（HTTPS 待用户提供域名 + 证书） | [deployment.md](deployment.md) |
 
-# 3. JS 门禁
-uv run python scripts/check_static_js.py
+---
 
-# 4. 渲染门禁
-node scripts/check_cluster_render.mjs   # V0.77.0 起 125 条
+## 附录 E · 历史实现细节（V0.78-V0.80）
 
-# 5. 文档门禁
-uv run python scripts/check_docs_claims.py
-# 预期：390+ 处引用全部命中
+> 本附录保留 V0.78 Step A-D、Step G/E/F/H 的实现细节作为技术参考。
+> **代码已落定**，本文档仅作"为什么这样设计"的索引。实操请直接读代码 + [`docs/releases/v0.79.0.md`](releases/v0.79.0.md) + [`v0.80.0.md`](releases/v0.80.0.md)。
 
-# 6. 同步更新文档
-# - docs/api-reference.md §6 核心模型增「阈值常量表」
-# - docs/development.md §10 版本历史新增 V0.78.0 条目
-# - docs/ux-roadmap.md V0.78.0 段落
+### E.1 V0.78.0 阈值口径统一 + 决策补全
 
-# 7. 标签
-git tag -a v0.78.0 -m "V0.78.0 · 阈值口径统一 + 决策补全"
+**Step A · 统一阈值常量** ✅ 2026-10-05
 
-# 8. 推送（用户需提供 classic PAT）
-git push https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git main --tags
+`schemas/thresholds.py` 四组 IntEnum：
+
+```python
+class DirectionThreshold(IntEnum):
+    STRONG_BULLISH = 70   # 强多（决策 BUY_HEAVY）
+    BULLISH = 55          # 看多（消息面 / 共振 / 单维度中性偏多）
+    NEUTRAL_HIGH = 60     # 中性偏上（单维度方向判定）
+    NEUTRAL_LOW = 40      # 中性偏下
+    BEARISH = 45          # 看空
+    STRONG_BEARISH = 25   # 综合指数 STRONG_DOWN 触发
+
+class LevelThreshold(IntEnum):
+    STRONG_UP = 75; UP = 55; SIDEWAYS = 45; DOWN = 25
+
+class DecisionThreshold(IntEnum):
+    BUY_HEAVY = 75; BUY = 65; BUY_LIGHT = 55  # BUY 拆 3 档
+    HOLD = 50; HOLD_LOW = 40; REDUCE = 40      # 新缓冲档 HOLD_CAUTIOUS
+
+class OpportunityWindowThreshold(IntEnum):     # 新增（独立语义）
+    pass
 ```
 
----
+**设计纪律**：硬编码不是一种语义而是四种 —— 着色 55/40 属产品语义有意保留，路线图"预期只剩一处定义"未达成且不打算达成。
 
-## 2. V0.79.0 · 阈值动态化 + 回测增强
+测试：`tests/test_services/test_thresholds.py` 25 例（含 AST 遍历断言服务层不再出现裸阈值）。
 
-**主题**：**参数自适应**——让阈值跟随市场滚动变化，让回测能扫到内部权重。
-**预计时间**：4-6 周（2026-10-14 至 2026-11-22）
-**预计 commit 数**：15-20 个
+**Step B · 决策矩阵档位补全** ✅
 
-**当前进度**（✅ 已交付 2026-10-07，origin/main `2a77555` 之前的基线）：
-- Step G（回测权重嵌套扩展）：✅ 完成（3/3 commit：dbf9239 + 77d33a5 + 43cab52）
-- Step E（动态化宏观阈值）：✅ 完成（4/4 commit：3ac95ca + 3d47b9d + 0722f74 + 04f2fa2）
-- Step F（技术面 5 维度重构）：✅ 完成（5/5 commit：45044f6 + 020ab5e + 479bd32 + 999decf，2026-10-07）
-- Step H（样本阈值分层）：✅ 完成（1 commit：5df2707，2026-10-07）
+BUY 拆 3 档（30% / 60% / 80%），消除 [60, 70) × [-10%, +15%] 卡死区，新增 idx [40, 45) HOLD_CAUTIOUS 缓冲档。
 
-**整版状态**：✅ V0.79.0 已发布并收口于 V0.80.0；本节保留是为「维护线 V0.79.x」做参考。
+`schemas/decision.py::DecisionAction = StrEnum(BUY_HEAVY / BUY / BUY_LIGHT / ADD / HOLD / HOLD_CAUTIOUS / REDUCE / SELL / WAIT)`。
 
-### 2.1 改进项
+`StrEnum` 而非 `str, Enum`（ruff UP042）。
 
-| ID | 改进 | 优先级 | 工作量 | 来自 parameter-evaluation.md | 状态 |
-|----|------|--------|--------|----------------------------|------|
-| G | 回测权重嵌套扩展 | P0 | 1 周 | §3.6 | ✅ 完成（43cab52） |
-| E | 动态化宏观阈值 | P0 | 1-2 周 | §3.2 | ✅ 完成（04f2fa2） |
-| F | 技术面 5 维度重构（组内平均） | P1 | 2-3 周 | §3.3 | ✅ 完成（999decf，2026-10-07） |
-| H | 样本阈值分层 | P2 | 0.5 天 | §3.8 | ✅ 完成（5df2707） |
+**Step C · 共振信号扩展反向** ✅
 
-**依赖**：F 必须等 G 完成（否则无法回测扫内部权重）。
+`DIVERGENT` 阈值 `_DIVERGENT_THRESHOLD = 15`，取幅度最大的达标对（**非**首达），3 子类型（tech_macro / tech_news / macro_news）。
 
-### 2.2 详细实施步骤
+`resonance.py::_build_signal()` 用 `pairs = [(tech, macro), (tech, news), (macro, news)]` 遍历。
 
-#### Step G · 回测权重嵌套扩展（Week 1）
+**Step D · 兜底策略差异化** ✅
 
-**目标**：`WeightGrid` 支持嵌套（`trend_5` / `macro_5` 字典形式），上限 125 → 1000，
-加异步回测端点让大网格扫描不阻塞页面。
+技术面 5 维度 score 改 `Optional[float]`，数据不足返回 `(None, "数据不足：< 14 个交易日")`，前端灰色 "—"。
 
-**状态**：✅ 已完成（3/3 commit 已合并，2026-10-07）：
-- ✅ Commit 1 `dbf9239`：WeightGrid 嵌套 + 上限 1000
-- ✅ Commit 2 `77d33a5`：异步回测接口 + task_registry + task_id 轮询
-- ✅ Commit 3 `43cab52`：UI 高级模式编辑器 + 异步进度条
+最低数据量集中 `services/trend.py::DIM_MIN_BARS`（结构 40 / 动量 21 / 支撑 20 / 动能 15 / 回撤 10），并有测试断言键集合与 `TREND_WEIGHTS` 一致。
 
-**最终 schema 形态**（与原计划不同 —— 见 Commit 1 实现）：
+顺带修：`_rsi` 守卫错位导致恰好 15 根收盘价时 HTTP 500（IndexError），改 `< period + 2`。
+
+W/M 视图技术面旁路保留 50 中性但**补披露**（见 `tech_note`），避免「沉默的假中性」。
+
+### E.2 V0.79.0 阈值动态化 + 回测增强
+
+**Step G · 回测权重嵌套扩展** ✅ 3 commits（dbf9239 / 77d33a5 / 43cab52）
+
 ```python
 class NestedWeights(BaseModel):
     weights: list[dict[str, float]] = Field(..., min_length=1, max_length=10)
-    _expected_fields: ClassVar[tuple[str, ...]] = ()  # 子类覆盖
 
 class TrendWeights(NestedWeights):
     _expected_fields = ("结构", "动量", "支撑", "动能", "回撤")
@@ -420,674 +504,73 @@ class MacroWeights(NestedWeights):
     _expected_fields = ("美元", "利率", "通胀", "地缘", "避险")
 
 class WeightGrid(BaseModel):
-    tech: list[float]
-    macro: list[float]
-    news: list[float]
+    tech: list[float]; macro: list[float]; news: list[float]
     trend_weights: TrendWeights | None = None
     macro_weights: MacroWeights | None = None
 ```
 
-**最终端点形态**（与原计划不同 —— 异步 + 轮询是 2 个端点不是 1 个）：
-- `POST /api/v1/backtest/run-async` → 202 Accepted + `Location: /api/v1/backtest/result/{task_id}`
-- `GET  /api/v1/backtest/result/{task_id}` → status + BacktestResultOut / error
+异步端点：`POST /backtest/run-async` → `202 + Location: /backtest/result/{task_id}` + `GET /backtest/result/{task_id}`。
 
-**关键决策（实现过程中沉淀）**：
+后台任务抽到 `services/background.py::_spawn_background`（endpoint 反向 import main 循环依赖规避）。
 
-| 决策 | 落点 | 与原计划差异 |
-|------|------|--------------|
-| `WeightGrid` 字段 | 仍拆成 `tech` / `macro` / `news` 三个独立 `list[float]` + 2 个 Optional 嵌套 | 原计划用 `tech_macro_news: list[tuple]`，但前端表单已是独立字段，强行打包会破坏 `BacktestConfigIn` 向后兼容 |
-| 共享 5 维字段常量 | 提到 schema 顶部 `TREND_DIM_FIELDS` / `MACRO_DIM_FIELDS` | 原计划要等 Step F 提取到 `static/backtest-fields.js`；Step G 内嵌即可（Step F 仍然要做） |
-| 后台任务持有 | 抽到 `services/background.py::_spawn_background` | 原计划共用 `main.py::_spawn_background`；但 endpoint 反向 import main 会循环依赖，故提取独立模块 |
-| 强引用 set 隔离 | `conftest._reset_db` 开头 `_BACKGROUND_TASKS.clear()` | 原计划用 `asyncio.gather`；实测发现**前一个测试可能用已关闭 loop spawn** task，gather 报「attached to a different loop」—— 直接 clear + 单元测试显式 await `_wait_for_status` 更稳 |
+**Step E · 动态化宏观阈值** ✅ 4 commits
 
-**Commit 3 · UI 高级模式编辑器（下一批启动）**：
+`MacroThresholdCalculator`：252 日滚动 90/10 分位，24h TTL 缓存。数据不足回退硬编码默认值。
 
-1. `static/backtest.html`：`<details id="advPanel">` 折叠面板 + 5×2 个 number input + `#asyncOn` 复选 + `#runBtnAsync` + `#asyncProgress` 进度条
-2. `static/backtest-chart.js`：CSS 注入 `.adv-panel` / `.progress-bar` / `.grp-grid`
-3. `static/i18n/{zh-CN,en-US,zh-TW}.js`：3 文件同步加 `backtest.advanced_title` 等 7 个 key
-4. `getSelectedParams()` 加 `trend_weights` / `macro_weights` 分支；新增 `runBacktestAsync()` + `pollBacktask()` 函数
+`scheduler.py::daily_capture_loop` 每日 07:00 BJT 预热缓存。
 
-**commit 切分**：3 个 commit（均已合并）
-1. ✅ `dbf9239` `feat(backtest): WeightGrid 支持嵌套 + 上限 1000`
-2. ✅ `77d33a5` `feat(backtest): 异步回测接口 + task_id 轮询`
-3. ✅ `43cab52` `feat(ui): 回测页高级模式 · trend_5/macro_5 编辑器 + 异步进度`
+`GET /market/gold/trend` 响应 `freshness.thresholds.macro_dynamic: bool`。
 
----
+**Step F · 技术面 5 维度重构（组内平均）** ✅ 5 commits
 
-#### Step E · 动态化宏观阈值（Week 2-3）
-
-**目标**：`best = 近 252 日 90 分位`，`worst = 10 分位`，每日 07:00 BJT 与快照同步刷新。
-
-**文件改动**：
-1. 新建 `src/app/services/macro_thresholds.py`：
-   ```python
-   class MacroThresholdCalculator:
-       """滚动百分位阈值计算器"""
-
-       WINDOW_DAYS = 252
-       HIGH_PCT = 90   # 90 分位 = friendly_score = 100
-       LOW_PCT = 10    # 10 分位 = friendly_score = 0
-
-       async def compute(self, target: str, history: list[dict]) -> dict:
-           """返回 {best: float, worst: float}"""
-           ...
-
-       async def get_or_compute(self, target: str) -> tuple[float, float]:
-           """带 24h TTL 缓存"""
-           ...
-   ```
-
-2. `src/app/services/macro.py:_friendly_score()`：把硬编码的 `best/worst` 改为运行时调用 `MacroThresholdCalculator`。
-   - 数据不足（< 60 个交易日）→ 回退硬编码默认值（V0.77.2 现状）
-
-3. `src/app/services/scheduler.py`：每日 07:00 BJT 在 `daily_capture_loop` 内串联预热 `MacroThresholdCalculator` 缓存。
-
-4. `src/app/api/v1/endpoints/market.py`：`GET /market/gold/trend` 响应 `freshness.thresholds` 字段新增 `macro_dynamic: bool`，告诉用户当前用的是动态还是静态阈值。
-
-5. `static/trend.html`：在「宏观因子」面板加小角标 `[动态 / 静态]`。
-
-**测试改动**：
-- `tests/test_services/test_macro_thresholds.py`（新增，约 20 例）
-  - 滚动百分位计算正确性（已知历史数据 → 期望 90/10 分位）
-  - 数据不足回退
-  - 24h TTL 缓存命中/失效
-  - 缓存 key 隔离（target + date）
-- `tests/test_services/test_macro.py`：增 5 例验证 `_friendly_score` 改用动态值
-
-**commit 切分**：4 个 commit
-1. `feat(macro): MacroThresholdCalculator · 滚动百分位`
-2. `refactor(macro): _friendly_score 改用动态阈值`
-3. `feat(scheduler): 每日 07:00 BJT 预热宏观阈值缓存`
-4. `feat(api): /market/gold/trend 暴露 macro_dynamic 字段`
-
----
-
-#### Step F · 技术面 5 维度重构（Week 3-5）
-
-**目标**：保留 5 维度 UI，内部按组平均（趋势组 / 超买组 / 风险组），降低内部相关性。
-
-**文件改动**：
-1. `src/app/services/trend.py:501-595`：维度计算输出 `DimensionScore`（Step D 已引入）后，**合成阶段**改为：
-   ```python
-   GROUP_WEIGHTS = {
-       "trend": 0.50,    # 结构 + 动量
-       "overbought": 0.30,   # RSI + 支撑（乖离）
-       "risk": 0.20,    # 回撤
-   }
-   GROUP_MAPPING = {
-       "结构": "trend", "动量": "trend",
-       "动能": "overbought", "支撑": "overbought",
-       "回撤": "risk",
-   }
-   def combine_by_group(dims: dict[str, Optional[float]]) -> float:
-       groups = {"trend": [], "overbought": [], "risk": []}
-       for name, val in dims.items():
-           if val is not None:
-               groups[GROUP_MAPPING[name]].append(val)
-       return sum(
-           GROUP_WEIGHTS[g] * (sum(vs) / len(vs) if vs else 50)
-           for g, vs in groups.items()
-       )
-   ```
-
-2. `schemas/settings.py`：`WeightConfig` 增字段 `group_combine: bool = True`，用户可关闭回归单维度加权。
-
-3. `static/weights.html`：UI 加 "维度组合方式" 选项（单维度 / 组内平均）。
-
-4. **回测联动**：用 V0.79.0 Step G 的内部权重扫描能力，**先用 `services/backtest.py` 在 2024-2026 历史数据上对比两种方案**，选出 Sharpe 更优的作为默认。
-
-**测试改动**：
-- `tests/test_services/test_trend.py`：增 8 例
-  - 5 维度全有效时组内平均正确性
-  - 单维度缺失时该组用 50 兜底
-  - 整组缺失时（罕见）其它组权重归一
-  - `group_combine=False` 时回退旧单维度加权
-
-**commit 切分**：5 个 commit
-1. `refactor(trend): combine_by_group · 组内平均`
-2. `feat(settings): WeightConfig 增 group_combine 开关`
-3. `feat(ui): 权重配置页维度组合方式选择`
-4. `test(backtest): 对比单维度 vs 组内平均 Sharpe`
-5. `docs: parameter-evaluation §3.3 验证结论`
-
----
-
-#### Step H · 样本阈值分层（Week 5）
-
-**目标**：总样本 10 / 分维度 5；UI 灰色小字 "样本 N，仅供参考"。
-
-**文件改动**：
-1. `src/app/services/backtest.py:41` + `review.py:71` + `resonance.py:40` 三处硬编码抽常量：
-   ```python
-   MIN_SAMPLES_OVERALL = 10   # 总体命中率
-   MIN_SAMPLES_BUCKET = 5     # 分维度（方向 / horizon / basis）
-   ```
-
-2. `src/app/api/v1/endpoints/review.py`：响应增 `sample_warning: Optional[str]`，当 `n < MIN_SAMPLES_OVERALL` 时填 "样本 N < 10，仅供参考"。
-
-3. `static/review.html`：命中统计卡片在 `sample_warning` 非空时显示灰色小字。
-
-**测试改动**：
-- 3 处各增 2 例样本阈值边界
-- 共 6 例
-
-**commit 切分**：1 个 commit `refactor: 样本阈值分层 · 总体 10 / 分维度 5`
-
----
-
-### 2.3 V0.79.0 发布前 Checklist
-
-```bash
-# 同 V0.78.0，外加：
-uv run python scripts/check_docs_claims.py   # 410+ 处
-git tag -a v0.79.0 -m "V0.79.0 · 阈值动态化 + 回测增强"
+```python
+GROUP_WEIGHTS = {"trend": 0.50, "overbought": 0.30, "risk": 0.20}
+GROUP_MAPPING = {
+    "结构": "trend", "动量": "trend",
+    "动能": "overbought", "支撑": "overbought",
+    "回撤": "risk",
+}
 ```
 
-**Step G Commit 3（UI 收口）启动前的前置门禁**：
-```bash
-uv run python -m pytest tests/test_api/test_async_backtest.py tests/test_api/test_backtest_api.py tests/test_services/test_backtest_service.py -q   # 56 例应全绿
-uv run ruff check src tests   # 0 error
-node scripts/check_clus_render.mjs   # UI 渲染断言（待 Commit 3 后回归）
-uv run python scripts/check_static_js.py   # 静态 JS 引用一致性
+`WeightConfig.group_combine: bool = True` 用户可关闭回归单维度。
+
+**Step H · 样本阈值分层** ✅ 1 commit
+
+```python
+MIN_SAMPLES_OVERALL = 10   # 总体命中率
+MIN_SAMPLES_BUCKET = 5     # 分维度
 ```
 
----
+`review.py` 响应 `sample_warning: Optional[str]`，前端灰色小字「样本 N < 10，仅供参考」。
 
-## 3. V0.80.0 · 决策网格化 + 仓位结合
+### E.3 V0.80.0 决策网格化 + 仓位结合
 
-**主题**：**决策可执行化**——决策矩阵网格化、`position_ratio` 真正结合账户本金（P3 #12 闭环）。
-**预计时间**：2-3 月（2026-11-23 至 2027-01-31）
-**预计 commit 数**：10-15 个
+**Step I · 阈值带自适应** ✅ 部分
 
-### 3.1 改进项
+`ThresholdBand` 默认 `bullish=[50, 55, 60, 65, 70]` × `bearish=[50, 45, 40, 35, 30]`，5×5=25 组。
 
-| ID | 改进 | 优先级 | 工作量 | 来自 parameter-evaluation.md |
-|----|------|--------|--------|----------------------------|
-| I | 阈值带自适应 | P2 | 2 月 | §3.8 + parameter-evaluation §4.3 |
-| J | 决策矩阵网格化 + 仓位结合 | P2 | 2 月 | §3.4 + P3 #12 |
+**Step J · 决策矩阵网格化 + 仓位结合** 🟡 半成品
 
-**前置**：依赖 V0.78.0 决策补全 + V0.79.0 回测增强。
-
-### 3.2 详细实施步骤（概览）
-
-#### Step I · 阈值带自适应
-
-1. `schemas/backtest.py`：`ThresholdBand` 默认值改为 `bullish=[50, 55, 60, 65, 70]` × `bearish=[50, 45, 40, 35, 30]`（5×5=25 组）
-2. `static/backtest.html`：UI 显示 25 组扫描热力图（x=bullish, y=bearish, color=Sharpe）
-3. 文档：`docs/parameter-evaluation.md` §3.1 同步说明
-
-#### Step J · 决策矩阵网格化 + 仓位结合
-
-1. `src/app/schemas/decision.py`：决策矩阵改为 `DecisionMatrix = dict[(idx_bucket, pnl_bucket, position_state), DecisionOut]`
-2. `src/app/services/decision.py`：决策函数改为查表（O(1) 而非多 if/elif）
-3. `src/app/services/decision.py:_suggest_position()`：结合 `accounts.current_capital` 计算 `position_ratio = position_value / capital`，不再是恒为 0
-4. `src/app/services/position.py`：`portfolio_summary()` 返回 `current_capital`（聚合所有账本未平仓持仓成本）
-5. `static/synthesis-card.js`：结论卡显示「建议仓位 60% · 当前本金 ¥X · 应持仓 ¥Y」
-
-### 3.3 V0.80.0 发布
-
-合并 4 周开发 → V0.80.0 标签发布。
+`schemas/decision.py::DecisionMatrix = dict[(idx_bucket, pnl_bucket, position_state), DecisionOut]` 已定义；查表逻辑与 `_suggest_position()` 结合 `accounts.current_capital` 计算 `position_ratio` 待闭环。
 
 ---
 
-## 4. V0.83+ · 维护线 + 长线 backlog
+## 附录 F · V0.96+ 候选对账（2026-10 已交付部分）
 
-**主题**：**前端深化 + UX 增强 + 多市场校准 K 项**（原 V0.84.0 主题「多市场独立校准」未启动；V0.84-V0.86 实际为「前端 UX 改进」系列）。
-**预计时间**：持续推进（V0.83.0 起每个 ~2 周一个维护版；新功能版不固定）
-**预计 commit 数**：每版 5-15 个
+| 原 §12 候选 | 2026-10 落地版本 | 备注 |
+|---|---|---|
+| A 打分命中率分布可视化 | ✅ V0.96.0 | 见 [releases/v0.96.0.md](releases/v0.96.0.md) |
+| B 胜率随 horizon 退化曲线 | ⏳ 未交付 | 候选，保持 |
+| C 跨市场对照扩展 | ⏳ 未交付 | 候选，V0.99.0 部分覆盖（3-market 重构） |
+| D 数据自动刷新 | ⏳ 未交付 | 候选 |
+| E 错误降级 UX 重构 | 🟡 部分（V0.77.1 / V0.83.4 / V0.85 / V0.100 零散） | 候选 F 收口 |
+| F 移动端 PWA 体验优化 | 🟡 部分（V0.72.0 / V0.83.0 触控） | 候选 D 收口 |
+| G 命中筛选 / T+0 联动快捷键 | 🟡 部分（V0.92.1 UI / V0.93.0 T+0） | 候选，键盘层待补 |
+| H K 项 · 多市场独立校准 | 🟡 部分（V0.99.0 3-market 重构） | **V0.102 正式项** |
 
-### 4.1 改进项
-
-| ID | 改进 | 优先级 | 工作量 | 备注 |
-|----|------|--------|--------|------|
-| K | 多市场参数差异化（白银 / 黄金 / ETF） | P3 | 2 月 | parameter-evaluation §4.3 |
-| L | ✅ 110 个 i18n 预存 gap 修复 | P0 | 1 周 → 1 commit | V0.83.1：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing。puppeteer_v083 1418/0 |
-| M | ✅ 共享 topnav 抽离 | P1 | 1 周 → 1 commit | V0.83.2：8 页面顶 nav 复制粘贴的 ~2000 字符 / 页（共 ~16KB）抽离成 `static/topnav.js` 同步注入。每页只剩 `<div id="topnav-mount"></div><script src="/static/topnav.js"></script>` 25 字符。`check_cluster_render` V0.83 节重写为 placeholder/script 断言，`check_i18n_keys` 加 JS 字面扫描（`i18n: "key"`）。`activeFor` 数组处理 FastAPI redirect 路径差异（如 `/portfolio` ↔ `/static/portfolio.html`）。`puppeteer_v083.mjs` 间隔 2.5s → 3.5s。1418/0 验证通过 |
-
-### 4.2 长线方向（V0.84.0+）
-
-- **公开部署真实域名**（P3 #16）—— 等用户提供域名 + 证书
-- **模拟交易**（P3 #13）—— 不落真实流水，验证策略后切主路径
-- **多设备同步**（P3 长线）—— 业务表 `user_id` 隔离后支持云端同步
-- **主题 / 无障碍完善**（P3 长线）—— axe-core 自动化守卫
+**6 条已落 / 2 条部分覆盖（推进中）/ 0 条纯搁置** —— candidate saturation 良好，未交付的多为"长尾收口"而非战略性遗漏。
 
 ---
 
-## 5. 并行线：V0.75.2 / V0.75.3 认证收尾
-
-**与主路线解耦**，独立推进。建议穿插在 V0.78.0 与 V0.79.0 之间。
-
-### 5.1 V0.75.2 · 数据隔离（业务表加 user_id）
-
-**预计时间**：2-3 周（2026-10 中旬开始）
-**风险**：高（涉及几乎所有业务表 + API）
-
-> ⚠ **本清单已于 2026-10-06 按本地库 `PRAGMA table_info` 实测重写。** 原文的 8 张表里有
-> **4 处与实现脱节**：写了一个并不存在的「央行设置」表、把 `analysis_records` 记成了
-> ``analysis_history``、并把 `gold_price_daily` 与 `central_bank_purchases` 这两张
-> **全局市场数据**当成用户数据；同时**漏列了 4 张真正的用户数据表**。
-> 照原文施工会白做一部分，又恰好漏掉真正的泄露面。
-
-**隔离清单（按实测分类）**
-
-一、**用户数据 · 已有 `user_id` 列**（V0.62.0 起就在，库内取值确为 1）
-- `accounts`、`positions`、`sessions`、`telemetry_events`
-- ⚠ 缺陷**不在「有没有列」，而在「没人读它」**：仓储签名写作 `user_id: int = 1`
-  （字面量默认值），全仓无一处传入真实用户 ⇒ 过滤条件恒等于「不过滤」。
-- 更严重的是 ID 寻址的方法**完全没有用户过滤**：`get()` / `list_trades()` 可凭 id
-  跨用户读，`add_trade()` / `soft_delete()` / `restore()` 可跨用户写。
-
-二、**用户数据 · 需新增 `user_id` 列**（列入本版迁移）
-- `trade_records`（交易流水）、`news_scores`（用户消息面打分）、
-  `analysis_records`（机会分析记录）、`push_subscriptions`（推送订阅；其模型注释
-  本就写明「V0.75+ 多用户时加 user_id 列 + 扩唯一键」）
-
-三、**混合表 · 需单独设计**（不能一次性全表加列）
-- `app_settings` 以 `key` 为主键，而表内 `weight_config`（用户权重）与
-  `vapid_keys`（**服务级**推送密钥）**混在一起**。直接加 `user_id` 并全表过滤，
-  会把服务密钥一并圈进用户维度、打断推送。计划：改 `(user_id, key)` 复合主键，
-  服务级键以约定值（如 `user_id=0`）落库并在用户级查询里显式排除。
-
-四、**全局数据 · 明确不加 `user_id`**
-- `gold_price_daily`（行情日历）、`central_bank_purchases`（IMF IRFCL / WGC 各国
-  季度净购金，唯一键是「国家 + 季度」）、`daily_snapshots`（每日评估基线序列）
-- `daily_snapshots` 尤其要注意：它由**调度器**在后台任务里用
-  `TrendService(settings=None, news=None)` 写入（无请求上下文），且回测直接读整条
-  序列。加 `user_id` 会同时破坏调度器与回测；若要让快照「按用户」，那是另一个
-  产品决策（每人一条序列 + 每人一份回测），**不在本版范围**。
-
-**实施步骤**
-1. 迁移：仅对「第二类」4 张表加 `user_id`（默认 1）+ 索引 `ix_{table}_user_id`；
-   把现有行归入 `LEGACY_USER_ID = 1`。
-   ⚠ 勿在迁移前 `create_all`（争锁 → 启动 hang）。
-2. 仓储层：所有查询解析当前用户 —— **这才是本版的核心，不是「加列」**。
-   - ✅ **已交付（2026-10-06 · 第 1 批）**：新增 `src/app/utils/user_scope.py`
-     （把 `user_id` 的 contextvar 抽到中立模块 + `current_user_id()` 解析器）；
-     `PositionRepository` / `AccountRepository` 共 **22 处**恢复真实用户解析，
-     并**补齐 ID 寻址方法的过滤与归属校验**；新增回归测试
-     `tests/test_services/test_user_isolation.py`（**8 例**，覆盖读/写越权与
-     解析器三条语义）。
-   - ⏳ 待办：`NewsScoreRepository` / `AnalysisRepository` / `PushRepository`
-     同样处理（依赖第 1 步的加列）。
-3. API 层：**实测无需**「给所有业务接口加 `Depends(get_current_user)`」——
-   `AuthMiddleware` 在 `AUTH_ENABLED=true` 时已对全部 `/api/` 做 401 门禁，并把用户
-   写进 contextvar；缺的只是仓储层去读。真正要做的是两件事：
-   - 给仓储层被**系统级调用**的入口显式传 `user_id`（已改：
-     `main._ensure_default_account` 传 `LEGACY_USER_ID`），否则多用户模式下解析器
-     会抛 `MissingUserContextError` —— 这是**有意的**：静默回退到 1 号用户会让
-     匿名/越权调用读到他人数据；
-   - 越权一律返回 404 而非 403，避免以状态码差异泄露「该 id 存在但不属于你」。
-4. 测试：每个接口增 2 例 —— 「用户 A 创建的持仓，用户 B 不能读到 / 不能改」。
-   仓储层已覆盖（8 例）；**API 层（真登录两个账号、带 cookie 与 CSRF）待补**。
-5. 数据迁移：现有数据归入 `LEGACY_USER_ID = 1`（`accounts` / `positions` 已是 1，
-   新增列的 4 张表需回填）。
-
-### 5.2 V0.75.3 · 找回密码 + 用户管理 ✅ 已交付（2026-10-08，V0.81.0）
-
-**预计时间**：1-2 周（实际 1 天完成，5 个 commit）
-- 邮件发送：复用 V0.72.0 SMTPNotifier
-- Token 表：`password_reset_tokens`（24h TTL，**只存 sha256 哈希**）
-- 用户管理页 `/static/admin/users.html`：列出所有用户、改密、禁用、删除
-- 鉴权：`require_owner` 角色鉴权（与服务级 `X-Admin-Token` 是两个维度，勿混）+ 三条防自锁
-- 发版说明：见 `docs/releases/v0.81.0.md`；次日 hotfix 见 `docs/releases/v0.81.1.md`
-
----
-
-## 6. 维护线：每 2 周一个 V0.7x.y 小版本
-
-| 小版本 | 时间 | 内容 |
-|--------|------|------|
-| V0.78.2 | ✅ 2026-10-05（**同日第二个补丁版**） | 门禁可信度修复：八道门禁加 `if: always()`、PWA 门禁补 14 例常驻测试、`SHELL_ASSETS` 307 条目确认不可改并写清理由 + 加回归锁、ruff 升级、五个 Action 升 Node 24。**刻意不做 `uv lock --upgrade`**（含 `sqlalchemy 2.0 → 2.1` 跨大版本，有容器启动崩溃前科）→ 记入 V0.79.1 |
-| V0.78.1 | ✅ 2026-10-05（**早于 10 月底排期**） | Bugfix 收口：SW 缓存版本脱钩 + PWA 快捷方式两条 404 + `compute_resonance` 缺维兜底 + 补 `starlette` 依赖声明；并新增 PWA 资源 / 死链 / 依赖声明三道门禁接入 CI。原排期的「社区反馈 / 监控告警」顺延至后续补丁版 |
-| V0.79.1 | 11 月底 | Bugfix + 依赖升级（`uv lock --upgrade`） |
-| V0.79.2 | 12 月中 | 测试扩充（覆盖率从 0 起步建基线，**目标 ≥ 60%**） |
-| V0.80.1 | ✅ 2026-10-08（**提前**） | Bugfix：prod 写端点自动附加 `X-Admin-Token`（`auth.js` 全局 fetch 打补丁）。原排期 2027-02 |
-| V0.81.1 | ✅ 2026-10-08（**同日第二个补丁版**） | Bugfix：admin token 缺失提示横幅（401 + `admin token required` 时引导去设置页，每会话一次）。**提前于任何排期** —— 是 V0.80.1 的直接后遗症。见 `docs/releases/v0.81.1.md` |
-| V0.82.0 | ✅ 2026-10-09（**提前于 2027-04 排期**） | LAN 多终端 admin token 修：双通道（header + cookie）+ 单用户模式 `AUTH_ENABLED=false` 整体豁免；settings 页「设置 Session」按钮一次配置整浏览器生命周期有效。含中间件测试隔离修复（`f46838b`）。**重大语义调整**：原本 V0.82 规划是「多市场独立校准」，改为优先解决 LAN 真实痛点（多终端写操作被 401）；多市场 K 顺延至 V0.83+。见 `docs/releases/v0.82.0.md` |
-| V0.83.0 | ✅ 2026-10-10 | 主页 UI 改版 + 8 页面警示合并 + 静态门禁强化。6 commits：trend.html redesign（双行 nav + `#freshnessInline` 集中时效 + `<details>` 警示折叠）+ 顶 nav i18n 修复 + warning.js a11y 兜底（aria-describedby / HC 模式 / 44px 触控）+ freshness 状态变更 diff + 8 页（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）迁移 V0.83 模式 + 静态门禁强化（`check_cluster_render` V0.83 节 73 条 + 新 `check_i18n_keys.py` V0.83-scope 严格 + 新 `puppeteer_v083.mjs` 72 组合 1418/1418）。多市场 K 继续顺延 V0.84+。遗留：110 个 i18n 预存 gap + 共享 topnav 抽离两个独立 ticket。见 `docs/releases/v0.83.0.md` |
-| V0.83.1 | ✅ 2026-10-10 | 110 个 i18n 预存 gap 修复：补齐 portfolio (36) / backtest (27) / trend (18) / trades (9) / settings (6) / review (6) / weights (5) / silver (2) / central_bank (1) 共 110 个 zh-TW 翻译，繁體不再静默回退简体。`check_i18n_keys.py --all` 现 0/450 missing（V0.83.0 暴露 110/450）。`puppeteer_v083.mjs` 间隔 1.2s → 2.5s 应对 dev server 5 req/s 限流，1418/1418 |
-| V0.83.2 | ✅ 2026-10-10 | 共享 topnav 抽离：8 页面（silver/portfolio/weights/trades/backtest/data-health/central_bank/review）的顶 nav 复制粘贴（约 2000 字符 / 页）合并到 `static/topnav.js` 同步注入，placeholder + script 标记只剩 25 字符 / 页。新增 `activeFor` 数组处理 FastAPI redirect 后 `location.pathname` 变 `/static/portfolio.html` 但 link.path 是 `/portfolio` 的差异。门禁同步：`check_cluster_render` V0.83 节重写为 placeholder/script 断言 + 旧 `<nav class="topnav">` 内联 markup 移除检查；`check_i18n_keys` 加 JS 字面扫描（`i18n: "key"` 模式）覆盖 topnav.js 里的 nav.*/brand.* keys。`puppeteer_v083.mjs` 间隔 2.5s → 3.5s。1418/1418 验证通过。`check_static_js.py` 25 共享脚本（V0.83.1 是 24）含 `topnav.js`。见 `docs/releases/v0.83.2.md` |
-| V0.83.3 | ✅ 2026-10-10 | 限速中间件 /static/ bypass + 默认 120→600/min：用户报主页「数据时效加载失败」误报，根因是 `RateLimitMiddleware` 对 `/static/*` 路径也计数（与 docstring line 11「不挂在 /static/」承诺不符），单 IP 120 req/min 频繁打满（单次加载 ~10 请求 + 60s 轮询）。两修：`rate_limit.py` 加 `skip_static` 参数（默认 True）`dispatch()` 直接放行 `/static/*`；`config.py` 默认 120→600，仅 /api/ 路径进入滑动窗口。顺手补 i18n：`freshness.js:233` 引用 `fresh.load_failed_suffix` 但 3 语都未定义（telemetry 触发 i18n_fallback_hit），3 语 +1 key 写入。测试：`test_rate_limit.py` 加 2 个新断言（30 次 /static/ 全 200 + 同期 /api/ 第 6 次 429 + skip_static=False 计入），8/8 pytest。见 `docs/releases/v0.83.3.md` |
-| V0.83.4 | ✅ 2026-10-10 | freshness 降级 UX 重设计 + sig() 关键 bug 修复：用户报「数据时效加载失败」红框影响 UX。新设计：首次失败显示中性「⏳ 数据加载中…」（不红、不报错），成功→失败保留末次 chips（半透明 .55）+ 追加「⏳ 离线/缓存」amber chip，失败→成功自动清 stale 状态。**关键 bug 顺手挖出**：V0.83.0 commit 3 引入的 `sig()` 函数对 dict 格式 `markets` 用 `.map()` 必抛 TypeError，被 `.catch` 吞后整个 render() 静默失败——V0.83.0~V0.83.2 三版生产环境的 freshness 一直显示 stale/错误态。修复：sig() 与 render() 共用同一组 order 序列，dict/array 兼容。加智能退避：60s → 120s → 300s → 600s（封顶 10min），成功重置。CSS +2 条（.fsh-stale opacity / .fsh-loading-text），3 语 i18n +2 keys（fresh.stale_chip / fresh.loading_first）。puppeteer 实跑 4 场景全 PASS：成功 / 首次失败 / 成功→失败（保留末次）/ 失败→成功（清 stale）。见 `docs/releases/v0.83.4.md` |
-| V0.84.0 | ✅ 2026-10-10 | 状态条方案 C · 数据时效 + 警示合并 1 行 disclosure：用户提「数据时效，投资警示，可以作到1行」。4 方案中选 C（顶 nav 收 1 行 + 单 `<details id="statusPanel">`，summary 1 行装 `#freshnessInline` chips + 警示计数 pill，body 展开 5 条 + dismiss）。前：topnav 2 行（row 1 brand+links，row 2 时效+警示按钮）+ 底部 warnFooter（展开 80px）；后：topnav 1 行 + 顶 nav 紧后 1 行 statusPanel（默认折叠 36px）。节省 ~80px 顶 nav 高度。9 页面（trend/silver/portfolio/weights/trades/backtest/data-health/central_bank/review）迁移；data-health 蓝 accent #1d4ed8 保留；backtest/central_bank/silver 页面特定 i18n keys 保留；news.html 仍用 .w-title 模式不在迁移范围。3 JS 改动：topnav.js 删 row 2 注入；warning.js 监听 #statusPanel + 动态从 `<ol>` 实际 li 数写 `[data-warn-count]` + **加 hashchange 监听**（修同页 #status 跳转响应问题）；**i18n.js 修历史 bug**：init() 漏 `await loadLang(saved)`，saved=非 zh-CN 时 reload 仍回退到 zh-CN（V0.73.0~V0.83.4 全系列漏此 bug，puppeteer 3 语测试只看 data-lang 不看 textContent 没暴露）。3 语 i18n +2 keys（status.warn_pill_label + status.warn_pill_unit，用 label+count+unit 三段不用 {n} 参数化）。门禁：`check_cluster_render` V0.83 C4 段重写为 V0.84 段，376/0 全过；新增 `check_v084.mjs` 27/27（9 页 × 3 语）+ `check_v084_interactive.mjs` 5/5（点击展开 + dismiss + reload 持久化 + #status 深链 + 截图）。见 `docs/releases/v0.84.0.md` |
-| V0.85.0 | ✅ 2026-10-11 | 数据时效迁移到 /data-health.html + 主页版面优化：用户提「数据时效移动到数据健康页面，并对主页版面进行优化」。4 方案中选 A（状态条瘦身 + 主页紧凑化，风险最低）。8 页非 health 的 statusPanel summary 内 `#freshnessInline` 替换为 `<a class="hs-chip-link" href="/data-health.html">` 紧凑摘要 chip（显示「X/Y 实时 ·N 缓存 →」+ stopPropagation 阻止 disclosure 误触发）；data-health.html 的 summary 升级为 4 个 mini-chip（数据源 / 实时 / 缓存 / 演示），点 summary 展开仍是完整 6 张市场卡。新增共享脚本 `static/health-summary.js`（自洽模块 + CSS 自注入 + 智能退避 60→120→300→600s + i18n 安全降级），从 `/api/v1/market/health` 聚合 6 数据源状态（gold × 3 + silver × 3）。趋势主页 trend.html「每日评估历史」面板包到 `<details class="panel-collapse">` 默认折叠，首屏省 ~290px（4 张极值卡 + 260px 图表 + 区间按钮全部进折叠体）。3 语 i18n +7 keys（hs.title / hs.sources / hs.live / hs.stale / hs.mock / hs.unknown / hs.loading）。9 页 `freshness.js` script 全部替换为 `health-summary.js`；backtest/central_bank 之前缺 freshness.js 导致 #freshnessInline 一直空 —— C2 同时修复该历史 bug；silver.html 内 stale 动态加载 `PM_Freshness.mount('freshnessInline')` 死码也清理为 `health-summary.js`。门禁：`check_cluster_render.mjs` V0.85 节 63 断言（含旧 V0.84 节 `#freshnessInline` 改 `#healthSummary`）+ 新增 `check_v085.mjs` 51 断言（27 渲染 + 24 chip-click 不展开 disclosure），437/0 + 51/0 全过。见 `docs/releases/v0.85.0.md` |
-| V0.86.0 | ✅ 2026-10-11 | 决策可解释性增强（拆解 + 对比 + tooltip 三件套）：用户提「同步路径地图说明文件，给我几个应用易用性的建议我来选择应用完善方向」。4 方案中选 A（决策可解释性增强 · 深耕核心价值）。核心动机：决策可信度是用户最关心的，但目前综合指数只给一个数字、决策行动 chip 只给标签、持仓旁边没「按建议加减」对比。新增共享脚本 `static/decision-explainer.js` 提供 4 个工具函数：`renderBreakdown`（综合指数按权加权拆解 + 公式行）+ `compareCard`（按当前建议加减对比卡，`position_ratio=0` 回退到描述性文案不伪造金额）+ `tooltipFor/renderTooltip`（hover 决策行动 chip 弹出 3 行触发条件：综合指数门槛 / PnL 门槛 / 反向信号）+ `dimensionBars`（三维横向条形图共振可视化）+ `attachTooltip`（hover/focus 监听 helper）。synthesis-card.js（C2）：`.syn-action` 加 `de-action` 类 + `data-de-action` + `cursor:help`，syn-bars 后插入 compareCard + renderBreakdown，render 末尾自动 attachTooltip（每次重渲染重新挂载避免 stale 监听）。portfolio.html（C3）：决策面板 `.badge` 加 `de-action` + `cursor:help`，position-rec 后插入 compareCard，buildComposition 后插入 renderBreakdown，loadDecision 末尾 attachTooltip。trend.html 加 `decision-explainer.js` script 加载（synthesis-card.js 依赖）。字段名陷阱保护（V0.75 教训）：`trend_index.components` 缺失显示「— 未计入」绝不渲染 undefined；i18n T(key, fallback) 字典缺 key 时回退中文。3 语 i18n +42 keys（explain_breakdown_title/formula/dim_title + compare_* 12 keys + explain_<9 行动>_line{1,2,3} 27 行 = 42 唯一 keys × 3 = 126 条）。门禁：`check_static_js.py` 15 静态页 + 27 共享脚本全过；`check_cluster_render.mjs` 437/0 无回归；`check_i18n_keys.py` 0 missing；新建 `check_v086.mjs` 36/36（2 页 × 3 语 × 6 断言：de-action + compare + breakdown + i18n + hover 3 行 tooltip）。见 `docs/releases/v0.86.0.md` |
-| V0.86.1 | ✅ 2026-10-11 | 数据健康跳转 404 hotfix：用户报告「主页点击数据健康链接出现 detail not found」。根因：V0.85.0 引入 chip 链接 `<a href="/data-health.html">`，但 `src/app/main.py` 根路径别名列表（/portfolio /central-bank /trades 等）漏注册 `/data-health` 别名 → FastAPI 默认 404。修复：(1) main.py 加 `@app.get('/data-health')` + `'/data-health.html'` 双别名（/data-health 与项目 kebab-url 约定一致；/data-health.html 向后兼容 V0.85 chip 直链 + 外部书签避免升级后老浏览器 404）；(2) health-summary.js + 8 个 HTML 的 chip href 从 /data-health.html 升级到 /data-health（与 /portfolio /central-bank 等其他 chip 风格一致）；(3) sw.js SHELL_ASSETS 加 /data-health 让离线缓存包含该页，VERSION bump v0.86.0→v0.86.1 强制重装 SW 清缓存；(4) check_cluster_render.mjs + check_v085.mjs 断言同步从 /data-health.html 改为 /data-health。版本号 0.86.0→0.86.1。教训：puppeteer 只验证 document.body 渲染不验证 URL 跳转是否 200 → V0.85 全部门禁通过但真实跳转 404 → 考虑 V0.87 加 `scripts/check_routes.py` 扫描 main.py 别名 + curl GET 验证 307/200。门禁：check_static_js.py 15 + 27 全过；check_cluster_render.mjs 437/0；check_i18n_keys.py 0 missing；check_v085.mjs 51/0；check_v086.mjs 36/0；curl GET /data-health → 307 → /static/data-health.html → 200；curl GET /data-health.html → 307 → /static/data-health.html → 200。见 `docs/releases/v0.86.1.md` |
-| V0.87.0 | ✅ 2026-10-11 | `scripts/check_routes.py` HTTP 状态码门禁：V0.86.1 教训的直接产物。`src/app/main.py` 14 个 `@app.get(...)` 别名用 AST 解析 + `urllib` curl GET 验证 200/307，拒绝 5xx / 404 / ConnectionError。集成进 `tests/gates/test_routes_smoke.py` 27 例（`scripts/test_routes_smoke.py` 反射 + 集成混合）。9 业务页 + 5 别名全部 200/307。门禁：check_static_js.py 15 + 27 全过；check_routes.py 14/14 全过；`pytest tests/gates/test_routes_smoke.py` 27/27；`pytest tests/test_services/test_user_isolation.py` 8/8（不回归）。见 `docs/releases/v0.87.0.md` |
-| V0.88.0 | ✅ 2026-10-12 | 维护线 src/ 覆盖率 87→90%+：admin.py 端点层 19 例（owner/409/404 全分支 + 双 token 路径）+ scripts/import_central_bank.py 13 例（含 mock build_full_dataset）+ grams 100% / import_central_bank 98% / admin 90% 三模块基线。**sw.js VERSION 漂移 hotfix**：V0.88.0 漏改 sw.js VERSION 导致缓存陈旧，同 commit 推送修复（`d29d9df`）—— 教训写入 `sw-version-sync-gate` memory 并加 `check_pwa_assets.py` 必跑门禁。**check_routes 双向验证 + 常量同步护栏**：`(expected_status, path)` 表驱动（GET 200 / 307），HTTPX 替换 urllib 支持 session + cookie。门禁：check_routes.py 14/14；check_pwa_assets.py v0.88.0 OK；test_admin.py 19/19；test_import_central_bank.py 13/13；test_routes_smoke.py 27/27。**无新功能纯维护**。见 `docs/releases/v0.88.0.md` |
-| V0.89.0 | ⏭ 跳过 | 10-12 当日无独立交付，并入 V0.90.0 |
-| V0.90.0 | ✅ 2026-10-12 | 版本号 + 发版说明：`pyproject.toml` 0.88.0→0.90.0 + sw.js VERSION + CHANGELOG（4 处同步）+ release notes `docs/releases/v0.90.0.md`。**V0.89 跳过**（双节同日发版合并处理）。无新功能、纯版本号 bump。门禁：check_pwa_assets.py v0.90.0 OK。commit `c4f87f8` |
-| V0.91.0 | ✅ 2026-10-12 | 复盘报告 PDF 一键导出 + 跨页上下文保留：用户提「复盘时能一键导出 PDF」。ReviewReportService 复用 `weasyprint` / `xhtml2pdf` 已有依赖，按 review.html 模板渲染 PDF；保留中央银行购金 / 持仓 / 决策历史 / 数据健康 4 个区块的跨页上下文（page-break-inside: avoid + 章节标题 sticky）。端点 `GET /api/v1/review/pdf?from=&to=` 流式返回 `application/pdf`。UI：review.html 加「📄 导出 PDF」按钮 + loading 态 + 完成 toast。3 语 i18n +3 keys（pdf.export / pdf.exporting / pdf.done）。门禁：check_static_js.py 16 + 27 全过；check_routes.py 14/14；check_i18n_keys.py 0 missing；test_review_pdf.py 6/6（空数据 / 跨月 / 图表占位 / 中文字体 / 大表分页 / 鉴权）。见 `docs/releases/v0.91.0.md` |
-| V0.92.0 | ✅ 2026-10-14 | **历史打分数据汇总 · scoring_daily_wide 物化宽表**：用户提「汇总页能看历史打分走势」。5 段交付：(1) 数据层 `scoring_daily_wide` 物化宽表（26 列 + 3 索引，1 行/日，写时 hook ETL）；(2) 服务层 `ScoringWideService` 4 聚合查询（summary / by-date / hit-stats / by-tag）；(3) 端点 5 个新 API（`/api/v1/scoring/summary` / `/by-date` / `/hit-stats` / `/by-tag` / `/tags`）+ 写时 hook（`capture_today` / `save_today` 触发 `rebuild(today)`）+ 回填 CLI `scripts/backfill_scoring_wide.py`；(4) 视图 `/scoring` 双 Tab（日历 + 表格）+ 顶栏「📊 打分」入口；(5) 维护线 4 处版本同步 + check_routes 12→13 alias + check_pwa_assets + i18n 33 keys。**设计纪律**：V0.78.0 Step D 所有数值列 nullable；V0.79.0 #162 宽表写失败不回滚源表（下次 capture_today 幂等 rebuild）；V0.80.0 #159 所有 query 默认 user_id 过滤；V0.85 教训 check_routes 同步 12→13 alias；V0.88.0 sw.js 4 处同步。**alembic stale revision 恢复**：c027a36 hotfix 补 c4d5e6f7a8b9 no-op 占位 + 链 V0.92.0 真迁移（生产 DB alembic_version 指向不存在 revision，核对 schema 后补 no-op 占位 + 改 down_revision 链接上）。门禁：check_routes.py 13/13；check_pwa_assets.py v0.92.0 OK；check_static_js.py 17+30 OK；check_i18n_keys.py 0 missing；test_scoring_wide.py 14/14；test_backfill_scoring_wide.py 6/6（dry-run / 区间 / 幂等 / 失败容忍 / 数据完整 / CLI 退出码）。见 `docs/releases/v0.92.0.md` |
-| V0.92.1 | ✅ 2026-10-15 | **行级命中筛选 + 是=红 #dc2626**：用户提「打分汇总 4 指数时序表加命中筛选」。summary endpoint 新增 `hit / horizon` Query 参数（`pattern=^(all|hit|miss)$`），service `summary()` 串接 hit 过滤（**默认 `group_by=day + horizon=t1`**，与 V0.93.0 T+0 一起重新校准默认项）。scoring.html 加 `.hit-cell` / `.hit-yes` / `.hit-no` / `.hit-pending` CSS（**语义覆盖：hit=yes → 红 #dc2626；hit=no → 绿；pending → 灰** —— 用户原话"红色的是"是数据语义而非视觉增强）。scoring.js `getParams` / `renderSummaryTable` 注入命中列。i18n 8 keys：hit_filter / hit_filter_all / hit_filter_yes / hit_filter_no / hit_col / hit_col_yes / hit_col_no / hit_col_pending。sw.js SHELL_ASSETS 加 scoring.html（V0.92.0 follow-up：避免 RUNTIME_CACHE 旧 307 持续回放旧 HTML）。puppeteer 视觉验证：4 指数时序表「全部/是/否」3 筛选全通，命中列 颜色符合语义。commit `ac33123`（与 V0.93.0 / V0.94.0 合并提交） |
-| V0.93.0 | ✅ 2026-10-15 | **T+0 outcome 当日尾盘验证 · 快速反馈**：用户提「复盘时想看当天决策的当日结果」。新增迁移 `j6d7e8f9a0b1`：`actual_change_pct_t0` / `hit_t0` 两列（V0.78.0 Step D nullable，老行 = NULL 视为 pending）。`_build_row` 复用 `gold.latest_before()` 取上一交易日收盘 → 当日 close = t0 outcome。summary / hit-stats 全部支持 t0（`pattern=^(t0|t1|t3|t5)$`）。`hit_stats.hit_col` dict: `{0: "hit_t0", 1: "hit_t1", 3: "hit_t3", 5: "hit_t5"}`。ScoringWideRepository.upsert 字段白名单同步加 2 字段（V0.79.0 #162 教训）。i18n 2 keys：hit_rate_t0 / t0_desc（**注明含盘内信息泄露**，定位「快速反馈」非预测评估）。scoring.html 加 T+0 horizon select option；scoring.js 渲染 T+0 命中率列。**horizon 扩展为 t0 / t1 / t3 / t5** 四档。commit `ac33123` |
-| V0.94.0 | ✅ 2026-10-15 | **预测评估卡 verdict card**：用户提「打分汇总顶部加预测评估总览」。scoring.html 顶部加 `<section id="scoringVerdict">`（方向 + 置信度 + 4 horizon ready/pending/missing + 一句话 summary），跟随 `toDate` 联动（onchange 重拉 API 重渲染）。新增 schema `ScoringHorizonVerdict`（单 horizon 三态 ready / pending / missing）。service `summary()` 返回 verdict 块；scoring.js `renderVerdict` 根据 4 horizon 状态组合：4 都 ready → 「🎯 高置信 · 4/4 horizon 已验证」；3/4 ready → 「🟡 中置信 · 3/4 horizon 已验证」；<3 ready → 「⏳ 早期数据 · N/4 horizon 已验证」；含 pending 但无 missing → 「🟢 当日 T+0 实时跟踪中」；全 missing → 「— 数据积累中」。i18n 5 keys：verdict_title / verdict_direction_bullish / verdict_direction_bearish / verdict_direction_neutral / verdict_confidence_high/mid/low。puppeteer 视觉验证：切换 `toDate` verdict 跟随更新。commit `ac33123` |
-| V0.95.0 | ✅ 2026-10-15 | **4 指数时序表「横盘日数」替换为 NY 金美元/盎司收盘**：用户提「把横盘日数改成当日美元的收盘价」（澄清后 = 黄金每盎司 NY 收盘价 USD/oz）。3 commit 链：(1) DB 层 `feat(db): scoring_daily_wide 加 gold_ny_close 列` (`3d38c15`) — migration `k7e8f9a0b1c2`（接 V0.93.0 j6d7e8f9a0b1）+ model Float nullable + repo upsert 白名单加 `gold_ny_close`（V0.79.0 #162 教训）；(2) 后端聚合 `feat(scoring): summary 桶聚合 gold_ny_close + i18n 三语同步` (`af1258d`) — schema ScoringSummaryBucket 删 `sideways_days` 加 `gold_ny_close`；service `_build_row` 末尾取 `gold_base.close`（已经是 ny target，无新查询）；summary 桶聚合 `gold_ny_close = ny_closes[-1] if ny_closes else None`（period-end snapshot）；3 语 i18n + 删 1 加 1 key；(3) 前端 `feat(scoring): 4 指数时序表横盘日数列替换为 NY金美元/盎司收盘` (`aa737c0`) — scoring.js thead / tbody 替换列名 + `fmt2()` 工具函数（千分位 + 2 位小数 `3,350.50`）。**数据补充**：NY 金 1 个月陈旧 9/39 → backfill 28/39 填充（11 剩余 NULL 是周末 + 当日，物理不可能有数据）；`/tmp/backfill_ny.py` 调 `_us_gold_via_subprocess` 绕过 TrendService 链路构造。puppeteer 视觉验证：zh-CN / en-US 两种语言列名 + 数值格式正确。 |
-| V0.95.1 | ✅ 2026-10-15 | **4 指数时序桶排序降序 · 最近→远期自上而下**：用户提「时序排列应该是从最近到远期，从上方向下排」。`summary()` 桶迭代 `sorted(...)` → `sorted(..., reverse=True)`（line 282）；`hit_stats().by_month` 桶迭代同上（line 392）。**多视图一致性**：日历视图（renderCalendar 早就是 `.reverse()` 倒序 line 328），主表与日历排序方向统一，消除 UX 割裂。**period 字符串设计**：day=`YYYY-MM-DD` / week=`YYYY-Wxx` / month=`YYYY-MM` 都是字典序 == 时间序，`reverse=True` 即可无需自定义 comparator。puppeteer 视觉确认 4 指数时序表自上而下从 2026-10-14 排到 2026-09-07。门禁：check_routes.py 14 OK / check_pwa_assets v0.92.0 OK / check_static_js 17+30 OK。commit `2e956d3`。**注：本版未发版本号**（V0.92.0 维护线无 sw.js VERSION 改动需求） |
-
-**维护任务清单**（每小版本至少 1 项）：
-- [ ] `ruff check` 警告清零
-- [ ] 依赖升级：`uv lock --upgrade` → 跑全量回归
-- [ ] 测试扩充：新功能 PR 至少 +10 测试
-- [ ] 文档同步：版本号、页数、端点数刷新
-- [ ] 静态门禁：JS + 渲染 + 文档声明 三关全绿
-
----
-
-## 7. 路线图甘特图（文字版）
-
-```
-       W41   W42   W43   W44   W45   W46   W47   W48   W49   W50   W51   W52
-2026  ──┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────┬────
-        │    │    │    │    │    │    │    │    │    │    │    │
-历史    │V83.x×4│V84│V85│V86│  (已交付)
-        │    │    │    │    │
-新方向  │    │    │V87──┤V88─────┤V89┤V90──────────────▶
-        │    │    │    │    │    │    │    │
-        │    │    │    │    │    │    │K项(3-4周)
-维护    │    │  .1 │  .1 │  .1 │  .1 │  .1 │  .1
-        │    │    │    │    │    │    │    │
-       ──┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────┴────
-       10-12 10-19 10-26 11-02 11-09 11-16 11-23 11-30 12-07 12-14 12-21 12-28
-```
-
-**新方向各版焦点**：
-- **V0.87.0**（1 周）—— `check_routes.py` HTTP 状态码门禁 + 决策可解释性补完（候选 1+2）
-- **V0.88.0**（1-2 周）—— 三市场对照可视化升级 OR 多账本模板 / 复盘助手（用户选择）
-- **V0.89.0**（1 周）—— 移动端 PWA 体验优化
-- **V0.90+**（3-4 周）—— K 项：多市场独立校准（parameter-evaluation 唯一未交付）
-
----
-
-## 8. 立即可启动的下一步（V0.79.0 Step G Commit 3）
-
-今天（2026-10-06）可以做的：
-
-1. **不需要建分支**：Step G Commit 1（`dbf9239`）+ Commit 2（`77d33a5`）已在 main 合并，Commit 3 沿用同一主线。
-
-2. **读 Commit 1 实现沉淀**：先看 `src/app/schemas/backtest.py:14-41`（`TREND_DIM_FIELDS` / `MACRO_DIM_FIELDS` 常量）、`NestedWeights` 基类，确认 UI 要暴露的字段名集合。
-
-3. **UI 改造**（按 §2.2 Step G Commit 3 计划）：
-   - `static/backtest.html`：`<details id="advPanel">` + 5×2 number input + `#runBtnAsync` + `#asyncProgress`
-   - `static/backtest-chart.js`：`injectCSS()` 加 `.adv-panel` / `.progress-bar` / `.grp-grid`
-   - `static/i18n/{zh-CN,en-US,zh-TW}.js`：3 文件同步 7 个新 key
-
-4. **端到端手测**（必须有真实浏览器或 puppeteer）：
-   ```bash
-   MARKET_PROVIDER=mock uvicorn app.main:app --port 8899 &
-   # 在 backtest 页勾选「启用 trend_5」→ 填 5 个值（验证 sum≈1.0 提示）→ 提交 → 应自动切到 /run-async 并显示进度条
-   ```
-   ⚠ **MEMORY 规则**：「前端 undefined 字面量排查」—— UI 渲染必须用 puppeteer 实跑，参考 `/tmp/check_portfolio.mjs`，不能仅凭静态阅读断言。
-
-5. **跑门禁**：
-   ```bash
-   node scripts/check_clus_render.mjs
-   uv run python scripts/check_docs_claims.py
-   uv run python scripts/check_static_js.py
-   uv run ruff check src tests
-   uv run ruff format --check src tests
-   ```
-
-6. **commit**：`feat(ui): 回测页高级模式 · trend_5/macro_5 编辑器 + 异步进度`
-
-预计半天即可完成 Commit 3，之后即可启动 Step E（动态化宏观阈值，§2.2 Week 2-3）。
-
----
-
-## 9. 风险与缓解
-
-| 风险 | 概率 | 影响 | 缓解 |
-|------|------|------|------|
-| **决策矩阵改档位 → 现有用户的 BUY 信号消失** | 高 | 中 | 在 `static/portfolio.html` 决策面板加「旧档位 vs 新档位」对比卡，标注「本版本起调整」 |
-| **动态宏观阈值回退默认值时与历史数据回测不可比** | 中 | 中 | 回测结果保留 `thresholds_mode: dynamic / static` 字段，让用户对比 |
-| **V0.75.2 数据隔离改太多 API 导致回归测试大面积失败** | 中 | 高 | 先在测试分支做 1 周的「逐步迁移」（每个 API 单独改 + 测试），不一次性全改 |
-| **V0.78.0 抽阈值后某个边界场景被遗漏** | 中 | 低 | 全量回归 + 比对参数化测试（parametrize）覆盖所有 0-100 分边界 |
-| **UI 渲染门禁（V0.77.0 起 125 条）随版本增长膨胀** | 低 | 低 | 每 100 条做一次重构（按场景合并） |
-
----
-
-## 10. 关键里程碑与发布节奏
-
-### 历史里程碑（已交付）
-
-| 日期 | 版本 | 里程碑 |
-|------|------|--------|
-| ✅ 2026-10-05 | V0.78.0 | 阈值口径统一 + 决策补全 |
-| ✅ 2026-10-05 | V0.78.1 | SW 缓存脱钩 + 依赖声明 + 8 道门禁 |
-| ✅ 2026-10-07 | V0.79.0 | 阈值动态化 + 回测增强（Step G/E/F/H） |
-| ✅ 2026-10-07 | V0.80.0 | 决策网格化 + 仓位结合 |
-| ✅ 2026-10-08 | V0.81.0 | V0.75.3 认证收尾发版 |
-| ✅ 2026-10-08 | V0.81.1 | admin token 缺失横幅 hotfix |
-| ✅ 2026-10-09 | V0.82.0 | LAN 多终端 admin token 双通道（原 V0.82「多市场独立校准」改主题） |
-| ✅ 2026-10-10 | V0.83.0 | 主页 UI 改版 + 8 页警示合并 |
-| ✅ 2026-10-10 | V0.83.1 | 110 个 zh-TW 翻译 gap 修复 |
-| ✅ 2026-10-10 | V0.83.2 | 共享 topnav 抽离 |
-| ✅ 2026-10-10 | V0.83.3 | 限速中间件 /static/ bypass + 120→600/min |
-| ✅ 2026-10-10 | V0.83.4 | freshness 降级 UX + sig() dict bug 修复 |
-| ✅ 2026-10-10 | V0.84.0 | 状态条方案 C · 数据时效 + 警示合并 |
-| ✅ 2026-10-11 | V0.85.0 | 数据时效迁移到 /data-health + 主页版面优化 |
-| ✅ 2026-10-11 | V0.86.0 | 决策可解释性增强（拆解 + 对比 + tooltip） |
-| ✅ 2026-10-11 | V0.86.1 | 数据健康跳转 404 hotfix |
-
-### 未来里程碑（候选，§11 详述）
-
-| 排期窗口 | 版本 | 主题 |
-|----------|------|------|
-| 2026-10-18 | V0.87.0 | check_routes.py 门禁 + 决策可解释补完（候选 1+2） |
-| 2026-10-底 / 11-初 | V0.88.0 | 三市场对照升级 OR 多账本模板（用户选） |
-| 2026-11-中 | V0.89.0 | 移动端 PWA 体验优化 |
-| 2026-12 起 3-4 周 | V0.90+ | K 项：多市场独立校准（parameter-evaluation 11 项中唯一未交付） |
-
-**发布节奏变化**：
-- **历史**：主版本（V0.78 / V0.79 / V0.80 / V0.82）：6-12 周一个；小版本（V0.7x.y）：2 周一个
-- **未来**：新功能版（V0.87+）：1-4 周一个（视工作量）；维护线：2 周一个 hotfix / 依赖升级 / 测试扩充
-- **不再有 6-12 周的大版本**——后端已打磨到稳定，UX 改进可以小步快跑
-
----
-
-## 11. V0.87+ Backlog（已交付 / 转入维护线）
-
-> 本节原始规划于 2026-10-11 落地。截至 2026-10-15，**全部 6 项候选已交付或并入 V0.88+ 维护线**。
-
-| 候选 | 状态 | 落地版本 | 备注 |
-|------|------|---------|------|
-| 候选 1 · `scripts/check_routes.py` HTTP 门禁 | ✅ 已交付 | V0.87.0（10-11） | 见 §6 V0.87.0 |
-| 候选 2 · 决策可解释性补完（三维行下钻 + tooltip 共振 + SW 缓存） | ✅ 已交付 | V0.86.0（10-11） | 见 §6 V0.86.0；SW 缓存 V0.86.0 顺手完成 |
-| 候选 3 · 三市场对照可视化升级 | 🟡 延后 | — | 转入 V0.96+ 候选（见 §12） |
-| 候选 4 · 多账本模板 / 复盘助手 | 🟡 延后 | — | 转入 V0.97+ 候选；账本能力 V0.75+ 已成熟 |
-| 候选 5 · K 项 · 多市场独立校准 | ⏸ 保持延后 | — | V0.98+ 必做；工作量 3-4 周 |
-| 候选 6 · 移动端 PWA 体验优化 | 🟡 延后 | — | 转入 V0.96+ 候选（见 §12） |
-
-**新增交付（V0.92.0+ 不在本节原始规划）**：
-- V0.90.0 · 版本号 + 发版说明（10-12）
-- V0.91.0 · 复盘报告 PDF 一键导出（10-12）
-- V0.92.0 · 历史打分数据汇总（物化宽表 + 汇总页，10-14）
-- V0.92.1 · 行级命中筛选（10-15）
-- V0.93.0 · T+0 outcome（10-15）
-- V0.94.0 · 预测评估卡 verdict card（10-15）
-- V0.95.0 · NY 金美元/盎司收盘（10-15）
-- V0.95.1 · 时序桶排序降序（10-15）
-
-**维护线累计**（截至 V0.95.1）：
-- 14 个 HTTP alias（V0.87 check_routes 持续护栏）
-- 16 个静态 HTML + 30 个共享 JS（V0.92.0 scoring.html /scoring 入口）
-- src/ 覆盖率 90%+ 基线（V0.88 admin 19 + grams 100% + import_central_bank 98%）
-- 维护线门禁 7 道：check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims / pytest
-
----
-
-## 12. V0.96+ Backlog 候选（用户体验优化 + 数据深度）
-
-> 物化宽表 V0.92.0 已稳定 + V0.92.1/V0.93.0/V0.94.0/V0.95.x UX 改进系列已落，转向：
-> 1. **数据深度**（V0.96.0）—— 让历史数据说话（命中率分布 / 跨市场对比 / 时段分析）
-> 2. **UX 体验优化**（V0.97.0）—— 减少点击 / 自动刷新 / 移动端 / 错误降级
-> 3. **K 项**（V0.98+）—— 多市场独立校准（parameter-evaluation 11 项中唯一未交付）
->
-> 候选分 3 类，按用户优先级选择。
-
-### 12.1 数据深度类（V0.96.0 候选）
-
-#### 候选 A · 打分命中率分布可视化（V0.96.0 优先级最高）
-
-**目标**：把 `hit_stats()` 已有数据升级为「一眼看出哪天/哪月策略最准」的可视化。
-
-- scoring.html「命中分析」Tab 加柱状图：x 轴月份，y 轴命中率（t0 / t1 / t3 / t5 四色叠加）
-- 4 horizon 同图对比，看到「短线好 vs 长线好」时序漂移
-- 表格下加 mini 卡：「最近 30 天命中率」+「同比上月」+「最佳 horizon」一句话
-- 服务端：`/api/v1/scoring/hit-stats?granularity=week` 新 granularity（已支持 day/month，加 week）
-
-**工作量**：2-3 天
-**风险**：🟢 0（数据已就绪，纯前端图表）
-**价值**：高（深耕核心价值「决策可信度」+ 时序可视化复用 V0.95.1 降序约定）
-
-#### 候选 B · 4 指数时序表「胜率随 horizon 退化曲线」（V0.96.0 候选）
-
-**目标**：在 verdict card 旁边加 1 张 mini 折线图 —— x 轴 horizon (t0/t1/t3/t5)，y 轴命中率。
-
-- 一眼看到「T+0 → T+5 命中率衰减有多快」
-- 长期观察策略稳定性（衰减越慢越稳）
-- 复用 `dimensionBars`（V0.86.0 decision-explainer.js 已有的横向条形图工具）
-
-**工作量**：1-2 天
-**风险**：🟢 0
-**价值**：中（视觉增强，决策洞察增量有限）
-
-#### 候选 C · 跨市场对照扩展（V0.96.0 候选）
-
-**目标**：trend.html 现有「NY / SGE / ETF」对照从纯指数曲线升级为「价 × 涨跌 × 状态」三维。
-
-- 主图保留 3 曲线
-- 副图：x 轴时间，y 轴 3 个 marker（NY / SGE / ETF），颜色按涨跌，状态 chip（实时/缓存/演示）嵌入
-- 一眼看到「哪个市场领先」「哪个市场背离」「哪个市场真实行情 vs Mock」
-
-**工作量**：5-7 天
-**风险**：🟡 中（重构 trend.html sge/cmp 区）
-**价值**：中（深化「对照」叙事，本节原候选 3 顺延）
-
-### 12.2 UX 体验优化类（V0.97.0 候选）
-
-#### 候选 D · 数据自动刷新（V0.97.0 优先级最高）
-
-**目标**：scoring / trend / data-health 3 页加智能轮询，**不打扰用户**。
-
-- 静默刷新：每 5min 自动 GET 一次 API（仅 polling，**不打断当前视图焦点**）
-- 视觉降级：有更新时右下角 toast「🆕 新数据已更新」+ 「点击查看」按钮；无更新不打扰
-- 用户偏好开关：「设置页」加「数据自动刷新」toggle（默认开，关闭后彻底不轮询）
-- 与 V0.83.4 智能退避 60→120→300→600s 复用：失败时不打扰
-
-**工作量**：2-3 天
-**风险**：🟡 中（需尊重 user_id 隔离 + 失败不打扰语义）
-**价值**：高（用户提"应用状态同步"暗示对实时性有期待）
-
-#### 候选 E · 错误降级 UX 重构（V0.97.0 候选）
-
-**目标**：把 9 业务页各自的错误展示统一为「中性灰 toast + 末次数据保留 + 重试按钮」。
-
-- 当前：health-summary.js 已有 60→120→300→600s 退避；其他页错误处理碎片化
-- 新设计：新增 `static/error-toast.js` 共享模块（toast + retry + 末次数据保留），9 业务页接入
-- 与 V0.83.4 freshness 降级 UX 模式一致（amber chip + 中性文案）
-- 错误不再有「❌」红框；最差显示「— 数据暂不可用」+ 灰色重试按钮
-
-**工作量**：3-5 天
-**风险**：🟡 中（涉及 9 页同步改造）
-**价值**：高（消除用户最大痛点"为什么我看到红框"）
-
-#### 候选 F · 移动端 PWA 体验优化（V0.97.0 候选）
-
-**目标**：LAN-only 部署场景下用户大多用手机/平板访问。
-
-- 决策面板可离线看（V0.85 已 cache `/data-health`，V0.92.0 已 cache `/scoring`）
-- 顶 nav 折叠汉堡菜单（移动端 ≤768px 自动切换）
-- 触控目标 ≥44px（V0.83.0 已部分做，全局审计）
-- iOS / Android 主屏图标 + splash
-- PWA manifest 完善（start_url / display / theme_color）
-
-**工作量**：1 周
-**风险**：🟢 0
-**价值**：中（本节原候选 6 顺延）
-
-#### 候选 G · 命中筛选 / T+0 联动快捷键（V0.97.0 候选）
-
-**目标**：scoring 页加键盘快捷键减少点击。
-
-- `1` / `2` / `3` 切 全部 / 是 / 否
-- `Tab` 切 horizon t0 / t1 / t3 / t5
-- `←` / `→` 翻月份
-- `Esc` 关 verdict card 详情弹窗
-- 帮助：`?` 弹快捷键说明
-
-**工作量**：1-2 天
-**风险**：🟢 0
-**价值**：中（高频用户效率提升）
-
-### 12.3 K 项（V0.98+ 必做）
-
-#### 候选 H · 多市场独立校准（K 项 · V0.98.0 必做）
-
-**目标**：parameter-evaluation.md §4.3 · 黄金 / 白银 / ETF 三套独立权重和阈值。11 项改进中**唯一未交付**。
-
-**实施步骤**（概览）：
-1. `schemas/settings.py`：权重 / 阈值配置改为 `target_keyed: dict[target, WeightConfig]`
-2. `services/trend.py` / `services/macro.py`：参数解析按 target 取值
-3. 回测支持 cross-market 验证（NY vs SGE vs ETF 共 3×3=9 组对照）
-4. UI：`static/weights.html` 加 target 切换 tab
-5. 文档同步：`docs/parameter-evaluation.md` §4.3 验证结论
-
-**工作量**：3-4 周
-**风险**：🟡 中（数据量大、口径多）
-**价值**：高（11 项里**唯一**未交付的 parameter-evaluation 项）
-
-### 12.4 维护线（持续）
-
-每 2 周一个 V0.95.x / V0.96.x 小版本：
-- **依赖升级**：`uv lock --upgrade` 谨慎（V0.78.2 教训 · sqlalchemy 2.0→2.1 跨大版本有容器启动崩溃前科）
-- **测试扩充**：覆盖率目标 ≥60%（V0.79.2 排期）→ 当前 src/ 90%+ 已超目标，下阶段加 puppeteer 视觉回归
-- **门禁维护**：check_routes / check_pwa_assets / check_static_js / check_cluster_render / check_i18n_keys / check_docs_claims 持续跑
-- **文档同步**：release notes / README / 内存 pattern 写入
-- **backfill 脚本化**：`/tmp/backfill_ny.py` 临时脚本转正为 `scripts/backfill_ny_gold.py`（V0.95.0 教训：NY 金 1 个月陈旧，scheduler 未自动拉）
-
----
-
-**V0.96.0 推荐组合**：候选 A（命中率分布可视化，2-3 天）+ 候选 B（胜率随 horizon 退化曲线，1-2 天）= **1 周内可交付**。
-**V0.97.0 候选**：候选 D（数据自动刷新）+ 候选 E（错误降级 UX 重构）由用户优先级选择。
-**V0.98.0 候选**：候选 H（K 项）必做；候选 F（移动端 PWA）+ 候选 C（跨市场对照扩展）视优先级。
-
----
-
-## 附录 A · 当前路线图与 parameter-evaluation.md 的对应关系
-
-| 路线图版本 | 包含 parameter-evaluation 改进项 |
-|------------|-------------------------------|
-| V0.78.0 | A, B, C, D |
-| V0.79.0 | E, F, G, H |
-| V0.80.0 | I, J |
-| V0.83.1 | L（i18n 110 gap 修复）✅ |
-| V0.83.2 | M（共享 topnav 抽离）✅ |
-| **V0.87+ backlog**（§11）| K 多市场独立校准（**未交付**，K 是 11 项中唯一未交付） |
-
-**11 项中 10 项已交付**，K 项未交付 → 见 §11 backlog 候选 5。
-
----
-
-## 附录 B · 与 development.md §11 改进计划的对账
-
-| development.md §11 项 | 状态 | 路线图覆盖 |
-|----------------------|------|------------|
-| P1 #1-6（CI / Alembic / 行情源 / 多账户） | ✅ 已完成 | — |
-| P2 #7-11（共振 / 克数 / 多时间框架 / 回测 / 多品种） | ✅ 已完成 | — |
-| P3 #12 仓位推荐 | 🟡 半成品 | **V0.80.0 J** 闭环 |
-| P3 #13 模拟交易 | 🟡 半成品 | **V0.84.0+** |
-| P3 #14 指数曲线 | ✅ | — |
-| P3 #15 监控告警 | 🟡（数据源失败告警未做） | **V0.79.x 维护线** 排期 |
-| P3 #16 公开部署 | 🟡 | **V0.84.0+** 等用户提供域名 |
-| 6.5 个性化与上下文记忆 | 🟡 | **V0.79.0 F** 部分覆盖 |
-| 6.9 加载与离线 | ✅ | — |
-| 6.11 研判复盘 | ✅ | — |
-| V0.75.0 认证 | 🟡 第①步 | **V0.75.2 / V0.75.3** |
-| V0.75.1 结论卡 | ✅ | — |
-| V0.76.0 消息面打分器 | ✅ | — |
-
----
-
-**文档完成时间**：2026-10-15（V0.87-V0.95.1 维护线快照补齐 + V0.96+ backlog 落地 + §11 旧候选状态收口）
-**下次更新时机**：V0.96.0 启动时确定「候选 A vs B vs C」；V0.97.0 启动时确定「候选 D vs E」；K 项评估时更新「V0.98+ 工作量预估」
+**文档完成时间**：2026-10-18（V0.100.0 发版 + V0.101 收口 + 三份文档聚类重组）
+**下次更新时机**：V0.101 发版后更新 §1 历史里程碑 + §2 推进主线；V0.102 K 项启动时更新 §3 backlog 状态

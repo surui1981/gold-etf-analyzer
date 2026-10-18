@@ -1,10 +1,10 @@
 # 技术架构与数据源
 
+> **目标读者**：开发者 ｜ **状态**：活跃 ｜ **最近更新**：2026-10-18
+>
 > 本指南已拆分为 5 部分，本文件包含 **技术架构（§3）+ 数据源（§7）**。
 > 其他部分：[overview](overview.md) · [getting-started](getting-started.md) ·
 > [api-reference](api-reference.md) · [development](development.md)
->
-> 完整索引见 [application-guide.md](application-guide.md)。
 
 ## 3. 技术架构
 
@@ -64,7 +64,7 @@ src/app/
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
 static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html / silver.html / backtest.html / data-health.html / settings.html / offline.html / **login.html（V0.75.0）**
                          #   + account.js / freshness.js / help.js / **auth.js（V0.75.0）** / **synthesis-card.js（V0.75.1）** / **news-score-widget.js（V0.76.0）** / resonance-card.js / responsive.css
-tests/                   # pytest（867 用例 / 63 个测试模块，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / **认证（V0.75.0：服务 54 + API 32 + 中间件 28）**）
+tests/                   # pytest（**866+ 用例** / 16+ 测试目录，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0 起））
 ```
 
 ### 3.3 数据流
