@@ -1196,8 +1196,9 @@ window.PM_I18N_zh_TW = {
   "home.scene_ai_desc": "基於實時數據的對話式輔助",
   "home.scene_ai_btn": "進入 AI 助手",
   "home.news_section_title": "今日要聞",
-  "home.news_empty": "暫無最近消息面打分",
+  "home.news_empty": "暫無今日要聞",
   "home.news_load_fail": "今日要聞載入失敗",
+  "home.news_view_more": "查看更多 →",
   /* V0.99 C5：白銀頁 3-market 選擇器 + 升貼水表 i18n */
   "silver.headline_title_3market": "📊 白銀即時評估摘要 · 趨勢指數 × 三市場報價",
   "silver.market_etf": "ETF（562800）",

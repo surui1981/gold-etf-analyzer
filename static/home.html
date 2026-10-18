@@ -116,12 +116,35 @@
   /* 底部要闻 */
   .home-bottom { padding: 16px 20px; background: var(--card);
     border: 1px solid var(--border); border-radius: 12px; }
-  .home-bottom h3 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+  .home-bottom-head { display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .home-bottom h3 { font-size: 15px; font-weight: 600; margin: 0; }
+  .home-bottom-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  /* V0.102：readhub 状态 chip（总数 + 24h 新增；DB 空时 amber）*/
+  .home-headlines-chip { font-size: 11px; padding: 2px 10px;
+    background: rgba(0,0,0,0.04); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--muted); }
+  [data-theme="dark"] .home-headlines-chip { background: rgba(255,255,255,0.06); }
+  .home-headlines-chip.is-warn { background: #fff8e6; border-color: #f5d77a; color: #b35309; }
+  .home-news-more { font-size: 12px; color: var(--accent, #2563eb);
+    text-decoration: none; padding: 2px 6px; border-radius: 4px; }
+  .home-news-more:hover { background: rgba(37,99,235,0.08); }
   .home-news-list { list-style: none; padding: 0; margin: 0; }
   .home-news-list li { padding: 10px 0; border-bottom: 1px solid var(--border);
-    font-size: 13px; line-height: 1.5; }
+    font-size: 13px; line-height: 1.5; display: flex; gap: 10px; align-items: baseline;
+    flex-wrap: wrap; }
   .home-news-list li:last-child { border-bottom: none; }
-  .home-news-list .home-news-date { color: var(--muted); font-size: 12px; margin-right: 8px; }
+  .home-news-list .home-news-date { color: var(--muted); font-size: 12px;
+    flex-shrink: 0; min-width: 42px; font-variant-numeric: tabular-nums; }
+  .home-news-list .home-news-site { font-size: 11px; padding: 1px 8px;
+    background: #e8eefc; color: #1d4ed8; border-radius: 999px;
+    flex-shrink: 0; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; }
+  [data-theme="dark"] .home-news-list .home-news-site { background: #1e293b; color: #93c5fd; }
+  .home-news-list .home-news-title { color: var(--text); text-decoration: none;
+    flex: 1; min-width: 200px; }
+  .home-news-list .home-news-title:hover { color: var(--accent, #1d4ed8);
+    text-decoration: underline; }
   .home-news-skeleton { color: var(--muted); }
   .home-news-error { color: var(--muted); font-style: italic; }
 
@@ -210,7 +233,13 @@
   </section>
 
   <section class="home-bottom">
-    <h3 data-i18n="home.news_section_title">今日要闻</h3>
+    <div class="home-bottom-head">
+      <h3 data-i18n="home.news_section_title">今日要闻</h3>
+      <div class="home-bottom-actions">
+        <span class="home-headlines-chip is-loading" id="homeHeadlinesChip">📰 --</span>
+        <a class="home-news-more" href="/headlines" data-i18n="home.news_view_more">查看更多 →</a>
+      </div>
+    </div>
     <ul class="home-news-list" id="homeNewsList" aria-live="polite">
       <li class="home-news-skeleton">--</li>
       <li class="home-news-skeleton">--</li>

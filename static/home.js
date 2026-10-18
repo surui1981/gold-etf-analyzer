@@ -1,16 +1,18 @@
 /*!
  * static/home.js — V0.98 C4 场景化首页数据加载
  *
- * 6 端点并发拉（Promise.allSettled 一个挂不影响其他）：
- * 1. /api/v1/market/gold → hero 金价 chip
- * 2. /api/v1/market/freshness → hero 时效 chip
- * 3. /api/v1/news-score/history?limit=3 → 底部今日要闻 Top 3
- *    ⚠ 实际路由 prefix 是 news-score（不是 news）；前者会 404
+ * 4 端点并发拉（Promise.allSettled 一个挂不影响其他）：
+ * 1. /api/v1/market/gold        → hero 金价 chip
+ * 2. /api/v1/market/freshness   → hero 时效 chip
+ * 3. /api/v1/news-feed/items?days=2&limit=5 → 底部今日要闻 Top 5（V0.102 readhub 财经流）
+ * 4. /api/v1/news-feed/status   → 今日要闻标题旁 chip（last_refresh + 24h 新增）
  *
  * 设计纪律（memory）：
  * - i18n-init-await：等待 i18n.ready 后再渲染（防 undefined 注入）
  * - frontend-undefined-rendering：所有字符串用 textContent（防 XSS）
  * - 不伪造数据：失败显示 "--" + toast 兜底
+ * - V0.102：今日要闻换为 readhub 财经流（语义更对：section 标题「今日要闻」对应外部新闻，
+ *   而非用户自己的消息面打分记录；后者保留在 /news 页）
  */
 (async function () {
   'use strict';
@@ -44,17 +46,19 @@
     el.textContent = t(key, el.textContent);
   });
 
-  // ── 3. 并发拉 3 个端点（allSettled = 一个挂不影响其他） ──
-  // 注意：新闻端点实际挂在 /api/v1/news-score/*（router prefix = "news-score"），
-  // 不是 /api/v1/news/*。后者是 HTML 页静态路径（/static/news.html），已弃用。
-  const [gold, fresh, news] = await Promise.allSettled([
+  // ── 3. 并发拉 4 个端点（allSettled = 一个挂不影响其他） ──
+  const [gold, fresh, headlines, headStatus] = await Promise.allSettled([
     fetch('/api/v1/market/gold', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
     fetch('/api/v1/market/freshness', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
-    fetch('/api/v1/news-score/history?limit=3', { headers: { accept: 'application/json' } })
+    // V0.102：今日要闻换为 readhub 财经新闻流（最近 2 天 + 5 条）
+    fetch('/api/v1/news-feed/items?days=2&limit=5', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    fetch('/api/v1/news-feed/status', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]);
@@ -95,32 +99,49 @@
     quotaEl.textContent = 'AI --';
   }
 
-  // ── 7. 渲染今日要闻 Top 3 ──
+  // ── 7. 渲染今日要闻 Top 5（V0.102：readhub 财经流）──
   const newsListEl = document.getElementById('homeNewsList');
   if (newsListEl) {
-    if (news.status === 'fulfilled' && news.value && Array.isArray(news.value.items) && news.value.items.length > 0) {
-      newsListEl.textContent = ''; // 清空
-      news.value.items.slice(0, 3).forEach((item) => {
+    if (
+      headlines.status === 'fulfilled' &&
+      headlines.value &&
+      Array.isArray(headlines.value.items) &&
+      headlines.value.items.length > 0
+    ) {
+      newsListEl.textContent = ''; // 清空 skeleton
+      headlines.value.items.slice(0, 5).forEach((item) => {
         const li = document.createElement('li');
-        // 防御：每个字段都可能缺失
-        const date = (item.score_date || '').toString();
-        const dir = item.direction || '';
-        const score = (typeof item.score === 'number') ? `${item.score.toFixed(0)} 分` : '';
-        const note = (item.notes || '').slice(0, 80);
 
-        const dateSpan = document.createElement('span');
-        dateSpan.className = 'home-news-date';
-        dateSpan.textContent = date;
+        // 时间（HH:MM BJT）
+        const pubDate = item.publish_date ? new Date(item.publish_date) : null;
+        const hh = pubDate && !isNaN(pubDate.getTime())
+          ? String(pubDate.getHours()).padStart(2, '0')
+          : '';
+        const mm = pubDate && !isNaN(pubDate.getTime())
+          ? String(pubDate.getMinutes()).padStart(2, '0')
+          : '';
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'home-news-date';
+        timeSpan.textContent = hh ? `${hh}:${mm}` : '--';
 
-        const scoreSpan = document.createElement('strong');
-        scoreSpan.textContent = score + (dir ? ` ${dir}` : '');
+        // 来源站（badge）
+        const site = (item.site_name || '').toString();
+        const siteSpan = document.createElement('span');
+        siteSpan.className = 'home-news-site';
+        siteSpan.textContent = site;
 
-        const noteSpan = document.createElement('span');
-        noteSpan.textContent = note ? ` — ${note}` : '';
+        // 标题（点击新 tab 跳原文）
+        const title = (item.title || '').toString();
+        const titleAnchor = document.createElement('a');
+        titleAnchor.className = 'home-news-title';
+        titleAnchor.textContent = title;
+        titleAnchor.href = item.url || '#';
+        titleAnchor.target = '_blank';
+        titleAnchor.rel = 'noopener noreferrer';
 
-        li.appendChild(dateSpan);
-        li.appendChild(scoreSpan);
-        li.appendChild(noteSpan);
+        li.appendChild(timeSpan);
+        li.appendChild(siteSpan);
+        li.appendChild(titleAnchor);
         newsListEl.appendChild(li);
       });
     } else {
@@ -128,11 +149,30 @@
       newsListEl.textContent = '';
       const li = document.createElement('li');
       li.className = 'home-news-error';
-      li.textContent = t('home.news_empty', '暂无最近消息面打分');
+      li.textContent = t('home.news_empty', '暂无今日要闻');
       newsListEl.appendChild(li);
       if (window.PM_Toast) {
         window.PM_Toast.warn(t('home.news_load_fail', '今日要闻加载失败'), { duration: 3000 });
       }
+    }
+  }
+
+  // ── 8. 渲染今日要闻 section 标题旁状态 chip（V0.102 新增）──
+  const headChipEl = document.getElementById('homeHeadlinesChip');
+  if (headChipEl) {
+    headChipEl.classList.remove('is-loading');
+    if (
+      headStatus.status === 'fulfilled' &&
+      headStatus.value &&
+      typeof headStatus.value.total_items === 'number'
+    ) {
+      const total = headStatus.value.total_items;
+      const last24 = headStatus.value.last_24h_count || 0;
+      headChipEl.textContent = `📰 ${total} 条 · 24h +${last24}`;
+      // V0.84 降级：DB 完全空 → amber
+      if (total === 0) headChipEl.classList.add('is-warn');
+    } else {
+      headChipEl.textContent = '📰 --';
     }
   }
 })();

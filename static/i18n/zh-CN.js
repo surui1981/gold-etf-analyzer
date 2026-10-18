@@ -1292,8 +1292,9 @@ window.PM_I18N_ZH_CN = {
   "home.scene_ai_desc": "基于实时数据的对话式辅助",
   "home.scene_ai_btn": "进入 AI 助手",
   "home.news_section_title": "今日要闻",
-  "home.news_empty": "暂无最近消息面打分",
+  "home.news_empty": "暂无今日要闻",
   "home.news_load_fail": "今日要闻加载失败",
+  "home.news_view_more": "查看更多 →",
   /* V0.99 C5：白银页 3-market 选择器 + 升贴水表 i18n */
   "silver.headline_title_3market": "📊 白银实时评估摘要 · 趋势指数 × 三市场报价",
   "silver.market_etf": "ETF（562800）",

@@ -1292,8 +1292,9 @@ window.PM_I18N_en_US = {
   "home.scene_ai_desc": "Conversational aid with live data",
   "home.scene_ai_btn": "Open AI Assistant",
   "home.news_section_title": "Today's Headlines",
-  "home.news_empty": "No recent news scores",
+  "home.news_empty": "No headlines yet",
   "home.news_load_fail": "Failed to load today's headlines",
+  "home.news_view_more": "View more →",
   /* V0.99 C5: silver page 3-market selector + premium table i18n */
   "silver.headline_title_3market": "📊 Silver Real-time Assessment · Trend Index × 3 Markets",
   "silver.market_etf": "ETF (562800)",
