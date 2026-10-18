@@ -26,6 +26,7 @@ from app.api.v1.endpoints import (
     snapshot,
     telemetry,
     trades,
+    user_news_favorite,  # V0.103 今日要闻「收藏 / 永久存储」
 )
 
 api_router = APIRouter()
@@ -41,6 +42,7 @@ api_router.include_router(settings.router)
 api_router.include_router(snapshot.router)
 api_router.include_router(news.router)
 api_router.include_router(news_feed.router)  # V0.102 今日要闻
+api_router.include_router(user_news_favorite.router)  # V0.103 收藏/永久存储
 api_router.include_router(review.router)
 api_router.include_router(resonance.router)  # V0.70.0 P2 #7
 api_router.include_router(central_bank.router)

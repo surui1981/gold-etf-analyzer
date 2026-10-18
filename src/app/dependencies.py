@@ -214,6 +214,29 @@ def get_news_feed_service(
     return NewsFeedService(repo=repo)
 
 
+# V0.103 ── 用户新闻收藏（今日要闻「收藏 / 永久存储」）
+
+from app.repositories.user_news_favorite import UserNewsFavoriteRepository  # V0.103
+from app.services.user_news_favorite import UserNewsFavoriteService  # V0.103
+
+
+async def get_user_news_favorite_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> UserNewsFavoriteRepository:
+    """用户新闻收藏仓储依赖。"""
+    return UserNewsFavoriteRepository(session)
+
+
+def get_user_news_favorite_service(
+    fav_repo: UserNewsFavoriteRepository = Depends(
+        get_user_news_favorite_repository
+    ),
+    feed_repo: NewsFeedRepository = Depends(get_news_feed_repository),
+) -> UserNewsFavoriteService:
+    """用户新闻收藏业务服务依赖（注入 feed_repo 用于 POST 时回填快照）。"""
+    return UserNewsFavoriteService(fav_repo=fav_repo, feed_repo=feed_repo)
+
+
 def get_trend_service(
     repo: MarketDataRepository = Depends(get_market_data_repository),
     settings: WeightService = Depends(get_weight_service),
