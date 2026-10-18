@@ -26,7 +26,7 @@
 #      && curl -fsS http://localhost:8889/api/v1/health
 
 # Stage 1 · builder：按 uv.lock 装运行时依赖到 /install（target dir 隔离 site-packages）
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -53,7 +53,7 @@ RUN uv export --frozen --no-dev --no-emit-project --no-hashes -o /tmp/requiremen
     && pip install --no-cache-dir --target=/install -r /tmp/requirements.txt
 
 # Stage 2 · runtime：slim 基础 + 拷贝 /install + 非 root + HEALTHCHECK
-FROM python:3.12-slim AS runtime
+FROM python:3.13-slim AS runtime
 
 # PYTHONPATH 以 /app/src 优先：确保 app 从业务源码载入（PROJECT_ROOT 才能解析为 /app），
 # 依赖目录 /install 仅提供第三方包。
