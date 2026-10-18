@@ -12,6 +12,40 @@
 
 ## [Unreleased]
 
+---
+
+## [V0.105.0] · 2026-10-19
+
+`headlines 分类筛选（5 类 + 多 switch）` — 5 commit
+
+### Added
+
+- 🏷️ **headlines 类目筛选** —— 用户原话「主要聚焦页面财经内容」（"主要 聚焦页面财经内容"）
+
+  - 🗄️ `news_feed_items` 表加 `category` 列（V0.105 n0o1p2q3r4，down_revision=m9g0a1b2c3 V0.102）；`String(16) NULL` + 单列索引（5 类 cardinality 仍走 B-tree）
+  - 🤖 关键词分类器 `app/repositories/news_classifier.py`（rule-based 5 类：财经/科技/创投/商业/其他；优先级 财经 > 科技 > 创投 > 商业 > 其他；准确率 ~70-80% 是 rule-based 上限，V0.106+ 再升级 LLM）
+  - 🛠️ `NewsFeedRepository`：`upsert_bulk` set_ 加 `category=stmt.excluded.category`（关键：防历史行永远 NULL）+ `list_items` 加 `category` filter（与 date/days/site_name/language **正交叠加**）+ 新增 `list_categories()`（distinct + 频次降序）+ `backfill_categories(batch_size=500)` 启动时一次性补齐 ~64378 行
+  - 🌐 `readhub_fetcher._normalize()` 入库即调 `classify()` 填入 category；新条目不会留 NULL
+  - ⏰ `main.py` lifespan `_backfill_news_categories()`（`spawn_background` 异步，6-10s 完成；启动过渡期少数 NULL 不阻塞）
+  - 🔌 `GET /api/v1/news-feed/items` 新增 `category` query param（max_length=16）；新端点 `GET /api/v1/news-feed/categories`（DB distinct + 频次降序）
+  - 🏷️ `NewsFeedItemOut` schema 加 `category: str | None` 字段（V0.78.0 NULL 纪律：未分类则 None）
+  - 🖥️ `headlines.html` 工具栏新增 `<select id="categorySel">`（5 控件后，第 5 位）
+  - 🖥️ `headlines.js` `currentCategory` state + `renderCategoryOptions()`（合并「DB 频次降序 + 固定 5 类兜底」并去重，5 类一定可选；i18n key `headlines.cat_{finance|tech|vc|business|other}`）+ bindToolbar change handler
+  - 🌐 i18n +6 keys × 3 语 = 18 条翻译：`headlines.filter_category` / `cat_finance` / `cat_tech` / `cat_vc` / `cat_business` / `cat_other`
+  - 🧪 分类器 9 例 + 仓储 7 例（filter / 联 site / 联 date / 联 days / distinct / backfill / 幂等 / upsert 更新）+ API 6 例（filter / 422 / 联 date / 联 days / /categories / 字段回归）+ puppeteer 8 状态验收（`scripts/_verify_category_filter.mjs`）
+
+### Discipline
+
+- 📐 **4 处版本同步**（V0.100.1 教训）：`__version__` / `pyproject.toml` / `sw.js VERSION` 同步 bump `v0.105.0`；`uv.lock` 同步 lockfile
+- 📐 **改 static 立即 bump SW**（V0.100.1）：C4 bump `v0.104.0 → v0.104.1`（中间版本），C5 release bump `v0.104.1 → v0.105.0`（最终版本）
+- 📐 **5 commit 顺序**：feat(repo) → feat(api) → test → feat(static) → chore(release)（沿用 V0.100/V0.103/V0.104 模式）
+- 📐 **正交叠加**：`category` 与 V0.104 `date` / V0.102 `days` / V0.102 `site_name` / V0.102 `language` 完全正交，切换 category 不清其他 state
+- 📐 **卡片不显类目 badge**（设计取舍）：让分类纯粹是筛选轴，不污染卡片视觉；用户没要求就不加
+
+---
+
+## [V0.104.0] · 2026-10-19
+
 ### Added
 
 - 📰 **今日要闻**（readhub 财经新闻流） —— 6 commit
