@@ -103,6 +103,20 @@ class NewsFeedRepository:
         rows = (await self._session.execute(stmt)).all()
         return [r[0] for r in rows]
 
+    async def find_by_external(
+        self, external_id: int, source: str = "readhub"
+    ) -> NewsFeedItem | None:
+        """按 ``(external_id, source)`` 取单条（V0.103 收藏回填快照用）。
+
+        Returns:
+            匹配的行；不存在则 None。
+        """
+        stmt = select(NewsFeedItem).where(
+            NewsFeedItem.external_id == external_id,
+            NewsFeedItem.source == source,
+        )
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
     async def get_status(self) -> dict:
         """取状态摘要：last_refresh + total + 24h 新增数。"""
         now = datetime.now(timezone.utc)
