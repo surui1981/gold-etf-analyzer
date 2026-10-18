@@ -12,7 +12,17 @@
 
 ## [Unreleased]
 
-（暂无）
+### Added
+
+- 📰 **今日要闻**（readhub 财经新闻流） —— 6 commit
+
+  - 🗄️ `news_feed_items` 表 + alembic 迁移（V0.102 m9g0a1b2c3，down_revision=l8f9a0b1c2 ai_chat）；单表 + 5 索引（site_name / language / publish_date / fetched_at + 唯一 external_id）；`external_id` 整型 UNIQUE → dedup 主键
+  - 🏗️ ORM 模型 `NewsFeedItem` + `NewsFeedRepository`（4 维查询：days / site_name / language / limit；批量 upsert 走 `sqlite_insert().on_conflict_do_update(index_elements=['external_id'])`）
+  - 🌐 `readhub` fetcher（httpx async + 30s timeout + 1 次重试，5min 进程内 cache 避免 scheduler 与手动 refresh 撞车；`_normalize` 缺关键字段自动 drop；`NewsFeedService.refresh()` 失败仅日志 + `ok=False`，不抛异常走 V0.84 保留末次 UX）
+  - 🔌 5 REST 端点：`GET /api/v1/news-feed/{items,sites,languages,status}` + `POST /refresh`（admin 守卫，单用户模式自动豁免）
+  - ⏰ 6h 调度器（`news_feed_loop` 启动 30s 立即抓 + 00/06/12/18 UTC 4 触发点 ≈ 08/14/20/02 BJT；`NEWS_FEED_AUTO_REFRESH` env 开关，默认启用）
+  - 🖥️ `/headlines` 静态页（headlines.html + headlines.js，silver 模式拆分；3 chip 顶栏：last_refresh + total + 24h；工具栏 时间/来源/语种 下拉；BJT 日分组卡片；新 tab 跳原文）+ 3 语 i18n 21 keys + topnav 接入「情报」第 4 子页
+  - 🧪 22 测试 + 4 门禁同步（`check_routes` 16→17 alias，`check_pwa_assets` SHELL_ASSETS +3 条，`check_i18n_keys` V083_KEY_PREFIXES + `headlines.`，`test_main_app` ROOT_ALIASES 15→16）
 
 ---
 
