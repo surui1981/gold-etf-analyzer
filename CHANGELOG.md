@@ -79,6 +79,36 @@
 - 🐛 test_main_app.ROOT_ALIASES 13 → 15 同步（V0.97.0 /ask + V0.98 /home 后预存漂移） — **C5 ✅**
 - 🐛 check_routes / check_routes_test 3 处硬断言同步（14/13/16 → 16/15/18） — **C5 ✅**
 
+---
+
+## [V0.104.0] · 2026-10-19
+
+`headlines 按日期分页（单日模式 + 日期导航）` — 4 commit / 1 hotfix
+
+### Added
+
+- 📅 **headlines 单日模式 + 日期导航** —— 用户原话「我们在 headlines 添加按照新闻日期的分页功能」
+  - 🔌 `GET /api/v1/news-feed/items` 新增 2 个 query param：`date`（YYYY-MM-DD）+ `tz_offset_minutes`（带符号，BJT = +480）；与现有 `days` 互斥
+  - 🏷️ `NewsFeedListOut` 新增 3 字段：`current_date`（回显的 date）/ `has_older`（前一天是否有新闻）/ `has_newer`（后一天是否有新闻）
+  - 🗄️ `NewsFeedRepository.list_items` 新增 `date` + `tz_offset_minutes` 参数；新增 `has_items_outside_day()` 2 个 EXISTS 查询（无 COUNT，走索引）
+  - 🖥️ `headlines.html` 工具栏新增 `#dateNav`：◀ / `<input type="date">` / ▶ / 回到今日（4 控件 + 13 行 CSS）
+  - 🖥️ `headlines.js` `enterDateMode()` + `refreshDateNav()`：currentDate state + 单日/范围模式互斥 + 翻页按钮 disabled
+  - 🌐 i18n +3 keys × 3 语 = 9 条翻译：`headlines.btn_today` / `.btn_prev_day_title` / `.btn_next_day_title`
+  - 🧪 仓储 4 例 + API 6 例 + puppeteer 4 状态验收（`scripts/_verify_date_nav.mjs`）
+
+### Fixed
+
+- 🐛 `refreshDateNav()` 同步 `btnToday.hidden`（修复 loadAll 失败时回到今日按钮状态不重置的 UX bug）— **C4 修**
+
+### Discipline
+
+- `total` 字段语义保留 `len(items)`，不升级为「匹配总数」；与现有 6 个测试一致
+- 现有 `days` 模式 SQL 与 V0.103 byte-identical（`date=None` 时不进入 date 分支），0 字段破坏
+- 时区偏移符号约定：JS `getTimezoneOffset()` 返回 WEST，反转后东八区 = +480；2 个测试用例固化
+- 改 static HTML/JS → bump SW VERSION v0.103.2 → v0.104.0（按 V0.100.1 沉淀教训）
+
+[详情](docs/releases/v0.104.0.md)
+
 ### Discipline
 
 - 「剔整面 + 归一化」算法（trend.py:517-524）**保留不动**（V0.78.0 Step D 实测覆盖）
