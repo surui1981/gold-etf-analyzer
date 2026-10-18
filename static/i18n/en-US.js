@@ -36,6 +36,7 @@ window.PM_I18N_en_US = {
   "nav.review": "Decision Review",
   "nav.central_bank": "Central Bank",
   "nav.silver": "Silver Tracker",
+  "nav.headlines": "Today's Headlines",
   "nav.backtest": "Backtest",
   "nav.health": "Data Health",
   "nav.settings": "Notifications",
@@ -65,6 +66,7 @@ window.PM_I18N_en_US = {
   /* ── Brand ── */
   "brand.gold": "🏅 Gold ETF Investment Assistant",
   "brand.silver": "🪙 Silver Investment Assistant",
+  "brand.headlines": "📰 Headlines · Gold ETF",
   "brand.backtest": "⚙️ Backtest",
   "brand.health": "🩺 Data Health",
 
@@ -1305,4 +1307,27 @@ window.PM_I18N_en_US = {
   "silver.sge_quote_title": "SGE Shanghai Silver Ag99.99",
   "silver.sge_unit": "CNY/kg",
   "silver.market_label": "Market: ",
+
+  /* ── Headlines (V0.102) ── */
+  "headlines.page_title": "Headlines · Gold ETF Investment Assistant",
+  "headlines.h1": "📰 Today's Headlines",
+  "headlines.subtitle": "readhub financial news stream · refreshed every 6 hours · research only",
+  "headlines.chip_last_refresh": "Last refresh",
+  "headlines.chip_total": "Total",
+  "headlines.chip_24h": "24h new",
+  "headlines.filter_range": "Range",
+  "headlines.filter_site": "Source",
+  "headlines.filter_lang": "Lang",
+  "headlines.range_today": "Today",
+  "headlines.range_7d": "7 days",
+  "headlines.range_30d": "30 days",
+  "headlines.site_all": "All",
+  "headlines.lang_all": "All",
+  "headlines.btn_refresh_title": "Manual refresh",
+  "headlines.loading": "Loading…",
+  "headlines.empty": "No news",
+  "headlines.load_failed": "Load failed",
+  "headlines.today": "Today",
+  "headlines.yesterday": "Yesterday",
+  "headlines.footer": "gold-etf-analyzer · Headlines · source readhub",
 };

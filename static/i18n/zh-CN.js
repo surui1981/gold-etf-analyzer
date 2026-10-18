@@ -36,6 +36,7 @@ window.PM_I18N_ZH_CN = {
   "nav.review": "研判复盘",
   "nav.central_bank": "央行购金统计",
   "nav.silver": "白银追踪",
+  "nav.headlines": "今日要闻",
   "nav.backtest": "参数回测",
   "nav.health": "数据健康",
   "nav.settings": "通知中心",
@@ -65,6 +66,7 @@ window.PM_I18N_ZH_CN = {
   /* ── 品牌 ── */
   "brand.gold": "🏅 黄金价格投资辅助工具",
   "brand.silver": "🪙 白银价格投资辅助工具",
+  "brand.headlines": "📰 今日要闻 · 黄金 ETF",
   "brand.backtest": "⚙️ 参数回测",
   "brand.health": "🩺 数据健康",
 
@@ -1305,4 +1307,27 @@ window.PM_I18N_ZH_CN = {
   "silver.sge_quote_title": "SGE 上海银 Ag99.99",
   "silver.sge_unit": "元/千克",
   "silver.market_label": "市场：",
+
+  /* ── 今日要闻（V0.102）── */
+  "headlines.page_title": "今日要闻 · 黄金 ETF 投资辅助工具",
+  "headlines.h1": "📰 今日要闻",
+  "headlines.subtitle": "readhub 财经新闻流 · 每 6 小时自动刷新 · 仅供研究参考",
+  "headlines.chip_last_refresh": "上次刷新",
+  "headlines.chip_total": "总条数",
+  "headlines.chip_24h": "24h 新增",
+  "headlines.filter_range": "时间",
+  "headlines.filter_site": "来源",
+  "headlines.filter_lang": "语种",
+  "headlines.range_today": "今日",
+  "headlines.range_7d": "7 天",
+  "headlines.range_30d": "30 天",
+  "headlines.site_all": "全部",
+  "headlines.lang_all": "全部",
+  "headlines.btn_refresh_title": "手动刷新",
+  "headlines.loading": "加载中…",
+  "headlines.empty": "暂无新闻",
+  "headlines.load_failed": "加载失败",
+  "headlines.today": "今日",
+  "headlines.yesterday": "昨日",
+  "headlines.footer": "gold-etf-analyzer · 今日要闻 · 数据源 readhub",
 };

@@ -69,6 +69,7 @@
         { path: "/news",                    ico: "📰", i18n: "nav.news",         fb: "消息面评估", activeFor: ["/news", "/static/news.html"] },
         { path: "/central-bank",            ico: "🏛️", i18n: "nav.central_bank", fb: "央行购金",   activeFor: ["/central-bank", "/static/central_bank.html"] },
         { path: "/static/silver.html",      ico: "🪙", i18n: "nav.silver",       fb: "白银追踪",   activeFor: ["/static/silver.html"] },
+        { path: "/headlines",               ico: "📢", i18n: "nav.headlines",    fb: "今日要闻",   activeFor: ["/headlines", "/static/headlines.html"] },
       ],
     },
     {
@@ -99,6 +100,7 @@
     "/static/backtest.html":    { i18n: "brand.backtest", fb: "参数回测" },
     "/static/data-health.html": { i18n: "brand.health",   fb: "数据健康" },
     "/static/settings.html":    { i18n: "brand.gold",     fb: "通知中心 · 黄金 ETF" },
+    "/static/headlines.html":   { i18n: "brand.headlines", fb: "今日要闻 · 黄金 ETF" },
   };
   var DEFAULT_BRAND = { i18n: "brand.gold", fb: "黄金价格投资辅助工具" };
 
