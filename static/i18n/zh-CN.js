@@ -297,6 +297,13 @@ window.PM_I18N_ZH_CN = {
   // V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权）
   "trend.tech_grouped_badge": "[组内平均]",
   "trend.tech_weighted_badge": "[单维度加权]",
+  // V0.100：消息面未打分 → 综合指数 pending（剔 news 整面，按 tech+macro 归一化）
+  "trend.pending_chip": "消息面 pending",
+  "trend.pending_tooltip": "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）",
+  "trend.news_unscored_label": "消息面指数 — · 今日未打分",
+  "trend.news_unscored_chip": "未打分 · pending",
+  "trend.news_pending_hint": "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价",
+  "trend.combined_pending_news": "消息面未打分",
   "trend.index_panel_title": "综合趋势评估指数",
   "trend.components_title": "指数构成",
   "trend.comp_tech": "技术面",

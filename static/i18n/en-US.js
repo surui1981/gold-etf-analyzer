@@ -298,6 +298,13 @@ window.PM_I18N_en_US = {
   // V0.79.0 Step F: 5-dim tech synthesis method
   "trend.tech_grouped_badge": "[Grouped]",
   "trend.tech_weighted_badge": "[Weighted]",
+  // V0.100: News unscored → composite index pending (drop news, normalize on tech+macro)
+  "trend.pending_chip": "News pending",
+  "trend.pending_tooltip": "News unscored; combined index normalized on tech+macro (news excluded)",
+  "trend.news_unscored_label": "News index — · unscored today",
+  "trend.news_unscored_chip": "Unscored · pending",
+  "trend.news_pending_hint": "News pending → excluded from combined (30% weight dropped). Score below.",
+  "trend.combined_pending_news": "News unscored",
   "trend.index_panel_title": "Composite Trend Index",
   "trend.components_title": "Index Components",
   "trend.comp_tech": "Technical",

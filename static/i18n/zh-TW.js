@@ -210,6 +210,13 @@ window.PM_I18N_zh_TW = {
   // V0.79.0 Step F：技術面 5 維合成方式
   "trend.tech_grouped_badge": "[組內平均]",
   "trend.tech_weighted_badge": "[單維度加權]",
+  // V0.100：消息面未打分 → 綜合指數 pending（剔 news，按 tech+macro 歸一化）
+  "trend.pending_chip": "消息面 pending",
+  "trend.pending_tooltip": "消息面尚未打分，綜合指數按技術+宏觀歸一計算（暫未含消息面權重）",
+  "trend.news_unscored_label": "消息面指數 — · 今日未打分",
+  "trend.news_unscored_chip": "未打分 · pending",
+  "trend.news_pending_hint": "消息面未打分不參與綜合指數（30% 權重剔除）。去下方「今日消息面打分」完成評價",
+  "trend.combined_pending_news": "消息面未打分",
   "trend.index_panel_title": "趨勢評估指數",
   "trend.components_title": "三大維度拆解",
   "trend.chart_title": "黃金價格走勢",

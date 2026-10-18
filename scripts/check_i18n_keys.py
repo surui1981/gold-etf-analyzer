@@ -62,6 +62,9 @@ V083_KEY_PREFIXES = (
     "nav.",
     # V0.97.0：AI 智能分析页
     "ai.",
+    # V0.100：消息面未打分 → 综合指数 pending（trend.html + silver.html 共用 trend.* namespace）
+    "trend.",
+    "silver.",
 )
 
 

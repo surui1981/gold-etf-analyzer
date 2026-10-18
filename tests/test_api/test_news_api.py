@@ -15,12 +15,13 @@ API = "/api/v1/news-score"
 
 
 async def test_empty_state(client: AsyncClient) -> None:
-    """未打分：中性 50、剩余 3 次、下一个槽位为 1。"""
+    """未打分：score=None（V0.100 不再伪装中性 50）、剩余 3 次、下一个槽位为 1。"""
     r = await client.get(API)
     assert r.status_code == 200
     d = r.json()
     assert d["scored"] is False
-    assert d["score"] == 50.0
+    assert d["score"] is None
+    assert d["direction"] is None
     assert d["slots"] == []
     assert d["used_slots"] == 0
     assert d["remaining_slots"] == 3

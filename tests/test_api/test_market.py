@@ -155,13 +155,28 @@ class FakeMarketRepo:
 
 @pytest.fixture(autouse=True)
 def _override_market_repo():
-    """所有行情用例注入假数据源（行情 + 宏观）。"""
+    """所有行情用例注入假数据源（行情 + 宏观 + 消息面）。"""
     from app.main import app
 
     app.dependency_overrides[get_market_data_repository] = lambda: FakeMarketRepo()
     app.dependency_overrides[get_trend_service] = lambda: TrendService(
         FakeMarketRepo(), macro=FakeMacro()
     )
+    # V0.100：注入 FakeNews（未打分 → score=None）—— 既有 _override_market_repo 不
+    # 注入 get_news_score_service 时 FastAPI 会用真实 NewsScoreService；这里覆盖
+    # 保证行情趋势 API 在测试环境呈现「消息面未打分」状态（与 V0.100 默认一致）
+    from app.schemas.news import NewsScoreOut
+    from app.dependencies import get_news_score_service
+    from datetime import date as _date
+
+    class _FakeNewsSvc:
+        async def get_today(self) -> NewsScoreOut:
+            return NewsScoreOut(
+                score_date=_date.today(), score=None, direction=None,
+                notes="", scored=False, weighted=False, slots=[], used_slots=0,
+            )
+
+    app.dependency_overrides[get_news_score_service] = lambda: _FakeNewsSvc()
     yield
     app.dependency_overrides.clear()
 
@@ -208,6 +223,15 @@ async def test_gold_trend(client: AsyncClient) -> None:
     # 宏观参考指数
     assert body["macro"]["score"] == 50.0
     assert "宏观" in body["index"]["summary"]
+    # V0.100：消息面未打分（fixture 注入 FakeNewsNone）→ news.score=None + scored=False + pending_reason
+    assert body["news"]["score"] is None
+    assert body["news"]["scored"] is False
+    assert body["news"]["direction"] is None
+    assert body["news"]["pending_reason"]  # V0.100：未打分必带 pending_reason
+    # V0.100：news 不在 components 中；summary 含 pending 文案
+    assert "news" not in body["index"]["components"]
+    assert set(body["index"]["components"]) == {"tech", "macro"}
+    assert "消息面未打分" in body["index"]["summary"]
     # 数据时效（UX 6.1）：时效等级 + 交易时段 + 数据截止日
     fresh = body["freshness"]
     assert fresh["market"] == "ny"
@@ -380,6 +404,12 @@ async def test_silver_trend_returns_silver_trend_out(client: AsyncClient) -> Non
     # 综合指数字段存在
     assert 0 <= body["index"]["score"] <= 100
     assert body["index"]["level"] in {"strong_up", "up", "sideways", "down", "strong_down"}
+    # V0.100：消息面未打分（fixture 注入 FakeNewsNone）→ news.score=None + pending_reason
+    assert body["news"]["score"] is None
+    assert body["news"]["scored"] is False
+    assert body["news"]["pending_reason"]
+    assert "news" not in body["index"]["components"]
+    assert "消息面未打分" in body["index"]["summary"]
 
 
 async def test_silver_ny_trend_returns_silver_trend_out(client: AsyncClient) -> None:

@@ -599,13 +599,37 @@ function render(d) {
   // 追踪指数
   const idx = d.index;
   const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "var(--muted)";
-  document.getElementById("idxNum").textContent = idx.score != null ? idx.score.toFixed(1) : "—";
-  document.getElementById("idxNum").style.color = idxColor;
+  const idxNumEl = document.getElementById("idxNum");
+  idxNumEl.textContent = idx.score != null ? idx.score.toFixed(1) : "—";
+  idxNumEl.style.color = idxColor;
   const lvlTxt = { strong_up: "🚀 强势上升", up: "↗ 上升", sideways: "→ 震荡整理", down: "↘ 下降", strong_down: "📉 弱势下降" }[idx.level] || idx.level || "—";
   const badge = document.getElementById("idxBadge");
   badge.style.display = "inline-block";
   badge.style.background = idxColor;
   badge.textContent = lvlTxt;
+
+  // V0.100：消息面未打分 → 综合指数显示「pending」chip + 数字降级透明度
+  // 复用 freshness.js 的 fsh-chip fsh-warn 样式（琥珀色 + ▲ 三角）
+  const news = d.news || {};
+  const newsPending = news.scored === false;
+  const existingPending = document.getElementById("idxPendingChip");
+  if (existingPending) existingPending.remove();
+  if (newsPending && idx.score != null) {
+    const chip = document.createElement("span");
+    chip.id = "idxPendingChip";
+    chip.className = "fsh-chip fsh-warn fsh-stale-chip";
+    chip.title = (window.I18n && typeof window.I18n.t === "function")
+      ? window.I18n.t("trend.pending_tooltip", "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）")
+      : "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）";
+    chip.textContent = "▲ " + ((window.I18n && typeof window.I18n.t === "function")
+      ? window.I18n.t("trend.pending_chip", "消息面 pending")
+      : "消息面 pending");
+    badge.insertAdjacentElement("afterend", chip);
+    idxNumEl.style.opacity = "0.55";  // V0.83 fsh-stale 同模式视觉降级
+  } else {
+    idxNumEl.style.opacity = "1";
+  }
+
   document.getElementById("idxSummary").textContent = idx.summary || "—";
   // 「快照于」提示：每日评估一次，展示生成时刻便于客户判断时效
   const servedAt = d.served_at ? new Date(d.served_at) : null;
@@ -663,18 +687,33 @@ function render(d) {
   }).join("");
 
   // 消息面评估
-  const news = d.news || {};
-  const nc = news.direction === "bullish" ? "var(--up)" : news.direction === "bearish" ? "var(--down)" : "var(--muted)";
-  document.getElementById("newsInfo").textContent =
-    `消息面指数 ${news.score?.toFixed(1) ?? "—"}/100 · ${news.scored ? "今日已打分" : "未打分（中性）"}`;
-  document.getElementById("newsFactor").innerHTML = `
-    <div class="macro-row">
+  // V0.100：未打分时显式「— · 今日未打分」（替代旧「未打分（中性 50）」表述）
+  document.getElementById("newsInfo").textContent = news.scored
+    ? `消息面指数 ${news.score?.toFixed(1) ?? "—"}/100 · 今日已打分`
+    : ((window.I18n && typeof window.I18n.t === "function")
+        ? window.I18n.t("trend.news_unscored_label", "消息面指数 — · 今日未打分")
+        : "消息面指数 — · 今日未打分");
+  document.getElementById("newsFactor").innerHTML = news.scored
+    ? `<div class="macro-row">
       <span class="nm"><a href="#newsScoreCard" style="color:var(--accent);text-decoration:none">消息面打分</a></span>
       <span class="val" style="color:${nc}">${news.score?.toFixed(0) ?? "—"}</span>
       <span class="bar"><i style="width:${news.score ?? 0}%;background:${nc}"></i></span>
       <span class="dt">${news.direction ?? "—"}</span>
     </div>
-    ${news.note ? `<div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">💬 ${news.note}</div>` : ""}`;
+    ${news.note ? `<div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">💬 ${news.note}</div>` : ""}`
+    : `<div class="macro-row">
+      <span class="nm"><a href="#newsScoreCard" style="color:var(--accent);text-decoration:none">消息面打分</a></span>
+      <span class="val muted" style="color:var(--muted)">—</span>
+      <span class="bar"><i style="width:0%;background:var(--muted)"></i></span>
+      <span class="dt"><span class="fsh-chip fsh-warn fsh-stale-chip" style="font-size:10px">${(window.I18n && typeof window.I18n.t === "function")
+        ? window.I18n.t("trend.news_unscored_chip", "未打分 · pending")
+        : "未打分 · pending"}</span></span>
+    </div>
+    <div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">
+      💬 ${(window.I18n && typeof window.I18n.t === "function")
+        ? window.I18n.t("trend.news_pending_hint", "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价")
+        : "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价"}
+    </div>`;
 
   // 趋势参数维度
   // V0.78.0 Step D：score 为 null = 该维度数据不足、未参与合成 → 显示「— 未计入」
