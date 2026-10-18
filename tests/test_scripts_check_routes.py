@@ -52,8 +52,8 @@ class TestDiscoverRoutes:
         任何 main.py alias 漏注册都会被这个数捕获（防 V0.85 漏注册 /data-health 复现）。
         """
         routes = check_routes.discover_routes(fastapi_app)
-        # 13 alias + 1 sw.js = 14
-        assert len(routes) == 14, (
+        # 15 alias + 1 sw.js = 16（V0.97.0 /ask + V0.98 /home 后 15 alias）
+        assert len(routes) == 16, (
             f"反射 {len(routes)} 条；期望 14（13 alias + /sw.js）。"
             "新增 alias 必须同步更新 EXPECTED_ALIAS_PATHS + test_main_app.ROOT_ALIASES"
         )
@@ -196,8 +196,8 @@ class TestExpectedStatusConsistency:
     """
 
     def test_expected_alias_paths_count(self) -> None:
-        """EXPECTED_ALIAS_PATHS 必须正好 13 条（与 main.py alias 数同步）。"""
-        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 13
+        """EXPECTED_ALIAS_PATHS 必须正好 15 条（与 main.py alias 数同步；V0.97 /ask + V0.98 /home 后）。"""
+        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 15
 
     def test_expected_status_alias_keys_match(self) -> None:
         """EXPECTED_STATUS 的 alias 部分 key 集合 ⊇ EXPECTED_ALIAS_PATHS。"""
@@ -211,5 +211,5 @@ class TestExpectedStatusConsistency:
             )
 
     def test_expected_status_alias_keys_count(self) -> None:
-        """EXPECTED_STATUS 必须含 13 alias + /sw.js + /docs + /static/trend.html = 16。"""
-        assert len(check_routes.EXPECTED_STATUS) == 16
+        """EXPECTED_STATUS 必须含 15 alias + /sw.js + /docs + /static/trend.html = 18。"""
+        assert len(check_routes.EXPECTED_STATUS) == 18

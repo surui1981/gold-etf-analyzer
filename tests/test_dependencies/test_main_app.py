@@ -32,6 +32,7 @@ from app.main import app
 # main.py 里所有 ``@app.get`` 的根路径别名（不含 sw.js —— 单测在下方）
 ROOT_ALIASES = [
     ("/", "/static/trend.html"),
+    ("/home", "/static/home.html"),  # V0.98 场景化首页
     ("/portfolio", "/static/portfolio.html"),
     ("/weights", "/static/weights.html"),
     ("/news", "/static/news.html"),
@@ -44,6 +45,7 @@ ROOT_ALIASES = [
     ("/reset-password", "/static/reset-password.html"),
     ("/report", "/static/report.html"),  # V0.91.0 复盘报告 PDF 导出页
     ("/scoring", "/static/scoring.html"),  # V0.92.0 历史打分数据汇总
+    ("/ask", "/static/ask.html"),  # V0.97.0 AI 智能分析页
 ]
 
 
@@ -107,7 +109,7 @@ class TestRootAliases:
             and not r.path.startswith("/sw")
         ]
         # 精确数：12 个 alias + / 本身 = 13 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 13, (
+        assert len(ROOT_ALIASES) == 15, (
             "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
         )
 

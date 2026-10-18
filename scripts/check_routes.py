@@ -68,6 +68,8 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/report",
     "/scoring",
     "/ask",
+    # V0.99.0：白银 silver 已存在 RESTful alias（V0.73.0 N+16 起，sge 端点不新增 alias）
+    # V0.100：综合指数 pending 改造不新增 alias
 ]
 
 # 期望 status 表：alias → 307，特殊端点 → 各自 status
