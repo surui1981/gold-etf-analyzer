@@ -26,6 +26,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name="张三",
             publish_date=datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
             source="readhub",
+            category="财经",
         ),
         NewsFeedItem(
             external_id=1002,
@@ -38,6 +39,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name=None,
             publish_date=datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc),
             source="readhub",
+            category="财经",
         ),
         NewsFeedItem(
             external_id=1003,
@@ -50,6 +52,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name="Alice",
             publish_date=datetime(2026, 10, 17, 14, 0, tzinfo=timezone.utc),
             source="readhub",
+            category="科技",
         ),
     ]
     for r in rows:
@@ -319,3 +322,84 @@ async def test_root_redirect_to_headlines(client) -> None:  # noqa: ANN001
     r = await client.get("/headlines", follow_redirects=False)
     assert r.status_code == 307
     assert r.headers["location"] == "/static/headlines.html"
+
+
+# ──────────────── V0.105 · 类目筛选 ────────────────
+
+
+async def test_list_items_filter_category(client, db_session) -> None:  # noqa: ANN001
+    """V0.105 ``?category=财经`` → 仅 1001 / 1002（1003 是「科技」）。"""
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/items?category=财经")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 2
+    assert sorted([it["external_id"] for it in data["items"]]) == [1001, 1002]
+    # 响应里每条都带 category 字段
+    assert all(it["category"] == "财经" for it in data["items"])
+
+
+async def test_list_items_invalid_category_returns_422(client) -> None:  # noqa: ANN001
+    """V0.105 ``?category=超过 16 字符的无效字符串`` → 422（max_length=16）。"""
+    r = await client.get(
+        "/api/v1/news-feed/items",
+        params={"category": "x" * 17},
+    )
+    assert r.status_code == 422
+
+
+async def test_list_items_category_combined_with_date(client, db_session) -> None:  # noqa: ANN001
+    """V0.105 × V0.104 联动：date + category 正交叠加。
+
+    date=2026-10-18 + category=科技 → 0 条（10-18 当天 1002 是财经）
+    date=2026-10-18 + category=财经 → 1 条（1002）
+    """
+    await _seed(db_session)
+    r1 = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-18", "tz_offset_minutes": 0, "category": "科技"},
+    )
+    assert r1.status_code == 200
+    assert r1.json()["total"] == 0
+
+    r2 = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-18", "tz_offset_minutes": 0, "category": "财经"},
+    )
+    assert r2.status_code == 200
+    assert r2.json()["total"] == 1
+    assert r2.json()["items"][0]["external_id"] == 1002
+
+
+async def test_list_items_category_orthogonal_to_days(client, db_session) -> None:  # noqa: ANN001
+    """V0.105 ``days=90 + category=科技`` → 仅 1003。"""
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/items?days=90&category=科技")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["external_id"] == 1003
+
+
+async def test_list_categories_endpoint(client, db_session) -> None:  # noqa: ANN001
+    """V0.105 ``GET /api/v1/news-feed/categories`` → 频次降序：财经(2) > 科技(1)。"""
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/categories")
+    assert r.status_code == 200
+    cats = r.json()
+    assert cats == ["财经", "科技"]
+
+
+async def test_list_items_includes_category_field(client, db_session) -> None:  # noqa: ANN001
+    """V0.105 NewsFeedItemOut 增加 category 字段（回归：现有 items 字段不丢）。"""
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/items")
+    assert r.status_code == 200
+    data = r.json()
+    # 3 条 items 都应有 category 字段
+    for it in data["items"]:
+        assert "category" in it
+    # 倒序：1001(财经) > 1002(财经) > 1003(科技)
+    assert data["items"][0]["category"] == "财经"
+    assert data["items"][1]["category"] == "财经"
+    assert data["items"][2]["category"] == "科技"

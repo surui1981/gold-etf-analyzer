@@ -24,7 +24,10 @@ from app.repositories.news_feed import NewsFeedRepository
 
 
 async def _seed(db) -> None:  # noqa: ANN001
-    """3 条新闻跨 3 个日期（UTC）；与 tests/test_api/test_news_feed.py 一致。"""
+    """3 条新闻跨 3 个日期（UTC）；与 tests/test_api/test_news_feed.py 一致。
+
+    V0.105：每条带 ``category``（1001=财经 / 1002=财经 / 1003=科技）。
+    """
     rows = [
         NewsFeedItem(
             external_id=1001,
@@ -37,6 +40,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name="张三",
             publish_date=datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
             source="readhub",
+            category="财经",
         ),
         NewsFeedItem(
             external_id=1002,
@@ -49,6 +53,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name=None,
             publish_date=datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc),
             source="readhub",
+            category="财经",
         ),
         NewsFeedItem(
             external_id=1003,
@@ -61,6 +66,7 @@ async def _seed(db) -> None:  # noqa: ANN001
             author_name="Alice",
             publish_date=datetime(2026, 10, 17, 14, 0, tzinfo=timezone.utc),
             source="readhub",
+            category="科技",  # V0.105：seeded 标科技便于测过滤
         ),
     ]
     for r in rows:
@@ -191,3 +197,148 @@ async def test_has_items_outside_day_empty_window(db_session) -> None:  # noqa: 
         day_start=day_start, day_end=day_end
     )
     assert (has_older, has_newer) == (False, True)
+
+
+# ──────────────── V0.105 · 类目筛选 ────────────────
+
+
+async def test_list_items_filter_category_returns_only_match(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``category='财经'`` → 仅 1001 / 1002 两条（1003 是「科技」）。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    items = await repo.list_items(category="财经")
+    assert sorted([it.external_id for it in items]) == [1001, 1002]
+
+
+async def test_list_items_filter_category_combined_with_site(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``site_name='财联社' + category='财经'`` 交集 → 仅 1002。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    items = await repo.list_items(site_name="财联社", category="财经")
+    assert [it.external_id for it in items] == [1002]
+
+
+async def test_list_items_filter_category_orthogonal_to_date(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``date + category`` 正交叠加：date=10-18 仅 1002（财经），科技不命中。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    items = await repo.list_items(
+        date=date_t(2026, 10, 18), tz_offset_minutes=0, category="科技"
+    )
+    assert items == []  # 1002 是财经，10-18 当天没有科技
+    items2 = await repo.list_items(
+        date=date_t(2026, 10, 18), tz_offset_minutes=0, category="财经"
+    )
+    assert [it.external_id for it in items2] == [1002]
+
+
+async def test_list_items_category_orthogonal_to_days(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``days=90 + category='科技'`` → 仅 1003。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    items = await repo.list_items(days=90, category="科技")
+    assert [it.external_id for it in items] == [1003]
+
+
+async def test_list_categories_returns_distinct_sorted_by_count(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``list_categories()`` → 频次降序：财经 (2) > 科技 (1)。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    cats = await repo.list_categories()
+    assert cats == ["财经", "科技"]
+
+
+async def test_backfill_categories_classifies_null_rows(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``backfill_categories()``：所有 category=NULL 行被分类填入。
+
+    模拟「老库 NULL 行」：插入 3 条 category=NULL 行（1001 财经 / 1002 财经 / 1003 科技），
+    backfill 后应被 ``classify()`` 正确打上类目。
+    """
+    rows = [
+        NewsFeedItem(
+            external_id=2001,
+            title="美联储 11月 暂停加息",
+            summary="",
+            url="https://wallstreetcn.com/a/2001",
+            site_name="华尔街见闻",
+            publish_date=datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
+            source="readhub",
+            category=None,  # legacy NULL
+        ),
+        NewsFeedItem(
+            external_id=2002,
+            title="金价突破 2750 美元",
+            summary="美元走弱",
+            url="https://cls.cn/a/2002",
+            site_name="财联社",
+            publish_date=datetime(2026, 10, 18, 8, 0, tzinfo=timezone.utc),
+            source="readhub",
+            category=None,  # legacy NULL
+        ),
+        NewsFeedItem(
+            external_id=2003,
+            title="Powell rate cut pause",
+            summary="Fed officials",
+            url="https://reuters.com/a/2003",
+            site_name="Reuters",
+            publish_date=datetime(2026, 10, 17, 14, 0, tzinfo=timezone.utc),
+            source="readhub",
+            category=None,  # legacy NULL
+        ),
+    ]
+    for r in rows:
+        db_session.add(r)
+    await db_session.commit()
+
+    repo = NewsFeedRepository(db_session)
+    n = await repo.backfill_categories(batch_size=500)
+    assert n == 3
+
+    items = await repo.list_items()
+    by_id = {it.external_id: it.category for it in items}
+    assert by_id[2001] == "财经"
+    assert by_id[2002] == "财经"
+    # 2003 "Powell rate cut pause" + "Fed officials" + "Reuters" 无中文关键词命中 → 其他
+    assert by_id[2003] == "其他"
+
+
+async def test_backfill_categories_is_idempotent(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``backfill_categories()`` 幂等：第二次跑返回 0（无 NULL 行）。"""
+    await _seed(db_session)  # seed 全有 category
+    repo = NewsFeedRepository(db_session)
+    n = await repo.backfill_categories(batch_size=500)
+    assert n == 0
+
+
+async def test_upsert_bulk_updates_category_on_conflict(db_session) -> None:  # noqa: ANN001
+    """V0.105 ``upsert_bulk`` set_ 含 category：再次插入同 external_id 时 category 被覆盖。
+
+    模拟 readhub 偶发标题/摘要微调 + classifier 重新分类的情况。
+    """
+    # seed 一条 category=财经
+    await _seed(db_session)
+
+    # 重抓同 external_id=1001，category 改为「科技」（人工干预模拟）
+    repo = NewsFeedRepository(db_session)
+    await repo.upsert_bulk([{
+        "external_id": 1001,
+        "title": "美联储 11月 暂停加息 (修正)",
+        "summary": "AI 模型辅助分析",
+        "url": "https://wallstreetcn.com/a/1001",
+        "site_name": "华尔街见闻",
+        "language": "zh-cn",
+        "publish_date": datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
+        "fetched_at": datetime.now(timezone.utc),
+        "source": "readhub",
+        "category": "科技",  # 强制改为科技
+    }])
+    items = await repo.list_items(category="科技")
+    # 1001 被 upsert 改为「科技」，1003 原本就是「科技」→ 共 2 条
+    assert sorted([it.external_id for it in items]) == [1001, 1003]
+    # 不带 filter 应仍 3 条（upsert 不增减行数）
+    all_items = await repo.list_items()
+    assert len(all_items) == 3
+    # 1001 现在的 category 确实被覆盖为「科技」
+    item_1001 = await repo.find_by_external(1001)
+    assert item_1001 is not None
+    assert item_1001.category == "科技"
