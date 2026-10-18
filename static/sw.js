@@ -14,7 +14,9 @@
  */
 
 // V0.97.2 布局 hotfix：/ask 视口感知 + welcome 卡片 + 2/3 栏切换
-const VERSION = "v0.100.0";
+// V0.100.1 hotfix：home.html 今日要闻改 readhub 后，旧 SW 缓存里仍是 news-score 旧版（含 score 字段），
+//   bump VERSION 让 activate 阶段按 cache name 删旧 SHELL/RUNTIME，浏览器重 precache 新 home.html
+const VERSION = "v0.100.1";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -144,9 +146,15 @@ self.addEventListener("activate", (event) => {
             // V0.92.0 hotfix：清除 RUNTIME_CACHE 里 stale 的 /scoring 入口（307 → /static/scoring.html）
             // 与 /static/scoring.html 旧版 HTML —— /static/* 走 cache-first，若不清掉，
             // SHELL_CACHE 里新版永远没机会被命中。一次性清理：activate 后新条目进 SHELL_CACHE 优先。
+            // V0.100.1 hotfix：/home 同问题（首页底部 今日要闻 改 readhub 后，浏览器 SW 缓存里仍是
+            // 旧版 home.html + home.js，渲染时仍走 /api/v1/news-score/history 显分值；用户报告「没显示新闻标题」），
+            // 同样清掉 RUNTIME_CACHE 里 307 旧条目。
             .then(async () => {
                 const rt = await caches.open(RUNTIME_CACHE);
-                const stale = ["/scoring", "/static/scoring.html"];
+                const stale = [
+                    "/scoring", "/static/scoring.html",
+                    "/home", "/static/home.html",
+                ];
                 for (const url of stale) {
                     const hit = await rt.match(url);
                     if (hit) await rt.delete(url);
