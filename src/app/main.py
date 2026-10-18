@@ -119,6 +119,28 @@ async def _ensure_default_account() -> None:
         logger.warning("default account ensure failed (%s)", exc)
 
 
+async def _backfill_news_categories() -> None:
+    """V0.105：启动时一次性把 news_feed_items 历史 NULL 行打上类目标签。
+
+    - 异步、不阻塞 readiness（warm_cache 已经是 spawn_background 模式）
+    - 失败仅日志告警：分类失败不影响启动（NULL 仍可工作，仅 UI 筛选项少）
+    - 幂等：只处理 ``category IS NULL`` 行
+    - 性能：~64378 行 / 500 batch ≈ 130 批 × ~50ms ≈ 6-10s
+
+    启动后 6h scheduler 抓新条目时，``readhub_fetcher._normalize()`` 会即时
+    调 ``classify()`` 填入 category，**新条目不会留 NULL**。
+    """
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.news_feed import NewsFeedRepository
+
+        async with async_session_factory() as session:
+            n = await NewsFeedRepository(session).backfill_categories(batch_size=500)
+        logger.info("news category backfill done: %d rows", n)
+    except Exception as exc:
+        logger.warning("news category backfill failed (%s)", exc)
+
+
 async def _warm_cache() -> None:
     """非阻塞预热行情缓存 + 首日 served cache：启动后后台拉取三市场数据 + 评估核心。
 
@@ -271,6 +293,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await ensure_sqlite_optimizations(engine)
     # 单用户多账本：保障默认账本存在（承接历史数据，幂等）
     await _ensure_default_account()
+    # V0.105：news 类目历史数据回填（spawn_background 异步执行，不阻塞启动）
+    _spawn_background(_backfill_news_categories())
     logger.info("Database ready (env=%s)", settings.app_env)
     # 非阻塞预热：首屏直接命中缓存，避免长时间空白等待
     _spawn_background(_warm_cache())

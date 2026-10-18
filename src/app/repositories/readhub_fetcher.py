@@ -51,6 +51,7 @@ from typing import Any
 
 import httpx
 
+from app.repositories.news_classifier import classify
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -149,6 +150,8 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
         "language": (raw.get("language") or "").strip()[:8] or None,
         "author_name": (raw.get("authorName") or "").strip()[:128] or None,
         "publish_date": pub_dt,
+        # V0.105：入库即分类（关键词规则；upsert 时已分类行不变更）
+        "category": classify(title, (raw.get("summary") or "").strip(), site),
         # fetched_at 用 SQL DEFAULT now；source = 'readhub' 走 server_default
     }
 

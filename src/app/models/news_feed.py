@@ -73,6 +73,16 @@ class NewsFeedItem(Base):
         server_default="readhub",
         comment="数据源标识：readhub（未来可扩 多家）",
     )
+    # V0.105：关键词分类器结果（财经/科技/创投/商业/其他）
+    # - 入库时由 ``readhub_fetcher._normalize`` 调 ``classify()`` 填入
+    # - backfill：``NewsFeedRepository.backfill_categories()`` 启动时一次
+    # - 索引：UI 顶部类目筛选 + 「/categories」端点 distinct 查询
+    category: Mapped[str | None] = mapped_column(
+        String(16),
+        nullable=True,
+        index=True,
+        comment="V0.105 分类（财经/科技/创投/商业/其他），_normalize() 关键词分类器填入；启动 backfill_categories() 一次性补齐历史",
+    )
 
     __table_args__ = (UniqueConstraint("external_id", name="uq_news_feed_external_id"),)
 
