@@ -246,6 +246,15 @@ async def _start_daily_scheduler() -> None:
     except Exception as exc:
         logger.error("central bank scheduler failed to start: %s", exc)
 
+    # V0.102 ── 今日要闻 6h 刷新协程：每 6h 抓一次 readhub，启动后 30s 立即补一次
+    try:
+        from app.services.scheduler import news_feed_loop
+
+        _spawn_background(news_feed_loop())
+        logger.info("news feed scheduler started (every 6h: 00/06/12/18 UTC)")
+    except Exception as exc:
+        logger.error("news feed scheduler failed to start: %s", exc)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -464,6 +473,12 @@ async def review_page() -> RedirectResponse:
 async def central_bank_page() -> RedirectResponse:
     """世界央行黄金购买统计页（按国家 / 季度）。"""
     return RedirectResponse("/static/central_bank.html")
+
+
+@app.get("/headlines", include_in_schema=False)
+async def headlines_page() -> RedirectResponse:
+    """今日要闻页（V0.102）—— readhub 财经新闻流，每 6h 刷新。"""
+    return RedirectResponse("/static/headlines.html")
 
 
 @app.get("/data-health", include_in_schema=False)

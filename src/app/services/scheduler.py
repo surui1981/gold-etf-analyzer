@@ -53,6 +53,13 @@ CB_AUTO_REFRESH_ENV = "CENTRAL_BANK_AUTO_REFRESH"
 # 环境变量开关：日内多次预热（V0.60.0 新增，默认启用）
 INTRADAY_REFRESH_ENV = "INTRADAY_REFRESH_ENABLED"
 
+# V0.102 ── 今日要闻 6h 自动刷新
+# readhub 内部 API 匿名稳定，6h 一次足够覆盖「今日要闻」用户面（实测 1h ≈ 8-15 条）
+NEWS_FEED_AUTO_REFRESH_ENV = "NEWS_FEED_AUTO_REFRESH"
+NEWS_FEED_INTERVAL_HOURS = 6  # 00/06/12/18 UTC ≈ 08/14/20/02 BJT
+# 启动后 30s 立即抓一次（不让用户首次访问看到空表）
+NEWS_FEED_BOOTSTRAP_DELAY_SECONDS = 30.0
+
 
 def _is_cb_auto_refresh_enabled() -> bool:
     """读环境变量判断央行购金自动刷新是否启用。"""
@@ -66,6 +73,12 @@ def is_intraday_refresh_enabled() -> bool:
     if raw in ("0", "false", "no", "off", ""):
         return False
     return get_settings().intraday_refresh_enabled
+
+
+def _is_news_feed_auto_refresh_enabled() -> bool:
+    """读环境变量判断今日要闻自动刷新是否启用（V0.102）。"""
+    raw = os.environ.get(NEWS_FEED_AUTO_REFRESH_ENV, "1").strip().lower()
+    return raw not in ("0", "false", "no", "off", "")
 
 
 def next_intraday_run_utc(now_utc: datetime | None = None) -> datetime:
@@ -443,3 +456,93 @@ async def monthly_central_bank_loop() -> None:
         )
         await asyncio.sleep(wait)
         await _refresh_central_bank()
+
+
+# V0.102 ── 今日要闻 6h 自动刷新 ─────────────────────────────────────
+
+
+def next_news_feed_run_utc(now_utc: datetime | None = None) -> datetime:
+    """计算下一次 readhub 抓取的 UTC 时间。
+
+    触发时刻：00/06/12/18 UTC（≈ 08/14/20/02 BJT，对齐 6h 节奏）。
+    今日触发点都过了 → 明日 00:00 UTC。
+
+    Examples:
+        UTC 2026-10-19 03:00 → 2026-10-19 06:00 UTC
+        UTC 2026-10-19 20:00 → 2026-10-20 00:00 UTC（明日首个）
+    """
+    now = now_utc or datetime.now(timezone.utc)
+    for hour in (0, 6, 12, 18):
+        cand = now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        if cand > now:
+            return cand
+    # 今日 18:00 也过了 → 明日 00:00
+    return (now + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+
+async def _refresh_news_feed() -> int:
+    """执行一次 readhub 抓取 + 落库（V0.102）。
+
+    Returns:
+        upserted 行数；失败返回 0。
+    失败仅日志，不抛异常：避免影响调度循环下一次触发。
+    """
+    from app.repositories.db import async_session_factory
+    from app.services.news_feed import NewsFeedService
+
+    try:
+        async with async_session_factory() as session:
+            from app.repositories.news_feed import NewsFeedRepository
+
+            service = NewsFeedService(NewsFeedRepository(session))
+            result = await service.refresh(force=True)
+        if result["ok"]:
+            logger.info("News feed auto-refresh OK: %d rows", result["upserted"])
+            return int(result["upserted"])
+        logger.warning("News feed auto-refresh failed: %s", result.get("error"))
+        return 0
+    except Exception as exc:
+        logger.error("News feed auto-refresh unexpected error: %s", exc)
+        return 0
+
+
+async def news_feed_loop() -> None:
+    """无限循环：每 6h 抓一次 readhub（00/06/12/18 UTC）。
+
+    通过环境变量 ``NEWS_FEED_AUTO_REFRESH`` 控制开关；默认启用。
+    启动后 ``NEWS_FEED_BOOTSTRAP_DELAY_SECONDS``（30s）立即抓一次（不延迟到
+    下一个 6h 触发点），保证用户首次访问页面不是空表。
+    """
+    if not _is_news_feed_auto_refresh_enabled():
+        logger.info(
+            "News feed auto-refresh DISABLED by env %s=0; "
+            "use 'python -m app.scripts.refresh_news_feed' to refresh manually.",
+            NEWS_FEED_AUTO_REFRESH_ENV,
+        )
+        return
+
+    logger.info(
+        "News feed auto-refresh scheduler started: every %dh (00/06/12/18 UTC), "
+        "bootstrap in %.0fs (env %s controls switch)",
+        NEWS_FEED_INTERVAL_HOURS,
+        NEWS_FEED_BOOTSTRAP_DELAY_SECONDS,
+        NEWS_FEED_AUTO_REFRESH_ENV,
+    )
+
+    # 启动后 30s 立即抓一次（避开 lifespan 启动期资源争抢）
+    await asyncio.sleep(NEWS_FEED_BOOTSTRAP_DELAY_SECONDS)
+    await _refresh_news_feed()
+
+    while True:
+        next_run = next_news_feed_run_utc()
+        wait = max(0.0, (next_run - datetime.now(timezone.utc)).total_seconds())
+        logger.info(
+            "News feed scheduler: next run at %s (in %.0f seconds, %.1f hours)",
+            next_run.isoformat(),
+            wait,
+            wait / 3600,
+        )
+        await asyncio.sleep(wait)
+        await _refresh_news_feed()
