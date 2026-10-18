@@ -25,7 +25,7 @@
 #   - **判断 CI 是否可信，必须逐 step 看 conclusion，`skipped` ≠ 通过。**
 #
 # 设计要点：
-#   - Python matrix 3.11 / 3.12（pyproject 要求 >=3.11）
+#   - Python matrix 3.13（V0.101 C2：单版本矩阵，pyproject 升 requires-python >=3.13）
 #   - uv 缓存（~/.cache/uv + .venv）跨 job 复用
 #   - ruff 版本由 pyproject.lock 决定，不在 CI 硬锁
 #   - Action 运行时（V0.78.2）：五个 action 全部升到 Node 24 ——
@@ -64,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false  # matrix 任一失败不全停，方便定位哪个版本坏
       matrix:
-          python-version: ["3.11", "3.12"]
+          python-version: ["3.13"]
 
     steps:
       - name: Checkout
