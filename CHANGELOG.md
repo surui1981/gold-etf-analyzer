@@ -44,6 +44,14 @@
 
   - 改动：`static/home.js` `limit=5` → `limit=20`、`slice(0, 5)` → `slice(0, 20)`；`static/home.html` 3 骨架 → 5 骨架（视觉占位）
   - 4 处版本同步 bump 到 `v0.100.2`（按 V0.100.1 沉淀的「改 static 必须 bump」教训，参见 memory `v01001-sw-bump-on-static-change`）
+- 🔧 **V0.103.1 hotfix · 5 个情报子页 subnav 显示不一致** —— 用户报告「情报下面的五个超链接展示形式和其他页面不一致」
+
+  - 根因：5 个 intel 子页（消息面评估 / 央行购金 / 白银追踪 / 今日要闻 / 我的收藏）渲染同一段 `<nav class="subnav">`（topnav.js 统一生成），但容器 + 样式不一致：news/central_bank/silver 3 老页有内联 `.subnav` CSS + mount INSIDE `.wrap`（900/1040/960px），headlines/favorites 2 新页无内联 CSS + mount OUTSIDE `.wrap`（裸链接铺满 body 宽）
+  - 修复：3 commit
+    - C1 `b55b035 refactor(theme)`：`.subnav` 18 行从 news.html:112-131 抽到 `static/theme.css`，5 子页共用
+    - C2 `6379f42 refactor(static)`：news/central_bank/silver 3 老页 `<div id="topnav-mount">` + `<div id="subnav-mount">` 一起从 `<main>` 内的 `<div class="wrap">` 移到 `<main>` 之前（OUTSIDE 任何宽度限制，与 headlines/favorites 对齐），同时删 3 处 byte-identical 内联 CSS 块
+    - C3 验证：puppeteer 5 子页截图比对（`scripts/_verify_subnav_5sub.mjs`），5 个 subnav 统一为 1352px 全宽 + `rgb(255,255,255)` bg + `10px` radius + 5 tabs + 当前页 active 高亮
+  - 4 处版本同步 bump 到 `v0.103.1`（`__version__` / `pyproject.toml` / `sw.js VERSION` / `CHANGELOG.md`）—— 改 static HTML 必须 bump SW VERSION 是 V0.100.1 沉淀教训
 
 ---
 
