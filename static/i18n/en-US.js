@@ -1339,7 +1339,7 @@ window.PM_I18N_en_US = {
   "headlines.range_30d": "30 days",
   "headlines.site_all": "All",
   "headlines.lang_all": "All",
-  "headlines.btn_refresh_title": "Manual refresh",
+  "headlines.btn_refresh_title": "Fetch latest from readhub now",  // V0.107 rewrite
   "headlines.loading": "Loading…",
   "headlines.empty": "No news",
   "headlines.load_failed": "Load failed",
@@ -1358,6 +1358,9 @@ window.PM_I18N_en_US = {
   "headlines.cat_other": "Other",
   // V0.107 · BJT-daily aggregate summary
   "headlines.daily_summary_lbl": "Today",
+  // V0.107 · refresh feedback toast
+  "headlines.toast_refreshed_n": "Refresh OK, {n} new",
+  "headlines.toast_refreshed_zero": "Up to date, 0 new",
   "nav.favorites": "My Favorites",
   "brand.favorites": "⭐ My Favorites · Gold ETF",
   "favorites.page_title": "My Favorites · Gold ETF Assistant",

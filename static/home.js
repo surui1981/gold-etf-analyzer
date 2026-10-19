@@ -177,18 +177,18 @@
             if (resp.ok) {
               favBtn.classList.add('archived');
               favBtn.textContent = '★';
-              if (window.PMToast) window.PMToast.show('已收藏', 'success');
+              if (window.PM_Toast) window.PM_Toast.show('已收藏', 'success');
             } else if (resp.status === 409) {
               favBtn.classList.add('archived');
               favBtn.textContent = '★';
-              if (window.PMToast) window.PMToast.show('已收藏', 'success');
+              if (window.PM_Toast) window.PM_Toast.show('已收藏', 'success');
             } else {
               const err = await resp.text().catch(() => '');
-              if (window.PMToast) window.PMToast.show('收藏失败: HTTP ' + resp.status, 'error');
+              if (window.PM_Toast) window.PM_Toast.show('收藏失败: HTTP ' + resp.status, 'error');
               console.warn('fav failed', err);
             }
           } catch (err) {
-            if (window.PMToast) window.PMToast.show('收藏失败: ' + err.message, 'error');
+            if (window.PM_Toast) window.PM_Toast.show('收藏失败: ' + err.message, 'error');
           } finally {
             favBtn.disabled = false;
           }

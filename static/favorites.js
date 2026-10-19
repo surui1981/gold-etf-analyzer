@@ -67,8 +67,8 @@
   }
 
   function toast(msg, type) {
-    if (window.PMToast && window.PMToast.show) {
-      window.PMToast.show(msg, type || "info");
+    if (window.PM_Toast && window.PM_Toast.show) {
+      window.PM_Toast.show(msg, type || "info");
     }
   }
 

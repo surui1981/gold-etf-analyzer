@@ -1339,7 +1339,7 @@ window.PM_I18N_ZH_CN = {
   "headlines.range_30d": "30 天",
   "headlines.site_all": "全部",
   "headlines.lang_all": "全部",
-  "headlines.btn_refresh_title": "手动刷新",
+  "headlines.btn_refresh_title": "从 readhub 立即拉取最新",  // V0.107 改写
   "headlines.loading": "加载中…",
   "headlines.empty": "暂无新闻",
   "headlines.load_failed": "加载失败",
@@ -1358,6 +1358,9 @@ window.PM_I18N_ZH_CN = {
   "headlines.cat_other": "其他",
   // V0.107 · 按 BJT 日聚合摘要
   "headlines.daily_summary_lbl": "今日摘要",
+  // V0.107 · 刷新反馈 toast
+  "headlines.toast_refreshed_n": "刷新成功，新增 {n} 条",
+  "headlines.toast_refreshed_zero": "已是最新，0 条新增",
   "nav.favorites": "我的收藏",
   "brand.favorites": "⭐ 我的收藏 · 黄金 ETF",
   "favorites.page_title": "我的收藏 · 黄金 ETF 投资辅助",

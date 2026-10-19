@@ -273,15 +273,15 @@
           );
           btn.classList.add("archived");
           btn.textContent = "★";
-          if (window.PMToast) window.PMToast.show(t("favorites.toast_archived", "已收藏"), "success");
+          if (window.PM_Toast) window.PM_Toast.show(t("favorites.toast_archived", "已收藏"), "success");
         } catch (err) {
           // 409 = 已收藏（幂等）
           if (err.message && err.message.includes("409")) {
             btn.classList.add("archived");
             btn.textContent = "★";
-            if (window.PMToast) window.PMToast.show(t("favorites.toast_archived", "已收藏"), "success");
+            if (window.PM_Toast) window.PM_Toast.show(t("favorites.toast_archived", "已收藏"), "success");
           } else {
-            if (window.PMToast) window.PMToast.show("收藏失败: " + err.message, "error");
+            if (window.PM_Toast) window.PM_Toast.show("收藏失败: " + err.message, "error");
           }
         } finally {
           btn.disabled = false;
@@ -434,7 +434,16 @@
         method: "POST",
         timeoutMs: 30000,
       });
-      if (!result.ok) {
+      if (result.ok) {
+        // V0.107：success toast（之前仅 fail 弹 toast，success 静默）
+        const n = result.upserted || 0;
+        const i18nKey = n > 0
+          ? "headlines.toast_refreshed_n"
+          : "headlines.toast_refreshed_zero";
+        const msg = (window.I18n && I18n.t(i18nKey, { n })) ||
+          (n > 0 ? `刷新成功，新增 ${n} 条` : "已是最新，0 条新增");
+        if (window.PM_Toast) PM_Toast.show(msg, n > 0 ? "success" : "info");
+      } else {
         const msg = result.error || "unknown";
         if (window.PM_Toast) PM_Toast.show("⚠️ " + msg, "warn");
       }
