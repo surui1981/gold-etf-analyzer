@@ -121,6 +121,112 @@ async def test_list_items_invalid_days_returns_422(client) -> None:  # noqa: ANN
     assert r.status_code == 422
 
 
+# ──────────────── V0.104 · 单日模式 ────────────────
+
+
+async def test_list_items_by_date_returns_only_that_day(client, db_session) -> None:  # noqa: ANN001
+    """V0.104 ``date=2026-10-18&tz_offset_minutes=0`` → 仅 1002（10-18 UTC）。
+
+    seed 3 条：1001(10-19 00:30 UTC) / 1002(10-18 08:00 UTC) / 1003(10-17 14:00 UTC)。
+    date 模式 + tz=0 → [10-18 00:00 UTC, 10-19 00:00 UTC) 半开 → 命中 1002。
+    """
+    from datetime import date as date_t
+
+    await _seed(db_session)
+    r = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-18", "tz_offset_minutes": 0},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["external_id"] == 1002
+    assert data["current_date"] == "2026-10-18"
+    # 10-19 在 day_end 之后，10-17 在 day_start 之前 → 都 True
+    assert data["has_older"] is True
+    assert data["has_newer"] is True
+
+
+async def test_list_items_date_with_tz_offset_shifts_boundary(client, db_session) -> None:  # noqa: ANN001
+    """V0.104 时区偏移：date=2026-10-18 + tz=+480 (BJT) 命中 10-18 BJT 当天。
+
+    1001 是 10-19 00:30 UTC = 10-19 08:30 BJT（不在 10-18 当天）
+    1002 是 10-18 08:00 UTC = 10-18 16:00 BJT（10-18 当天 ✅）
+    1003 是 10-17 14:00 UTC = 10-17 22:00 BJT（不在 10-18 当天）
+    """
+    from datetime import date as date_t
+
+    await _seed(db_session)
+    r = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-18", "tz_offset_minutes": 480},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["external_id"] == 1002
+    # BJT 10-18 之前还有 10-17（更早）= has_older True
+    # BJT 10-18 之后还有 10-19 08:30 BJT（更新）= has_newer True
+    assert data["has_older"] is True
+    assert data["has_newer"] is True
+
+
+async def test_list_items_date_no_neighbours(client, db_session) -> None:  # noqa: ANN001
+    """V0.104 单日模式：选择最新一天（10-19）→ has_older=True, has_newer=False。
+
+    seed 中 10-19 是最新，没有更新的 → has_newer=False。
+    """
+    await _seed(db_session)
+    r = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-19", "tz_offset_minutes": 0},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 1
+    assert data["items"][0]["external_id"] == 1001
+    assert data["has_older"] is True
+    assert data["has_newer"] is False
+
+
+async def test_list_items_date_empty_day(client, db_session) -> None:  # noqa: ANN001
+    """V0.104 单日模式：选一个没有数据的日期 → total=0 + has_older/has_newer 都 True。"""
+    await _seed(db_session)
+    r = await client.get(
+        "/api/v1/news-feed/items",
+        params={"date": "2026-10-15", "tz_offset_minutes": 0},
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 0
+    assert data["items"] == []
+    assert data["current_date"] == "2026-10-15"
+    # 10-15 之前（10-17/18/19 都在之后）→ has_older=False（更早没有）
+    # 10-15 之后有 10-17/18/19 → has_newer=True
+    assert data["has_older"] is False
+    assert data["has_newer"] is True
+
+
+async def test_list_items_days_mode_has_no_date_fields(client, db_session) -> None:  # noqa: ANN001
+    """V0.104 days 模式：响应里 current_date=None, has_older/has_newer=False。
+
+    回归保护：确保 days 模式不受 date 模式字段污染。
+    """
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/items?days=7")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["current_date"] is None
+    assert data["has_older"] is False
+    assert data["has_newer"] is False
+
+
+async def test_list_items_invalid_date_returns_422(client) -> None:  # noqa: ANN001
+    """V0.104 ``date=not-a-date`` → 422（FastAPI 自动按 date 解析）。"""
+    r = await client.get("/api/v1/news-feed/items?date=not-a-date")
+    assert r.status_code == 422
+
+
 # ──────────────── sites / languages ────────────────
 
 
