@@ -1304,6 +1304,12 @@ window.PM_I18N_en_US = {
   "home.news_empty": "No headlines yet",
   "home.news_load_fail": "Failed to load today's headlines",
   "home.news_view_more": "View more →",
+  // V0.107 · 5 category labels (mirrors headlines.cat_*)
+  "home.cat_finance": "Finance",
+  "home.cat_tech": "Tech",
+  "home.cat_vc": "VC",
+  "home.cat_business": "Business",
+  "home.cat_other": "Other",
   /* V0.99 C5: silver page 3-market selector + premium table i18n */
   "silver.headline_title_3market": "📊 Silver Real-time Assessment · Trend Index × 3 Markets",
   "silver.market_etf": "ETF (562800)",
@@ -1321,7 +1327,7 @@ window.PM_I18N_en_US = {
   /* ── Headlines (V0.102) ── */
   "headlines.page_title": "Headlines · Gold ETF Investment Assistant",
   "headlines.h1": "📰 Today's Headlines",
-  "headlines.subtitle": "readhub financial news stream · refreshed every 6 hours · research only",
+  "headlines.subtitle": "readhub financial news stream · refreshed every 4 hours · research only",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "Last refresh",
   "headlines.chip_total": "Total",
   "headlines.chip_24h": "24h new",
@@ -1350,6 +1356,8 @@ window.PM_I18N_en_US = {
   "headlines.cat_vc": "VC",
   "headlines.cat_business": "Business",
   "headlines.cat_other": "Other",
+  // V0.107 · BJT-daily aggregate summary
+  "headlines.daily_summary_lbl": "Today",
   "nav.favorites": "My Favorites",
   "brand.favorites": "⭐ My Favorites · Gold ETF",
   "favorites.page_title": "My Favorites · Gold ETF Assistant",

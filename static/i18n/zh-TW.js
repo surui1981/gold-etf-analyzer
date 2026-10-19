@@ -1208,6 +1208,12 @@ window.PM_I18N_zh_TW = {
   "home.news_empty": "暫無今日要聞",
   "home.news_load_fail": "今日要聞載入失敗",
   "home.news_view_more": "查看更多 →",
+  // V0.107 · 5 類目
+  "home.cat_finance": "財經",
+  "home.cat_tech": "科技",
+  "home.cat_vc": "創投",
+  "home.cat_business": "商業",
+  "home.cat_other": "其他",
   /* V0.99 C5：白銀頁 3-market 選擇器 + 升貼水表 i18n */
   "silver.headline_title_3market": "📊 白銀即時評估摘要 · 趨勢指數 × 三市場報價",
   "silver.market_etf": "ETF（562800）",
@@ -1225,7 +1231,7 @@ window.PM_I18N_zh_TW = {
   /* ── 今日要聞（V0.102）── */
   "headlines.page_title": "今日要聞 · 黃金 ETF 投資輔助工具",
   "headlines.h1": "📰 今日要聞",
-  "headlines.subtitle": "readhub 財經新聞流 · 每 6 小時自動刷新 · 僅供研究參考",
+  "headlines.subtitle": "readhub 財經新聞流 · 每 4 小時自動刷新 · 僅供研究參考",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "上次刷新",
   "headlines.chip_total": "總條數",
   "headlines.chip_24h": "24h 新增",
@@ -1254,6 +1260,8 @@ window.PM_I18N_zh_TW = {
   "headlines.cat_vc": "創投",
   "headlines.cat_business": "商業",
   "headlines.cat_other": "其他",
+  // V0.107 · BJT 日聚合摘要
+  "headlines.daily_summary_lbl": "今日摘要",
   "nav.favorites": "我的收藏",
   "brand.favorites": "⭐ 我的收藏 · 黃金 ETF",
   "favorites.page_title": "我的收藏 · 黃金 ETF 投資輔助",

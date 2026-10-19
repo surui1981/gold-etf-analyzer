@@ -46,8 +46,13 @@
     el.textContent = t(key, el.textContent);
   });
 
-  // ── 3. 并发拉 4 个端点（allSettled = 一个挂不影响其他） ──
-  const [gold, fresh, headlines, headStatus] = await Promise.allSettled([
+  // ── 3. 并发拉 5 个端点（allSettled = 一个挂不影响其他） ──
+  // V0.107：+ 1 个 daily 聚合（O(1) 行替代实时 GROUP BY）
+  const bjtToday = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+  const [gold, fresh, headlines, headStatus, daily] = await Promise.allSettled([
     fetch('/api/v1/market/gold', { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
@@ -59,6 +64,10 @@
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
     fetch('/api/v1/news-feed/status', { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null),
+    // V0.107：按 BJT 日聚合
+    fetch(`/api/v1/news-feed/daily?date=${bjtToday}`, { headers: { accept: 'application/json' } })
       .then((r) => (r.ok ? r.json() : null))
       .catch(() => null),
   ]);
@@ -228,5 +237,27 @@
     } else {
       headChipEl.textContent = '📰 --';
     }
+  }
+
+  // ── 9. V0.107 渲染按 BJT 日聚合摘要（标题下方一行）──
+  const dailyEl = document.getElementById('homeDaily');
+  if (dailyEl) {
+    if (daily.status === 'fulfilled' && daily.value && typeof daily.value.total_count === 'number') {
+      const d = daily.value;
+      const $fin = document.getElementById('homeDailyFinance');
+      const $tech = document.getElementById('homeDailyTech');
+      const $vc = document.getElementById('homeDailyVc');
+      const $biz = document.getElementById('homeDailyBiz');
+      const $other = document.getElementById('homeDailyOther');
+      const $total = document.getElementById('homeDailyTotal');
+      if ($fin) $fin.textContent = d.finance_count;
+      if ($tech) $tech.textContent = d.tech_count;
+      if ($vc) $vc.textContent = d.vc_count;
+      if ($biz) $biz.textContent = d.biz_count;
+      if ($other) $other.textContent = d.other_count;
+      if ($total) $total.textContent = d.total_count;
+      dailyEl.hidden = false;
+    }
+    // 当日为空时 daily.value=null → 隐藏整行（避免显示「0 财经 0 科技…」干扰）
   }
 })();

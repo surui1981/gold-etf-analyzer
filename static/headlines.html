@@ -95,6 +95,25 @@
   .status-chip.bad { background: #ffe9e9; border-color: #ffc9c9; }
   .status-chip.bad .val { color: #c92a2a; }
 
+  /* V0.107：按 BJT 日聚合摘要（仿 status-row 横向 chip 风格） */
+  .daily-summary {
+    display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    margin-bottom: 14px; font-size: 12px; padding: 6px 10px;
+    background: var(--card); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .daily-summary .lbl { color: var(--muted); font-weight: 600; }
+  .daily-summary .cat-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 999px; background: var(--bg);
+  }
+  .daily-summary .cat-pill .cat-name { color: var(--muted); }
+  .daily-summary .cat-pill .cat-num { font-weight: 600; }
+  .daily-summary .total-pill {
+    margin-left: auto; font-weight: 600; padding: 2px 10px;
+    border-radius: 999px; background: var(--accent); color: #fff;
+  }
+  .daily-summary[data-loading="true"] { opacity: 0.5; }
+
   .news-list { display: flex; flex-direction: column; gap: 12px; }
   .news-card {
     background: var(--card); border: 1px solid var(--border); border-radius: 10px;
@@ -183,6 +202,17 @@
       <span class="lbl" data-i18n="headlines.chip_24h">24h 新增</span>
       <span class="val" id="val24h">--</span>
     </span>
+  </div>
+
+  <!-- V0.107：按 BJT 日聚合摘要（O(1) 行替代实时 GROUP BY） -->
+  <div class="daily-summary" id="dailySummary" data-loading="true" hidden>
+    <span class="lbl" data-i18n="headlines.daily_summary_lbl">今日</span>
+    <span class="cat-pill" data-cat="finance"><span class="cat-name" data-i18n="headlines.cat_finance">财经</span><span class="cat-num" id="dailyFinance">--</span></span>
+    <span class="cat-pill" data-cat="tech"><span class="cat-name" data-i18n="headlines.cat_tech">科技</span><span class="cat-num" id="dailyTech">--</span></span>
+    <span class="cat-pill" data-cat="vc"><span class="cat-name" data-i18n="headlines.cat_vc">创投</span><span class="cat-num" id="dailyVc">--</span></span>
+    <span class="cat-pill" data-cat="biz"><span class="cat-name" data-i18n="headlines.cat_business">商业</span><span class="cat-num" id="dailyBiz">--</span></span>
+    <span class="cat-pill" data-cat="other"><span class="cat-name" data-i18n="headlines.cat_other">其他</span><span class="cat-num" id="dailyOther">--</span></span>
+    <span class="total-pill" id="dailyTotal">--</span>
   </div>
 
   <div class="toolbar">

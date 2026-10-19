@@ -1304,6 +1304,12 @@ window.PM_I18N_ZH_CN = {
   "home.news_empty": "暂无今日要闻",
   "home.news_load_fail": "今日要闻加载失败",
   "home.news_view_more": "查看更多 →",
+  // V0.107 · 5 类目（与 headlines.cat_* 同源）
+  "home.cat_finance": "财经",
+  "home.cat_tech": "科技",
+  "home.cat_vc": "创投",
+  "home.cat_business": "商业",
+  "home.cat_other": "其他",
   /* V0.99 C5：白银页 3-market 选择器 + 升贴水表 i18n */
   "silver.headline_title_3market": "📊 白银实时评估摘要 · 趋势指数 × 三市场报价",
   "silver.market_etf": "ETF（562800）",
@@ -1321,7 +1327,7 @@ window.PM_I18N_ZH_CN = {
   /* ── 今日要闻（V0.102）── */
   "headlines.page_title": "今日要闻 · 黄金 ETF 投资辅助工具",
   "headlines.h1": "📰 今日要闻",
-  "headlines.subtitle": "readhub 财经新闻流 · 每 6 小时自动刷新 · 仅供研究参考",
+  "headlines.subtitle": "readhub 财经新闻流 · 每 4 小时自动刷新 · 仅供研究参考",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "上次刷新",
   "headlines.chip_total": "总条数",
   "headlines.chip_24h": "24h 新增",
@@ -1350,6 +1356,8 @@ window.PM_I18N_ZH_CN = {
   "headlines.cat_vc": "创投",
   "headlines.cat_business": "商业",
   "headlines.cat_other": "其他",
+  // V0.107 · 按 BJT 日聚合摘要
+  "headlines.daily_summary_lbl": "今日摘要",
   "nav.favorites": "我的收藏",
   "brand.favorites": "⭐ 我的收藏 · 黄金 ETF",
   "favorites.page_title": "我的收藏 · 黄金 ETF 投资辅助",

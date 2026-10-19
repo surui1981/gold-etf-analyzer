@@ -110,6 +110,37 @@
     }
   }
 
+  // V0.107 · 按 BJT 日聚合摘要渲染
+  // 入参：daily 行（NewsFeedDailyOut）或 null（当日为空）
+  function renderDaily(daily) {
+    const $sum = document.getElementById("dailySummary");
+    if (!$sum) return;
+    $sum.dataset.loading = "false";
+    $sum.hidden = false;
+    const $fin = document.getElementById("dailyFinance");
+    const $tech = document.getElementById("dailyTech");
+    const $vc = document.getElementById("dailyVc");
+    const $biz = document.getElementById("dailyBiz");
+    const $other = document.getElementById("dailyOther");
+    const $total = document.getElementById("dailyTotal");
+    if (daily) {
+      if ($fin) $fin.textContent = daily.finance_count;
+      if ($tech) $tech.textContent = daily.tech_count;
+      if ($vc) $vc.textContent = daily.vc_count;
+      if ($biz) $biz.textContent = daily.biz_count;
+      if ($other) $other.textContent = daily.other_count;
+      if ($total) $total.textContent = daily.total_count;
+    } else {
+      // 当日为空 → 全部显示 0
+      if ($fin) $fin.textContent = 0;
+      if ($tech) $tech.textContent = 0;
+      if ($vc) $vc.textContent = 0;
+      if ($biz) $biz.textContent = 0;
+      if ($other) $other.textContent = 0;
+      if ($total) $total.textContent = 0;
+    }
+  }
+
   // ── 工具栏下拉渲染 ──
 
   function renderSiteOptions(sites) {
@@ -326,6 +357,7 @@
   async function loadAll() {
     try {
       // 并发 4 个只读端点（status / sites / languages / V0.105 categories）+ 1 个 list
+      // V0.107：+ 1 个 daily 聚合（O(1) 行替代实时 GROUP BY）
       const url = new URL(API_BASE + "/api/v1/news-feed/items", location.origin);
       if (currentDate) {
         // V0.104 单日模式：date + tz_offset_minutes（date 优先于 days）
@@ -339,17 +371,23 @@
       if (currentLang) url.searchParams.set("language", currentLang);
       if (currentCategory) url.searchParams.set("category", currentCategory);  // V0.105
 
-      const [status, sites, langs, cats, list] = await Promise.all([
+      // V0.107：daily 端点用 BJT 今日；单日模式用 currentDate
+      const dailyDate = currentDate || todayLocal();
+      const dailyUrl = `${API_BASE}/api/v1/news-feed/daily?date=${encodeURIComponent(dailyDate)}`;
+
+      const [status, sites, langs, cats, list, daily] = await Promise.all([
         fetchJSON(API_BASE + "/api/v1/news-feed/status"),
         fetchJSON(API_BASE + "/api/v1/news-feed/sites"),
         fetchJSON(API_BASE + "/api/v1/news-feed/languages"),
         fetchJSON(API_BASE + "/api/v1/news-feed/categories").catch(() => []),  // V0.105：启动过渡期可能 404
         fetchJSON(url.toString()),
+        fetchJSON(dailyUrl).catch(() => null),  // V0.107：当日空时返回 null，不算错
       ]);
       renderStatus(status);
       renderSiteOptions(sites);
       renderLangOptions(langs);
       renderCategoryOptions(cats);  // V0.105
+      renderDaily(daily);  // V0.107
       renderItems(list.items);
       // V0.104 单日模式：根据 has_older/has_newer 翻页按钮 disabled
       if (currentDate) {
