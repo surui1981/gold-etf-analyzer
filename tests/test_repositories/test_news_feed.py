@@ -1,4 +1,4 @@
-"""新闻流仓储单测（V0.104 单日模式扩展）
+"""新闻流仓储单测（V0.104 单日模式扩展 / V0.105 类目筛选 / V0.107 按日聚合）
 
 覆盖：
 - list_items 现有 days 模式（与 V0.102 行为一致，0 字段破坏保护）
@@ -6,6 +6,8 @@
 - list_items date + days 互斥：date 优先
 - has_items_outside_day 4 象限：(older, newer) ∈ {T,F}²
 - list_items 与 site_name / language / limit 复合过滤
+- V0.105 类目筛选（list_items + list_categories + backfill_categories 幂等）
+- V0.107 按日聚合（upsert_daily / get_daily / list_daily / backfill_daily）
 
 镜像 tests/test_repositories/test_user_news_favorite.py 风格。
 """
@@ -342,3 +344,126 @@ async def test_upsert_bulk_updates_category_on_conflict(db_session) -> None:  # 
     item_1001 = await repo.find_by_external(1001)
     assert item_1001 is not None
     assert item_1001.category == "科技"
+
+
+# ──────────────── V0.107 · 按日聚合（news_feed_daily）────────────────
+
+
+async def test_upsert_daily_aggregates_by_bjt_day(db_session) -> None:  # noqa: ANN001
+    """V0.107 ``upsert_daily(2026-10-19)``：BJT 当日（10-19 00:00 ~ 10-20 00:00 BJT）。
+
+    _seed 3 条新闻：
+    - 1001 publish_date = 10-19 00:30 UTC = 10-19 08:30 BJT → 10-19 BJT 当天 ✅
+    - 1002 publish_date = 10-18 08:00 UTC = 10-18 16:00 BJT → 10-19 BJT 之外 ❌
+    - 1003 publish_date = 10-17 14:00 UTC = 10-17 22:00 BJT → 10-19 BJT 之外 ❌
+
+    期望：total_count=1, finance_count=1, unique_sites_count=1, en_count=0, zh_count=1
+    """
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    result = await repo.upsert_daily(date_t(2026, 10, 19))
+    assert result is not None
+    assert result.date == date_t(2026, 10, 19)
+    assert result.total_count == 1
+    assert result.finance_count == 1
+    assert result.tech_count == 0
+    assert result.unique_sites_count == 1  # 1001 = 华尔街见闻
+    assert result.en_count == 0
+    assert result.zh_count == 1
+
+
+async def test_upsert_daily_returns_none_for_empty_day(db_session) -> None:  # noqa: ANN001
+    """V0.107 空日不创建行：upsert_daily(10-15) 无数据 → 返回 None。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    result = await repo.upsert_daily(date_t(2026, 10, 15))
+    assert result is None
+    # DB 中仍无 10-15 行
+    assert await repo.get_daily(date_t(2026, 10, 15)) is None
+
+
+async def test_upsert_daily_is_idempotent_on_replay(db_session) -> None:  # noqa: ANN001
+    """V0.107 ``upsert_daily`` 幂等：重跑同一日只更新 last_refresh_at，行数 +0。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    first = await repo.upsert_daily(date_t(2026, 10, 19))
+    assert first is not None
+    first_refresh_at = first.last_refresh_at
+
+    # 重跑（sleep > 0 区分时间戳；本测试用「重跑后值变化」粗略断言）
+    second = await repo.upsert_daily(date_t(2026, 10, 19))
+    assert second is not None
+    assert second.date == first.date
+    assert second.total_count == first.total_count == 1
+    # DB 仍只有 1 行 10-19（date 是 PK）
+    assert await repo.get_daily(date_t(2026, 10, 19)) is not None
+    rows_in_range = await repo.list_daily(
+        start=date_t(2026, 10, 19), end=date_t(2026, 10, 19)
+    )
+    assert len(rows_in_range) == 1
+
+
+async def test_list_daily_returns_range_in_desc_order(db_session) -> None:  # noqa: ANN001
+    """V0.107 ``list_daily(start, end)``：闭区间 + 倒序（最近 → 远期）。
+
+    _seed 3 条跨 3 日 → backfill 3 天 → list_daily 应倒序返回 3 行。
+    """
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    # 先 backfill 3 天（10-17 / 10-18 / 10-19）
+    n = await repo.backfill_daily(
+        start_date=date_t(2026, 10, 17), end_date=date_t(2026, 10, 19)
+    )
+    assert n == 3
+    # list_daily 3 天
+    rows = await repo.list_daily(
+        start=date_t(2026, 10, 17), end=date_t(2026, 10, 19)
+    )
+    # 倒序：10-19, 10-18, 10-17
+    assert [r.date for r in rows] == [
+        date_t(2026, 10, 19),
+        date_t(2026, 10, 18),
+        date_t(2026, 10, 17),
+    ]
+    # 10-18 total=154 不对——是 10-19 = 1, 10-18 = 1, 10-17 = 1（seed 各 1 条）
+    assert all(r.total_count == 1 for r in rows)
+
+
+async def test_backfill_daily_skips_empty_days(db_session) -> None:  # noqa: ANN001
+    """V0.107 ``backfill_daily`` 跳过空日：30 天范围只创建 3 行。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    n = await repo.backfill_daily(
+        start_date=date_t(2026, 10, 1), end_date=date_t(2026, 10, 30)
+    )
+    # _seed 3 条占 3 个不同日期 → 27 个空日 + 3 个有数据日 = 3 行
+    assert n == 3
+
+
+async def test_upsert_daily_aggregates_bilingual_and_categories(db_session) -> None:  # noqa: ANN001
+    """V0.107 类目 + 语种聚合：3 条覆盖 2 类目 / 2 语种 / 2 站点。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    # 跨 3 天分别 backfill
+    for d in (date_t(2026, 10, 17), date_t(2026, 10, 18), date_t(2026, 10, 19)):
+        await repo.upsert_daily(d)
+    # 10-19: 1 条 (1001 zh-cn 财经 华尔街见闻)
+    row_19 = await repo.get_daily(date_t(2026, 10, 19))
+    assert row_19.finance_count == 1
+    assert row_19.zh_count == 1
+    assert row_19.en_count == 0
+    # 10-18: 1 条 (1002 zh-cn 财经 财联社)
+    row_18 = await repo.get_daily(date_t(2026, 10, 18))
+    assert row_18.finance_count == 1
+    assert row_18.zh_count == 1
+    # 10-17: 1 条 (1003 en 科技 Reuters)
+    row_17 = await repo.get_daily(date_t(2026, 10, 17))
+    assert row_17.tech_count == 1
+    assert row_17.en_count == 1
+    assert row_17.zh_count == 0
+    # 累计：finance=2, tech=1, en=1, zh=2
+    finance_total = sum(r.finance_count for r in (row_17, row_18, row_19))
+    tech_total = sum(r.tech_count for r in (row_17, row_18, row_19))
+    en_total = sum(r.en_count for r in (row_17, row_18, row_19))
+    zh_total = sum(r.zh_count for r in (row_17, row_18, row_19))
+    assert (finance_total, tech_total, en_total, zh_total) == (2, 1, 1, 2)

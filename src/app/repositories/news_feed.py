@@ -1,4 +1,4 @@
-"""新闻流仓储：readhub 财经新闻 CRUD（V0.102 / V0.104 单日模式扩展 / V0.105 类目筛选）
+"""新闻流仓储：readhub 财经新闻 CRUD（V0.102 / V0.104 单日模式 / V0.105 类目 / V0.107 按日聚合）
 
 设计要点：
 - 纯 CRUD 仓储，**不**做业务编排（业务在 ``services/news_feed.py``）
@@ -12,17 +12,23 @@
   - 返回 ``(has_older, has_newer)``，供前端禁用「前一天/后一天」按钮
 - 状态查询：last_refresh（最新 fetched_at）+ total + 24h 新增数
 - V0.105 类目回填：``backfill_categories()`` 启动时一次性处理 NULL 行
+- V0.107 按日聚合：``upsert_daily(target_date)`` 重建指定 BJT 日行；
+  ``backfill_daily(start, end)`` 启动 lifespan 一次性回填
+  - BJT 边界计算：``target_date`` 是 BJT 日期，转 UTC 区间
+    ``[target_date 00:00 BJT, target_date+1 00:00 BJT)``，
+    用 ``datetime.combine(target_date, time.min, tzinfo=BJT)`` 构造边界
+  - 当日为空 → **不**创建空行（保留「DB 反映实际数据」原则）
 """
 
 from __future__ import annotations
 
 from datetime import date as date_t, datetime, time, timedelta, timezone
 
-from sqlalchemy import and_, desc, distinct, func, literal, select, update
+from sqlalchemy import and_, case, desc, distinct, func, literal, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.news_feed import NewsFeedItem
+from app.models.news_feed import NewsFeedDaily, NewsFeedItem
 from app.repositories.news_classifier import classify
 from app.utils.logger import get_logger
 
@@ -274,4 +280,157 @@ class NewsFeedRepository:
                 break  # 不到 1 批说明刷完了
         if total > 0:
             logger.info("backfill_categories DONE: %d rows backfilled", total)
+        return total
+
+    # ────────────── V0.107 按日聚合 ──────────────
+
+    @staticmethod
+    def _bjt_day_bounds(target_date: date_t) -> tuple[datetime, datetime]:
+        """BJT 日期 → (start, end) UTC-aware datetime 边界（半开区间）。
+
+        例：target_date=2026-10-19 (BJT) → [2026-10-19 00:00 BJT, 2026-10-20 00:00 BJT)
+        即 [2026-10-18 16:00 UTC, 2026-10-19 16:00 UTC)
+
+        ⚠ 返回的 datetime **带 BJT tzinfo**（不是 UTC），SQLAlchemy 会在
+        WHERE 子句里自动转 UTC 比较（DateTime(timezone=True) 列）。
+        """
+        bjt_tz = timezone(timedelta(hours=8))
+        day_start = datetime.combine(target_date, time.min, tzinfo=bjt_tz)
+        day_end = datetime.combine(target_date + timedelta(days=1), time.min, tzinfo=bjt_tz)
+        return day_start, day_end
+
+    async def upsert_daily(self, target_date: date_t) -> NewsFeedDaily | None:
+        """V0.107：重建 ``target_date``（BJT 日）的聚合行（idempotent）。
+
+        1. 从 ``news_feed_items`` 算 BJT 当日的 5 类目 / 站点 / 中英文 / 首末时间
+        2. ``INSERT ON CONFLICT(date) DO UPDATE SET ...``
+
+        Args:
+            target_date: BJT 日期（YYYY-MM-DD）
+
+        Returns:
+            ``NewsFeedDaily`` 行（新建或更新）；当日为空时返回 ``None``
+            （**不**创建空行 —— 保留「DB 反映实际数据」原则）
+        """
+        day_start, day_end = self._bjt_day_bounds(target_date)
+
+        # 1. 单行聚合：5 类目计数 + 独立站点 + 中英文 + 首末时间
+        agg_stmt = (
+            select(
+                func.count(NewsFeedItem.id).label("total"),
+                func.sum(case((NewsFeedItem.category == "财经", 1), else_=0)).label(
+                    "finance"
+                ),
+                func.sum(case((NewsFeedItem.category == "科技", 1), else_=0)).label(
+                    "tech"
+                ),
+                func.sum(case((NewsFeedItem.category == "创投", 1), else_=0)).label("vc"),
+                func.sum(case((NewsFeedItem.category == "商业", 1), else_=0)).label("biz"),
+                func.sum(case((NewsFeedItem.category == "其他", 1), else_=0)).label(
+                    "other"
+                ),
+                func.count(distinct(NewsFeedItem.site_name)).label("unique_sites"),
+                func.sum(case((NewsFeedItem.language == "en", 1), else_=0)).label("en"),
+                func.sum(case((NewsFeedItem.language.like("zh%"), 1), else_=0)).label(
+                    "zh"
+                ),
+                func.min(NewsFeedItem.publish_date).label("first_pub"),
+                func.max(NewsFeedItem.publish_date).label("last_pub"),
+            )
+            .where(
+                and_(
+                    NewsFeedItem.publish_date >= day_start,
+                    NewsFeedItem.publish_date < day_end,
+                )
+            )
+        )
+        row = (await self._session.execute(agg_stmt)).one()
+        total = int(row.total or 0)
+
+        # 2. 当日为空 → 不创建空行
+        if total == 0:
+            return None
+
+        # 3. Upsert：date PK 冲突时全字段更新（除 date 主键自身）
+        now_utc = datetime.now(timezone.utc)
+        payload = {
+            "date": target_date,
+            "total_count": total,
+            "finance_count": int(row.finance or 0),
+            "tech_count": int(row.tech or 0),
+            "vc_count": int(row.vc or 0),
+            "biz_count": int(row.biz or 0),
+            "other_count": int(row.other or 0),
+            "unique_sites_count": int(row.unique_sites or 0),
+            "en_count": int(row.en or 0),
+            "zh_count": int(row.zh or 0),
+            "first_publish_at": row.first_pub,
+            "last_publish_at": row.last_pub,
+            "last_refresh_at": now_utc,
+        }
+        stmt = sqlite_insert(NewsFeedDaily).values(payload)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["date"],
+            set_={k: stmt.excluded[k] for k in payload if k != "date"},
+        )
+        await self._session.execute(stmt)
+        await self._session.commit()
+        return await self.get_daily(target_date)
+
+    async def get_daily(self, target_date: date_t) -> NewsFeedDaily | None:
+        """V0.107：取指定 BJT 日的聚合行（无则 None）。"""
+        stmt = select(NewsFeedDaily).where(NewsFeedDaily.date == target_date)
+        return (await self._session.execute(stmt)).scalar_one_or_none()
+
+    async def list_daily(
+        self, *, start: date_t, end: date_t
+    ) -> list[NewsFeedDaily]:
+        """V0.107：取 BJT 日期区间 [start, end] 的聚合行（闭区间，倒序）。
+
+        闭区间（含 start 和 end）+ 倒序（最近日期在前），与 ``list_items`` 的
+        默认排序保持一致。
+        """
+        stmt = (
+            select(NewsFeedDaily)
+            .where(and_(NewsFeedDaily.date >= start, NewsFeedDaily.date <= end))
+            .order_by(desc(NewsFeedDaily.date))
+        )
+        return list((await self._session.execute(stmt)).scalars().all())
+
+    async def backfill_daily(
+        self, *, start_date: date_t, end_date: date_t | None = None
+    ) -> int:
+        """V0.107：逐日重建 [start_date, end_date] 闭区间（仿 backfill_categories）。
+
+        Args:
+            start_date: 起始 BJT 日（含）
+            end_date: 结束 BJT 日（含），None 时 = start_date（单日）
+
+        Returns:
+            本次回填创建 / 更新的天数（不含「当日为空」跳过的天数）
+        """
+        if end_date is None:
+            end_date = start_date
+        if end_date < start_date:
+            return 0
+        total = 0
+        current = start_date
+        one_day = timedelta(days=1)
+        while current <= end_date:
+            try:
+                result = await self.upsert_daily(current)
+            except Exception as exc:  # 防止单日 SQL 异常中断整段
+                logger.error("backfill_daily failed at %s: %s", current, exc)
+                current += one_day
+                continue
+            if result is not None:
+                total += 1
+            current += one_day
+        if total > 0:
+            logger.info(
+                "backfill_daily DONE: %d days backfilled (range %s..%s)",
+                total,
+                start_date,
+                end_date,
+            )
         return total
