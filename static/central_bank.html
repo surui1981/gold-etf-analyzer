@@ -146,26 +146,7 @@
   .legend-list .sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
   /* 表格容器（明细表可能很长，加 max-height 滚动） */
   .scroll-x { overflow-x: auto; }
-  /* V0.98 C7 · 双层导航底 row（sub-tabs；与中央 topnav 同源） */
-  .subnav { background: var(--card, #ffffff); border: 1px solid var(--border);
-    border-radius: 10px; padding: 6px 10px; margin-bottom: 12px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.06); }
-  .subnav .subnav-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .subnav .subnav-label { font-size: 12px; color: var(--muted);
-    padding: 0 8px 0 4px; border-right: 1px solid var(--border); font-weight: 600;
-    white-space: nowrap; }
-  .subnav .subnav-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
-  .subnav a { display: inline-flex; align-items: center; gap: 5px;
-    color: var(--text, #1f2329); text-decoration: none; font-size: 13px;
-    padding: 5px 11px; border-radius: 6px; transition: background .15s, color .15s;
-    border: 1px solid transparent; }
-  .subnav a .sub-ico { font-size: 13px; opacity: .85; }
-  .subnav a:hover { background: rgba(0,0,0,.06); border-color: rgba(0,0,0,.04); }
-  [data-theme="dark"] .subnav a:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.06); }
-  .subnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0,0,0,.15); }
-  .subnav a.active .sub-ico { opacity: 1; }
-
+  /* V0.103.1：.subnav 18 行已抽到 theme.css（5 子页共用） */
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
@@ -177,12 +158,12 @@
 <body>
 <!-- V0.69.0 skip-link -->
 <a class="skip-link" href="#main">跳到主要内容</a>
+<!-- V0.103.1：双层导航 mount 移出 .wrap（与 headlines/favorites 全宽一致） -->
+<div id="topnav-mount"></div>
+<div id="subnav-mount"></div>
+<script src="/static/topnav.js"></script>
 <main id="main" tabindex="-1">
 <div class="wrap">
-  <!-- V0.83.2 · 共享顶 nav（topnav.js 同步注入，roadmap §4.1 M）：brand + 11 链接 + 时效/警示 meta -->
-  <div id="topnav-mount"></div>
-  <div id="subnav-mount"></div>
-  <script src="/static/topnav.js"></script>
   <!-- V0.91.0：跨页上下文读 / 写（pm_ctx_v1_* 命名空间） -->
   <script src="/static/nav-context.js"></script>
   <!-- V0.91.0：跨页上下文恢复（必须在页面 bind/load 之前完成） -->
