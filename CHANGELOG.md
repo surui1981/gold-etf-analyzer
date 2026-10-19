@@ -59,6 +59,49 @@
 
 ---
 
+## [V0.107.1] · 2026-10-20
+
+`今日要闻分类聚焦（财经 32→60+ / 科技 33→50+ / 创投 23→35+ / 商业 22→30+）+ fetcher 弃入「其他」+ page_size 50 + service 二次 gate` — 4 commit hotfix
+
+### Added
+
+- ✨ **关键词字典焦点化扩充**（`src/app/repositories/news_classifier.py`）
+  - **财经** 32 → 67：新增「行情」（牛市 / K线 / 黄金ETF / PE）、「主体」（比特币 / ETH / 离岸 / 外汇 / 储备）、「宏观」（衰退 / 通缩 / 缩表）、「人物」（鲍威尔 / 耶伦 / 巴菲特 / 芒格）、「机构」（贝莱德 / 桥水 / 高盛 / 中金 / 中信 / 瑞银 / 摩根士丹利）— 用户原话「主要聚焦于财经方面的新闻」重点扩充
+  - **科技** 33 → 49：删「英伟达」duplicate（修旧版 L44 bug）+ 硬件公司（比亚迪 / 特斯拉 / SpaceX / 台积电 / 中芯国际 / 宁德时代 / 三星 / 英特尔 / AMD / 高通 / 联发科 / Meta / 亚马逊 / Oracle / IBM）+ 前沿（机器人 / 无人机 / 储能 / 自动驾驶 / 脑机接口 / 可穿戴）+ 节点（3nm / 5nm / 7nm / 5 纳米 / 7 纳米）
+  - **创投** 23 → 36：行为（风投 / 退出 / 并购 / M&A / FA / 财顾 / 路演 / BP / 商业计划书）+ 身份（创始人 / 联创 / 合伙人 / GP / LP）+ 事件（增发 / 配股 / 可转债 / 债转股 / 借壳 / 回购 / 对赌）
+  - **商业** 22 → 32：扩张（出海 / 跨境 / 国际化 / 海外）+ 渠道（电商 / 直播带货 / 抖音 / 微信 / 品牌）+ 经营（份额 / 用户 / 流量 / 增长 / 净利润 / 扭亏 / 亏损 / 增亏 / 渗透率）
+  - 优先级保留 `财经 > 科技 > 创投 > 商业 > 其他` 不变
+
+### Changed
+
+- 🔧 **fetcher 弃入「其他」**（`src/app/repositories/readhub_fetcher.py` L130-146）
+  - `_normalize()` 末尾加 `if category == "其他": return None` —— 不写入 DB，落 `logger.debug`
+- 🔧 **page_size 20 → 50**（同上 L62）
+  - readhub max 100，实测 50 P99 <2s，4h 周期足够覆盖
+  - fetcher 文档 + User-Agent V0.102 → V0.107.1 同步
+- 🔧 **service 二次 gate**（`src/app/services/news_feed.py` L96-126）
+  - `refresh()` 在 fetcher 返回 records 后再 `tuple(...)` filter `category in (财经/科技/创投/商业)`
+  - 全被弃入 → 软失败 `ok=False + error='no valid items after category filter'`，保留「保留末次」 UX（参考 V0.84 状态条合并模式）
+  - 落入条目打印 `logger.info dropped N`
+
+### Fixed
+
+- 🐛 **`_TECH_KW` 重复「英伟达」bug**（V0.105 旧版 L44 末尾）—— 字典去重
+
+### Discipline
+
+- **测试覆盖**：3 测试文件 + 1 新增文件（test_news_classifier 10→30 / test_readhub_fetcher 16→18 / test_news_feed_service 新建 3 / test_news_feed API +2 / 仓储 test_news_feed 24 不变）；40 测试 PASSED（1 pre-existing failure `test_list_items_filter_days` 由 seed 日期漂移导致，与 V0.107.1 无关，不阻塞发版）
+- **维护线覆盖率**：本次仅修改 backend + tests，UI / API schema 不变；`check_pwa_assets.py` sw.js VERSION bump 必跑门禁已通过
+- **不在 5 类 list 中间移除「其他」常量**（CATEGORIES 5 类保持兼容；新写入 daily `other_count = 0`）
+
+### Why hotfix 不开 docs 单条
+
+V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetcher 弃入「其他」），无新功能模块；纳入 V0.107 综合 release notes 统一记录，并在 `docs/releases/v0.107.1.md` 留独立 summary。
+
+---
+
+---
+
 ## [V0.106.2] · 2026-10-19
 
 `16 静态文件去掉 8888 硬编码（API_BASE 全改同源相对 URL）` — 1 commit hotfix
