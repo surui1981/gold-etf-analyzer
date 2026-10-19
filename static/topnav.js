@@ -4,11 +4,18 @@
  * 设计动机（V0.98 C7）：
  * 之前顶 nav 14 个链接平铺 1 行，wrap 后排版乱、首屏占用高、用户找不到
  * 所属「场景」。改为：
- *   - 顶 nav 7 个**场景入口**（首页 + 决策 + 持仓 + 情报 + 配置 + AI + 健康）
+ *   - 顶 nav 8 个**场景入口**（首页 + 今日要闻 + 决策 + 持仓 + 情报 + 配置 + AI + 健康）
  *   - 底 nav **sub-tabs**：当前场景下子页快捷切换（决策 4 / 持仓 2 / 情报 3 / 配置 2）
- *   - 3 个独立顶项（首页 / AI / 健康）无 sub-tabs
+ *   - 3 个独立顶项（首页 / 今日要闻 / AI / 健康）无 sub-tabs
  *   - active 判定：当前 pathname → 找所属 scene → 顶高亮 + 底高亮子页
  *   - 报告导出按钮（V0.91.0）保留在顶 nav 右侧
+ *
+ * 重要变更（V0.106 · 今日要闻提升到顶 nav）：
+ *   - 「今日要闻」从「情报」子页（5 个之一）提升为顶级场景，排第 2 位（首页之后 / 决策之前）
+ *   - 「情报」子页剩 4 个：消息面评估 / 央行购金 / 白银追踪 / 我的收藏
+ *   - 用户原话「当前今日要闻页面连接 提升到 导航栏 首页之后 决策之前」：
+ *     1) 让用户首屏即可达要闻（不必点开情报再下钻）
+ *     2) 与「首页 / 决策 / 持仓」三大主操作并列，符合 V0.98 双层导航语义
  *
  * 设计取舍（与 V0.91.0 沿用）：
  * 1. **同步注入（非 defer）**：避免 FOUC。script 紧跟 placeholder。
@@ -18,7 +25,7 @@
  * 5. **双 mount 同步注入**：
  *    - `<div id="topnav-mount">` → 顶 nav
  *    - `<div id="subnav-mount">` → 底 sub-tabs（紧跟 topnav-mount）
- *    - 找不到 subnav-mount 时仅渲染顶 nav（首页 / AI / 健康 3 页无 subnav）
+ *    - 找不到 subnav-mount 时仅渲染顶 nav（首页 / 今日要闻 / AI / 健康 4 页无 subnav）
  *
  * 加载方式：
  *   <div id="topnav-mount"></div>
@@ -29,17 +36,22 @@
 (function () {
   "use strict";
 
-  // ────────────── 7 个顶 nav 场景（顺序 = 显示顺序）──────────────
+  // ────────────── 8 个顶 nav 场景（顺序 = 显示顺序）──────────────
   // 每个 scene 是一个「顶级分类」：含子页 sub-tabs + 自己的入口 URL
   //  - key: scene 唯一标识
   //  - path: 顶 nav 点击时跳的 URL（场景默认页）
   //  - ico / i18n / fb: 顶 nav 显示
   //  - subpages: 子页数组（activeFor 按 pathname 匹配）
-  // 顶项无 subpages 的（首页 / AI / 健康）：path 是入口，subnav-mount 不渲染
+  // 顶项无 subpages 的（首页 / 今日要闻 / AI / 健康）：path 是入口，subnav-mount 不渲染
   var SCENES = [
     {
       key: "home", path: "/home", activeFor: ["/home", "/static/home.html"],
       ico: "🏠", i18n: "nav.home", fb: "首页",
+    },
+    {
+      key: "headlines", path: "/headlines",
+      activeFor: ["/headlines", "/static/headlines.html"],
+      ico: "📢", i18n: "nav.headlines", fb: "今日要闻",
     },
     {
       key: "decision", path: "/scoring",
@@ -69,7 +81,6 @@
         { path: "/news",                    ico: "📰", i18n: "nav.news",         fb: "消息面评估", activeFor: ["/news", "/static/news.html"] },
         { path: "/central-bank",            ico: "🏛️", i18n: "nav.central_bank", fb: "央行购金",   activeFor: ["/central-bank", "/static/central_bank.html"] },
         { path: "/static/silver.html",      ico: "🪙", i18n: "nav.silver",       fb: "白银追踪",   activeFor: ["/static/silver.html"] },
-        { path: "/headlines",               ico: "📢", i18n: "nav.headlines",    fb: "今日要闻",   activeFor: ["/headlines", "/static/headlines.html"] },
         { path: "/favorites",               ico: "⭐", i18n: "nav.favorites",    fb: "我的收藏",   activeFor: ["/favorites", "/static/favorites.html"] },
       ],
     },

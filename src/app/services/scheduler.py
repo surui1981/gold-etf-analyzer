@@ -56,7 +56,10 @@ INTRADAY_REFRESH_ENV = "INTRADAY_REFRESH_ENABLED"
 # V0.102 ── 今日要闻 6h 自动刷新
 # readhub 内部 API 匿名稳定，6h 一次足够覆盖「今日要闻」用户面（实测 1h ≈ 8-15 条）
 NEWS_FEED_AUTO_REFRESH_ENV = "NEWS_FEED_AUTO_REFRESH"
-NEWS_FEED_INTERVAL_HOURS = 6  # 00/06/12/18 UTC ≈ 08/14/20/02 BJT
+NEWS_FEED_INTERVAL_HOURS = 4  # 00/04/08/12/16/20 UTC ≈ 08/12/16/20/00/04 BJT
+# V0.106 用户原话「更新策略也没有实现，修改成每四小更新一次财经新闻」：
+# 从 6h（4 触发点/日）加密到 4h（6 触发点/日），让首页顶部「今日要闻」chip
+# 更频繁更新。readhub 内部 API 1h ≈ 8-15 条新流，4h 抓一次覆盖率足够。
 # 启动后 30s 立即抓一次（不让用户首次访问看到空表）
 NEWS_FEED_BOOTSTRAP_DELAY_SECONDS = 30.0
 
@@ -458,25 +461,27 @@ async def monthly_central_bank_loop() -> None:
         await _refresh_central_bank()
 
 
-# V0.102 ── 今日要闻 6h 自动刷新 ─────────────────────────────────────
+# V0.102 ── 今日要闻自动刷新（V0.106 加密 6h → 4h）────────────
 
 
 def next_news_feed_run_utc(now_utc: datetime | None = None) -> datetime:
     """计算下一次 readhub 抓取的 UTC 时间。
 
-    触发时刻：00/06/12/18 UTC（≈ 08/14/20/02 BJT，对齐 6h 节奏）。
+    触发时刻：``NEWS_FEED_INTERVAL_HOURS`` 倍数（4h 节奏 → 00/04/08/12/16/20 UTC
+    ≈ 08/12/16/20/00/04 BJT；6h 节奏 → 00/06/12/18 UTC ≈ 08/14/20/02 BJT）。
     今日触发点都过了 → 明日 00:00 UTC。
 
     Examples:
-        UTC 2026-10-19 03:00 → 2026-10-19 06:00 UTC
-        UTC 2026-10-19 20:00 → 2026-10-20 00:00 UTC（明日首个）
+        UTC 2026-10-19 03:00 (4h 节奏) → 2026-10-19 04:00 UTC
+        UTC 2026-10-19 20:00 (4h 节奏) → 2026-10-20 00:00 UTC（明日首个）
     """
     now = now_utc or datetime.now(timezone.utc)
-    for hour in (0, 6, 12, 18):
+    hours = tuple(range(0, 24, NEWS_FEED_INTERVAL_HOURS))
+    for hour in hours:
         cand = now.replace(hour=hour, minute=0, second=0, microsecond=0)
         if cand > now:
             return cand
-    # 今日 18:00 也过了 → 明日 00:00
+    # 今日最后一个触发点也过了 → 明日 00:00
     return (now + timedelta(days=1)).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
@@ -509,11 +514,11 @@ async def _refresh_news_feed() -> int:
 
 
 async def news_feed_loop() -> None:
-    """无限循环：每 6h 抓一次 readhub（00/06/12/18 UTC）。
+    """无限循环：每 ``NEWS_FEED_INTERVAL_HOURS`` 小时抓一次 readhub（V0.106 4h）。
 
     通过环境变量 ``NEWS_FEED_AUTO_REFRESH`` 控制开关；默认启用。
     启动后 ``NEWS_FEED_BOOTSTRAP_DELAY_SECONDS``（30s）立即抓一次（不延迟到
-    下一个 6h 触发点），保证用户首次访问页面不是空表。
+    下一个触发点），保证用户首次访问页面不是空表。
     """
     if not _is_news_feed_auto_refresh_enabled():
         logger.info(
@@ -523,10 +528,12 @@ async def news_feed_loop() -> None:
         )
         return
 
+    hours_label = "/".join(f"{h:02d}" for h in range(0, 24, NEWS_FEED_INTERVAL_HOURS))
     logger.info(
-        "News feed auto-refresh scheduler started: every %dh (00/06/12/18 UTC), "
+        "News feed auto-refresh scheduler started: every %dh (%s UTC), "
         "bootstrap in %.0fs (env %s controls switch)",
         NEWS_FEED_INTERVAL_HOURS,
+        hours_label,
         NEWS_FEED_BOOTSTRAP_DELAY_SECONDS,
         NEWS_FEED_AUTO_REFRESH_ENV,
     )
