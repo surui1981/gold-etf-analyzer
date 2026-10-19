@@ -19,7 +19,7 @@
 // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice(0,5)→slice(0,20)、limit=5→limit=20、3 骨架→5 骨架）
 // V0.103.0 正式发版：/favorites 档案管理页 + /api/v1/favorites/* 9 端点
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
-const VERSION = "v0.106.0";  // V0.106 release：v0.105.1 → v0.106.0（4 处版本同步：__version__ / pyproject.toml / sw.js / CHANGELOG）
+const VERSION = "v0.106.1";  // V0.106.1 hotfix：home 场景卡同步 topnav 8 scene（+今日要闻 +数据健康 +3 卡 sub-items 同步 + i18n 3 语）
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

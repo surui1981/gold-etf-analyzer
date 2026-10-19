@@ -14,6 +14,35 @@
 
 ---
 
+## [V0.106.1] · 2026-10-19
+
+`home 场景卡同步 topnav 8 scene（hotfix · 不发 docs）` — 1 commit
+
+### Changed
+
+- 🏠 **home.html 场景卡 5 → 7 张**（与顶 nav 8 scene 对齐：topnav 8 个 scene 去掉「home」自身）
+
+  - 📢 新增 `scene-headlines` 今日要闻卡（顶 nav 顺序第 2 位）
+  - 🩺 新增 `scene-health` 数据健康卡（顶 nav 顺序第 8 位）
+  - 📐 重排顺序：今日要闻 → 决策 → 持仓 → 情报 → 配置 → 数据健康 → AI（AI 全宽）
+  - 🧹 整合 3 张旧卡的 sub-items 与顶 nav subpages：
+    - 决策：3 项 → 4 项（+研判复盘；今日评分→打分汇总）
+    - 持仓：3 项 → 2 项（-复盘报告：复盘已归入决策 subpage）
+    - 情报：4 项错位 → 4 项对齐（消息面评估 / 央行购金 / 白银追踪 / 我的收藏）
+  - 📝 desc 文案同步：决策「趋势 · 打分 · 回测 · 复盘」、持仓「决策 · 流水」、情报「新闻 · 央行 · 白银 · 收藏」
+
+### Discipline
+
+- 📐 **改 static 立即 bump SW**（V0.100.1 教训）：`__version__` 0.106.0 → 0.106.1 + sw.js VERSION v0.106.0 → v0.106.1 + 4 处版本同步
+- 🌐 3 语 i18n 同步：zh-CN / en-US / zh-TW 增 11 key + 改 6 key
+- 🧪 4 门禁：pwa_assets ✓ / i18n_keys ✓（0 missing / 179 in-scope）/ static_js ✓ / routes ✓（18 路由 OK）
+
+### Why hotfix 不开 docs
+
+V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scene → home 卡片同步），非新功能。`docs/releases/` 暂不新增条目，纳入 V0.107 综合 release notes 统一记录。
+
+---
+
 ## [V0.106.0] · 2026-10-19
 
 `今日要闻顶 nav 提级 + scheduler 6h→4h 加密` — 2 commit
