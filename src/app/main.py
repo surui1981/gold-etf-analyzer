@@ -127,8 +127,8 @@ async def _backfill_news_categories() -> None:
     - 幂等：只处理 ``category IS NULL`` 行
     - 性能：~64378 行 / 500 batch ≈ 130 批 × ~50ms ≈ 6-10s
 
-    启动后 6h scheduler 抓新条目时，``readhub_fetcher._normalize()`` 会即时
-    调 ``classify()`` 填入 category，**新条目不会留 NULL**。
+    启动后 4h scheduler 抓新条目时（V0.106 6h→4h），``readhub_fetcher._normalize()``
+    会即时调 ``classify()`` 填入 category，**新条目不会留 NULL**。
     """
     try:
         from app.repositories.db import async_session_factory
@@ -139,6 +139,38 @@ async def _backfill_news_categories() -> None:
         logger.info("news category backfill done: %d rows", n)
     except Exception as exc:
         logger.warning("news category backfill failed (%s)", exc)
+
+
+async def _backfill_news_feed_daily() -> None:
+    """V0.107：启动时一次性回填 news_feed_daily 最近 30 天。
+
+    - 异步、不阻塞 readiness（仿 _backfill_news_categories 模式）
+    - 失败仅日志告警：聚合失败不影响启动（daily 行可有可无，UI 走实时 GROUP BY 兜底）
+    - 幂等：``upsert_daily`` 用 INSERT ON CONFLICT(date) DO UPDATE
+    - 性能：30 天 × 1 行 × 1 SQL 聚合 ≈ 30ms（实测 3-10ms/日）
+
+    启动后 4h scheduler refresh 末尾会自动 rebuild_daily(BJT today + BJT yesterday)，
+    日常更新由 scheduler 维护；本函数只负责**历史 30 天**的一次性回填。
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+        from app.repositories.db import async_session_factory
+        from app.repositories.news_feed import NewsFeedRepository
+
+        bjt_tz = timezone(timedelta(hours=8))
+        bjt_today = datetime.now(bjt_tz).date()
+        start_date = bjt_today - timedelta(days=30)
+
+        async with async_session_factory() as session:
+            n = await NewsFeedRepository(session).backfill_daily(
+                start_date=start_date, end_date=bjt_today
+            )
+        logger.info(
+            "news feed daily backfill done: %d days (%s..%s BJT)",
+            n, start_date, bjt_today,
+        )
+    except Exception as exc:
+        logger.warning("news feed daily backfill failed (%s)", exc)
 
 
 async def _warm_cache() -> None:
@@ -295,6 +327,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await _ensure_default_account()
     # V0.105：news 类目历史数据回填（spawn_background 异步执行，不阻塞启动）
     _spawn_background(_backfill_news_categories())
+    # V0.107：news_feed_daily 最近 30 天历史聚合回填（spawn_background）
+    _spawn_background(_backfill_news_feed_daily())
     logger.info("Database ready (env=%s)", settings.app_env)
     # 非阻塞预热：首屏直接命中缓存，避免长时间空白等待
     _spawn_background(_warm_cache())

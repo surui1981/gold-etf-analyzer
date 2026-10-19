@@ -488,11 +488,15 @@ def next_news_feed_run_utc(now_utc: datetime | None = None) -> datetime:
 
 
 async def _refresh_news_feed() -> int:
-    """执行一次 readhub 抓取 + 落库（V0.102）。
+    """执行一次 readhub 抓取 + 落库（V0.102），V0.107 末尾重建日聚合。
 
     Returns:
         upserted 行数；失败返回 0。
     失败仅日志，不抛异常：避免影响调度循环下一次触发。
+
+    V0.107 daily 重建：refresh 成功后**始终**重建 BJT 当日 + BJT 昨日 2 行
+    （覆盖「跨 BJT 午夜 refresh」场景，避免昨日聚合遗漏）。
+    2 次 rebuild ≈ 20ms，可接受（idempotent + self-healing）。
     """
     from app.repositories.db import async_session_factory
     from app.services.news_feed import NewsFeedService
@@ -503,9 +507,28 @@ async def _refresh_news_feed() -> int:
 
             service = NewsFeedService(NewsFeedRepository(session))
             result = await service.refresh(force=True)
+            n_upserted = int(result["upserted"]) if result["ok"] else 0
+
+            # V0.107：refresh 成功 → 重建 BJT 当日 + BJT 昨日
+            # 即使 result.ok=False 仍尝试 rebuild：失败时仍可能有上次成功抓取的数据
+            bjt_tz = timezone(timedelta(hours=8))
+            bjt_today = datetime.now(bjt_tz).date()
+            bjt_yesterday = bjt_today - timedelta(days=1)
+            for d in (bjt_yesterday, bjt_today):  # 倒序避免同日覆盖顺序问题
+                try:
+                    rebuilt = await service.rebuild_daily(d)
+                    if rebuilt is not None:
+                        logger.info(
+                            "news_feed_daily rebuilt: %s total=%d",
+                            d,
+                            rebuilt.total_count,
+                        )
+                except Exception as exc:
+                    logger.error("rebuild_daily(%s) failed: %s", d, exc)
+
         if result["ok"]:
-            logger.info("News feed auto-refresh OK: %d rows", result["upserted"])
-            return int(result["upserted"])
+            logger.info("News feed auto-refresh OK: %d rows", n_upserted)
+            return n_upserted
         logger.warning("News feed auto-refresh failed: %s", result.get("error"))
         return 0
     except Exception as exc:
