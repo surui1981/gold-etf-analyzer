@@ -508,3 +508,23 @@ body { background: var(--bg); color: var(--text); }
 
 /* 高对比模式下加强簇标题的分隔线（1px 白线在纯黑底上已足够，仅补标题色） */
 [data-theme="hc"] .pmc-cluster-head { border-bottom-width: 2px; }
+
+/* V0.103.1 · 双层导航 subnav 样式 —— 5 子页共用（之前在 news/central_bank/silver 3 处内联） */
+.subnav { background: var(--card, #ffffff); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px 10px; margin-bottom: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.subnav .subnav-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.subnav .subnav-label { font-size: 12px; color: var(--muted);
+  padding: 0 8px 0 4px; border-right: 1px solid var(--border); font-weight: 600;
+  white-space: nowrap; }
+.subnav .subnav-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.subnav a { display: inline-flex; align-items: center; gap: 5px;
+  color: var(--text, #1f2329); text-decoration: none; font-size: 13px;
+  padding: 5px 11px; border-radius: 6px; transition: background .15s, color .15s;
+  border: 1px solid transparent; }
+.subnav a .sub-ico { font-size: 13px; opacity: .85; }
+.subnav a:hover { background: rgba(0,0,0,.06); border-color: rgba(0,0,0,.04); }
+[data-theme="dark"] .subnav a:hover { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.06); }
+.subnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+  box-shadow: 0 1px 2px rgba(0,0,0,.15); }
+.subnav a.active .sub-ico { opacity: 1; }
