@@ -67,6 +67,8 @@ V083_KEY_PREFIXES = (
     "silver.",
     # V0.102：今日要闻页（readhub 财经新闻流；nav + headlines.* 全 3 语覆盖）
     "headlines.",
+    # V0.103：我的收藏（favorites.* 全 3 语覆盖，47 键 + nav.favorites + brand.favorites）
+    "favorites.",
 )
 
 

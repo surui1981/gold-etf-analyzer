@@ -47,6 +47,7 @@ ROOT_ALIASES = [
     ("/scoring", "/static/scoring.html"),  # V0.92.0 历史打分数据汇总
     ("/ask", "/static/ask.html"),  # V0.97.0 AI 智能分析页
     ("/headlines", "/static/headlines.html"),  # V0.102 今日要闻
+    ("/favorites", "/static/favorites.html"),  # V0.103 我的收藏
 ]
 
 
@@ -110,7 +111,7 @@ class TestRootAliases:
             and not r.path.startswith("/sw")
         ]
         # 精确数：12 个 alias + / 本身 = 13 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 16, (
+        assert len(ROOT_ALIASES) == 17, (
             "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
         )
 
@@ -344,6 +345,50 @@ class TestRequireUserSingleUserFallback:
         # 标记为已加载（== ROLE_OWNER）以满足 Pydantic UserOut 序列化
         assert user.id == LEGACY_USER_ID
         assert user.role == ROLE_OWNER
+
+    async def test_favorites_endpoint_works_in_single_user_mode(
+        self, no_lifespan_client: AsyncClient
+    ) -> None:
+        """V0.103 端到端：``/api/v1/favorites/*`` 走 ``Depends(require_user)``，
+        单用户模式（auth_enabled=false 默认）下不能 401。
+
+        直连 POST → 期望 201（或 422 因 snapshot 字段缺，**不能** 401）。
+        """
+        from datetime import datetime
+        from sqlalchemy import select
+        from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
+        from app.repositories.db import async_session_factory
+
+        # no_lifespan_client 跳过了 main._bootstrap_default_user，需手动建 LEGACY_USER
+        async with async_session_factory() as session:
+            existing = (await session.execute(
+                select(User).where(User.id == LEGACY_USER_ID)
+            )).scalar_one_or_none()
+            if existing is None:
+                session.add(User(
+                    id=LEGACY_USER_ID, email="legacy@test",
+                    display_name="Legacy", password_hash="x",
+                    role=ROLE_OWNER, is_active=True,
+                    created_at=datetime(2026, 1, 1),
+                    last_login_at=datetime(2026, 1, 1),
+                ))
+                await session.commit()
+
+        # 收藏时 news_feed_items 无对应行 → 直接传 snapshot
+        r = await no_lifespan_client.post(
+            "/api/v1/favorites/items",
+            json={
+                "news_external_id": 99001,
+                "title": "单用户模式收藏",
+                "url": "https://x.com/a/99001",
+                "site_name": "测试站",
+                "publish_date": "2026-10-19T00:00:00Z",
+                "importance": 1,
+            },
+        )
+        assert r.status_code in (201, 422), (
+            f"单用户模式下不应 401，实际 {r.status_code}: {r.text[:200]}"
+        )
 
 
 # ──────────────── SW 路径 bug 回归测试（V0.86.1 hotfix 防回归） ────────────────

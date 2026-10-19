@@ -69,9 +69,11 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/scoring",
     "/ask",
     "/headlines",  # V0.102 今日要闻
+    "/favorites",  # V0.103 我的收藏（/api/v1/favorites/* 9 端点）
     # V0.99.0：白银 silver 已存在 RESTful alias（V0.73.0 N+16 起，sge 端点不新增 alias）
     # V0.100：综合指数 pending 改造不新增 alias
     # V0.102：今日要闻新增 /headlines alias（页面 + /api/v1/news-feed/* 5 端点）
+    # V0.103：我的收藏新增 /favorites alias（页面 + /api/v1/favorites/* 9 端点）
 ]
 
 # 期望 status 表：alias → 307，特殊端点 → 各自 status

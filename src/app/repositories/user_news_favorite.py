@@ -86,6 +86,8 @@ class UserNewsFavoriteRepository:
         await self._session.commit()
         if result.rowcount == 0:
             return None
+        # Core UPDATE 不会刷新 identity map 里的 ORM 实例 → expire_all 让下次 get() 走 DB
+        self._session.expire_all()
         return await self.get(fav_id)
 
     async def delete(self, fav_id: int) -> bool:
