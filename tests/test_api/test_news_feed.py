@@ -493,3 +493,87 @@ async def test_get_daily_requires_date_param(client) -> None:  # noqa: ANN001
     """V0.107 ``GET .../daily`` 不带 date → 422（必填）。"""
     r = await client.get("/api/v1/news-feed/daily")
     assert r.status_code == 422
+
+
+# ──────────────── V0.107.1 · 弃入「其他」+ page_size=50 ────────────────
+
+
+async def test_list_items_category_other_returns_empty(client, db_session) -> None:  # noqa: ANN001
+    """V0.107.1：fetcher 已弃入「其他」→ ``?category=其他`` 在新数据中无记录。
+
+    行为不变（V0.105 已支持类目筛选）；V0.107.1 加固保证新写入的新闻
+    不会带「其他」类目落到 items 端点。
+    """
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/items?category=其他")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["total"] == 0
+    assert data["items"] == []
+
+
+async def test_list_items_after_v01071_refresh_excludes_other(
+    client, db_session, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: ANN001
+    """V0.107.1：模拟 refresh（mock fetcher）→ 4 类入「其他」不入 DB。
+
+    Patch ``app.services.news_feed.fetch_readhub_feed`` 返 4 条 「财经」+ 2
+    条 「其他」；调 refresh endpoint → 验证 DB 只 4 条 「财经」、0 条 「其他」。
+    """
+    from datetime import datetime, timezone
+
+    from app.services import news_feed as svc_module
+
+    finance_records = (
+        {
+            "external_id": 8001 + i,
+            "title": f"美联储官员暗示 11 月 暂停加息-{i}",
+            "summary": "通胀回落速度超预期",
+            "url": f"https://wallstreetcn.com/articles/{8001 + i}",
+            "mobile_url": None,
+            "site_name": "华尔街见闻",
+            "language": "zh-cn",
+            "author_name": None,
+            "publish_date": datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
+            "category": "财经",
+        }
+        for i in range(4)
+    )
+    other_records = tuple(
+        {
+            "external_id": 8501 + i,
+            "title": f"某地发生交通事故-{i}",
+            "summary": "",
+            "url": f"https://example.com/{8501 + i}",
+            "mobile_url": None,
+            "site_name": "地方日报",
+            "language": "zh-cn",
+            "author_name": None,
+            "publish_date": datetime(2026, 10, 19, 0, 30, tzinfo=timezone.utc),
+            "category": "其他",
+        }
+        for i in range(2)
+    )
+
+    async def _fake_fetch(**_kwargs):
+        return tuple(finance_records) + other_records
+
+    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch)
+
+    # 触发 refresh endpoint
+    r = await client.post("/api/v1/news-feed/refresh")
+    assert r.status_code == 200
+    data = r.json()
+    # 只 4 条「财经」入 DB
+    assert data["ok"] is True
+    assert data["upserted"] == 4
+
+    # /items?category=其他 → 0 条（fetcher 已弃入 + service 二次 gate）
+    r_other = await client.get("/api/v1/news-feed/items?category=其他")
+    assert r_other.status_code == 200
+    assert r_other.json()["total"] == 0
+
+    # /items?category=财经 → 4 条
+    r_fin = await client.get("/api/v1/news-feed/items?category=财经")
+    assert r_fin.status_code == 200
+    assert r_fin.json()["total"] == 4

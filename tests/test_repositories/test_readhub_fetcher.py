@@ -136,6 +136,25 @@ class TestNormalize:
         assert out["author_name"] is None
         assert out["language"] is None
 
+    def test_drop_category_other_v01071(self) -> None:
+        """V0.107.1：fetcher 层弃入「其他」——classify() 返回「其他」时整条丢弃。
+
+        触发条件：title / summary / site_name 都不命中 4 类关键词。
+        """
+        raw = _sample_raw()[0]
+        raw["title"] = "今天天气真好"  # 不命中任何关键词
+        raw["summary"] = "司机受伤"
+        raw["siteName"] = "地方日报"  # 不在 4 类站点名列表
+        assert rh._normalize(raw) is None
+
+    def test_drop_category_other_v01071_unrelated_site(self) -> None:
+        """V0.107.1：纯饮食类题目 → 「其他」→ 整条丢弃。"""
+        raw = _sample_raw()[0]
+        raw["title"] = "某餐厅开业"
+        raw["summary"] = "试菜体验分享"
+        raw["siteName"] = "美食推荐"
+        assert rh._normalize(raw) is None
+
 
 # ──────────────── parse_publish_date ────────────────
 
