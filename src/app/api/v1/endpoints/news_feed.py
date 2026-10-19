@@ -1,4 +1,6 @@
-"""今日要闻 REST 端点（V0.102）"""
+"""今日要闻 REST 端点（V0.102 / V0.104 单日模式扩展）"""
+
+from datetime import date as date_t
 
 from fastapi import APIRouter, Depends, Query
 
@@ -24,7 +26,17 @@ async def list_items(
         None,
         ge=1,
         le=90,
-        description="限定最近 N 天内的（按 publish_date）；None=不限",
+        description="限定最近 N 天内的（按 publish_date）；None=不限。V0.104：与 date 互斥，date 优先。",
+    ),
+    date: date_t | None = Query(
+        None,
+        description="V0.104 单日模式：取 publish_date 落在 [date 00:00 本地, date+1 00:00 本地) 的新闻。YYYY-MM-DD 格式。",
+    ),
+    tz_offset_minutes: int = Query(
+        0,
+        ge=-14 * 60,
+        le=14 * 60,
+        description="V0.104 浏览器时区偏移（**带符号**，东八区 = +480）。仅 date 模式生效。",
     ),
     site_name: str | None = Query(
         None,
@@ -41,10 +53,15 @@ async def list_items(
 ) -> NewsFeedListOut:
     """返回按 publish_date 倒序的 readhub 新闻列表。
 
-    UI 默认只显示今天 1 天的；``days=7`` 适合「7 日回顾」视图。
+    - 窗口模式（``days=N``）：取最近 N 天内的新闻
+    - 单日模式（``date=YYYY-MM-DD``）：取那一天的新闻；响应里多 3 字段
+      （``current_date`` / ``has_older`` / ``has_newer``）供前端翻页按钮
+    - 两个模式互斥，date 优先
     """
     return await service.list_items(
         days=days,
+        date=date,
+        tz_offset_minutes=tz_offset_minutes,
         site_name=site_name,
         language=language,
         limit=limit,

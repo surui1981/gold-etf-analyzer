@@ -1,4 +1,4 @@
-"""今日要闻业务服务：readhub 财经新闻编排（V0.102）
+"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式扩展）
 
 设计要点
 --------
@@ -9,11 +9,13 @@
   （参考 V0.84.0 状态条合并模式 + V0.77.1 失败态不再伪装正常）
 - 手动 ``refresh()`` 强制走 fetcher cache miss（``use_cache=False``），
   scheduler 6h 唤醒可以吃 5min cache
+- V0.104 单日模式：``list_items(date=...)`` 时额外调
+  ``repo.has_items_outside_day()`` 拿 has_older/has_newer，回填到 schema
 """
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date as date_t, datetime, time, timedelta, timezone
 from typing import Any
 
 from app.repositories.news_feed import NewsFeedRepository
@@ -96,23 +98,51 @@ class NewsFeedService:
         self,
         *,
         days: int | None = None,
+        date: date_t | None = None,
+        tz_offset_minutes: int = 0,
         site_name: str | None = None,
         language: str | None = None,
         limit: int = 50,
     ) -> NewsFeedListOut:
         """按筛选取列表（单次返回，UI 单次渲染）。
 
-        不在这里截断 limit——仓储已做 1..200 夹紧；UI 默认 50 够用。
+        Args:
+            days: 窗口模式（UTC cutoff），与 date 互斥
+            date: 单日模式（浏览器本地日期），与 days 互斥
+            tz_offset_minutes: 时区偏移（带符号），仅 date 模式用
+            site_name/language/limit: 透传仓储
+
+        Returns:
+            NewsFeedListOut；date 模式时多 3 字段：current_date/has_older/has_newer
         """
         items = await self._repo.list_items(
             days=days,
+            date=date,
+            tz_offset_minutes=tz_offset_minutes,
             site_name=site_name,
             language=language,
             limit=limit,
         )
+
+        # 单日模式：查窗口外是否有新闻（has_older/has_newer）
+        current_date_str: str | None = None
+        has_older = False
+        has_newer = False
+        if date is not None:
+            current_date_str = date.isoformat()
+            tz = timezone(timedelta(minutes=tz_offset_minutes))
+            day_start = datetime.combine(date, time.min, tzinfo=tz)
+            day_end = datetime.combine(date + timedelta(days=1), time.min, tzinfo=tz)
+            has_older, has_newer = await self._repo.has_items_outside_day(
+                day_start=day_start, day_end=day_end
+            )
+
         return NewsFeedListOut(
             items=[_to_out(it) for it in items],
             total=len(items),
+            current_date=current_date_str,
+            has_older=has_older,
+            has_newer=has_newer,
         )
 
     async def list_sites(self) -> list[str]:

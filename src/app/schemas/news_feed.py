@@ -30,10 +30,25 @@ class NewsFeedItemOut(BaseModel):
 
 
 class NewsFeedListOut(BaseModel):
-    """新闻列表响应（一次返回全量；UI 限 limit 默认 50 避免渲染压力）。"""
+    """新闻列表响应（一次返回全量；UI 限 limit 默认 50 避免渲染压力）。
+
+    V0.104 单日模式扩展：
+    - ``current_date`` 回显请求的 date（YYYY-MM-DD）；days 模式时为 None
+    - ``has_older`` / ``has_newer`` 用于前端禁用「前一天 / 后一天」按钮
+    - ``total`` 语义保持 ``= len(items)``（≤ limit），不破坏现有测试
+    """
 
     items: list[NewsFeedItemOut] = Field(default_factory=list)
     total: int = Field(..., ge=0, description="返回条数（≤ limit）")
+    current_date: str | None = Field(
+        default=None, description="V0.104：单日模式回显的 date（YYYY-MM-DD）；days 模式为 None"
+    )
+    has_older: bool = Field(
+        default=False, description="V0.104：current_date 之前是否还有更早的新闻（可点「前一天」）"
+    )
+    has_newer: bool = Field(
+        default=False, description="V0.104：current_date 之后是否还有更新的新闻（可点「后一天」）"
+    )
 
 
 class NewsFeedStatusOut(BaseModel):
