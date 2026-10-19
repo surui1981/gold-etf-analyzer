@@ -116,7 +116,8 @@
   }
 
   function signalUrl(target) {
-    var base = location.port === '8888' ? '' : 'http://127.0.0.1:8888';
+    // V0.106.2 整合：去掉 8888 硬编码（同源）
+    var base = '';
     return base + '/api/v1/resonance/signal?target=' + encodeURIComponent(target || state.target);
   }
 
@@ -147,7 +148,8 @@
       window.TL.track('resonance_card_click', { url: location.pathname, target: target || state.target });
     }
     // V0.70.0 MVP：弹窗用浏览器原生 confirm，列出 components + 历史链接
-    var base = location.port === '8888' ? '' : 'http://127.0.0.1:8888';
+    // V0.106.2 整合：去掉 8888 硬编码（同源）
+    var base = '';
     Promise.all([
       fetchJSON(signalUrl(target)).catch(function () { return null; }),
       fetchJSON(base + '/api/v1/resonance/strength-up?days=90&horizon=1').catch(function () { return null; })

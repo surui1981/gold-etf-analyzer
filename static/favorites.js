@@ -13,7 +13,8 @@
 (function () {
   "use strict";
 
-  const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+  // V0.106.2 整合：去掉 8888 硬编码（同源）
+  const API_BASE = "";
 
   // 状态
   let currentDays = 7;

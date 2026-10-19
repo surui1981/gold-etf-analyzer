@@ -222,7 +222,8 @@
   function load() {
     var mount = document.getElementById("healthSummary");
     if (!mount) return Promise.resolve();
-    var base = (location.port === "8888" || location.port === "8889") ? "" : "http://127.0.0.1:8888";
+    // V0.106.2 整合：去掉 8888/8889 硬编码（同源；8889 nginx 部署时同源亦可走通）
+    var base = "";
     return fetchJSON(base + "/api/v1/market/health")
       .then(function (d) {
         _consecutiveFails = 0;

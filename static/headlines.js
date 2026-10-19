@@ -15,7 +15,10 @@
 (function () {
   "use strict";
 
-  const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+  // V0.106.2 整合：去掉 8888 硬编码（16 文件统一用同源相对 URL）
+  // 问是：当 uvicorn 跑在 8888/8890/8891 任一端口时，JS 应走同源，
+  //       而不是 fallback 到 8888（否则 CORS 拦截 + 永远连错实例）
+  const API_BASE = "";
 
   // V0.105：5 类固定标签（与后端 news_classifier.CATEGORIES 保持一致；启动 backfill 后下拉数据来自 DB）
   const FIXED_CATEGORIES = ["财经", "科技", "创投", "商业", "其他"];

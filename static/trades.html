@@ -431,7 +431,7 @@
       })
       .catch(function (e) {
         $("tbody").innerHTML = '<tr><td colspan="11" class="empty">加载失败：' + esc(e.message) +
-          '<br>请确认服务已启动（127.0.0.1:8888）后重试。</td></tr>';
+          `<br>请确认服务已启动（同源 ${location.origin}）后重试。</td></tr>`;
         $("listInfo").textContent = "";
       })
       .then(function () { state.loading = false; });

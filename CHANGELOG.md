@@ -14,6 +14,55 @@
 
 ---
 
+## [V0.106.2] · 2026-10-19
+
+`16 静态文件去掉 8888 硬编码（API_BASE 全改同源相对 URL）` — 1 commit hotfix
+
+### Fixed
+
+- 🐛 **/headlines 选日期新闻「加载失败 · Failed to fetch」** —— 16 个静态文件硬编码了 `location.port === "8888" ? "" : "http://127.0.0.1:8888"`，导致 V0.106.1 验证用的 8890 uvicorn 时 JS 全部指向 8888 → **CORS 拦截**（8890 origin fetch 8888 origin），fetch 直接 rejected
+
+  - 表现 1：home 底部 5 条新闻列表为空（home.js fetch 失败被 Promise.allSettled 吞掉）
+  - 表现 2：/headlines 选日期显示「⚠️ 加载失败 · Failed to fetch」
+  - 表现 3：所有 9 个数据子页（central_bank / weights / trend / news / backtest / review / data-health / silver / favorites）的 API 请求都走错实例
+
+### Changed
+
+- 🔧 **API_BASE 同源统一**（整合 16 个文件的重复 pattern）
+
+  | 文件 | 旧 | 新 |
+  |---|---|---|
+  | static/headlines.js | `port==="8888"?"":"http://127.0.0.1:8888"` | `""` |
+  | static/silver.js | 同 | `""` |
+  | static/freshness.js | 同 | `""` |
+  | static/resonance-card.js | 同（×2）| `""` |
+  | static/synthesis-card.js | 同 | `""` |
+  | static/health-summary.js | `port==="8888"‖"8889"?"":"..."` | `""` |
+  | static/news-score-widget.js | `ABS_BASE='http://127.0.0.1:8888'` | `""` + 删除 ABS_BASE 概念 |
+  | static/favorites.js | 同 | `""` |
+  | static/weights.html | 同 | `""` |
+  | static/central_bank.html | 同（×2）| `""` |
+  | static/trend.html | 同 | `""` |
+  | static/news.html | `protocol检测?"":"..."` | `""` |
+  | static/backtest.html | 同 | `""` |
+  | static/data-health.html | `port==="8888"‖"8889"?"":"..."` | `""` |
+  | static/review.html | `protocol检测?"":"..."` | `""` |
+
+- 🗑️ **删除冗余的 ABS_BASE 概念**（news-score-widget.js 独有）
+- 📝 **3 处错误提示文案**改用 `location.origin`（central_bank / trend / trades）—— 用户能看到自己实际访问的 origin，不再被强制看到 8888
+
+### Discipline
+
+- 📐 4 处版本同步：__version__ 0.106.1→0.106.2 / pyproject.toml 同 / sw.js v0.106.1→v0.106.2 / uv.lock 同步
+- 🧪 4 门禁：pwa_assets ✓ / i18n_keys ✓（0 missing / 179 in-scope）/ static_js ✓ / routes ✓（18 路由 OK）
+- 🐛 **Puppeteer 验证**：fix 后 /headlines 初始 2 day group + 选 2026-10-19 显示 36Kr 00:59 文章（fix 前是 empty-state warn）
+
+### Why hotfix 不开 docs
+
+V0.106.2 是 V0.106.1 release 当天的 CORS 拦截修复，非新功能。`docs/releases/` 暂不新增条目，纳入 V0.107 综合 release notes 统一记录。
+
+---
+
 ## [V0.106.1] · 2026-10-19
 
 `home 场景卡同步 topnav 8 scene（hotfix · 不发 docs）` — 1 commit

@@ -412,7 +412,8 @@
 // API 基础地址：同源（8888 直开）用相对路径；跨源（如预览通道 3455）用绝对地址，
 // 避免 fetch 根相对路径打到错误端口。
 const API_BASE =
-  location.port === "8888" ? "" : "http://127.0.0.1:8888";
+  // V0.106.2 整合：去掉 8888 硬编码（同源）
+  "";
 // 带超时的 JSON 请求：避免接口长时间无响应导致面板静默空白（快速失败 + 可见提示）
 async function fetchJSON(url, timeoutMs = 40000) {
   const ctrl = new AbortController();
@@ -451,7 +452,7 @@ async function loadTrend(days = 60, interval = "D") {
   } catch (e) {
     document.getElementById("chartArea").innerHTML =
       '<div class="error">数据加载失败：' + e.message +
-      '<br>请确认服务已启动（127.0.0.1:8888），并直接访问 <b>http://127.0.0.1:8888/</b></div>';
+      `<br>请确认服务已启动（同源 ${location.origin}），并直接访问 <b>${location.origin}/</b></div>`;
   }
 }
 

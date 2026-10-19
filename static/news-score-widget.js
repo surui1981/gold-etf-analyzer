@@ -52,7 +52,7 @@
   'use strict';
 
   var DEFAULT_CONTAINER = 'newsScoreCard';
-  var ABS_BASE = 'http://127.0.0.1:8888';
+  // V0.106.2 整合：去掉 8888 硬编码（删除 ABS_BASE 概念）
   var NEWS_PATH = '/api/v1/news-score';
   var META_PATH = '/api/v1/review/meta';
   var FETCH_TIMEOUT_MS = 20000;
@@ -84,7 +84,7 @@
   function apiBase() {
     /* 与 trend.html 同口径：同源 8888 直开用相对路径；跨源（如预览通道）走绝对地址，
        否则 fetch 根相对路径会打到错误端口。 */
-    return location.port === '8888' ? '' : ABS_BASE;
+    return '';
   }
 
   function T(key, fallback, params) {

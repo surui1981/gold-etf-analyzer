@@ -194,7 +194,8 @@
   /* ───────────────── 工具 ───────────────── */
 
   function base() {
-    return location.port === '8888' ? '' : 'http://127.0.0.1:8888';
+    // V0.106.2 整合：去掉 8888 硬编码（同源）
+    return '';
   }
 
   function fetchJSON(url) {

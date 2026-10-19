@@ -245,7 +245,8 @@
 </main>
 
 <script>
-const API_BASE = /^https?:$/.test(location.protocol) ? "" : "http://127.0.0.1:8888";
+// V0.106.2 整合：去掉 8888 硬编码（同源；protocol 检测不再需要，浏览器强制 fetch 同源）
+const API_BASE = "";
 const API = API_BASE + "/api/v1/news-score";
 
 let state = null;        // 当日打分状态（NewsScoreOut）

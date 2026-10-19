@@ -311,7 +311,8 @@
 
 <script>
   // ============ 工具函数 ============
-  const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+  // V0.106.2 整合：去掉 8888 硬编码（同源）
+  const API_BASE = "";
 
   async function fetchJSON(url, timeoutMs = 30000) {
     const ctrl = new AbortController();
@@ -560,7 +561,7 @@
       const wrap = document.querySelector(".wrap");
       const div = document.createElement("div");
       div.className = "panel";
-      div.innerHTML = `<div class="error">数据加载失败：${e.message}<br><br><span style="font-size:11.5px;color:var(--muted)">请确认服务已启动（${API_BASE || "http://127.0.0.1:8888"}），并先访问 <code>python -m app.scripts.import_central_bank</code> 导入历史数据。</span></div>`;
+      div.innerHTML = `<div class="error">数据加载失败：${e.message}<br><br><span style="font-size:11.5px;color:var(--muted)">请确认服务已启动（同源 ${location.origin}），并先访问 <code>python -m app.scripts.import_central_bank</code> 导入历史数据。</span></div>`;
       wrap.appendChild(div);
     }
   })();

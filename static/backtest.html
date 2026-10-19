@@ -340,7 +340,8 @@
 <script src="/static/backtest-chart.js"></script>
 
 <script>
-const API_BASE = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+// V0.106.2 整合：去掉 8888 硬编码（同源）
+const API_BASE = "";
 
 async function fetchJSON(url, opts, timeoutMs = 40000) {
   const ctrl = new AbortController();

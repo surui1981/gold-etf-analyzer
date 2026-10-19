@@ -279,7 +279,8 @@
   function load() {
     var bar = document.getElementById("freshnessBar") || document.getElementById("freshnessInline");
     if (!bar) return Promise.resolve();
-    var base = location.port === "8888" ? "" : "http://127.0.0.1:8888";
+    // V0.106.2 整合：去掉 8888 硬编码（同源）
+    var base = "";
     return fetchJSON(base + "/api/v1/market/freshness")
       .then(function (d) {
         // V0.83.4：成功 → 清理 stale 状态（即便 sig 相同也得清，否则 render 短路会留下旧 chip）

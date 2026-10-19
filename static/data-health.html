@@ -263,7 +263,8 @@
     mock:    { txt: "演示",     cls: "mock",   badge: "badge-mock"   },
     unknown: { txt: "未知",     cls: "unknown",badge: "badge-unknown"}
   };
-  var API_BASE = (location.port === "8888" || location.port === "8889") ? "" : "http://127.0.0.1:8888";
+  // V0.106.2 整合：去掉 8888/8889 硬编码（同源；8889 nginx 部署时同源亦可走通）
+  var API_BASE = "";
 
   function _t(key, fallback) {
     try {
