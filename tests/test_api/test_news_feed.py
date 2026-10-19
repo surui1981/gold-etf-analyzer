@@ -1,13 +1,15 @@
-"""今日要闻 REST 端点 单测（V0.102）"""
+"""今日要闻 REST 端点 单测（V0.102 / V0.105 类目 / V0.107 按日聚合）"""
 
 from __future__ import annotations
 
+from datetime import date as date_t
 from datetime import datetime, timezone
 from typing import Any
 
 import pytest
 
 from app.models.news_feed import NewsFeedItem
+from app.repositories.news_feed import NewsFeedRepository
 
 
 # ──────────────── 公共 fixture：DB seed ────────────────
@@ -403,3 +405,91 @@ async def test_list_items_includes_category_field(client, db_session) -> None:  
     assert data["items"][0]["category"] == "财经"
     assert data["items"][1]["category"] == "财经"
     assert data["items"][2]["category"] == "科技"
+
+
+# ──────────────── V0.107 · 按日聚合 ────────────────
+
+
+async def test_get_daily_returns_aggregate_for_seeded_day(client, db_session) -> None:  # noqa: ANN001
+    """V0.107 ``GET /api/v1/news-feed/daily?date=2026-10-19``：返回当日聚合。
+
+    seed 3 条跨 3 日（10-19/10-18/10-17），先 backfill 再查 10-19：
+    - total=1（1001）
+    - finance=1, tech=0
+    - zh=1, en=0
+    - unique_sites=1（华尔街见闻）
+    """
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    for d in ("2026-10-17", "2026-10-18", "2026-10-19"):
+        await repo.upsert_daily(date_t.fromisoformat(d))
+
+    r = await client.get("/api/v1/news-feed/daily?date=2026-10-19")
+    assert r.status_code == 200
+    data = r.json()
+    assert data is not None
+    assert data["date"] == "2026-10-19"
+    assert data["total_count"] == 1
+    assert data["finance_count"] == 1
+    assert data["tech_count"] == 0
+    assert data["zh_count"] == 1
+    assert data["en_count"] == 0
+    assert data["unique_sites_count"] == 1
+    # last_refresh_at 是 ISO 字符串
+    assert "T" in data["last_refresh_at"]
+
+
+async def test_get_daily_returns_null_for_empty_day(client, db_session) -> None:  # noqa: ANN001
+    """V0.107 空日不创建行：``GET .../daily?date=2026-10-15`` → null。"""
+    await _seed(db_session)
+    r = await client.get("/api/v1/news-feed/daily?date=2026-10-15")
+    assert r.status_code == 200
+    assert r.json() is None
+
+
+async def test_list_daily_returns_range_in_desc_order(client, db_session) -> None:  # noqa: ANN001
+    """V0.107 ``GET /api/v1/news-feed/daily/list?start=...&end=...``：闭区间 + 倒序。"""
+    await _seed(db_session)
+    repo = NewsFeedRepository(db_session)
+    for d in ("2026-10-17", "2026-10-18", "2026-10-19"):
+        await repo.upsert_daily(date_t.fromisoformat(d))
+
+    r = await client.get(
+        "/api/v1/news-feed/daily/list?start=2026-10-17&end=2026-10-19"
+    )
+    assert r.status_code == 200
+    data = r.json()
+    # 3 条（空日不创建行）
+    assert data["total"] == 3
+    assert data["start"] == "2026-10-17"
+    assert data["end"] == "2026-10-19"
+    # 倒序：10-19 → 10-18 → 10-17
+    assert [it["date"] for it in data["items"]] == [
+        "2026-10-19",
+        "2026-10-18",
+        "2026-10-17",
+    ]
+
+
+async def test_list_daily_rejects_inverted_range(client) -> None:  # noqa: ANN001
+    """V0.107 ``start > end`` → 400。"""
+    r = await client.get(
+        "/api/v1/news-feed/daily/list?start=2026-10-19&end=2026-10-17"
+    )
+    assert r.status_code == 400
+    assert "start must be <= end" in r.json()["detail"]
+
+
+async def test_list_daily_rejects_oversized_range(client) -> None:  # noqa: ANN001
+    """V0.107 ``end - start > 90 天`` → 400。"""
+    r = await client.get(
+        "/api/v1/news-feed/daily/list?start=2026-01-01&end=2026-12-31"
+    )
+    assert r.status_code == 400
+    assert "max 90 days" in r.json()["detail"]
+
+
+async def test_get_daily_requires_date_param(client) -> None:  # noqa: ANN001
+    """V0.107 ``GET .../daily`` 不带 date → 422（必填）。"""
+    r = await client.get("/api/v1/news-feed/daily")
+    assert r.status_code == 422

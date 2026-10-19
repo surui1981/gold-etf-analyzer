@@ -1,5 +1,6 @@
-"""今日要闻 Pydantic Out schemas（V0.102）"""
+"""今日要闻 Pydantic Out schemas（V0.102 / V0.107 按日聚合）"""
 
+from datetime import date as date_t
 from datetime import datetime
 
 from pydantic import BaseModel, Field
@@ -74,3 +75,47 @@ class NewsFeedRefreshOut(BaseModel):
     error: str | None = Field(
         default=None, description="失败原因（ok=False 时填；ok=True 时 None）"
     )
+
+
+class NewsFeedDailyOut(BaseModel):
+    """V0.107 按 BJT 日聚合的物化快照。
+
+    1 日 1 行（``date`` 主键），由 ``NewsFeedRepository.upsert_daily`` 重建。
+    UI /home 顶 chip 与 /headlines 顶部 daily 摘要直接读此表（O(1) 行），
+    替代实时 ``GROUP BY`` 计算。
+
+    所有 nullable 字段遵循 V0.78.0 NULL 纪律：「未知就是未知」，
+    **不**用 0 兜底。
+    """
+
+    date: date_t = Field(..., description="BJT 日期（YYYY-MM-DD，1 日 1 行）")
+    total_count: int = Field(..., ge=0, description="当日总条数（含未分类）")
+    finance_count: int = Field(..., ge=0, description="财经类目条数")
+    tech_count: int = Field(..., ge=0, description="科技类目条数")
+    vc_count: int = Field(..., ge=0, description="创投类目条数")
+    biz_count: int = Field(..., ge=0, description="商业类目条数")
+    other_count: int = Field(..., ge=0, description="其他类目条数")
+    unique_sites_count: int = Field(..., ge=0, description="当日独立来源站数")
+    en_count: int = Field(..., ge=0, description="英文条数（language='en'）")
+    zh_count: int = Field(..., ge=0, description="中文条数（language 任意 zh- 前缀）")
+    first_publish_at: datetime | None = Field(
+        default=None, description="当日首篇发布时间（UTC）"
+    )
+    last_publish_at: datetime | None = Field(
+        default=None, description="当日末篇发布时间（UTC）"
+    )
+    last_refresh_at: datetime = Field(
+        ..., description="最近一次 refresh 触发本行重建的时间（UTC）"
+    )
+
+
+class NewsFeedDailyListOut(BaseModel):
+    """V0.107 区间聚合响应：``[start, end]`` 闭区间（倒序，最近 → 远期）。"""
+
+    items: list[NewsFeedDailyOut] = Field(
+        default_factory=list,
+        description="区间内日聚合行（按 date 倒序；空日不创建行，可能跳过）",
+    )
+    start: date_t = Field(..., description="区间起始 BJT 日（闭）")
+    end: date_t = Field(..., description="区间结束 BJT 日（闭）")
+    total: int = Field(..., ge=0, description="返回条数（实际有数据的日数）")

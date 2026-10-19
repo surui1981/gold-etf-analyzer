@@ -1,4 +1,4 @@
-"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式扩展）
+"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合）
 
 设计要点
 --------
@@ -8,9 +8,12 @@
   显示「数据时效 chip」+ amber 提示，**不**在用户可见路径抛 500
   （参考 V0.84.0 状态条合并模式 + V0.77.1 失败态不再伪装正常）
 - 手动 ``refresh()`` 强制走 fetcher cache miss（``use_cache=False``），
-  scheduler 6h 唤醒可以吃 5min cache
+  scheduler 4h 唤醒可以吃 5min cache（V0.106 改 4h）
 - V0.104 单日模式：``list_items(date=...)`` 时额外调
   ``repo.has_items_outside_day()`` 拿 has_older/has_newer，回填到 schema
+- V0.107 按日聚合：``refresh()`` 末尾 → ``rebuild_daily(BJT today)`` 重建
+  当日行；scheduler 跨午夜时加 rebuild_daily(BJT yesterday)。
+  启动 lifespan 阶段 ``backfill_daily(30 days)`` 一次性回填历史
 """
 
 from __future__ import annotations
@@ -18,9 +21,12 @@ from __future__ import annotations
 from datetime import date as date_t, datetime, time, timedelta, timezone
 from typing import Any
 
+from app.models.news_feed import NewsFeedDaily
 from app.repositories.news_feed import NewsFeedRepository
 from app.repositories.readhub_fetcher import ReadhubFetchError, fetch_readhub_feed
 from app.schemas.news_feed import (
+    NewsFeedDailyListOut,
+    NewsFeedDailyOut,
     NewsFeedItemOut,
     NewsFeedListOut,
     NewsFeedStatusOut,
@@ -45,6 +51,25 @@ def _to_out(it) -> NewsFeedItemOut:
         fetched_at=it.fetched_at,
         source=it.source,
         category=getattr(it, "category", None),  # V0.105：未分类时 None
+    )
+
+
+def _to_daily_out(row: NewsFeedDaily) -> NewsFeedDailyOut:
+    """V0.107 ORM NewsFeedDaily → Pydantic NewsFeedDailyOut。"""
+    return NewsFeedDailyOut(
+        date=row.date,
+        total_count=row.total_count,
+        finance_count=row.finance_count,
+        tech_count=row.tech_count,
+        vc_count=row.vc_count,
+        biz_count=row.biz_count,
+        other_count=row.other_count,
+        unique_sites_count=row.unique_sites_count,
+        en_count=row.en_count,
+        zh_count=row.zh_count,
+        first_publish_at=row.first_publish_at,
+        last_publish_at=row.last_publish_at,
+        last_refresh_at=row.last_refresh_at,
     )
 
 
@@ -168,3 +193,45 @@ class NewsFeedService:
             total_items=int(status["total_items"]),
             last_24h_count=int(status["last_24h_count"]),
         )
+
+    # ────────────── V0.107 按日聚合 ──────────────
+
+    async def rebuild_daily(self, target_date: date_t) -> NewsFeedDailyOut | None:
+        """V0.107：重建 ``target_date``（BJT 日）的聚合行。
+
+        透传仓储 ``upsert_daily`` —— UI 触发手动 refresh / scheduler 4h 定时
+        / 启动 lifespan backfill 都会调此入口。
+        """
+        try:
+            row = await self._repo.upsert_daily(target_date)
+        except Exception as exc:
+            logger.error("rebuild_daily(%s) failed: %s", target_date, exc)
+            return None
+        return _to_daily_out(row) if row is not None else None
+
+    async def get_daily(self, target_date: date_t) -> NewsFeedDailyOut | None:
+        """V0.107：取指定 BJT 日的聚合行（无则 None）。"""
+        row = await self._repo.get_daily(target_date)
+        return _to_daily_out(row) if row is not None else None
+
+    async def list_daily(
+        self, *, start: date_t, end: date_t
+    ) -> NewsFeedDailyListOut:
+        """V0.107：取 [start, end] BJT 闭区间的聚合行（倒序）。"""
+        rows = await self._repo.list_daily(start=start, end=end)
+        items = [_to_daily_out(r) for r in rows]
+        return NewsFeedDailyListOut(
+            items=items, start=start, end=end, total=len(items)
+        )
+
+    async def backfill_daily(
+        self, *, start_date: date_t, end_date: date_t | None = None
+    ) -> int:
+        """V0.107：启动 lifespan 阶段一次性回填历史 N 天。"""
+        try:
+            return await self._repo.backfill_daily(
+                start_date=start_date, end_date=end_date
+            )
+        except Exception as exc:
+            logger.error("backfill_daily failed: %s", exc)
+            return 0

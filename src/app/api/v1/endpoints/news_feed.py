@@ -1,4 +1,4 @@
-"""今日要闻 REST 端点（V0.102 / V0.104 单日模式扩展）"""
+"""今日要闻 REST 端点（V0.102 / V0.104 单日模式 / V0.107 按日聚合）"""
 
 from datetime import date as date_t
 
@@ -7,6 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from app.dependencies import get_news_feed_service
 from app.middleware.admin_auth import require_admin_session
 from app.schemas.news_feed import (
+    NewsFeedDailyListOut,
+    NewsFeedDailyOut,
     NewsFeedListOut,
     NewsFeedRefreshOut,
     NewsFeedStatusOut,
@@ -147,3 +149,52 @@ async def refresh(
         upserted=result["upserted"],
         error=result["error"],
     )
+
+
+# ──────────────── V0.107 按日聚合 ────────────────
+
+
+@router.get(
+    "/daily",
+    response_model=NewsFeedDailyOut | None,
+    summary="V0.107 指定 BJT 日的聚合行（无则 null）",
+)
+async def get_daily(
+    date: date_t = Query(
+        ..., description="BJT 日期（YYYY-MM-DD）；目标聚合日"
+    ),
+    service: NewsFeedService = Depends(get_news_feed_service),
+) -> NewsFeedDailyOut | None:
+    """取单日聚合（UI /headlines 顶 chip + /home 底 chip 用）。
+
+    无该日数据时返回 ``null``（**不**创建空行），前端按「暂无」处理。
+    """
+    return await service.get_daily(date)
+
+
+@router.get(
+    "/daily/list",
+    response_model=NewsFeedDailyListOut,
+    summary="V0.107 [start, end] 闭区间的聚合行（倒序）",
+)
+async def list_daily(
+    start: date_t = Query(..., description="BJT 起始日（闭）"),
+    end: date_t = Query(..., description="BJT 结束日（闭）"),
+    service: NewsFeedService = Depends(get_news_feed_service),
+) -> NewsFeedDailyListOut:
+    """取闭区间聚合（最多 90 天，仿 ``/items`` 的 ``days`` 上限）。
+
+    倒序返回（最近 → 远期），与 ``/items`` 排序保持一致。
+    """
+    # 区间合法性校验：start ≤ end 且跨度 ≤ 90 天
+    if start > end:
+        from fastapi import HTTPException  # 局部 import 避免模块级拖入
+
+        raise HTTPException(status_code=400, detail="start must be <= end")
+    if (end - start).days > 90:
+        from fastapi import HTTPException
+
+        raise HTTPException(
+            status_code=400, detail="range too large (max 90 days)"
+        )
+    return await service.list_daily(start=start, end=end)
