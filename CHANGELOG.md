@@ -14,6 +14,43 @@
 
 ---
 
+## [V0.106.0] · 2026-10-19
+
+`今日要闻顶 nav 提级 + scheduler 6h→4h 加密` — 2 commit
+
+### Added
+
+- 📢 **「今日要闻」提级为顶 nav 第 2 位** —— 用户原话「当前今日要闻页面连接 提升到 导航栏 首页之后 决策之前」
+
+  - 🖥️ `static/topnav.js` `SCENES` 数组 7 → 8 顶 scene
+  - 🆕 新增 `key:"headlines"` 顶级场景：`/headlines` 入口、`ico:"📢"`、无 sub-tabs（独立页）
+  - 📐 顶 nav 顺序：首页(🏠) → 今日要闻(📢) → 决策(📊) → 持仓(💼) → 情报(📰) → 配置(⚙️) → AI(🤖) → 数据健康(🩺)
+  - 🗑️ 「情报」scene 子页 5 → 4（移除今日要闻）：消息面评估 / 央行购金 / 白银追踪 / 我的收藏
+  - 📐 独立顶项 3 → 4（首页 / 今日要闻 / AI / 健康）
+  - 📝 注释同步更新（V0.98 7-scene 描述 → V0.106 8-scene 描述）
+
+### Changed
+
+- ⏰ **今日要闻 scheduler 6h → 4h 加密** —— 用户原话「更新策略也没有实现，修改成每四小更新一次财经新闻」
+
+  - 🔧 `src/app/services/scheduler.py` `NEWS_FEED_INTERVAL_HOURS` 6 → 4
+  - 📐 触发时刻（UTC）：00/06/12/18 (4点/日) → 00/04/08/12/16/20 (6点/日)
+  - 📐 触发时刻（BJT ≈）：08/14/20/02 → 08/12/16/20/00/04
+  - ♻️ `next_news_feed_run_utc()` 改用 `tuple(range(0, 24, NEWS_FEED_INTERVAL_HOURS))` 自动算小时列表（日志 hours_label 同步动态生成）
+  - ♻️ `news_feed_loop()` 日志格式从硬编码 `00/06/12/18` 改为 `hours_label` 动态（将来改间隔只需改 1 个常量）
+
+### Discipline
+
+- 📐 **4 处版本同步**（V0.100.1 教训）：`__version__` / `pyproject.toml` / `sw.js VERSION` 同步 bump `v0.106.0`；`uv.lock` 同步 lockfile
+- 📐 **改 static 立即 bump SW**（V0.100.1）：C1 bump `v0.105.0 → v0.105.1`（topnav.js 改动），C2 release bump `v0.105.1 → v0.106.0`
+- 🧪 8 个新 scheduler 单测（4h 节奏 6 触发点全覆盖 + 跨日 + 默认 now_utc）
+
+---
+
+## [V0.105.0] · 2026-10-19
+
+---
+
 ## [V0.105.0] · 2026-10-19
 
 `headlines 分类筛选（5 类 + 多 switch）` — 5 commit
