@@ -3,6 +3,51 @@
 > 黄金 ETF 投资辅助 · 完整发版历史
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
+
+## [V0.107.0] · 2026-10-19
+
+`今日要闻 按天聚合 + 刷新 UX 改进` — news_feed_daily 物化宽表 + alembic 双 head 合并 + 刷新 toast
+
+- 🆕 **news_feed_daily 物化宽表**（migration `n1o2p3q4r5`，双 head 合并 + 新表合一）
+  - 1 日 1 行（date 主键，仿 scoring_daily_wide · date-as-PK · 无 user_id）
+  - 5 类目计数：finance / tech / vc / biz / other
+  - unique_sites_count / en_count / zh_count
+  - first_publish_at / last_publish_at（UTC，nullable 当日空）
+  - last_refresh_at（最近一次 refresh 重建本行时间，UTC）
+  - 共 15 列
+- 🆕 **2 端点**：
+  - `GET /api/v1/news-feed/daily?date=YYYY-MM-DD` —— 单日聚合，无则 null
+  - `GET /api/v1/news-feed/daily/list?start=&end=` —— [start, end] 闭区间 + 倒序，最多 90 天
+- 🆕 **仓储 4 方法**：`upsert_daily` / `get_daily` / `list_daily` / `backfill_daily`
+  - BJT 边界：`datetime.combine(target_date, time.min, tzinfo=BJT)` → SQLAlchemy 自动转 UTC
+  - 单条 SQL 聚合 5 类目 + 独立站点 + 中英文 + 首末时间（9 列单行 GROUP BY）
+  - 当日为空 → 不创建空行（保留「DB 反映实际数据」原则）
+- 🆕 **scheduler 集成**：refresh 末尾**始终**重建 BJT today + BJT yesterday 2 行（self-healing 跨午夜场景）
+- 🆕 **启动 lifespan backfill**：`_backfill_news_feed_daily(30 天)` spawn_background（仿 _backfill_news_categories 模式）
+- 🆕 **前端 daily 摘要**：
+  - `/headlines` 顶 daily-summary 横条（5 类目 pill + 总数 pill，仿 status-row 风格）
+  - `/home` 标题下方 daily 一行（同类目 5 + total）
+  - `Promise.all +1 daily 端点`，O(1) 行替代实时 GROUP BY
+- 🆕 **刷新 UX 改进**：
+  - 刷新 success 路径加 toast（之前仅 fail 弹）
+    - upserted > 0 → 「刷新成功，新增 N 条」（success 绿）
+    - upserted = 0 → 「已是最新，0 条新增」（info 蓝）
+  - 刷新按钮 tooltip 改写：「从 readhub 立即拉取最新」
+- 🐛 **PMToast → PM_Toast typo 修**（4 文件 11 处，fav toast 之前**静默 dead**）
+  - `static/headlines.js` 3 处
+  - `static/home.js` 4 处
+  - `static/favorites.js` 2 处
+  - `static/home.js` 1 处（重复 fav handler）
+  - **影响**：fav 收藏成功 / 失败 toast 之前从不见到 —— 因 PMToast 拼错 → undefined.show() TypeError → 静默吞
+- 🔧 **alembic 双 head 合并**：`n0a1b2c3d4 (V0.103 收藏) + n0o1p2q3r4 (V0.105 类目) → n1o2p3q4r5 (V0.107 daily)`
+  - `down_revision = (n0a1b2c3d4, n0o1p2q3r4)` tuple 自动合并
+  - 之后是单一 head（V0.108+ 不再有多 head 状态）
+- 🔧 **i18n stale 修**（V0.106 漏改）：`headlines.subtitle` 「每 6 小时」→「每 4 小时」3 语统一
+- 端点 17 → 18（+2 daily，-0 移除），仓储 16 → 20 测试
+- 静态 JS 49 个全部通过（check_static_js.py）
+
+[详情](docs/releases/v0.107.0.md)
+
 >
 > 能力 × 版本对照（"哪个能力在哪个版本落地"）见 [docs/releases/index.md](docs/releases/index.md)
 
