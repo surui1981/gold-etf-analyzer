@@ -9,10 +9,12 @@
 - **env 控制开关** ``RATE_LIMIT_PER_MIN=0`` 禁用（dev 友好）。
 - **不过滤 OPTIONS**：CORS 预检频繁，不应被限速。
 - **跳过 /static/**：静态资产（HTML/JS/CSS/图片）走 FastAPI fallback 时也不计数。
-  - 理由：浏览器一次页面加载会拉 HTML + 5+ JS + 2+ CSS + favicon = 10+ 请求，
+  - 理由：浏览器一次页面加载会拉 HTML + 5+ JS + 2+ CSS + favicon = 10+ 请求,
     把静态当 API 一起限会让正常用户频繁看到"加载失败"提示（V0.83.2 实测）。
   - env ``RATE_LIMIT_SKIP_STATIC=false`` 可关闭（极端场景下需要）。
   - 仅 API 路径（/api/、/auth/、其他业务路由）进入滑动窗口。
+- **最小退避 10s**：V0.103.1 用户实测反馈 "刷新新闻 429 retry_after=4s" 立即点重试又撞，
+  改成 ``max(10, ...)`` 保证至少给客户端 10s 冷静期。窗口内前 9s 不再被 429 反复弹。
 
 测试
 ----
@@ -29,6 +31,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 WINDOW_SECONDS = 60.0
+MIN_RETRY_AFTER = 10  # V0.103.1：最小退避 10s（避免 retry_after=4s 立即重试又撞）
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -63,7 +66,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             hits.popleft()
 
         if len(hits) >= self._per_min:
-            retry_after = int(WINDOW_SECONDS - (now - hits[0]))
+            retry_after = max(MIN_RETRY_AFTER, int(WINDOW_SECONDS - (now - hits[0])))
             return JSONResponse(
                 status_code=429,
                 content={"detail": "rate limit exceeded", "retry_after": retry_after},

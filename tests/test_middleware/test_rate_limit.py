@@ -174,3 +174,26 @@ async def test_static_skip_can_be_disabled() -> None:
         r = await client.get("/static/ping", headers={"X-Forwarded-For": "8.8.8.8"})
         assert r.status_code == 429
 
+
+# ───────────────────── V0.103.1 · 最小退避 10s ─────────────────────
+
+
+async def test_retry_after_minimum_10s(app_limited: FastAPI) -> None:
+    """V0.103.1：retry_after 最小 10s（避免 4s 立即重试又撞）。
+
+    验证：第 6 次返回 429 时，Retry-After 头至少 10s。
+    """
+    from app.middleware.rate_limit import MIN_RETRY_AFTER
+
+    assert MIN_RETRY_AFTER == 10
+    transport = ASGITransport(app=app_limited)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        for _ in range(5):
+            await client.get("/ping", headers={"X-Forwarded-For": "5.5.5.5"})
+        r = await client.get("/ping", headers={"X-Forwarded-For": "5.5.5.5"})
+        assert r.status_code == 429
+        retry = int(r.headers["Retry-After"])
+        assert retry >= MIN_RETRY_AFTER, f"期望 ≥ {MIN_RETRY_AFTER}s，实际 {retry}s"
+        body = r.json()
+        assert body["retry_after"] >= MIN_RETRY_AFTER
+
