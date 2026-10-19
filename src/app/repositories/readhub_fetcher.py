@@ -1,8 +1,8 @@
-"""readhub 财经新闻流抓取器（V0.102）
+"""readhub 财经新闻流抓取器（V0.102 / V0.107.1 page_size=50 + 弃入「其他」）
 
 数据源
 ------
-- readhub 内部 API（前端 hydrate 用），非官方但匿名稳定，6h 一次抓取
+- readhub 内部 API（前端 hydrate 用），非官方但匿名稳定，4h 一次抓取
 - 端点：``GET https://api.readhub.cn/news``（仅 ``/news`` 不带 ``/finance`` 子
   路径——``/finance`` 只是一级 URL 上的静态目录，API 只暴露 /news 流）
 - 响应 schema::
@@ -22,7 +22,7 @@
         },
         ...
       ],
-      "pageSize": 20,
+      "pageSize": 50,
       "totalItems": 64378,
       "totalPages": 12876,
       "lastCursor": 263178
@@ -30,13 +30,16 @@
 
 设计要点
 --------
-- 进程内 5 分钟 fetcher cache：避免 scheduler 6h 唤醒 + 手动 ``refresh`` 在
+- 进程内 5 分钟 fetcher cache：避免 scheduler 4h 唤醒 + 手动 ``refresh`` 在
   同一时刻撞车；并降低对 readhub 的请求频次（实测无 429，但以防万一）
 - 抓取错误（timeout / 5xx / JSON 解析失败）→ 抛 ``ReadhubFetchError``，
   由 service 捕获 + 走「保留末次」 UX 路径（参考 V0.84 freshness 降级）
-- 单页 20 条已覆盖「今日要闻」页（实测 1h ≈ 8-15 条）；不支持分页深抓
-  （分页 cursor 用 base64 编码 + 服务端校验字段，逆向成本远高于价值）
-- **不**做实体抽取 / 关键词 / 情感——留给后续能力（plan §排除已声明）
+- V0.107.1 page_size 20→50（readhub max 100；实测 P99 <2s）：抓 1 次够 cover
+  4h 周期；不支持分页深抓（分页 cursor 用 base64 编码 + 服务端校验字段，
+  逆向成本远高于价值）
+- V0.107.1 ``_normalize`` 末段拦截 ``category == '其他'`` —— 不写入 DB；
+  service 层另有二次 gate（defense-in-depth）
+- **不**做实体抽取 / 情感——留给后续能力（plan §排除已声明）
 """
 
 from __future__ import annotations
@@ -58,7 +61,7 @@ logger = get_logger(__name__)
 
 # readhub 内部 API（前端 hydrate 用，匿名稳定）
 _API_URL = "https://api.readhub.cn/news"
-_DEFAULT_PAGE_SIZE = 20  # 1 抓只拿最近 ~20 条；6h 一次刷新足够
+_DEFAULT_PAGE_SIZE = 50  # V0.107.1：20→50（readhub max 100；实测 P99 <2s）
 _HTTP_TIMEOUT_SECONDS = 30.0
 _RETRY_BACKOFFS: tuple[float, ...] = (0.0, 1.5)  # 第 1 次失败后等 1.5s 重试
 _FETCHER_CACHE_TTL = 300  # 5 分钟（避免 scheduler + 手动 refresh 撞车）
@@ -122,7 +125,9 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
     """把 readhub 单条 dict 转 NewsFeedItem 字段 dict；缺关键字段则丢弃。
 
     Returns:
-        正常 dict；缺 external_id / title / url / publish_date → None（丢弃该条）
+        正常 dict；缺 external_id / title / url / publish_date → None（丢弃该条）。
+        V0.107.1 新增：``classify(...) == '其他'`` 也返 None（fetcher 层弃入，
+        不写入 DB；另有 service 二次 gate 兜底）。
     """
     ext_id = raw.get("id")
     title = (raw.get("title") or "").strip()
@@ -140,6 +145,12 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
             bool(pub_dt),
         )
         return None
+    # V0.105：入库即分类（关键词规则；upsert 时已分类行不变更）
+    category = classify(title, (raw.get("summary") or "").strip(), site)
+    # V0.107.1：fetcher 层弃入「其他」——不写入 DB
+    if category == "其他":
+        logger.debug("readhub item dropped (category=其他): id=%r", ext_id)
+        return None
     return {
         "external_id": ext_id,
         "title": title,
@@ -150,8 +161,7 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
         "language": (raw.get("language") or "").strip()[:8] or None,
         "author_name": (raw.get("authorName") or "").strip()[:128] or None,
         "publish_date": pub_dt,
-        # V0.105：入库即分类（关键词规则；upsert 时已分类行不变更）
-        "category": classify(title, (raw.get("summary") or "").strip(), site),
+        "category": category,
         # fetched_at 用 SQL DEFAULT now；source = 'readhub' 走 server_default
     }
 
@@ -164,11 +174,13 @@ async def fetch_readhub_feed(
     """抓取 readhub 最新财经新闻。
 
     Args:
-        page_size: 一次抓取条数（默认 20，readhub max 100）
+        page_size: 一次抓取条数（默认 50，readhub max 100；V0.107.1 20→50）
         use_cache: True → 5min TTL 命中直接返回；False → 强制重抓
 
     Returns:
-        已 normalize 的 dict 元组（可直接喂 ``NewsFeedRepository.upsert_bulk``）
+        已 normalize 的 dict 元组（可直接喂 ``NewsFeedRepository.upsert_bulk``）。
+        V0.107.1：``_normalize`` 已弃入 ``category='其他'``，本函数返回的元组
+        **不会**含 category='其他'。
         抓取失败 → 抛 ``ReadhubFetchError``（由 service 兜底）
 
     Raises:
@@ -191,7 +203,7 @@ async def fetch_readhub_feed(
                     _API_URL,
                     params={"pageSize": page_size},
                     headers={
-                        "User-Agent": "gold-etf-analyzer/V0.102",
+                        "User-Agent": "gold-etf-analyzer/V0.107.1",
                         "Accept": "application/json",
                     },
                 )

@@ -1,4 +1,4 @@
-"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合）
+"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合 / V0.107.1 弃入「其他」）
 
 设计要点
 --------
@@ -14,6 +14,8 @@
 - V0.107 按日聚合：``refresh()`` 末尾 → ``rebuild_daily(BJT today)`` 重建
   当日行；scheduler 跨午夜时加 rebuild_daily(BJT yesterday)。
   启动 lifespan 阶段 ``backfill_daily(30 days)`` 一次性回填历史
+- V0.107.1：service ``refresh()`` 二次拦截 ``category='其他'`` 记录——
+  defense-in-depth，fetcher ``_normalize`` 也已弃入（本层兜底）
 """
 
 from __future__ import annotations
@@ -101,12 +103,25 @@ class NewsFeedService:
             logger.error("news feed refresh unexpected error: %s", exc)
             return {"ok": False, "upserted": 0, "error": f"unexpected: {exc}"}
 
+        # V0.107.1：service 二次拦截「其他」——defense-in-depth（fetcher 层
+        # _normalize 已弃入；本层在 fetcher 改动漏改时仍能拦住）
+        _ALLOWED_CATEGORIES = ("财经", "科技", "创投", "商业")
+        before = len(records)
+        records = tuple(
+            r for r in records if r.get("category") in _ALLOWED_CATEGORIES
+        )
+        dropped = before - len(records)
+        if dropped:
+            logger.info(
+                "news feed refresh: dropped %d 其他 items at service gate", dropped
+            )
+
         if not records:
-            # readhub 返回空（极罕见，可能是 API 维护）→ 当作软失败
+            # readhub 返回空 或 全部被弃入「其他」→ 当作软失败
             return {
                 "ok": False,
                 "upserted": 0,
-                "error": "readhub returned empty payload",
+                "error": "no valid items after category filter",
             }
 
         try:
