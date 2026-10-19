@@ -17,7 +17,8 @@
 // V0.100.1 hotfix：home.html 今日要闻改 readhub 后，旧 SW 缓存里仍是 news-score 旧版（含 score 字段），
 //   bump VERSION 让 activate 阶段按 cache name 删旧 SHELL/RUNTIME，浏览器重 precache 新 home.html
 // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice(0,5)→slice(0,20)、limit=5→limit=20、3 骨架→5 骨架）
-const VERSION = "v0.100.2";
+// V0.103.0 正式发版：/favorites 档案管理页 + /api/v1/favorites/* 9 端点
+const VERSION = "v0.103.0";
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
