@@ -19,7 +19,7 @@
 // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice(0,5)→slice(0,20)、limit=5→limit=20、3 骨架→5 骨架）
 // V0.103.0 正式发版：/favorites 档案管理页 + /api/v1/favorites/* 9 端点
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
-const VERSION = "v0.108.0";  // V0.108.0 · 今日要闻站点黑名单 + 财经加强 + 白名单站点名
+const VERSION = "v0.109.0";  // V0.109.0 · 分类词边界修复 + 发布词精度
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
