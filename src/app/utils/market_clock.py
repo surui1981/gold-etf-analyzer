@@ -331,3 +331,39 @@ def classify_freshness(
     if lag_days == 1:
         return FreshnessLevel.T1
     return FreshnessLevel.LAGGED
+
+
+def trading_days_between(start: date, end: date) -> int:
+    """返回从 ``start`` 到 ``end``（含两端）之间的工作日数。
+
+    V0.109.2：用于白银 SGE 基准价 staleness 检测。akshare ``spot_silver_benchmark_sge()``
+    接口常见滞后 2-3 个工作日（实测 2026-10-20 时接口最新数据停在 10-18 周日），
+    仓储层据此把 stale 数据标 fallback 并让 source-bar 显示 warn。
+
+    工作日定义：周一至周五（``weekday() < 5``）。
+    不区分法定节假日：A 股节假日与 SGE 休市同步，简化为「5×24h」足够对齐用户直觉。
+    逆序（``end < start``）返回 0，staleness 判定永为 false（保留原行为）。
+
+    Example:
+        >>> trading_days_between(date(2026, 10, 16), date(2026, 10, 20))
+        3   # 16(五)、19(一)、20(二)
+        >>> trading_days_between(date(2026, 10, 18), date(2026, 10, 19))
+        1   # 跨周日不算
+
+    Args:
+        start: 数据真实所属交易日。
+        end: 当前日期（一般是 ``date.today()``）。
+
+    Returns:
+        大于等于 0 的整数。``0`` = 同日 / 逆序；
+        ``1`` = 跨了一个工作日 / 周末挡路；``>=2`` = 明显滞后。
+    """
+    if end < start:
+        return 0
+    days = 0
+    d = start
+    while d <= end:
+        if d.weekday() < 5:  # Mon=0..Fri=4, Sat=5, Sun=6
+            days += 1
+        d += timedelta(days=1)
+    return days

@@ -212,6 +212,9 @@ async def silver_quote(
     """纽约白银（COMEX SI 期货主力，美元/盎司）最新报价。
 
     与 ``/market/silver/etf-quote``（562800 元/份）口径严格区分。
+
+    V0.109.2：返回带 ``data_as_of`` 字段。如果上游数据滞后 > 1 工作日（akshare history 路径），
+    前端可见 ``data_as_of`` ≠ 当天日期 → 应显示「数据滞后 N 天」chip。
     """
     quote = await repo.get_silver_ny_quote()
     return SilverQuoteOut(
@@ -219,6 +222,7 @@ async def silver_quote(
         price_usd=quote.price_usd,
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
+        data_as_of=quote.data_as_of,  # V0.109.2
     )
 
 
@@ -234,6 +238,8 @@ async def silver_etf_quote(
 
     V0.99：当 ``data_source_note="lof_proxy"`` 时，表示数据来自 sz161226「白银基金 LOF」
     （eastmoney 失败后的代理源），前端应展示「数据来源：白银基金 LOF（新浪代理）」备注。
+
+    V0.109.2：返回带 ``data_as_of`` 字段供前端时效滞告判定。
     """
     quote = await repo.get_silver_etf_quote()
     return SilverEtfQuoteOut(
@@ -244,6 +250,7 @@ async def silver_etf_quote(
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
         data_source_note=quote.data_source_note,
+        data_as_of=quote.data_as_of,  # V0.109.2
     )
 
 
@@ -272,6 +279,7 @@ async def silver_gram_quote(
         source="silver_etf×1000",
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
+        data_as_of=quote.data_as_of,  # V0.109.2
     )
 
 
@@ -416,6 +424,10 @@ async def silver_sge_quote(
     - 本端点：CNY/kg（每千克人民币），数据源 SGE 基准价
     - etf-quote：CNY/份（每份人民币），数据源 562800 ETF
     - silver/quote：USD/oz（每盎司美元），数据源 NY COMEX SI
+
+    V0.109.2：返回带 ``data_as_of`` 字段。
+    上游 ``ak.spot_silver_benchmark_sge()`` 在生产中常见滞后 2-3 工作日，
+    前端用此字段做时效滞告。
     """
     quote = await repo.get_silver_sge_quote()
     if quote is None:
@@ -424,6 +436,7 @@ async def silver_sge_quote(
         price_cny_per_kg=quote.price_usd,  # SilverQuote.price_usd 字段承载任意单位价格
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
+        data_as_of=quote.data_as_of,  # V0.109.2
     )
 
 

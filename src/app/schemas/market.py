@@ -349,6 +349,12 @@ class SilverQuoteOut(BaseModel):
     price_usd: float = Field(..., gt=0, description="最新价，美元/盎司")
     change_pct: float = Field(..., description="涨跌幅 %")
     updated_at: datetime
+    data_as_of: date | None = Field(
+        None,
+        description="V0.109.2：数据真实所属交易日（K 线末根日期 / 实时 bar 日期）。"
+        "对比 ``updated_at``：实时源两者一致；历史兜底段 ``updated_at`` 是末根日期 00:00 UTC，"
+        "``data_as_of`` 是同一日期，但额外为前端提供独立语义位用于时效滞告判定。",
+    )
 
 
 class SilverEtfQuoteOut(BaseModel):
@@ -368,6 +374,10 @@ class SilverEtfQuoteOut(BaseModel):
     data_source_note: str | None = Field(
         default=None,
         description='V0.99：数据源备注。"lof_proxy" = eastmoney 失败时降级到 sz161226 白银基金 LOF；None = 真实 562800 ETF',
+    )
+    data_as_of: date | None = Field(
+        None,
+        description="V0.109.2：见 ``SilverQuoteOut.data_as_of``。",
     )
 
 
@@ -389,6 +399,10 @@ class SilverGramQuoteOut(BaseModel):
     )
     change_pct: float = Field(..., description="涨跌幅 %")
     updated_at: datetime
+    data_as_of: date | None = Field(
+        None,
+        description="V0.109.2：见 ``SilverQuoteOut.data_as_of``（与 ETF 同源同步）。",
+    )
 
 
 class SilverTrendPoint(BaseModel):
@@ -479,6 +493,10 @@ class SilverSgeQuoteOut(BaseModel):
     单位：CNY/kg（人民币元 / 千克）。
     数据源：上海黄金交易所基准价（ak.spot_silver_benchmark_sge()）。
     与 ``silver_etf``（元/份）、``silver_ny``（美元/盎司）口径严格区分。
+
+    V0.109.2：加 ``data_as_of`` 字段。
+    本接口上游 ``ak.spot_silver_benchmark_sge()`` 在生产中实测滞后 2-3 个工作日
+    （2026-10-20 时接口最新数据停在 10-18 周日）—— 前端可用此字段做时效滞告。
     """
 
     symbol: str = Field(default="Ag99.99", description="合约标识（SGE Ag99.99）")
@@ -488,6 +506,10 @@ class SilverSgeQuoteOut(BaseModel):
     unit: str = Field(default="元/千克", description="单位")
     change_pct: float = Field(default=0.0, description="当日涨跌幅（百分点）")
     updated_at: datetime
+    data_as_of: date | None = Field(
+        None,
+        description="V0.109.2：见 ``SilverQuoteOut.data_as_of``。",
+    )
 
 
 class SilverSgeTrendPoint(BaseModel):

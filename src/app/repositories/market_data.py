@@ -111,6 +111,11 @@ class SilverQuote:
     - ``None``：默认（来自 562800 真实 ETF 行情）
     - ``"lof_proxy"``：sina sz161226「白银基金 LOF」代理源（eastmoney 失败时降级）
     - ``"sge_silver"``：SGE 上海银基准价（CNY/kg）
+
+    V0.109.2：加 ``data_as_of`` 字段 = 数据真实所属交易日（K 线末根日期 / 实时 bar 日期）。
+    之前 ``updated_at`` 字段混用了「实时抓取时刻」和「K 线末根日期 + 00:00 UTC」，
+    前端没法识别 staleness。``data_as_of`` 给前端一个明确语义位：
+    「这报价的收盘价是哪天的」——即便 akshare 数据源滞后 2 天，用户也能看见。
     """
 
     symbol: str
@@ -118,6 +123,7 @@ class SilverQuote:
     change_pct: float
     updated_at: datetime
     data_source_note: str | None = None
+    data_as_of: date | None = None
 
 
 @dataclass(frozen=True)
@@ -334,6 +340,33 @@ class MarketDataRepository:
         provider = self._bundle.silver_history
         is_lof = getattr(provider, "_last_was_lof_proxy", False)
         return "lof_proxy" if is_lof else None
+
+    @staticmethod
+    def _is_data_stale(last_date: date | None, *, max_lag_days: int = 1) -> bool:
+        """V0.109.2：报价用数据的「真实交易日」距今超过 max_lag_days 个工作日 → stale。
+
+        Whiteboards / 上下文：
+        - SGE 基准价 akshare 接口 (``spot_silver_benchmark_sge``) 上游经常滞后 2-3 天，
+          期间接口照常返回历史 K 线末根当 "今日报价"——数字没问题但用户看不出 stale。
+        - 阈值 1 工作日是「周末休市后下周一算正常」的设计（trading_days_between 自动跳过周末）；
+          周二早上 SGE 数据还没拿到算 stale，符合直觉。
+        - 用于``get_silver_*_quote`` 返回前：stale 数据应让 source-bar 看到，
+          但**仍**走真数据路径（不切 mock），否则会让用户看到假数据。
+
+        Args:
+            last_date: 数据真实所属交易日（K 线末根日期 / 实时 bar 日期）。
+            max_lag_days: 允许的最大滞后工作日数（默认 1）。
+
+        Returns:
+            True 表示数据已 stale（应标 fallback 而非 live）；
+            False 表示数据新鲜（保留 live 标记）。
+            ``last_date`` 为 None（无任何数据可参考）时返回 False（保留原行为，让上层用 mock）。
+        """
+        if last_date is None:
+            return False  # None 表示没数据可判断，保留原路径（live/mock 由其他机制判断）
+        from app.utils.market_clock import trading_days_between
+
+        return trading_days_between(last_date, date.today()) > max_lag_days
 
     def source_status(self) -> dict[str, str]:
         """各数据源状态明细（供接口返回与页面展示）。
@@ -756,6 +789,10 @@ class MarketDataRepository:
         这样即使当日 K 线 Yahoo 已生成（盘中有 tick 更新），``updated_at`` 就是今天。
 
         V0.99：当 history 来自 sz161226「白银基金 LOF」代理源时，``data_source_note="lof_proxy"``。
+
+        V0.109.2：返回带 ``data_as_of`` 字段 = 数据真实所属交易日。
+        配合 ``_is_data_stale`` 检测，超过 1 工作日的 stale 数据走 ``_mark(ok=False)``
+        让 source-bar 在健康摘要中标 warn。
         """
         cache_key = ("quote_silver_etf", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
@@ -764,7 +801,8 @@ class MarketDataRepository:
         try:
             spot = await self._try_silver_spot(symbol)
             if spot is not None:
-                self._mark("silver_etf", True, last_date=spot.date)
+                stale = self._is_data_stale(spot.date)
+                self._mark("silver_etf", not stale, last_date=spot.date)
                 quote = SilverQuote(
                     symbol=symbol,
                     price_usd=round(spot.close, 3),
@@ -772,6 +810,7 @@ class MarketDataRepository:
                     updated_at=datetime.combine(
                         spot.date, datetime.min.time(), tzinfo=timezone.utc
                     ),
+                    data_as_of=spot.date,  # V0.109.2
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -781,7 +820,9 @@ class MarketDataRepository:
                 last = klines[-1]
                 prev = klines[-2] if len(klines) >= 2 else last
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-                self._mark("silver_etf", True)
+                # V0.109.2：stale → ok=False 走 source-bar warn
+                stale = self._is_data_stale(last.date)
+                self._mark("silver_etf", not stale, last_date=last.date)
                 # V0.99：检测 provider 是否走了 sz161226 LOF 代理源
                 note = self._detect_silver_etf_data_source_note()
                 quote = SilverQuote(
@@ -792,6 +833,7 @@ class MarketDataRepository:
                         last.date, datetime.min.time(), tzinfo=timezone.utc
                     ),
                     data_source_note=note,
+                    data_as_of=last.date,  # V0.109.2
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -852,6 +894,8 @@ class MarketDataRepository:
 
         设计目标：默认 ``MARKET_PROVIDER=akshare`` 下 NY 银即可拿到实时报价
         （不再依赖 ``silver_yahoo`` 配置项）。
+
+        V0.109.2：返回带 ``data_as_of`` 字段 + 历史兜底段也走 staleness 检查。
         """
         cache_key = ("quote_silver_ny", symbol)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
@@ -869,6 +913,7 @@ class MarketDataRepository:
                     price_usd=round(price, 3),
                     change_pct=0.0,
                     updated_at=datetime.now(timezone.utc),
+                    data_as_of=date.today(),  # V0.109.2：实时源，数据日期=今日
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -880,7 +925,9 @@ class MarketDataRepository:
                 last = klines[-1]
                 prev = klines[-2] if len(klines) >= 2 else last
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-                self._mark("silver_ny", True, last_date=last.date)
+                # V0.109.2：历史兜底段也走 staleness 检查
+                stale = self._is_data_stale(last.date)
+                self._mark("silver_ny", not stale, last_date=last.date)
                 quote = SilverQuote(
                     symbol=symbol,
                     price_usd=round(last.close, 3),
@@ -888,6 +935,7 @@ class MarketDataRepository:
                     updated_at=datetime.combine(
                         last.date, datetime.min.time(), tzinfo=timezone.utc
                     ),
+                    data_as_of=last.date,  # V0.109.2
                 )
                 _cache_set(cache_key, quote)
                 return quote
@@ -992,6 +1040,8 @@ class MarketDataRepository:
         Returns:
             SilverQuote（symbol="Ag"，price_usd 字段承载 元/克，结构沿用统一口径）。
             任何异常降级 Mock（基于 ETF mock × 1000）。
+
+        V0.109.2：同步继承 ETF 报的 ``data_as_of``，与 ETF 同 stale 状态。
         """
         cache_key = ("quote_silver_gram",)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
@@ -1002,12 +1052,16 @@ class MarketDataRepository:
             if etf_quote is None or etf_quote.price_usd <= 0:
                 raise RuntimeError("silver ETF quote unavailable")
             gram_price = round(etf_quote.price_usd * self._SILVER_GRAM_PER_ETF_SHARE, 2)
-            self._mark("silver_gram", True, last_date=etf_quote.updated_at.date())
+            # V0.109.2：跟 ETF 走同样 staleness（gram 是 ETF 派生）
+            etf_stale = self._is_data_stale(etf_quote.data_as_of)
+            self._mark("silver_gram", not etf_stale, last_date=etf_quote.data_as_of)
             quote = SilverQuote(
                 symbol="Ag",
                 price_usd=gram_price,
                 change_pct=etf_quote.change_pct,
                 updated_at=etf_quote.updated_at,
+                data_source_note=etf_quote.data_source_note,
+                data_as_of=etf_quote.data_as_of,  # V0.109.2：继承 ETF
             )
             _cache_set(cache_key, quote)
             return quote
@@ -1109,6 +1163,11 @@ class MarketDataRepository:
         数据源：``bundle.sge_silver_history`` 最后一根 K 线的 close（即「晚盘价」，
         最贴近 T+0 现货价）。
         与 ``silver_etf_quote``（元/份）、``silver_ny_quote``（美元/盎司）口径严格区分。
+
+        V0.109.2：返回带 ``data_as_of`` 字段 + 上游数据滞后检测。
+        akshare 的 ``spot_silver_benchmark_sge()`` 接口常见滞后 2-3 个工作日
+        （实测 2026-10-20 时接口最新数据停在 10-18 周日），该 stale 数据走
+        ``_mark(sge_silver, ok=False)`` 让 source-bar 看到 warn。
         """
         cache_key = ("quote_silver_sge",)
         cached = _cache_get(cache_key, ttl=self._cache_ttl)
@@ -1122,6 +1181,7 @@ class MarketDataRepository:
                 price_usd=0.0,
                 change_pct=0.0,
                 updated_at=datetime.now(timezone.utc),
+                data_as_of=None,  # V0.109.2
             )
         try:
             klines = await sge_provider.get_sge_silver_history(days=3)
@@ -1129,8 +1189,18 @@ class MarketDataRepository:
                 last = klines[-1]
                 prev = klines[-2] if len(klines) >= 2 else last
                 change_pct = (last.close - prev.close) / prev.close * 100 if prev.close else 0.0
-                ok = self._is_silver_data_real(sge_provider)
+                real_ok = self._is_silver_data_real(sge_provider)
+                # V0.109.2：stale 数据视为降级 → ok=False 让 source-bar warn
+                stale = self._is_data_stale(last.date)
+                ok = real_ok and not stale
                 self._mark("sge_silver", ok, last_date=last.date)
+                if stale:
+                    logger.warning(
+                        "SGE silver 上游数据滞后: last_date=%s today=%s (>%d 工作日，标 fallback)",
+                        last.date,
+                        date.today(),
+                        1,
+                    )
                 # ⚠ SilverQuote.price_usd 字段实际承载任意单位价格（元/千克 也是用这个字段）。
                 # 仓储层统一结构（避免在 dataclass 加字段破坏旧 schema）。
                 quote = SilverQuote(
@@ -1140,6 +1210,8 @@ class MarketDataRepository:
                     updated_at=datetime.combine(
                         last.date, datetime.min.time(), tzinfo=timezone.utc
                     ),
+                    data_source_note="sge_silver" if real_ok else None,
+                    data_as_of=last.date,  # V0.109.2
                 )
                 _cache_set(cache_key, quote)
                 return quote

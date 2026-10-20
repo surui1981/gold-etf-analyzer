@@ -94,6 +94,7 @@ class FakeMarketRepo:
                 "change_pct": 1.2,
                 "updated_at": date.today(),
                 "data_source_note": None,  # V0.99：默认无 LOF 代理标记
+                "data_as_of": date.today(),  # V0.109.2：fake 默认今日
             },
         )()
 
@@ -101,7 +102,13 @@ class FakeMarketRepo:
         return type(
             "Q",
             (),
-            {"symbol": symbol, "price_usd": 31.5, "change_pct": 0.8, "updated_at": date.today()},
+            {
+                "symbol": symbol,
+                "price_usd": 31.5,
+                "change_pct": 0.8,
+                "updated_at": date.today(),
+                "data_as_of": date.today(),  # V0.109.2：fake 默认今日
+            },
         )()
 
     async def get_silver_etf_history(self, days: int = 60) -> list[GoldKline]:
@@ -149,6 +156,7 @@ class FakeMarketRepo:
                 "updated_at": datetime.combine(
                     date.today(), datetime.min.time(), tzinfo=timezone.utc
                 ),
+                "data_as_of": date.today(),  # V0.109.2：与 ETF 同源同步
             },
         )()
 
@@ -367,6 +375,8 @@ async def test_silver_quote_returns_200(client: AsyncClient) -> None:
     assert body["symbol"] == "SI"
     assert body["price_usd"] == pytest.approx(31.5, abs=0.01)
     assert "updated_at" in body
+    # V0.109.2：data_as_of 字段在响应里 = 当天日期
+    assert body.get("data_as_of") == date.today().isoformat()
 
 
 async def test_silver_etf_quote_returns_200(client: AsyncClient) -> None:
@@ -378,6 +388,8 @@ async def test_silver_etf_quote_returns_200(client: AsyncClient) -> None:
     assert body["price"] == pytest.approx(2.45, abs=0.01)
     assert body["currency"] == "CNY"
     assert body["unit"] == "元/份"
+    # V0.109.2：data_as_of 字段在响应里
+    assert body.get("data_as_of") == date.today().isoformat()
 
 
 async def test_silver_gram_quote_returns_200(client: AsyncClient) -> None:
@@ -387,6 +399,8 @@ async def test_silver_gram_quote_returns_200(client: AsyncClient) -> None:
     body = resp.json()
     assert body["symbol"] == "Ag"
     assert body["price"] == pytest.approx(2450.0, abs=0.01)  # 2.45 × 1000
+    # V0.109.2：data_as_of 字段在响应里（与 ETF 同源同步）
+    assert body.get("data_as_of") == date.today().isoformat()
     assert body["currency"] == "CNY"
     assert body["unit"] == "元/克"
     assert body["source"] == "silver_etf×1000"

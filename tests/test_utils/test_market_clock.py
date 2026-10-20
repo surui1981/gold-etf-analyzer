@@ -13,6 +13,7 @@ from app.utils.market_clock import (
     freshness_label,
     ny_gold_session,
     sge_session,
+    trading_days_between,
 )
 
 _ET = ZoneInfo("America/New_York")
@@ -128,6 +129,54 @@ def test_classify_freshness_delayed_on_weekend() -> None:
         )
         == FreshnessLevel.DELAYED
     )
+
+
+# ───────────────────── V0.109.2：trading_days_between 单位测试 ─────────────────────
+
+
+def test_trading_days_between_same_day() -> None:
+    """V0.109.2：同日（含两端）= 1。"""
+    assert trading_days_between(date(2026, 10, 20), date(2026, 10, 20)) == 1
+
+
+def test_trading_days_between_midweek() -> None:
+    """V0.109.2：周三→周五（中间无周末）= 3。"""
+    assert trading_days_between(date(2026, 10, 14), date(2026, 10, 16)) == 3
+
+
+def test_trading_days_between_across_weekend() -> None:
+    """V0.109.2：周五→下周二 = 3（周五 + 周一 + 周二，跳过周末）。"""
+    assert trading_days_between(date(2026, 10, 16), date(2026, 10, 20)) == 3
+
+
+def test_trading_days_between_sunday_to_monday() -> None:
+    """V0.109.2：周日→周一 = 1（只周一工作日，周日不计）。
+
+    这是白银 SGE akshare 接口常见状态：周日 18:00 的数据，
+
+    如果周一拉，trading_days_between = 1，max_lag_days=1 时不算 stale。
+    """
+    assert trading_days_between(date(2026, 10, 18), date(2026, 10, 19)) == 1
+
+
+def test_trading_days_between_sunday_to_tuesday() -> None:
+    """V0.109.2：周日→周二 = 2（周一 + 周二）→ 应触发 stale。
+
+    这是本次故障的真实状态：2026-10-20 周二拉 akshare
+
+    接口拿到 10-18 周日数据，trading_days_between = 2 > 1 → 标 fallback。
+    """
+    assert trading_days_between(date(2026, 10, 18), date(2026, 10, 20)) == 2
+
+
+def test_trading_days_between_saturday_sunday_only_returns_0() -> None:
+    """V0.109.2：周六→周日 = 0（两天都不是工作日）。"""
+    assert trading_days_between(date(2026, 10, 17), date(2026, 10, 18)) == 0
+
+
+def test_trading_days_between_reverse_returns_0() -> None:
+    """V0.109.2：逆序 end < start 返回 0（staleness 永远不算 stale，让上层走其他判定）。"""
+    assert trading_days_between(date(2026, 10, 20), date(2026, 10, 18)) == 0
 
 
 def test_freshness_labels_cover_all_levels() -> None:
