@@ -4,6 +4,33 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.109.2] · 2026-10-20
+
+`白银页面数据时效透明化（SGE akshare 数据滞后 2 天暴露）` — 接口透明化 hotfix
+
+- 🐛 **白银 `/silver/sge-quote` 数据「缓存 2 天」伪象根因**
+  - `ak.spot_silver_benchmark_sge()` 在生产常见滞后 2-3 个工作日
+    （实测 2026-10-20 周二时接口最新数据停在 10-18 周日）
+  - 原仓储 `get_silver_sge_quote()` 用历史 K 线末根日期当 `updated_at` + 没告诉前端
+    → 用户反复刷新拿同一日数据 → 误以为「缓存 2 天」
+  - cache TTL 不是问题（默认 300s = 5min 是合理的）
+- ✅ **加 `data_as_of` 字段**到 4 个白银 quote schema（Silver/Etf/Gram/Sge）
+  - 字段语义 = 数据真实所属交易日
+  - 与 `updated_at` 分离，前端可独立判断 staleness
+  - 向后兼容（`None` 默认，老客户端不报错）
+- 🔍 **后端 staleness 检测**：`trading_days_between(last_date, today) > 1` → `_mark(ok=False)`
+  - 阈值 1 工作日的直觉：Sun→Mon（跨周末挡路）不算 stale；Sun→Tue 算 stale
+  - stale 时 source-bar 把 `sge_silver` 标 mock
+- 🎨 **前端数据日期显示 + 滞后 chip**：3 个白银卡片下方显示「数据日期 YYYY-MM-DD」
+  - 跨日 > 1 日历天时显示琥珀色「⚠ 数据滞后 N 天」chip
+  - 复用 `fsh-chip fsh-warn fsh-stale-chip` 样式（freshness.js 已有）
+  - `renderSourceBar()` 增强：尾部追加「⚠ 时效滞后: 〈源〉数据至 〈date〉（滞后 N 天）」
+- 🛠️ **`utils.market_clock.trading_days_between()`** 简化版工作日数（周一至周五 5×24h）
+- 🚫 **不引入新数据源**：akshare 滞后是上游问题；加代理源风险大、收益小
+- ✅ **stale 时仍走真数据路径**（不切 mock）：让用户看到真实价 + 滞告提示；假数据会误导
+
+测试增量：+10 全绿（market_clock trading_days_between 7 例 + market API data_as_of 3 例）
+
 ## [V0.109.1] · 2026-10-20
 
 `分类架构改为「内容优先、站名兜底」` — 修正 V0.108.0「站名压过内容」的设计失误
