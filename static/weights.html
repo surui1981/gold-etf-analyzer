@@ -60,6 +60,8 @@
   .mo-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     font-size: 11.5px; color: var(--muted); padding: 0 0 6px; }
   .mo-head span { min-width: 88px; }
+  /* 同 .mo-ops：display:flex 会盖掉 [hidden]，必须显式写 */
+  .mo-head[hidden] { display: none; }
   .mo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     padding: 9px 0; border-top: 1px solid var(--border); }
   .mo-row .nm { width: 116px; font-size: 13px; flex-shrink: 0; }
@@ -81,8 +83,15 @@
   .mo-chip.mo-chip-warn { color: #946300; border-color: rgba(245,217,122,.55);
     background: rgba(245,217,122,.16); }
   .mo-ops { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  /* [hidden] 陷阱：上一行的 display:flex 会盖掉 [hidden] 属性自带的 display:none，
+     JS 里 ops.hidden = true 看着生效、实际按钮还在。这条必须显式写。 */
+  .mo-ops[hidden] { display: none; }
   .mo-ops button { padding: 8px 16px; font-size: 13px; }
   .mo-empty { font-size: 12px; color: var(--muted); padding: 10px 0; }
+  /* 后端未部署该端点时的说明块 —— 不画表单，改画原因 */
+  .mo-missing { color: #946300; background: rgba(245,217,122,.10);
+    border: 1px solid rgba(245,217,122,.40); border-radius: 8px; padding: 12px 14px; }
+  .mo-missing-hint { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
   .actions { display: flex; gap: 10px; margin-top: 4px; }
   button { border: none; border-radius: 8px; padding: 10px 22px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .btn-save { background: #1f2329; color: #fff; }
@@ -575,6 +584,11 @@ let macroFactors = {};      // key → {value, data_date, source}（来自 gold/
 // 「当前生效」列的取数状态。冷启动时 gold/trend 要现拉 60 根 K 线，实测数秒 ——
 // 这期间必须显示中性「加载中」而不是「暂无读数」（后者会被读成"因子丢了"）。
 let macroFactorState = "loading";   // loading | ready | failed
+// 后端未部署本功能（GET /settings/macro-overrides → 404）。
+// 典型成因：static/*.html 由 StaticFiles 直接读磁盘，改完即生效；而 Python 路由
+// 冻结在后端进程的内存里 —— 部署滞后时就会出现"页面是新的、后端是旧的"，
+// 保存必然 404。static 与后端版本不一致是本项目反复出现的部署故障形态。
+let overrideApiMissing = false;
 
 /** i18n 取值：i18n.js 以 defer 加载，早于本页首屏 fetch 时未必就绪，故做一次兜底 */
 function t(key, params) {
@@ -664,6 +678,22 @@ function restoreUserEdits(edits) {
 function renderOverrides() {
   const rows = document.getElementById("moRows");
   if (!rows) return;
+  if (overrideApiMissing) {
+    // 后端没有这个端点：只说明原因，不画表单。画了也保存不了。
+    rows.innerHTML = `<div class="mo-empty mo-missing">
+      <div>${t("weights.mo_not_deployed")}</div>
+      <div class="mo-missing-hint">${t("weights.mo_not_deployed_hint")}</div>
+    </div>`;
+    const ops = document.querySelector("#macroOverrideCard .mo-ops");
+    if (ops) ops.hidden = true;   // 保存 / 清除同样会 404，一并藏掉
+    const head = document.querySelector("#macroOverrideCard .mo-head");
+    if (head) head.hidden = true; // 表头下面是说明块、没有数据行，留着只是误导
+    return;
+  }
+  const ops = document.querySelector("#macroOverrideCard .mo-ops");
+  if (ops) ops.hidden = false;
+  const head = document.querySelector("#macroOverrideCard .mo-head");
+  if (head) head.hidden = false;
   const edits = snapshotUserEdits();
   rows.innerHTML = OVERRIDE_FIELDS.map(overrideRowHtml).join("");
   restoreUserEdits(edits);
@@ -680,16 +710,55 @@ function absorbMacroFactors(trendJson) {
   renderOverrides();
 }
 
+/** 把 fetch 结果里的 HTTP status 带进 Error，供上层区分"后端没这功能"与"取数失败" */
+async function fetchOverrideApi(method, body) {
+  let r;
+  try {
+    r = await fetch(OVERRIDE_API, {
+      method,
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (e) {
+    const err = new Error(t("weights.mo_err_network", { msg: e.message }));
+    err.status = 0;   // 网络层失败（非 HTTP 错误）
+    throw err;
+  }
+  if (r.status === 404) {
+    const err = new Error(t("weights.mo_err_404"));
+    err.status = 404;
+    throw err;
+  }
+  if (!r.ok) {
+    const detail = (await r.json().catch(() => ({}))).detail;
+    const err = new Error(t(r.status === 403 ? "weights.mo_err_403"
+      : r.status === 422 ? "weights.mo_err_422"
+      : r.status >= 500 ? "weights.mo_err_5xx"
+      : "weights.mo_err_http", { msg: detail || r.status }));
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+}
+
 async function loadOverrides() {
   try {
-    const r = await fetch(OVERRIDE_API);
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    overrideState = await r.json();
-    renderOverrides();
+    overrideState = await fetchOverrideApi("GET");
+    overrideApiMissing = false;
   } catch (e) {
-    const rows = document.getElementById("moRows");
-    if (rows) rows.innerHTML = `<div class="mo-empty">${t("weights.mo_load_fail", { msg: e.message })}</div>`;
+    if (e.status === 404) {
+      // 后端跑的是旧版本：本功能根本没部署。此时**不能**继续画可填写的表单 ——
+      // 用户会认真填完、点保存、再撞一次 404。V0.110.0 实测踩到：首屏 loadOverrides
+      // 404 后，紧随其后的 loadTrendForPreview() 成功并调用 renderOverrides()，
+      // 把刚画出的「加载失败」整个抹掉，换成一张看起来完全正常的表单。
+      overrideApiMissing = true;
+    } else {
+      const rows = document.getElementById("moRows");
+      if (rows) rows.innerHTML = `<div class="mo-empty">${t("weights.mo_load_fail", { msg: e.message })}</div>`;
+      return;
+    }
   }
+  renderOverrides();
 }
 
 /** 收集表单 → 请求体；值与日期都填了才生效（只填其一视为未设置） */
@@ -722,16 +791,16 @@ async function saveOverrides() {
   if (bad) { moMsg(t("weights.mo_bad_value", { k: bad[0] }), "err"); return; }
   moMsg(t("weights.mo_saving"), "");
   try {
-    const r = await fetch(OVERRIDE_API, {
-      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
-    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "HTTP " + r.status);
-    overrideState = await r.json();
+    overrideState = await fetchOverrideApi("PUT", body);
+    overrideApiMissing = false;
     renderOverrides();
     // 覆盖值直接改写宏观面评分 → 必须重新取一次趋势，刷新下方实时预览
     loadTrendForPreview();
     moMsg(t("weights.mo_saved"), "ok");
-  } catch (e) { moMsg(t("weights.mo_save_fail", { msg: e.message }), "err"); }
+  } catch (e) {
+    if (e.status === 404) overrideApiMissing = true;   // 保存后不再显示可填表单
+    moMsg(t("weights.mo_save_fail", { msg: e.message }), "err");
+  }
 }
 
 /** 单因子清除：清空输入框后立即提交（其余因子的值原样带上，不误伤） */

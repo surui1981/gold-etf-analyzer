@@ -39,6 +39,19 @@
     （loading/ready/failed），加载期间显示中性「加载中…」
   - 🧹 重命名 `TrendService.invalidate_for_news` → `invalidate_cached_results`
     （名字带 news，但两条写入路径都调它，不改名会说谎；原名保留为转发别名）
+- 🐛 **用户实测 hotfix —— 「保存失败：Not Found」**（部署滞后，非功能 bug）
+  - 根因：`static/*.html` 由 `StaticFiles` **直接读磁盘**（改完即生效），而 Python
+    路由**冻结在进程内存**（必须重启）。`8888` 的 root 进程 10月18日 启动、
+    跑着旧代码，页面却已是新版 —— 页面有卡片、后端无端点，保存必然 404
+  - **降级本身才是 bug**：首屏 `loadOverrides()` 404 画出的「加载失败」，被紧随其后
+    成功的 `loadTrendForPreview() → renderOverrides()` **整个抹掉**，换成 5 行看起来
+    完全正常的表单 —— 真实失败被一次后续的成功渲染吃掉了
+  - 修：`overrideApiMissing` 置位后只画琥珀色说明块、不画表单、藏起表头与
+    保存/清除按钮；`fetchOverrideApi()` 按 status 给可行动文案（404/403/422/5xx/网络），
+    不再把裸 `Not Found` 抛给用户；i18n 8 key × 3 语
+  - `.mo-ops` / `.mo-head` 的 `display:flex` 会盖掉 `[hidden]`，必须显式写
+    `[hidden] { display:none }`；断言里加 `getComputedStyle` 检查防骗
+  - 验证：`_verify_mo_degraded.mjs` 9 passed（跑在**真实旧后端** 8888 上，不 mock）
 - 📚 **docs 整理**
   - 🐛 **死链门禁当时是红的**（12 条失效链接）：2 条指向已删除的 `application-guide.md`、
     3 条指向仓库外的 `.claude/.../memory/*.md`、1 条相对路径写错、

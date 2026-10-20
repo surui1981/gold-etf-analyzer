@@ -377,6 +377,14 @@ window.PM_I18N_en_US = {
   "weights.mo_save_fail": "Save failed: {msg}",
   "weights.mo_bad_value": "Manual value for factor {k} is not a valid number. Please check and retry.",
   "weights.mo_load_fail": "Failed to load manual calibration config: {msg}",
+  "weights.mo_err_404": "Backend has not deployed this feature yet (endpoint missing). The page is new but the backend is old — restart the service and retry.",
+  "weights.mo_err_403": "No write permission; an admin session is required: {msg}",
+  "weights.mo_err_422": "Rejected payload: {msg}",
+  "weights.mo_err_5xx": "Server-side failure: {msg}",
+  "weights.mo_err_http": "Request failed: {msg}",
+  "weights.mo_err_network": "Cannot reach the backend (service may be down): {msg}",
+  "weights.mo_not_deployed": "⚠ The backend has not deployed manual macro-factor calibration; saving is unavailable for now.",
+  "weights.mo_not_deployed_hint": "This page's HTML is served straight from the static directory so edits apply immediately, while backend routes are frozen in the server process — restart the service to bring both onto the same version.",
   "weights.mo_confirm_clear": "Clear all manual overrides? Macro factors revert to their automatic sources (DXY / VIX fall back to the 2026-08-28 built-in references), and the macro index and composite trend index will be recalculated.",
 
   /* ── News Scoring (news.html) ── */
