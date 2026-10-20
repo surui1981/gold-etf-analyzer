@@ -10,6 +10,14 @@ User=surui
 Group=surui
 WorkingDirectory=/home/surui/gold-etf-analyzer
 EnvironmentFile=/home/surui/gold-etf-analyzer/.env.prod
+# V0.110.0 fix: app 包在 src/ 下，而 venv 里**没有可用的 editable 安装** ——
+# site-packages 只有 root 属主的 gold_etf_analyzer-0.104.0.dist-info，没有
+# editable finder/.pth，所以不带 PYTHONPATH 时 `import app.main` 直接
+# ModuleNotFoundError: No module named 'app'（已实测）。
+# V0.107 那版只把 `uv run` 换成 `.venv/bin/python -m uvicorn`，却仍假设包可导入，
+# 部署后会卡在同一个 ImportError 上。显式给 PYTHONPATH 就不依赖安装状态。
+# 复现：cd /home/surui/gold-etf-analyzer && .venv/bin/python -c "import app.main"
+Environment=PYTHONPATH=/home/surui/gold-etf-analyzer/src
 # V0.107 fix: bypass `uv run` rebuild (ProtectSystem=full blocks setuptools egg-info write)
 # 改用 venv python 直跑，与原 428768 进程 (10/18 20:41 启动) 启动方式一致
 ExecStart=/home/surui/gold-etf-analyzer/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --no-access-log
