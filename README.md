@@ -12,6 +12,7 @@
 | **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换） |
 
 > 📖 **使用文档**（按目标读者标注，按需查阅）：
+> - [docs/README.md](docs/README.md) — **文档导航**（"我要找 X 该打开哪个" + 目录结构 + 写作约定）
 > - [docs/overview.md](docs/overview.md) — 项目概述 + 功能清单（**双方**）
 > - [docs/getting-started.md](docs/getting-started.md) — 快速开始 + 配置说明（**用户**为主，开发者也用）
 > - [docs/architecture.md](docs/architecture.md) — 技术架构 + 数据源（**开发者**）

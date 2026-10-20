@@ -1,3 +1,5 @@
+> **目标读者**：开发者 ｜ **状态**：归档（2026-10-18 起）｜ **最近更新**：2026-10-21（仅修链接，未增内容）
+>
 > ⚠️ **本文档已并入 [docs/roadmap.md](roadmap.md) 作为历史档案保留**（2026-10-18 三份文档聚类重组）
 >
 > 本文件 §一 §二 V0.68-V0.77 全部版本**已落地交付**；§四 不变项（Invariants）已迁移至 [roadmap.md 附录 C](roadmap.md#附录-c--不变项invariants源自-ux-roadmapmd-四)；附录 A 工时汇总、附录 B 验证清单、附录 C 可观测性总表、附录 D 配置速查仅作历史参考。
@@ -338,7 +340,7 @@
 
 - **已落地 UX**（6.1 ~ 6.12）→ [docs/improvement-path.md §六](./improvement-path.md)
 - **工程路线**（V0.68.0 → V0.72.0）→ [docs/improvement-path.md §三·五](./improvement-path.md)
-- **应用能力 + 架构说明**（功能清单 + API 表 + 数据源）→ [docs/application-guide.md](./application-guide.md)
+- **应用能力 + 架构说明**（功能清单 + API 表 + 数据源）→ [architecture.md](./architecture.md) · [api-reference.md](./api-reference.md) · [overview.md](./overview.md)
 - **文档对账**（代码 vs 文档 vs README）→ [docs/feature-alignment.md](./feature-alignment.md)
 - **项目主页**（版本 + 测试数 + 功能清单）→ [README.md](../README.md)
 

@@ -1,3 +1,5 @@
+> **目标读者**：开发者 ｜ **状态**：归档（2026-10-18 起）｜ **最近更新**：2026-10-21（仅修链接，未增内容）
+>
 > ⚠️ **本文档已并入 [docs/roadmap.md](roadmap.md) 作为历史档案保留**（2026-10-18 三份文档聚类重组）
 >
 > 本文件 §一 现状评估、§二 UX P0-P3、§三 实施路线 V0.50-V0.67 **已全部交付**；§三·五 下一阶段路线（V0.67.0→V0.72.0）**已全部落地**；§四 验收度量（工程性评估 81.5→84.3 起点为 V0.67.0）已基线归档；§五 部署状态已迁移至 [roadmap.md 附录 D](roadmap.md#附录-d--部署状态速查源自-improvement-pathmd-五)；§六 UX Roadmap（[ux-roadmap.md](ux-roadmap.md)）同步归档。
@@ -563,7 +565,7 @@ git push https://oauth2:<user-supplied-classic-PAT>@github.com/surui1981/gold-et
 
 ## 七、附：与既有文档的关系
 
-- 架构 / API / 核心模型 / 改进计划总表：见 [application-guide.md](application-guide.md) 第 11 章
+- 架构 / API / 核心模型：见 [architecture.md](architecture.md) 与 [api-reference.md](api-reference.md)
 - 快速开始与功能清单：见 [README.md](../README.md)
 - 本文档聚焦**易用性**维度的改善路径，与技术改进计划（数据源扩展、回测、CI/CD 等）互补。
 - **下一阶段路线（V0.67.0 → V0.72.0）**：见 §三·五——工程性评估驱动的工程优先级（CI/CD / trace_id / Prometheus / Service Worker / 主题 / 无障碍 / 共振信号 / 克数持仓 / 多品种 / 回测 / 推送 / 公开部署）；计划基于 §一.3 工程性评估（81.5/100）排序。

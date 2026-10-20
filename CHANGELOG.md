@@ -4,6 +4,60 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.110.0] · 2026-10-21
+
+`宏观因子手动校准 + docs 整理` — 功能 + 文档
+
+- 🎯 **核心评估参数可由用户手动更新**（用户诉求：「有些核心评估参数更新不及时」）
+  - 根因：`dxy` / `vix` **无自动实时源**，用 `STATIC_REF` 里 **2026-08-28** 的硬编码常量
+    （96.5 / 18.5）。两者在宏观面内部合计权重 0.40，宏观面占综合指数 0.40
+    → **综合指数的 16% 建立在两个半月前的常量上**，UI 上完全看不出来
+  - ✏️ **存储**：`app_settings` 新增独立 key `macro_factor_overrides`
+    （5 因子 × 值 / 数据日期 / 备注）；复用 `WeightService` 已有的 `SettingRepository`
+  - 🔁 **优先级链**：用户手动覆盖 > 自动源（央行购金表 / 美联储 H.15）> 内置常量
+  - 🌐 **端点**：`GET/PUT /api/v1/settings/macro-overrides`（PUT 需 admin session）
+  - 🎨 **UI**：`/weights` 页新增「宏观因子手动校准」卡片 —— 5 行同屏显示
+    「当前生效值 + 数据日期 + 来源标记」，复用已有的 `gold/trend` 响应不新增请求；
+    滞后 > 1 交易日显示琥珀 chip；「清除全部覆盖」走二次确认弹窗
+  - 🕐 **保存即失效两层缓存**：`MacroFactorService._CACHE`（10min）+ `served_cache`
+    （10min，在前者之上）。只清前者时 `/market/gold/trend` 会从 served_cache 回放
+    覆盖前的响应 —— 提示"已保存"而数值纹丝不动
+  - 🌐 i18n 23 key × 3 语（zh-CN / en-US / zh-TW）
+- 🐛 **验证期实跑修掉 4 个缺陷**（`scripts/_verify_macro_override.mjs` 15 项断言暴露）
+  - **`served_cache` 漏清 —— 功能等于没做**：上面那条的实测形态。顺带修掉
+    `PUT /settings/weights` 的**既有缺陷**（原先一个缓存都不清，改完权重后首页
+    最长 10 分钟仍显示旧指数）。新增 `TrendService.invalidate_cached_results()`，
+    `invalidate_for_news` 改为转发别名并说明三条调用路径；两条回归锁均验证过
+    「去掉修复即 FAIL」
+  - **`renderOverrides()` 冲掉用户正在输入的值**：整块 innerHTML 替换 + 首屏
+    `loadOverrides()` 与 `loadTrendForPreview()` 并发（冷启动数秒）→ 静默提交全 null，
+    表现为"我明明填了却没生效"且一次覆盖被全清。改为重渲染前 `snapshotUserEdits()`
+    快照、渲染后写回
+  - **备注输入框漏 `class="mo-note"`**：`.mo-row .mo-note` 整条 CSS 失效，
+    字段退回默认宽度 → 「清除」按钮被挤到第二行，5 行全折
+  - **冷启动显示「暂无读数」**：会被读成"因子丢了"；新增 `macroFactorState`
+    （loading/ready/failed），加载期间显示中性「加载中…」
+  - 🧹 重命名 `TrendService.invalidate_for_news` → `invalidate_cached_results`
+    （名字带 news，但两条写入路径都调它，不改名会说谎；原名保留为转发别名）
+- 📚 **docs 整理**
+  - 🐛 **死链门禁当时是红的**（12 条失效链接）：2 条指向已删除的 `application-guide.md`、
+    3 条指向仓库外的 `.claude/.../memory/*.md`、1 条相对路径写错、
+    5 条 `v0.87.0.md` 里带捕获组的 regex 被 `LINK_RE` 当成链接 —— 全部修掉
+  - 🚦 **新增门禁**：`check_links.py` 增加 release notes 索引完整性检查
+    （目录里有 `v*.md`、索引里没入口 ⇒ 报红）。此前 `releases/index.md` 停在
+    V0.100.2，9 份 release notes 无人索引且无任何门禁报红；实际漏登记 **13** 份，已全部补齐
+  - 🆕 **新建 `docs/README.md`**：按「我要做什么」导航 + 目录结构与三条边界 +
+    文档门禁矩阵 + 三条踩过的坑；README 顶部补入口
+  - 📈 **`roadmap.md` 补 9 个版本**：§1 里程碑表在 V0.100.0 后断了 V0.102–V0.109.2；
+    §2 从「V0.101 迁移收口 in progress」（早已完成）改写为
+    V0.110.0 已落 + V0.111.0 阈值可覆盖 + K 项多市场独立校准
+  - 🏷️ 3 份规划文档补 `状态：` 抬头（`roadmap.md` / `improvement-path.md` / `ux-roadmap.md`）
+  - 📑 `releases/index.md` 新增 §1.4.1「今日要闻」逐版本登记表
+- ✅ **测试**：+21（API 7 / 宏观服务 7 / 设置服务 4 / 门禁 3）；相关回归 **157 passed**；
+  UI 实跑 `_verify_macro_override.mjs` **15 passed / 0 failed**
+
+---
+
 ## [V0.109.2] · 2026-10-20
 
 `白银页面数据时效透明化（SGE akshare 数据滞后 2 天暴露）` — 接口透明化 hotfix
