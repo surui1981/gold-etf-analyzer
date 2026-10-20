@@ -50,6 +50,8 @@
 
 from __future__ import annotations
 
+import re
+
 # ────────────── 5 类标签（顺序固定：列表渲染与下拉 value 都按这个）──────────────
 CATEGORIES: tuple[str, ...] = ("财经", "科技", "创投", "商业", "其他")
 
@@ -122,6 +124,9 @@ _TECH_KW: tuple[str, ...] = (
     "储能", "自动驾驶", "脑机接口", "可穿戴",
     # 节点
     "5 纳米", "7 纳米", "3nm", "5nm", "7nm",
+    # V0.109.0：复合词显式补齐（短 ASCII 词加词边界后，"AIGC" 里的 AI
+    # 后面紧跟字母 G 会被边界规则拒掉，所以这类高频复合词要单独列名）
+    "AIGC", "AGI", "GPU云", "算力云",
 )
 _VC_KW: tuple[str, ...] = (
     # ── 原 23 个 ──
@@ -144,7 +149,12 @@ _BIZ_KW: tuple[str, ...] = (
     # ── 原 22 个 ──
     "财报", "营收", "利润", "股价", "市值", "业绩", "季报",
     "年报", "股东大会", "高管", "CEO", "CFO", "COO", "CTO",
-    "离职", "任命", "战略合作", "签约", "发布", "新品",
+    "离职", "任命", "战略合作", "签约", "新品",
+    # V0.109.0：裸词「发布」换成「发布会」。中文无词边界，「发布」会命中
+    # 「警方发布彩叶观赏季安全提示」「档案馆集中开放」「俄乌战事通报」等
+    # 4 条噪声；改用「发布会」后这 4 条掉进「其他」被弃入，而 7 条真正的
+    # 发布会商业新闻全部保留。
+    "发布会", "发布公告",
     "供应链", "客户", "订单", "裁员", "重组",
     # ── V0.107.1 新增 10+ 词：扩张 / 渠道 / 经营 ──
     # 扩张
@@ -157,12 +167,41 @@ _BIZ_KW: tuple[str, ...] = (
 )
 
 
+# ────────────── V0.109.0 短 ASCII 词的词边界表 ───────────────
+# 只收「长度 <= 3 且纯 ASCII」的词。这类词子串误匹配率高，且集中在优先级
+# 最高的财经词典里，误判代价最大。
+# 边界定义：前后紧邻字符不得是 ASCII 字母。数字与汉字都算「可接受邻居」，
+# 这样 "2026PE"（中文财经报道常见写法）与 "科创ETF" 仍能命中。
+_BOUNDARY_KW_MAX_LEN = 3
+_BOUNDARY_PATTERNS: dict[str, re.Pattern[str]] = {
+    kw: re.compile(
+        rf"(?<![a-z]){re.escape(kw.lower())}(?![a-z])",
+    )
+    for kw in (*_FINANCE_KW, *_TECH_KW, *_VC_KW, *_BIZ_KW)
+    if kw.isascii() and len(kw) <= _BOUNDARY_KW_MAX_LEN
+}
+
+
 def _hit(text: str, keywords: tuple[str, ...]) -> bool:
     """text（小写后）是否包含 keywords 任意一个（小写匹配）。
 
     大小写不敏感；中文不受 case 影响，英文小写化后匹配。
+
+    V0.109.0：**长度 <= 3 的纯 ASCII 词**改走词边界正则，防止子串误匹配。
+    这个 bug 是 V0.108.0 上一版词典带来的放大效应——财经优先级最高，
+    ``"PE" in "openai"`` 为真，于是**所有 OpenAI 新闻都被判成财经**。
+    同类高危：``ETH ⊂ Ethiopia``、``GP ⊂ GPT``、``AI ⊂ Retail/Chain/Mail``。
+
+    只对短 ASCII 词加边界，其余（长英文词 / 全部中文词）保持子串匹配：
+    - ``"2026PE"`` 仍命中 PE（数字不算字母边界）——中文财经报道的常见写法
+    - ``"科创ETF"`` 仍命中 ETF（汉字不算 ASCII 字母）
+    - ``"OpenAI"`` / ``"Anthropic"`` 等长词不受影响，仍走子串
     """
-    return any(kw.lower() in text for kw in keywords)
+    return any(
+        _BOUNDARY_PATTERNS[kw].search(text) if kw in _BOUNDARY_PATTERNS
+        else kw.lower() in text
+        for kw in keywords
+    )
 
 
 def classify(title: str, summary: str, site_name: str) -> str:
