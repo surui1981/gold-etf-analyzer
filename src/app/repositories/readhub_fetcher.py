@@ -1,4 +1,4 @@
-"""readhub 财经新闻流抓取器（V0.102 / V0.107.1 page_size=50 + 弃入「其他」）
+"""readhub 财经新闻流抓取器（V0.102 / V0.107.1 / V0.108.0 站点黑白名单）
 
 数据源
 ------
@@ -39,6 +39,14 @@
   逆向成本远高于价值）
 - V0.107.1 ``_normalize`` 末段拦截 ``category == '其他'`` —— 不写入 DB；
   service 层另有二次 gate（defense-in-depth）
+- V0.108.0 站点黑白名单（用户方案 B）：
+  - ``SITE_BLOCKLIST``：确证聚合噪声源，``_normalize`` 入口硬删（即使摘要
+    本身能分类）。实测 30 天窗口「新浪科技」26 条里 4 条是地方新闻 / 文艺
+    活动（重阳节文明实践、高速隧道贯通、获奖座谈会），信噪比 26:1，不值得为
+    它开白名单豁免。
+  - 白名单**不**在 fetcher 做：优质站点的「即使摘要为空也该保留」需求由
+    ``news_classifier`` 把站名写进关键词字典实现（站名即关键词），复用现有
+    classify 通路，零新增逻辑。
 - **不**做实体抽取 / 情感——留给后续能力（plan §排除已声明）
 """
 
@@ -65,6 +73,20 @@ _DEFAULT_PAGE_SIZE = 50  # V0.107.1：20→50（readhub max 100；实测 P99 <2s
 _HTTP_TIMEOUT_SECONDS = 30.0
 _RETRY_BACKOFFS: tuple[float, ...] = (0.0, 1.5)  # 第 1 次失败后等 1.5s 重试
 _FETCHER_CACHE_TTL = 300  # 5 分钟（避免 scheduler + 手动 refresh 撞车）
+
+# V0.108.0 站点黑名单（用户方案 B）：聚合类噪声源，_normalize 入口硬删。
+# 收录纪律 —— 必须同时满足：
+#   1. 该源在 30 天窗口样本量 ≥ 10 条（样本太少的源交给 classify 兜底）
+#   2. 抽样 ≥5 条里，与「财经 / 科技 / 创投 / 商业」无关的比例 ≥ 60%
+#   3. 不是任何优质垂直媒体的转载源
+# 「澎湃新闻」实测 3 条全为优质（量子网络相位锁定等）→ **不**拉黑；
+# 「techradar / 9to5Mac」虽有广告/促销内容，但主体是有效科技新闻 → **不**拉黑。
+SITE_BLOCKLIST: frozenset[str] = frozenset(
+    {
+        "新浪科技",  # 26 条中 ~4 条地方新闻 / 文艺活动，ETF 类有效内容仅 1 条
+        "maomu.com",  # 加密推广 spam（样本量小但内容 100% 无效）
+    }
+)
 
 
 class ReadhubFetchError(RuntimeError):
@@ -128,6 +150,8 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
         正常 dict；缺 external_id / title / url / publish_date → None（丢弃该条）。
         V0.107.1 新增：``classify(...) == '其他'`` 也返 None（fetcher 层弃入，
         不写入 DB；另有 service 二次 gate 兜底）。
+        V0.108.0 新增：``site_name in SITE_BLOCKLIST`` 也返 None（聚合噪声源
+        硬删，优先于 classify）。
     """
     ext_id = raw.get("id")
     title = (raw.get("title") or "").strip()
@@ -144,6 +168,11 @@ def _normalize(raw: dict[str, Any]) -> dict | None:
             bool(site),
             bool(pub_dt),
         )
+        return None
+    # V0.108.0：站点黑名单硬删（优先于 classify —— 新浪科技这类聚合源即使
+    # 单条内容碰巧能分类，也不进 4 类流）
+    if site in SITE_BLOCKLIST:
+        logger.debug("readhub item dropped (site blacklisted): id=%r site=%r", ext_id, site)
         return None
     # V0.105：入库即分类（关键词规则；upsert 时已分类行不变更）
     category = classify(title, (raw.get("summary") or "").strip(), site)
@@ -203,7 +232,7 @@ async def fetch_readhub_feed(
                     _API_URL,
                     params={"pageSize": page_size},
                     headers={
-                        "User-Agent": "gold-etf-analyzer/V0.107.1",
+                        "User-Agent": "gold-etf-analyzer/V0.108.0",
                         "Accept": "application/json",
                     },
                 )

@@ -1,4 +1,4 @@
-"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合 / V0.107.1 弃入「其他」）
+"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合 / V0.107.1 弃入「其他」/ V0.108.0 站点黑名单）
 
 设计要点
 --------
@@ -16,6 +16,8 @@
   启动 lifespan 阶段 ``backfill_daily(30 days)`` 一次性回填历史
 - V0.107.1：service ``refresh()`` 二次拦截 ``category='其他'`` 记录——
   defense-in-depth，fetcher ``_normalize`` 也已弃入（本层兜底）
+- V0.108.0：同一道 gate 加拦 ``SITE_BLOCKLIST`` 站点（新浪科技 / maomu.com
+  聚合噪声源），复用同一 tuple 过滤，无需额外分支
 """
 
 from __future__ import annotations
@@ -25,7 +27,11 @@ from typing import Any
 
 from app.models.news_feed import NewsFeedDaily
 from app.repositories.news_feed import NewsFeedRepository
-from app.repositories.readhub_fetcher import ReadhubFetchError, fetch_readhub_feed
+from app.repositories.readhub_fetcher import (
+    SITE_BLOCKLIST,
+    ReadhubFetchError,
+    fetch_readhub_feed,
+)
 from app.schemas.news_feed import (
     NewsFeedDailyListOut,
     NewsFeedDailyOut,
@@ -105,15 +111,21 @@ class NewsFeedService:
 
         # V0.107.1：service 二次拦截「其他」——defense-in-depth（fetcher 层
         # _normalize 已弃入；本层在 fetcher 改动漏改时仍能拦住）
+        # V0.108.0：同一道 gate 加拦站点黑名单（fetcher 层已硬删，此处兜底）
         _ALLOWED_CATEGORIES = ("财经", "科技", "创投", "商业")
         before = len(records)
         records = tuple(
-            r for r in records if r.get("category") in _ALLOWED_CATEGORIES
+            r
+            for r in records
+            if r.get("category") in _ALLOWED_CATEGORIES
+            and r.get("site_name") not in SITE_BLOCKLIST
         )
         dropped = before - len(records)
         if dropped:
             logger.info(
-                "news feed refresh: dropped %d 其他 items at service gate", dropped
+                "news feed refresh: dropped %d items at service gate "
+                "(category=其他 or site blacklisted)",
+                dropped,
             )
 
         if not records:
