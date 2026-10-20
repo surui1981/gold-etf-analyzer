@@ -2,6 +2,7 @@
 
 import json
 import time
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict
 
@@ -9,6 +10,8 @@ from app.repositories.settings import SettingRepository
 from app.schemas.alert import AlertRuleIn, AlertRuleOut
 from app.schemas.backtest import BacktestConfigIn, BacktestConfigOut
 from app.schemas.settings import (
+    MacroFactorOverride,
+    MacroFactorOverrideSet,
     WeightConfig,
 )
 from app.utils.logger import get_logger
@@ -20,6 +23,9 @@ WEIGHTS_KEY = "weight_config"
 # V0.71.0：回测预设配置 key（与 weight_config 共用 settings 表，key 区分）
 BACKTEST_CONFIG_KEY = "backtest_config"
 
+# V0.110.0：宏观因子手动校准 key（独立于 weight_config，避免权重保存时相互覆盖）
+MACRO_OVERRIDE_KEY = "macro_factor_overrides"
+
 # 配置内存缓存（P2-3）：权重属于低频变更数据，读库缓存 60s，保存时立即失效
 WEIGHTS_CACHE_TTL = 60  # 秒
 _WEIGHTS_CACHE: dict = {"ts": 0.0, "config": None}
@@ -27,13 +33,17 @@ _WEIGHTS_CACHE: dict = {"ts": 0.0, "config": None}
 # V0.71.0：回测配置缓存（与 weights 同 TTL）
 _BACKTEST_CACHE: dict = {"ts": 0.0, "config": None}
 
+# V0.110.0：宏观因子手动校准缓存（与 weights 同 TTL）
+_MACRO_OVERRIDE_CACHE: dict = {"ts": 0.0, "config": None}
+
 
 def clear_weights_cache() -> None:
     """使配置缓存失效（保存配置 / 测试隔离时调用）。"""
-    global _WEIGHTS_CACHE, _BACKTEST_CACHE, _ALERT_RULES_CACHE
+    global _WEIGHTS_CACHE, _BACKTEST_CACHE, _ALERT_RULES_CACHE, _MACRO_OVERRIDE_CACHE
     _WEIGHTS_CACHE = {"ts": 0.0, "config": None}
     _BACKTEST_CACHE = {"ts": 0.0, "config": None}
     _ALERT_RULES_CACHE = {"ts": 0.0, "config": None}
+    _MACRO_OVERRIDE_CACHE = {"ts": 0.0, "config": None}
 
 
 class WeightService:
@@ -111,6 +121,62 @@ class WeightService:
         False：保持单维度加权（历史行为，向后兼容）。
         """
         return (await self.get_weights()).group_combine
+
+    # ── V0.110.0：宏观因子手动校准 ─────────────────────────────
+
+    async def macro_overrides(self) -> MacroFactorOverrideSet:
+        """当前生效的宏观因子手动覆盖集合（未设置过则返回全 None 的空集合）。
+
+        挂在 ``WeightService`` 上而不是新建服务，是因为 ``MacroFactorService`` 已经
+        注入了本对象 —— 复用同一条 ``SettingRepository`` 链路，无需新增 DI 依赖。
+        """
+        global _MACRO_OVERRIDE_CACHE
+        now = time.time()
+        if (
+            _MACRO_OVERRIDE_CACHE["config"] is not None
+            and now - _MACRO_OVERRIDE_CACHE["ts"] < WEIGHTS_CACHE_TTL
+        ):
+            return _MACRO_OVERRIDE_CACHE["config"]
+        raw = await self._repo.get(MACRO_OVERRIDE_KEY)
+        if raw:
+            try:
+                cfg = MacroFactorOverrideSet.model_validate_json(raw)
+            except Exception as exc:
+                logger.warning("macro_factor_overrides 解析失败 (%s), 回退为空覆盖", exc)
+                cfg = MacroFactorOverrideSet()
+        else:
+            cfg = MacroFactorOverrideSet()
+        _MACRO_OVERRIDE_CACHE = {"ts": now, "config": cfg}
+        return cfg
+
+    async def save_macro_overrides(
+        self, overrides: MacroFactorOverrideSet
+    ) -> MacroFactorOverrideSet:
+        """保存宏观因子手动覆盖（整体替换语义；全 None 等价于「清除全部覆盖」）。
+
+        保存后立即失效内存缓存，让下一次宏观面评分就用上新值 —— 否则用户改完
+        数字回到首页看到的还是旧指数，会以为「没生效」。
+        """
+        await self._repo.set(MACRO_OVERRIDE_KEY, overrides.model_dump_json())
+        global _MACRO_OVERRIDE_CACHE
+        _MACRO_OVERRIDE_CACHE = {"ts": time.time(), "config": overrides}
+        logger.info("Macro factor overrides saved: %s", overrides.model_dump_json())
+        return overrides
+
+
+def override_lag_days(override: MacroFactorOverride, *, today: date | None = None) -> int:
+    """手动覆盖值落后今天多少个交易日（用于 UI 滞后提示；当天填的返回 0）。
+
+    V0.110.0：复用 ``utils.market_clock.trading_days_between``，与白银页面的
+    staleness 判定同口径（周一至周五；SGE / A 股同日休市）。该函数**含两端**，
+    所以同一天返回 1 —— 这里减 1 才是用户理解的"滞后天数"。
+
+    与 V0.109.2 的 stale 判定保持一致：``trading_days_between(as_of, today) > 1``
+    等价于本函数 ``> 0``，即"不是当天填的就提示滞后"。
+    """
+    from app.utils.market_clock import trading_days_between
+
+    return max(0, trading_days_between(override.as_of, today or date.today()) - 1)
 
 
 def _migrate_legacy(raw: str) -> WeightConfig | None:
