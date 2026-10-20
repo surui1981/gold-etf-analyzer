@@ -1,0 +1,30 @@
+[Unit]
+Description=gold-etf-analyzer FastAPI app (prod)
+Documentation=https://github.com/local/gold-etf-analyzer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=surui
+Group=surui
+WorkingDirectory=/home/surui/gold-etf-analyzer
+EnvironmentFile=/home/surui/gold-etf-analyzer/.env.prod
+# V0.107 fix: bypass `uv run` rebuild (ProtectSystem=full blocks setuptools egg-info write)
+# 改用 venv python 直跑，与原 428768 进程 (10/18 20:41 启动) 启动方式一致
+ExecStart=/home/surui/gold-etf-analyzer/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --no-access-log
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=gold-etf-analyzer
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+# V0.107 fix: 不需要写 src/，因为不再用 `uv run` 触发 setuptools 重建
+ReadWritePaths=/home/surui/gold-etf-analyzer/data /home/surui/.cache/uv /home/surui/.local
+
+[Install]
+WantedBy=multi-user.target
