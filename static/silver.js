@@ -109,6 +109,18 @@
     }
   }
 
+  // V0.109.2：根据 data_as_of 与今日差几个工作日，超 1 个 = 「数据滞后」
+  // 工作日简化：date 对象差的天数（容忍周末 1-2 天，走后端 tradng_days_between 不准但显示够用）
+  function _lagTradingDaysFromString(dataAsOfStr) {
+    if (!dataAsOfStr) return 0;
+    const asOf = new Date(dataAsOfStr + "T00:00:00");
+    if (isNaN(asOf.getTime())) return 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    // 简化版：直接换算日历天数 → 周末休市的「真实滞后」只会偏高 1-2 天（用户理解无碍）
+    return Math.max(0, Math.round((today - asOf) / 86400000));
+  }
+
   async function loadCards() {
     try {
       const [etf, ny, sge] = await Promise.all([
@@ -116,6 +128,19 @@
         fetchJSON(API_BASE + "/api/v1/market/silver/quote"),
         fetchJSON(API_BASE + "/api/v1/market/silver/sge-quote"),
       ]);
+      // V0.109.2：data_as_of → 滞后 chip（仅跨日 > 1 天时显示）
+      const etfLag = _lagTradingDaysFromString(etf.data_as_of);
+      const nyLag = _lagTradingDaysFromString(ny.data_as_of);
+      const sgeLag = _lagTradingDaysFromString(sge.data_as_of);
+      function lagChipHtml(lag) {
+        return lag > 1
+          ? ` <span class="fsh-chip fsh-warn fsh-stale-chip" style="font-size:10px" title="上游数据源滞后">⚠ 数据滞后 ${lag} 天</span>`
+          : "";
+      }
+      function asOfLabel(dataAsOf) {
+        if (!dataAsOf) return "数据日期未知";
+        return "数据日期 " + dataAsOf;
+      }
       const items = [
         {
           label: "白银 ETF 562800",
@@ -124,6 +149,9 @@
           color: etf.change_pct >= 0 ? "up" : "down",
           // V0.99：LOF 代理源时给前端一个可见提示（eastmoney 失败后回退 sina sz161226）
           sourceNote: etf.data_source_note === "lof_proxy" ? "（LOF 代理）" : "",
+          // V0.109.2：数据日期 + 滞后 chip
+          asOf: asOfLabel(etf.data_as_of),
+          lagChip: lagChipHtml(etfLag),
         },
         {
           label: "纽约白银 SI",
@@ -131,6 +159,8 @@
           extra: (ny.change_pct >= 0 ? "+" : "") + ny.change_pct.toFixed(2) + "%",
           color: ny.change_pct >= 0 ? "up" : "down",
           sourceNote: "",
+          asOf: asOfLabel(ny.data_as_of),
+          lagChip: lagChipHtml(nyLag),
         },
         {
           label: "SGE 上海银 Ag99.99",
@@ -138,6 +168,8 @@
           extra: (sge.change_pct >= 0 ? "+" : "") + sge.change_pct.toFixed(2) + "%",
           color: sge.change_pct >= 0 ? "up" : "down",
           sourceNote: "",
+          asOf: asOfLabel(sge.data_as_of),
+          lagChip: lagChipHtml(sgeLag),
         },
         {
           label: "数据源",
@@ -157,6 +189,7 @@
         <div class="label">${i.label}</div>
         <div class="value ${i.color || ""}">${i.value}</div>
         <div class="extra">${i.extra}${i.sourceNote ? " " + i.sourceNote : ""}</div>
+        ${i.asOf ? `<div class="as-of" style="font-size:11px;color:var(--muted);margin-top:2px">${i.asOf}${i.lagChip || ""}</div>` : ""}
       </div>`
         )
         .join("");
@@ -166,6 +199,12 @@
 
       // V0.99 C5：渲染 3-market 升贴水表（以 SGE 为锚）
       renderPremiumTable(etf, ny, sge);
+
+      // V0.109.2：loadCards 在 loadTrend 之后跑，_silverQuotes 已就绪，
+      // 重新跑一次 source-bar 渲染，让「数据滞后」尾部标能拿到 quote 真实数据日期
+      if (typeof lastTrend === "object" && lastTrend) {
+        renderSourceBar(lastTrend);
+      }
     } catch (e) {
       document.getElementById("cards").innerHTML =
         '<div class="card"><div class="label">报价</div><div class="value">加载失败</div><div class="extra">' +
@@ -323,15 +362,38 @@
     const ds = data.data_sources || {};
     const live = Object.values(ds).filter((v) => v === "live").length;
     const mock = Object.values(ds).filter((v) => v === "mock").length;
-    if (mock === 0) {
+    // V0.109.2：补「数据滞后」尾部标 + 改用 warn 时包含具体源
+    const quotes = window._silverQuotes || {};
+    const SOURCE_LABEL_LOCAL = {
+      silver_etf: "白银 ETF 562800",
+      silver_ny: "纽约白银 SI",
+      sge_silver: "SGE 上海银 Ag99.99",
+    };
+    const staleLines = [];
+    ["silver_etf", "silver_ny", "sge_silver"].forEach((k) => {
+      const q = quotes[
+        k === "silver_etf" ? "etf" : k === "silver_ny" ? "ny" : "sge"
+      ];
+      if (q && q.data_as_of) {
+        const lag = _lagTradingDaysFromString(q.data_as_of);
+        if (lag > 1) {
+          staleLines.push(`${SOURCE_LABEL_LOCAL[k]} 数据至 ${q.data_as_of}（滞后 ${lag} 天）`);
+        }
+      }
+    });
+    const staleSuffix = staleLines.length ? ` · ⚠ 时效滞后: ${staleLines.join(" / ")}` : "";
+    if (mock === 0 && !staleLines.length) {
       bar.className = "source-bar source-ok";
       bar.textContent = `✅ 全部数据源实时（${live} 个源：白银 ETF 562800 + COMEX SI 期货 + 黄金宏观因子）`;
-    } else if (live > 0) {
+    } else if (mock > 0 && live > 0) {
       bar.className = "source-bar source-warn";
       bar.textContent = `⚠️ 部分数据源降级为演示数据（${mock} mock / ${live} live）：${Object.entries(ds)
         .filter(([, v]) => v === "mock")
         .map(([k]) => k)
-        .join(" / ")}`;
+        .join(" / ")}${staleSuffix}`;
+    } else if (staleLines.length) {
+      bar.className = "source-bar source-warn";
+      bar.textContent = `⚠️ 部分数据源时效滞后：${staleLines.join(" / ")}`;
     } else {
       bar.className = "source-bar source-bad";
       bar.textContent = `❌ 全部数据源降级为演示数据，请检查网络`;
