@@ -298,3 +298,71 @@ class TestFetchReadhubFeed:
         await rh.fetch_readhub_feed(use_cache=False)
         await rh.fetch_readhub_feed(use_cache=False)
         assert call_count["n"] == 2
+
+
+# ──────────────── V0.108.0 站点黑名单 ────────────────
+
+
+class TestSiteBlocklist:
+    """``SITE_BLOCKLIST`` 聚合噪声源硬删（用户方案 B）。"""
+
+    def test_blocklist_contents_v01080(self) -> None:
+        """V0.108.0：黑名单固定为新浪科技 / maomu.com。
+
+        收录依据是生产 30 天窗口的实测样本：「新浪科技」26 条里约 4 条是
+        地方新闻 / 文艺活动（重阳节文明实践、高速隧道贯通、获奖座谈会），
+        ETF 类有效内容仅 1 条——26:1 的信噪比不值得为它开白名单豁免。
+        「澎湃新闻」实测 3 条全为优质内容，**刻意不**拉黑。
+        """
+        assert rh.SITE_BLOCKLIST == frozenset({"新浪科技", "maomu.com"})
+        assert "澎湃新闻" not in rh.SITE_BLOCKLIST
+        assert "techradar.com" not in rh.SITE_BLOCKLIST
+        assert "9to5Mac" not in rh.SITE_BLOCKLIST
+
+    def test_drop_blacklisted_site_v01080(self) -> None:
+        """V0.108.0：黑名单站点即使标题本身可分类也丢弃。
+
+        这条特意用「半导体 ETF 交投升温」——正文含「ETF」，classify 会判
+        财经。断言黑名单优先级高于 classify。
+        """
+        raw = _sample_raw()[0]
+        raw["title"] = "韩国 2 万亿韩元加码半导体材料设备，科创半导体设备 ETF 交投升温"
+        raw["summary"] = "半导体 ETF 份额增长"
+        raw["siteName"] = "新浪科技"
+        assert rh._normalize(raw) is None
+
+    def test_keep_quality_site_v01080(self) -> None:
+        """V0.108.0：非黑名单优质站同款标题必须保留（防黑名单写太宽）。"""
+        raw = _sample_raw()[0]
+        raw["title"] = "韩国 2 万亿韩元加码半导体材料设备，科创半导体设备 ETF 交投升温"
+        raw["summary"] = "半导体 ETF 份额增长"
+        raw["siteName"] = "第一财经"
+        out = rh._normalize(raw)
+        assert out is not None
+        assert out["category"] == "财经"
+        assert out["site_name"] == "第一财经"
+
+    def test_keep_pengpai_v01080(self) -> None:
+        """V0.108.0：澎湃新闻刻意不进黑名单（实测内容优质）。"""
+        raw = _sample_raw()[0]
+        raw["title"] = "研究实现量子网络跨节点相位锁定"
+        raw["summary"] = ""
+        raw["siteName"] = "澎湃新闻"
+        out = rh._normalize(raw)
+        assert out is not None
+        assert out["site_name"] == "澎湃新闻"
+
+    async def test_fetch_drops_blacklisted_batch(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """V0.108.0：整批里混黑名单站点 → 只留非黑名单条目。"""
+        good = _sample_raw()[0]
+        bad = _sample_raw()[0].copy()
+        bad["id"] = 263198
+        bad["siteName"] = "新浪科技"
+        bad["title"] = "情暖重阳话新风 文明实践活动"
+        resp = _make_response(200, {"data": [good, bad]})
+        _patch_http(monkeypatch, resp)
+        out = await rh.fetch_readhub_feed(use_cache=False)
+        assert len(out) == 1
+        assert out[0]["site_name"] == "华尔街见闻"

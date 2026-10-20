@@ -147,3 +147,76 @@ async def test_refresh_passes_through_valid_records_v01071(monkeypatch: pytest.M
     # 断言：全部 4 条 upserted
     assert out["ok"] is True
     assert out["upserted"] == 4
+
+
+# ──────────────── V0.108.0 service gate：站点黑名单 ────────────────
+
+
+async def test_refresh_drops_blacklisted_site_v01080(monkeypatch: pytest.MonkeyPatch) -> None:
+    """V0.108.0：fetcher 改动漏改时，service gate 仍拦住黑名单站点条目。
+
+    这条模拟「fetcher 的 SITE_BLOCKLIST 检查被漏掉」的场景——records 里
+    带 site_name='新浪科技' 的 4 类记录照样到不了 upsert_bulk。
+    """
+    from app.services import news_feed as svc_module
+    from app.services.news_feed import NewsFeedService
+
+    blocked = _make_record("财经", ext_id=10)
+    blocked["site_name"] = "新浪科技"
+    blocked["title"] = "科创半导体设备 ETF 交投升温"
+    mixed_records = (
+        _make_record("财经", ext_id=1),
+        blocked,
+        _make_record("科技", ext_id=3),
+    )
+
+    async def _fake_fetch_readhub_feed(**_kwargs):
+        return mixed_records
+
+    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+
+    repo = MagicMock()
+    captured: dict[str, Any] = {}
+
+    async def _fake_upsert_bulk(records):
+        captured["records"] = list(records)
+        return len(records)
+
+    repo.upsert_bulk = _fake_upsert_bulk
+
+    svc = NewsFeedService(repo)
+    out = await svc.refresh(force=True)
+
+    assert out["ok"] is True
+    assert out["upserted"] == 2  # 新浪科技那条被拦下
+    assert {r["external_id"] for r in captured["records"]} == {1, 3}
+
+
+async def test_refresh_all_blacklisted_is_soft_failure_v01080(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """V0.108.0：整批都是黑名单站点 → 软失败（不调 upsert_bulk），
+    UI 走 V0.84「保留末次数据」路径，不返 500。"""
+    from app.services import news_feed as svc_module
+    from app.services.news_feed import NewsFeedService
+
+    only_blacklisted = (
+        {**_make_record("财经", ext_id=1), "site_name": "新浪科技"},
+        {**_make_record("科技", ext_id=2), "site_name": "maomu.com"},
+    )
+
+    async def _fake_fetch_readhub_feed(**_kwargs):
+        return only_blacklisted
+
+    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+
+    repo = MagicMock()
+    repo.upsert_bulk = AsyncMock()
+
+    svc = NewsFeedService(repo)
+    out = await svc.refresh(force=True)
+
+    assert out["ok"] is False
+    assert out["upserted"] == 0
+    assert "category filter" in out["error"]
+    repo.upsert_bulk.assert_not_called()
