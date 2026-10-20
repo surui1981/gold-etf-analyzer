@@ -148,3 +148,144 @@ async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(monkeypatch, 
     cb = next(f for f in out.factors if f.key == "cb_gold")
     assert cb.value == "1019"  # STATIC_REF 硬编码
     assert cb.source == "世界黄金协会 GDT Q2 2026（季度明细：Q1 56.5 / Q2 288.9）"
+
+
+# ───────────────────── V0.110.0 · 宏观因子手动校准 ─────────────────────
+
+
+def _override_service(**overrides):
+    """构造一个只提供 macro_overrides() 的假 WeightService。"""
+    from app.schemas.settings import MacroFactorOverride, MacroFactorOverrideSet
+    from app.services.settings import WeightService
+
+    cfg = MacroFactorOverrideSet(**overrides)
+
+    class _Fake(WeightService):
+        def __init__(self) -> None:  # noqa: D107 —— 刻意不调 super().__init__
+            pass
+
+        async def macro_overrides(self):
+            return cfg
+
+        async def macro_weights(self):
+            return {}  # 空 dict → _evaluate_uncached 回退 MACRO_FACTOR_RULES 内置权重
+
+    return _Fake()
+
+
+async def _collect_with(monkeypatch, fake_settings, *, us_ten_ok: bool = True) -> dict:
+    """跑一次 _collect（绕过 10min TTL 缓存），返回各因子三元组。"""
+    from datetime import date
+
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        if not us_ten_ok:
+            raise RuntimeError("H.15 unreachable")
+        return USTYield(us10y=4.05, us30y=4.88, data_date=date(2026, 10, 21))
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    svc = MacroFactorService(settings=fake_settings)
+    return await svc._collect()
+
+
+async def test_v01100_manual_override_beats_static_ref(monkeypatch) -> None:
+    """dxy / vix 无自动源，覆盖值必须压过 STATIC_REF 的 2026-08-28 常量。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(
+        dxy=MacroFactorOverride(value=97.42, as_of="2026-10-21", note="Wind"),
+        vix=MacroFactorOverride(value=16.8, as_of="2026-10-21", note=None),
+    )
+    values = await _collect_with(monkeypatch, fake)
+
+    assert values["dxy"] == (97.42, "2026-10-21", "手动输入")
+    assert values["vix"] == (16.8, "2026-10-21", "手动输入")
+
+
+async def test_v01100_manual_override_beats_live_h15(monkeypatch) -> None:
+    """覆盖优先级高于自动源：H.15 拉到 4.05，但用户填了 3.90 就用 3.90。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(us10y=MacroFactorOverride(value=3.90, as_of="2026-10-21"))
+    values = await _collect_with(monkeypatch, fake)
+
+    assert values["us10y"] == (3.90, "2026-10-21", "手动输入")
+    # 未覆盖的 us30y 仍走 H.15 自动源
+    assert values["us30y"][2] == "美联储 H.15"
+
+
+async def test_v01100_partial_override_keeps_auto_for_others(monkeypatch) -> None:
+    """只覆盖 dxy 时，其余 4 个因子不受影响（各自照常走自动源 / 静态参考）。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(dxy=MacroFactorOverride(value=97.42, as_of="2026-10-21"))
+    values = await _collect_with(monkeypatch, fake)
+
+    assert values["dxy"][2] == "手动输入"
+    assert values["vix"] == (18.5, "2026-08-28", "静态参考值")
+    assert values["cb_gold"][0] == 1019.0
+
+
+async def test_v01100_empty_override_set_changes_nothing(monkeypatch) -> None:
+    """空覆盖集 = 完全不干预（回归保护：默认路径行为不变）。"""
+    values = await _collect_with(monkeypatch, _override_service())
+    assert values["dxy"] == (96.5, "2026-08-28", "静态参考值")
+
+
+async def test_v01100_override_survives_h15_failure(monkeypatch) -> None:
+    """H.15 挂掉时手动值仍生效（覆盖不依赖任何自动源可用性）。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(us10y=MacroFactorOverride(value=3.90, as_of="2026-10-21"))
+    values = await _collect_with(monkeypatch, fake, us_ten_ok=False)
+
+    assert values["us10y"] == (3.90, "2026-10-21", "手动输入")
+    assert values["us30y"][2] == "静态参考值"  # 未覆盖的仍回退静态
+
+
+async def test_v01100_override_read_failure_does_not_break_macro(monkeypatch) -> None:
+    """读覆盖抛异常时回落自动源，不能让整个宏观面 500。"""
+    from app.services.settings import WeightService
+
+    class _Boom(WeightService):
+        def __init__(self) -> None:  # noqa: D107
+            pass
+
+        async def macro_overrides(self):
+            raise RuntimeError("db down")
+
+    values = await _collect_with(monkeypatch, _Boom())
+    assert values["dxy"] == (96.5, "2026-08-28", "静态参考值")
+
+
+async def test_v01100_override_propagates_into_index(monkeypatch) -> None:
+    """端到端：覆盖 dxy 后 MacroIndexOut 的因子值与来源都变成手动值。"""
+    from app.schemas.settings import MacroFactorOverride
+    from app.services.macro import _CACHE
+
+    monkeypatch.setattr(
+        "app.repositories.market_data.fetch_us_treasury_h15",
+        lambda: _noop_ust(),
+    )
+    _CACHE.update(ts=0.0, result=None)
+
+    fake = _override_service(dxy=MacroFactorOverride(value=105.0, as_of="2026-10-21"))
+    out = await MacroFactorService(settings=fake).evaluate()
+
+    dxy = next(f for f in out.factors if f.key == "dxy")
+    assert dxy.value == "105"
+    assert dxy.source == "手动输入"
+    assert dxy.data_date == "2026-10-21"
+    assert dxy.score == 0.0  # worst 分位 105 → 对黄金最不利
+    from app.services.macro import clear_macro_cache
+
+    clear_macro_cache()
+
+
+async def _noop_ust():
+    from datetime import date
+
+    from app.repositories.market_data import USTYield
+
+    return USTYield(us10y=4.05, us30y=4.88, data_date=date(2026, 10, 21))

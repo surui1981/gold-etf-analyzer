@@ -9,7 +9,8 @@
 ------------
 - ``analyze()`` 命中当日缓存时**直接返回 GoldTrendOut**（页面秒级加载）；
 - 缓存由 ``services/cache.py`` 提供，key 为 (target, interval, date)，跨日自动失效；
-- 消息面评分更新通过 ``invalidate_for_news()`` 主动失效，下次请求全量重算；
+- 会改变综合指数成分的写入（消息面评分、宏观因子手动覆盖、评估权重）通过
+  ``invalidate_cached_results()`` 主动失效，下次请求全量重算；
 - ``scheduler.py`` 在北京时间 07:00 自动预生成（首屏直接命中缓存）。
 
 多时间框架（V0.64.0）
@@ -326,13 +327,29 @@ class TrendService:
         self._news: NewsScoreService | None = news
 
     @staticmethod
-    def invalidate_for_news(target: str | None = None) -> int:
-        """消息面评分更新后调用：失效 ``served_cache``，下次请求全量重算。
+    def invalidate_cached_results(target: str | None = None) -> int:
+        """失效 ``served_cache``，下次 ``analyze()`` 全量重算。
+
+        凡是**会改变综合指数成分**的写入都必须调用，否则用户在保存后仍会看到
+        旧指数长达 ``served_cache_ttl_seconds``（默认 600s）—— 与"保存没生效"
+        的观感完全一致，而日志里什么异常都没有。当前三条调用路径：
+
+        - 消息面评分更新（``services/news.py``，经 :meth:`invalidate_for_news`）
+        - 宏观因子手动覆盖（V0.110.0，``endpoints/settings.py``）
+        - 评估权重保存（V0.110.0，``endpoints/settings.py``）
+
+        ⚠ 这层缓存在 ``MacroFactorService._CACHE``（600s）**之上**：只清后者，
+        ``/market/gold/trend`` 仍会从 ``served_cache`` 回放覆盖前的响应。
 
         Returns:
             失效的缓存条目数。
         """
         return served_cache.invalidate(target)
+
+    @staticmethod
+    def invalidate_for_news(target: str | None = None) -> int:
+        """消息面评分更新后调用（保留的语义化别名，转发 :meth:`invalidate_cached_results`）。"""
+        return TrendService.invalidate_cached_results(target)
 
     async def analyze(
         self,

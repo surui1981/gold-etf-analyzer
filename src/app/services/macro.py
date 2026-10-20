@@ -97,6 +97,16 @@ MACRO_CACHE_TTL = 600  # 10 分钟
 _CACHE: dict = {"ts": 0.0, "result": None}
 
 
+def clear_macro_cache() -> None:
+    """失效宏观评分缓存（V0.110.0：保存手动覆盖后必须调用）。
+
+    ``MACRO_CACHE_TTL`` 有 10 分钟，不清的话用户填完覆盖值回到首页看到的仍是旧指数，
+    会以为功能没生效 —— 与白银页面 V0.109.2 的「时效不透明」是同一类体验问题。
+    """
+    global _CACHE
+    _CACHE = {"ts": 0.0, "result": None}
+
+
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
 
@@ -225,7 +235,17 @@ class MacroFactorService:
         )
 
     async def _collect(self) -> dict[str, tuple[float, str, str]]:
-        """采集各因子当前值：(数值, 数据日期, 数据源标识)。美债实时，其余静态。"""
+        """采集各因子当前值：(数值, 数据日期, 数据源标识)。
+
+        **优先级链（V0.110.0）**：用户手动覆盖 > 自动数据源（央行购金表 / 美联储
+        H.15）> ``STATIC_REF`` 内置静态参考值。
+
+        覆盖优先级最高的设计理由：``dxy`` / ``vix`` 没有自动源，永远是 2026-08-28
+        的常量；``us10y`` / ``cb_gold`` 虽然有自动源，但上游失败时会静默回退到同一批
+        过期常量且只有 ``logger.warning``。用户从行情终端抄进来的当日读数在任何情况下
+        都比它们新，所以只要设了就用。覆盖的 ``as_of`` 日期会原样写进 ``data_date``，
+        滞后提示交给前端 —— 服务端不做静默过期，避免"我明明填了却没生效"的困惑。
+        """
         values: dict[str, tuple[float, str, str]] = {}
         for key, ref in STATIC_REF.items():
             values[key] = (float(ref["value"]), ref["date"], ref["note"])  # 静态参考值自带 note
@@ -266,7 +286,28 @@ class MacroFactorService:
             logger.warning("US bond rate fetch failed (%s), use static ref", exc)
             values["us10y"] = (4.4, "2026-08-28", "静态参考值")
             values["us30y"] = (4.9, "2026-08-28", "静态参考值")
+
+        # V0.110.0：用户手动校准值覆盖前两步的一切结果（静态参考 / 自动源）。
+        values.update(await self._apply_manual_overrides())
         return values
+
+    async def _apply_manual_overrides(self) -> dict[str, tuple[float, str, str]]:
+        """读取用户手动校准并转成 ``_collect`` 同构的 (值, 日期, 源标识) 三元组。"""
+        if self._settings is None:
+            return {}
+        try:
+            active = (await self._settings.macro_overrides()).active()
+        except Exception as exc:
+            # 覆盖读取失败绝不能让宏观面整体挂掉 —— 回落到自动源 / 静态参考即可
+            logger.warning("macro overrides unavailable (%s), keep auto values", exc)
+            return {}
+        if not active:
+            return {}
+        out: dict[str, tuple[float, str, str]] = {}
+        for key, ov in active.items():
+            out[key] = (float(ov.value), ov.as_of.isoformat(), "手动输入")
+        logger.info("macro factors overridden by user: %s", sorted(out))
+        return out
 
     @staticmethod
     def _summarize(score: float, direction: DirectionSignal) -> str:

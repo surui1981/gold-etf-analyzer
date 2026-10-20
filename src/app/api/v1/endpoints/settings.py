@@ -6,8 +6,10 @@ from app.dependencies import get_setting_repository, get_weight_service
 from app.middleware.admin_auth import require_admin_session
 from app.repositories.settings import SettingRepository
 from app.schemas.alert import AlertRuleIn, AlertRuleOut, AlertTestResult
-from app.schemas.settings import WeightConfig
+from app.schemas.settings import MacroFactorOverrideSet, WeightConfig
+from app.services.macro import clear_macro_cache
 from app.services.notify import NotifierFactory
+from app.services.trend import TrendService
 from app.services.settings import (
     WeightService,
     get_alert_rules,
@@ -35,8 +37,60 @@ async def save_weights(
     config: WeightConfig,
     service: WeightService = Depends(get_weight_service),
 ) -> WeightConfig:
-    """保存权重（各组权重和须为 1，由 Schema 校验）。"""
-    return await service.save_weights(config)
+    """保存权重（各组权重和须为 1，由 Schema 校验）。
+
+    V0.110.0：保存后必须失效 ``served_cache`` —— 权重直接参与综合指数合成，
+    不失效的话用户保存完看到的仍是旧指数（默认 600s），与"保存没生效"无法区分。
+    """
+    saved = await service.save_weights(config)
+    clear_macro_cache()  # 宏观面内部用 group_by 权重，同样是宏观评分的输入
+    TrendService.invalidate_cached_results()
+    return saved
+
+
+# ───────────────────── V0.110.0：宏观因子手动校准 ─────────────────────
+
+
+@router.get(
+    "/macro-overrides",
+    response_model=MacroFactorOverrideSet,
+    summary="获取宏观因子手动覆盖",
+)
+async def get_macro_overrides(
+    service: WeightService = Depends(get_weight_service),
+) -> MacroFactorOverrideSet:
+    """返回用户手动校准的宏观因子读数（未设置过则 5 项全为 null）。
+
+    公开读：页面需要显示"当前生效的手动值 vs 自动源值"，与 ``/settings/weights``
+    保持同样的读权限口径。
+    """
+    return await service.macro_overrides()
+
+
+@router.put(
+    "/macro-overrides",
+    response_model=MacroFactorOverrideSet,
+    summary="保存宏观因子手动覆盖",
+    dependencies=[Depends(require_admin_session)],
+)
+async def put_macro_overrides(
+    payload: MacroFactorOverrideSet,
+    service: WeightService = Depends(get_weight_service),
+) -> MacroFactorOverrideSet:
+    """整体替换宏观因子手动覆盖（传全 null 即清除全部覆盖）。
+
+    ``dxy`` / ``vix`` 无自动源、长期停在 2026-08-28 的静态常量；本端点允许用户
+    从行情终端抄入当日真实读数顶替。
+
+    保存后要失效**两层**缓存：``MacroFactorService._CACHE``（600s）与
+    ``TrendService`` 的 ``served_cache``（600s，在前者之上）。只清前者时
+    ``/market/gold/trend`` 会从 served_cache 回放覆盖前的响应 —— 实测确认：
+    覆盖已落库、GET 仍返回 ``dxy 96.5 · 2026-08-28``。
+    """
+    saved = await service.save_macro_overrides(payload)
+    clear_macro_cache()
+    TrendService.invalidate_cached_results()
+    return saved
 
 
 # ───────────────────── V0.72.0：告警规则 + 测试发送 ─────────────────────
