@@ -19,6 +19,7 @@ from app.repositories.news_classifier import (
     CATEGORIES,
     _BIZ_KW,
     _FINANCE_KW,
+    _SITE_HINTS,
     _TECH_KW,
     _VC_KW,
     classify,
@@ -76,8 +77,18 @@ def test_classify_tech_overrides_business() -> None:
 
 
 def test_classify_empty_title_uses_site_name() -> None:
-    """title 空但 site_name 是「华尔街见闻」→ 财经（site_name 计入）。"""
-    assert classify("", "", "华尔街见闻") == "财经"
+    """内容为空但 site_name 是**垂直媒体** → 按站名兜底。
+
+    V0.109.1 起站名只对「垂直媒体」兜底，综合通讯社不再兜底（实测它们
+    14-35 条内容未命中的条目里大量是战事灾难）。所以这里用「金融界」
+    而不是原先的「华尔街见闻」—— 后者也会发「胡塞武装空袭也门致 9 死」。
+    """
+    assert classify("", "", "金融界") == "财经"
+    assert classify("", "", "同花顺财经") == "财经"
+    # 综合通讯社刻意不兜底
+    assert classify("", "", "华尔街见闻") == "其他"
+    assert classify("", "", "财联社") == "其他"
+    assert classify("", "", "格隆汇") == "其他"
 
 
 def test_classify_all_empty_returns_other() -> None:
@@ -210,14 +221,15 @@ def test_classify_finance_overrides_tech_new_v01071() -> None:
 
 
 def test_classify_whitelist_finance_site_v01080() -> None:
-    """V0.108.0：白名单财经站名 + 空标题空摘要 → 仍归财经。
+    """V0.108.0 白名单的**财经垂直媒体**部分：空标题空摘要 → 仍归财经。
 
-    这是白名单的核心价值：readhub 上财经源的摘要字段经常为空，正文关键词
-    命中不了；站名进字典后这类条目不再掉进「其他」被 fetcher 弃入。
+    V0.109.1 把白名单拆成两类：只有选题限定在市场的**垂直媒体**参与站名
+    兜底；综合通讯社（选题覆盖全球战事灾难）不再兜底，见下方
+    ``test_wire_service_no_site_fallback_v01091``。
     """
     for site in (
-        "第一财经", "金融界", "同花顺财经", "界面新闻", "中国证券报",
-        "上海证券报", "证券时报", "经济观察报", "每日经济新闻", "金十数据",
+        "金融界", "同花顺财经", "中国证券报", "上海证券报",
+        "证券时报", "每日经济新闻", "金十数据",
     ):
         assert classify("", "", site) == "财经", f"{site} 应归财经"
 
@@ -411,3 +423,92 @@ class TestPublishKeywordPrecision:
             "公司召开业绩说明会",
         ):
             assert classify(title, "", "") == "商业", f"{title} 应归商业"
+
+
+# ────────────── V0.109.1 内容优先 / 站名只作垂直媒体兜底 ───────────────
+
+
+class TestContentFirstSiteFallback:
+    """站名不得压过内容（V0.108.0 设计的修正）。
+
+    V0.108.0 把 33 个优质站名写进内容词典，而财经优先级最高，于是站名压过
+    内容：实测生产 DB 576 条里 160 条（27.8%）纯靠站名定类，样例包括
+    「印度东部踩踏事故致 17 人死亡」→ 财经（来源 财联社）。
+    """
+
+    def test_content_wins_over_site(self) -> None:
+        """内容命中财经 + 来源是科技站 → 财经（站名不参与）。"""
+        assert classify("公司发布最新 ETF 份额数据", "", "IT 之家") == "财经"
+        # 科技 > 创投 是既定优先级：「芯片」先命中科技，融资类词不再生效。
+        # 这条断言的是「站名（华尔街见闻）没有把结果从科技拉成财经/创投」。
+        assert classify("某芯片公司完成 B 轮融资", "", "华尔街见闻") == "科技"
+        assert classify("某 SaaS 公司完成 B 轮融资", "", "华尔街见闻") == "创投"
+
+    def test_world_disaster_from_wire_dropped(self) -> None:
+        """通讯社的战事灾难新闻不该靠站名混进财经流。
+
+        以下标题均为生产库真实条目（摘要已按真实内容补齐）。
+        """
+        cases = [
+            ("印度东部踩踏事故致 17 人死亡", "", "财联社"),
+            ("伊拉克首都一弹药仓库发生爆炸", "", "财联社"),
+            ("法国多地发生大规模抗议 数百人被捕",
+             "法国多地 17 日发生游行示威和抗议活动，部分地区出现暴力行为。",
+             "第一财经"),
+            ("格隆汇 10 月 18 日｜胡塞武装军事发言人叶海亚・萨雷亚：在过去 24 小时内，"
+             "沙特战斗机对首都萨那以及塔伊", "", "格隆汇"),
+            ("胡塞武装方面称沙特空袭也门萨达省致 9 死 11 伤", "", "华尔街见闻"),
+        ]
+        for title, summary, site in cases:
+            assert classify(title, summary, site) == "其他", (
+                f"{title[:24]}… 不该靠站名进入 {site} 的类目"
+            )
+
+    def test_wire_service_no_site_fallback(self) -> None:
+        """V0.109.1：综合通讯社不在站名兜底表内。
+
+        「通讯社」= 选题覆盖全球快讯的财经媒体。它们发纯市场内容时仍会被
+        内容词典命中（不靠站名），但内容无关时必须掉进「其他」。
+        """
+        for wire in ("财联社", "格隆汇", "第一财经", "界面新闻",
+                     "经济观察报", "华尔街见闻"):
+            assert classify("", "", wire) == "其他", f"{wire} 不该站名兜底"
+            assert wire not in _SITE_HINTS, f"{wire} 不该在 _SITE_HINTS 里"
+
+    def test_international_finance_still_kept(self) -> None:
+        """国际**财经**新闻必须保留（这是本次改动的目的，不是全部丢国际）。"""
+        # (标题, 摘要, 来源) —— 韩国财长一条为生产库真实数据：该标题单独看
+        # 只有「半导体」(科技)，财经信号全在摘要里（「财政部/基金/经济/
+        # 世界银行」）。刻意保留真实摘要，证明内容优先确实吃到摘要。
+        for title, summary, site in (
+            ("韩国财长：半导体市场景气至少维持至明年",
+             "韩国财政部长李炯日周六表示，半导体行业繁荣将至少延续至 2027 年；"
+             "他在曼谷出席国际货币基金组织与世界银行年会间隙接受 CNBC 采访时称",
+             "格隆汇"),
+            ("欧洲央行维持利率不变 拉加德发表讲话", "", ""),
+            ("日本央行调整负利率区间", "", ""),
+            ("OPEC+ 宣布延长减产协议", "", ""),
+            ("美股三大指数集体收涨 纳指涨超 1%", "", ""),
+        ):
+            got = classify(title, summary, site)
+            assert got == "财经", f"{title} 应保留为财经，实际 {got}"
+
+    def test_vertical_sites_still_fallback(self) -> None:
+        """垂直媒体的站名兜底能力保留（英文科技评测场景不可替代）。"""
+        for site in ("techradar.com", "9to5Mac", "IT 之家", "快科技",
+                     "金十数据", "36Kr", "创业邦"):
+            got = classify("", "", site)
+            assert got != "其他", f"{site} 应能站名兜底"
+        # 英文产品评测：无中文关键词，全靠站名
+        assert classify("I tested the Sony Bravia 9 II for weeks", "",
+                        "techradar.com") == "科技"
+
+    def test_longest_site_hint_wins(self) -> None:
+        """带后缀的站名走最长匹配。"""
+        assert classify("", "", "C114 通信网") == "科技"
+        assert classify("", "", "IT之家") == "科技"
+        assert classify("", "", "IT 之家") == "科技"
+
+    def test_non_vertical_unknown_site_dropped(self) -> None:
+        """既不在兜底表、内容也不命中的条目 → 弃入。"""
+        assert classify("某地举办读书节活动", "", "地方都市报") == "其他"
