@@ -123,3 +123,38 @@ def test_repo_docs_have_no_broken_links() -> None:
     problems, links, _ = check_links.check_files(check_links.DOC_FILES)
     assert problems == [], f"以下链接失效：{problems}"
     assert links > 50, "链接总数异常偏少，可能是扫描范围被改坏了"
+
+
+# ───────────────────── V0.110.0 · release notes 索引完整性 ─────────────────────
+#
+# V0.110.0 背景：docs/releases/index.md 停在 V0.100.2，V0.103~V0.109 共 9 份
+# release notes 无人索引，且**没有任何门禁报红** —— 死链门禁只看"已写的链接能不能
+# 点开"，看不见"该写的链接根本没写"。check_release_index 补上后半段。
+
+
+def test_release_index_registers_every_note() -> None:
+    """仓库当前状态：每份 release notes 都能在 index.md 里找到入口。"""
+    assert check_links.check_release_index() == []
+
+
+def test_release_index_catches_unregistered_note(tmp_path, monkeypatch) -> None:
+    """注入一份没被索引的 release note ⇒ 门禁必须报红。"""
+    releases = tmp_path / "docs" / "releases"
+    releases.mkdir(parents=True)
+    (releases / "index.md").write_text(
+        "已登记的版本：[v0.109.2.md](v0.109.2.md)\n", encoding="utf-8"
+    )
+    (releases / "v0.109.2.md").write_text("# ok\n", encoding="utf-8")
+    (releases / "v9.9.9.md").write_text("# 忘了登记\n", encoding="utf-8")
+
+    monkeypatch.setattr(check_links, "ROOT", tmp_path)
+    problems = check_links.check_release_index()
+
+    assert problems == ["docs/releases/v9.9.9.md 未在 docs/releases/index.md 中登记"]
+
+
+def test_release_index_missing_index_file(tmp_path, monkeypatch) -> None:
+    """index.md 本身缺失 ⇒ 报红（而不是静默通过）。"""
+    (tmp_path / "docs" / "releases").mkdir(parents=True)
+    monkeypatch.setattr(check_links, "ROOT", tmp_path)
+    assert check_links.check_release_index() == ["docs/releases/index.md 不存在"]

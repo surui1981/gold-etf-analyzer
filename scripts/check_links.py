@@ -216,11 +216,42 @@ def check_files(
     return problems, total_links, total_anchors
 
 
+def check_release_index(verbose: bool = False) -> list[str]:
+    """检查 ``docs/releases/index.md`` 是否漏登记了已存在的 release notes。
+
+    V0.110.0 背景：索引表停在 V0.100.2，而 V0.103 ~ V0.109 共 9 份 release notes
+    静静躺在 ``docs/releases/`` 里没人链 —— **没有任何门禁会报这个红**。
+    死链门禁只看"已写的链接能不能点开"，看不见"该写的链接根本没写"。
+    这个检查补上后半段：目录里有文件、索引里没有入口 ⇒ 报红。
+
+    刻意**不设豁免名单**：V0.110.0 之前有 13 份 release notes 是"有意合并进
+    v0.86.0 维护线"而未登记，但那个"有意"从未被写下来，也没有任何机制能区分
+    "真的合并了"与"忘了登记"。全部登记进索引成本更低，也不会再退化。
+    """
+    index_path = ROOT / "docs" / "releases" / "index.md"
+    if not index_path.exists():
+        return ["docs/releases/index.md 不存在"]
+
+    index_text = index_path.read_text(encoding="utf-8")
+    missing = [
+        note.name
+        for note in sorted((ROOT / "docs" / "releases").glob("v*.md"))
+        if note.name not in index_text
+    ]
+    if verbose:
+        for name in missing:
+            print(f"  [MISS] docs/releases/{name} 未在 index.md 中登记")
+    return [f"docs/releases/{n} 未在 docs/releases/index.md 中登记" for n in missing]
+
+
 def main(argv: list[str]) -> int:
     verbose = "-v" in argv
     problems, total_links, total_anchors = check_files(DOC_FILES, verbose=verbose)
 
+    index_problems = check_release_index(verbose=verbose)
+
     print()
+    problems = [*problems, *index_problems]
     if problems:
         print(f"[FAIL] 发现 {len(problems)} 个失效链接：")
         for p in problems:
@@ -229,7 +260,8 @@ def main(argv: list[str]) -> int:
 
     print(
         f"[OK] 死链门禁通过：{len(DOC_FILES)} 份文档、"
-        f"{total_links} 条内部链接 + {total_anchors} 个锚点全部有效"
+        f"{total_links} 条内部链接 + {total_anchors} 个锚点全部有效；"
+        f"docs/releases/index.md 已登记全部 release notes"
     )
     return 0
 
