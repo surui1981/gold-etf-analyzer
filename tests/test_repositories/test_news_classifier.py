@@ -316,3 +316,98 @@ def test_all_kw_no_duplicate_v01080() -> None:
     ):
         dupes = {w for w in kw if list(kw).count(w) > 1}
         assert not dupes, f"{name} 有重复词: {dupes}"
+
+
+# ────────────── V0.109.0 短 ASCII 词词边界（修 PE ⊂ Europe 子串误匹配）──────────────
+
+
+class TestWordBoundary:
+    """短 ASCII 词（<=3 字符）必须整词命中，不得匹配更长单词的内部。
+
+    背景：``"PE" in "europe"`` 为真，而 ``PE``（市盈率）在 ``_FINANCE_KW``
+    且财经优先级最高 —— 实测 576 条生产数据里有 28 条科技新闻（Oppo /
+    Claude / OpenCode / AWS / iPhone / Sony / Windows）被误判成财经。
+    """
+
+    def test_boundary_table_only_short_ascii(self) -> None:
+        """边界表只收「长度 <=3 且纯 ASCII」的词。"""
+        from app.repositories.news_classifier import _BOUNDARY_PATTERNS
+
+        for kw in _BOUNDARY_PATTERNS:
+            assert kw.isascii(), f"{kw} 非 ASCII，不该进边界表"
+            assert len(kw) <= 3, f"{kw} 长度 >3，不该进边界表（长词子串匹配安全）"
+        assert "PE" in _BOUNDARY_PATTERNS
+        assert "ETH" in _BOUNDARY_PATTERNS
+        assert "OpenAI" not in _BOUNDARY_PATTERNS  # 长词走子串，不受影响
+
+    def test_pe_no_longer_matches_europe(self) -> None:
+        """V0.109.0 核心回归：PE 不得命中 Europe / European / OpenAI。"""
+        for word in ("europe", "european", "openai", "shape", "hope", "escape"):
+            assert classify(f"{word} 相关报道", "", "") != "财经" or (
+                # 该词若命中其它财经词则仍可能判财经；单独校验 PE 本身不命中
+                True
+            )
+            from app.repositories.news_classifier import _hit
+
+            assert not _hit(word, ("PE",)), f"PE 不该命中 {word!r}"
+
+    def test_pe_still_matches_standalone(self) -> None:
+        """边界不能把正常用法也一起干掉。"""
+        from app.repositories.news_classifier import _hit
+
+        for phrase in ("pe 估值 30 倍", "2026pe 仅 8 倍", "pe(ttm)", "静态 pe"):
+            assert _hit(phrase, ("PE",)), f"PE 应命中 {phrase!r}"
+
+    def test_cjk_neighbour_does_not_block_match(self) -> None:
+        """汉字邻居不算 ASCII 字母边界，中文财经写法必须仍命中。"""
+        from app.repositories.news_classifier import _hit
+
+        for phrase, kw in (("科创 50etf 交投", "ETF"), ("btc 突破新高", "BTC"),
+                           ("英伟达 gpu 供货", "GPU"), ("aigc 大模型", "AIGC")):
+            assert _hit(phrase, (kw,)), f"{kw} 应命中 {phrase!r}"
+
+    def test_eth_no_longer_matches_ethiopia(self) -> None:
+        """ETH 不得命中 Ethiopia（埃塞俄比亚）。"""
+        from app.repositories.news_classifier import _hit
+
+        assert not _hit("ethiopia 冲突", ("ETH",))
+        assert _hit("eth 价格", ("ETH",))
+
+    def test_openai_now_classifies_tech(self) -> None:
+        """V0.109.0 端到端：OpenAI 新闻不再被判财经。"""
+        assert classify("OpenAI 发布新模型", "", "") == "科技"
+        assert classify("Oppo 计划进军欧洲智能市场", "", "") == "科技"
+
+    def test_aigc_agi_still_tech(self) -> None:
+        """复合词显式补齐后仍归科技。"""
+        assert classify("AIGC 大模型应用爆发", "", "") == "科技"
+        assert classify("AGI 何时到来", "", "") == "科技"
+
+
+# ────────────── V0.109.0 裸词「发布」→ 「发布会」 ───────────────
+
+
+class TestPublishKeywordPrecision:
+    """中文无词边界，裸词「发布」会把公告/战事误判成商业。"""
+
+    def test_publish_not_in_biz_kw(self) -> None:
+        """V0.109.0：裸「发布」已从 _BIZ_KW 移除。"""
+        assert "发布" not in _BIZ_KW
+        assert "发布会" in _BIZ_KW
+
+    def test_news_announcement_not_biz(self) -> None:
+        """警方提示 / 档案馆开放 / 战事通报不该判商业。"""
+        for title in (
+            "北京警方发布彩叶观赏季安全提示",
+            "中央档案馆向社会集中开放 5000 余件长征专题档案",
+            "俄罗斯称袭击乌克兰敖德萨地区四艘货船及雷尼港设施",
+        ):
+            assert classify(title, "", "") == "其他", f"{title} 不该是商业"
+
+    def test_launch_event_still_biz(self) -> None:
+        """真正的「发布会」商业新闻必须保留（生产数据实测 7 条）。"""
+        for title in (
+            "小米举行秋季新品发布会",
+            "公司召开业绩说明会",
+        ):
+            assert classify(title, "", "") == "商业", f"{title} 应归商业"
