@@ -55,6 +55,34 @@
   .sum-line { font-size: 12px; color: var(--muted); text-align: right; margin-top: 8px; }
   .sum-line b { font-size: 13px; }
   .sum-ok { color: var(--down); } .sum-bad { color: var(--up); }
+  /* V0.110.0 · 宏观因子手动校准（macro override）—— dxy / vix 无自动源，
+     长期停在 2026-08-28 内置常量，允许从行情终端手工录入当日读数顶替。 */
+  .mo-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    font-size: 11.5px; color: var(--muted); padding: 0 0 6px; }
+  .mo-head span { min-width: 88px; }
+  .mo-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 9px 0; border-top: 1px solid var(--border); }
+  .mo-row .nm { width: 116px; font-size: 13px; flex-shrink: 0; }
+  .mo-row .cur { width: 176px; font-size: 12px; color: var(--muted); flex-shrink: 0;
+    font-variant-numeric: tabular-nums; }
+  .mo-row input[type=number] { width: 96px; padding: 6px 8px; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--card);
+    color: var(--text); }
+  .mo-row input[type=date] { width: 150px; padding: 6px 8px; font-size: 13px;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--card);
+    color: var(--text); }
+  .mo-row .mo-note { width: 132px; padding: 6px 8px; font-size: 12px;
+    border: 1px solid var(--border); border-radius: 7px; background: var(--card);
+    color: var(--text); }
+  .mo-row button { padding: 6px 12px; font-size: 12px; }
+  .mo-row.is-manual .cur { color: var(--accent, #806014); font-weight: 600; }
+  .mo-chip { display: inline-block; margin-left: 5px; padding: 1px 7px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 600; border: 1px solid var(--border); color: var(--muted); }
+  .mo-chip.mo-chip-warn { color: #946300; border-color: rgba(245,217,122,.55);
+    background: rgba(245,217,122,.16); }
+  .mo-ops { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .mo-ops button { padding: 8px 16px; font-size: 13px; }
+  .mo-empty { font-size: 12px; color: var(--muted); padding: 10px 0; }
   .actions { display: flex; gap: 10px; margin-top: 4px; }
   button { border: none; border-radius: 8px; padding: 10px 22px; font-size: 14px; cursor: pointer; font-weight: 600; }
   .btn-save { background: #1f2329; color: #fff; }
@@ -210,6 +238,26 @@
     <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重</div>
     <div id="macroRows"></div>
     <div class="sum-line" data-i18n="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
+  </div>
+
+  <!-- V0.110.0 · 宏观因子手动校准：dxy / vix 无自动源，内置常量停在 2026-08-28 -->
+  <div class="card" id="macroOverrideCard">
+    <h2 data-i18n="weights.mo_title">🌍 宏观因子手动校准</h2>
+    <div class="desc" data-i18n="weights.mo_desc">美元指数 / VIX 没有自动实时源，系统默认使用内置静态参考值（2026-08-28）。在行情终端看到最新读数后，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。</div>
+    <div class="mo-head" aria-hidden="true">
+      <span data-i18n="weights.mo_factor">因子</span>
+      <span class="cur" style="width:176px" data-i18n="weights.mo_current">当前生效</span>
+      <span style="width:96px" data-i18n="weights.mo_input">手动值</span>
+      <span style="width:150px" data-i18n="weights.mo_date">数据日期</span>
+      <span style="width:132px" data-i18n="weights.mo_note">备注</span>
+      <span></span>
+    </div>
+    <div id="moRows"><div class="mo-empty" data-i18n="weights.mo_loading">正在读取宏观因子当前读数…</div></div>
+    <div class="mo-ops">
+      <button class="btn-save" onclick="saveOverrides()" data-i18n="weights.mo_btn_save">💾 保存覆盖值</button>
+      <button class="btn-reset" onclick="clearOverrides()" data-i18n="weights.mo_btn_clear_all">清除全部覆盖</button>
+    </div>
+    <div class="msg" id="moMsg"></div>
   </div>
 
   <!-- 合成权重 -->
@@ -408,8 +456,12 @@ async function loadTrendForPreview() {
     const d = await fetch(API_BASE + "/api/v1/market/gold/trend?days=60").then(r => r.json());
     baseIndex = d.index.score;
     baseComponents = d.index.components || { tech: 0, macro: 0, news: 0 };
+    absorbMacroFactors(d);  // V0.110.0：宏观因子当前读数 → 手动校准表的「当前生效」列
     renderPreview();
   } catch (e) {
+    // 预览失败时让「当前生效」列落到"暂无读数"而不是永远停在「加载中」
+    macroFactorState = "failed";
+    renderOverrides();
     document.getElementById("previewBox").innerHTML =
       `<div class="empty">预览数据获取失败：${e.message}（需服务运行中）</div>`;
   }
@@ -503,6 +555,204 @@ async function resetAll() {
   }
 }
 
+/* ══════════════ V0.110.0 · 宏观因子手动校准 ══════════════
+ * 背景：dxy / vix 无自动实时源，MACRO_FACTOR_RULES 用的是 STATIC_REF 里
+ * 2026-08-28 的内置常量（96.5 / 18.5）。两者在宏观面内部合计权重 0.40，
+ * 宏观面又占综合指数 0.40 —— 综合指数的 16% 建立在两个半月前的常量上。
+ * 这里让用户从行情终端录入当日真实读数顶替，保存后立即重算。
+ */
+const OVERRIDE_API = API_BASE + "/api/v1/settings/macro-overrides";
+// 与后端 schemas/settings.py::MACRO_FACTOR_KEYS 一一对应
+const OVERRIDE_FIELDS = [
+  ["dxy", "美元指数", "点位"],
+  ["us10y", "美债10Y收益率", "%"],
+  ["us30y", "美债30Y收益率", "%"],
+  ["vix", "VIX恐慌指数", "点位"],
+  ["cb_gold", "国际央行购金量", "吨/年"],
+];
+let overrideState = null;   // 服务端返回的 MacroFactorOverrideSet
+let macroFactors = {};      // key → {value, data_date, source}（来自 gold/trend 响应）
+// 「当前生效」列的取数状态。冷启动时 gold/trend 要现拉 60 根 K 线，实测数秒 ——
+// 这期间必须显示中性「加载中」而不是「暂无读数」（后者会被读成"因子丢了"）。
+let macroFactorState = "loading";   // loading | ready | failed
+
+/** i18n 取值：i18n.js 以 defer 加载，早于本页首屏 fetch 时未必就绪，故做一次兜底 */
+function t(key, params) {
+  if (window.I18n && typeof window.I18n.t === "function") return window.I18n.t(key, params);
+  return key;
+}
+// 切语言时重渲染手动校准行（行内容是 JS 拼的，i18n 的 DOM 应用覆盖不到）
+document.addEventListener("i18n:change", renderOverrides);
+
+/** 覆盖值的滞后天数（日历日；仅用于提示，与后端 trading_days 略宽但足够直观） */
+function lagDays(dateStr) {
+  if (!dateStr) return null;
+  const t = Date.parse(dateStr);
+  if (Number.isNaN(t)) return null;
+  // data_date 可能是 "2025Q3–2026Q2 滚动12月" 这类自由文本，解析失败就不提示滞后
+  return Math.floor((Date.now() - t) / 86400000);
+}
+
+function overrideRowHtml([key, label, unit]) {
+  const ov = (overrideState && overrideState[key]) || null;
+  const cur = macroFactors[key] || null;
+  const isManual = !!(cur && cur.source === "手动输入");
+  const lag = isManual ? lagDays(cur.data_date) : null;
+  const lagChip = lag !== null && lag > 1
+    ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_lag_warn", { n: lag })}</span>`
+    : "";
+  const srcChip = isManual
+    ? `<span class="mo-chip">${t("weights.mo_source_manual")}</span>`
+    : "";
+  const curTxt = cur
+    ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${lagChip}`
+    : t(macroFactorState === "loading" ? "weights.mo_loading" : "weights.mo_no_reading");
+  return `<div class="mo-row${isManual ? " is-manual" : ""}">
+    <span class="nm">${label}</span>
+    <span class="cur">${curTxt}</span>
+    <input type="number" step="0.01" id="mo_${key}" placeholder="${t("weights.mo_placeholder")}"
+           value="${ov && ov.value != null ? ov.value : ""}" aria-label="${label} ${t("weights.mo_input")}">
+    <input type="date" id="mo_${key}_d" value="${ov && ov.as_of ? ov.as_of : ""}" aria-label="${label} ${t("weights.mo_date")}">
+    <input type="text" id="mo_${key}_n" class="mo-note" maxlength="120" placeholder="${t("weights.mo_note_ph")}"
+           value="${ov && ov.note ? ov.note : ""}" aria-label="${label} ${t("weights.mo_note")}">
+    <button class="btn-reset" onclick="clearOverride('${key}')" data-i18n="weights.mo_clear_one">清除</button>
+  </div>`;
+}
+
+/** 重渲染前的用户编辑快照。
+ *
+ *  ``renderOverrides()`` 整块替换 ``#moRows`` 的 innerHTML，输入框的 value 会按
+ *  ``overrideState`` 重新生成 —— 于是**用户正在输入 / 已改未保存的值会被冲掉**。
+ *  触发路径不止保存成功这一条：首屏 ``loadOverrides()`` 与 ``loadTrendForPreview()``
+ *  并发在飞，冷启动下后者要现拉 60 根 K 线（实测数秒），期间用户填的 dxy 一旦
+ *  被迟到的 ``loadOverrides()`` 重渲染掉，点击保存提交的就是空值 —— 现象是
+ *  "我明明填了却没生效"，且没有任何报错。
+ *
+ *  返回「与 ``overrideState`` 不一致」的字段；保存成功后 base 已更新，快照自然为空。
+ */
+function snapshotUserEdits() {
+  const edits = {};
+  for (const [key] of OVERRIDE_FIELDS) {
+    const vEl = document.getElementById("mo_" + key);
+    if (!vEl) continue;
+    const dEl = document.getElementById("mo_" + key + "_d");
+    const nEl = document.getElementById("mo_" + key + "_n");
+    const ov = (overrideState && overrideState[key]) || null;
+    const cur = { v: vEl.value.trim(), d: dEl ? dEl.value : "", n: nEl ? nEl.value.trim() : "" };
+    const base = {
+      v: ov && ov.value != null ? String(ov.value) : "",
+      d: (ov && ov.as_of) || "",
+      n: (ov && ov.note) || "",
+    };
+    if (cur.v !== base.v || cur.d !== base.d || cur.n !== base.n) edits[key] = cur;
+  }
+  return edits;
+}
+
+function restoreUserEdits(edits) {
+  for (const key of Object.keys(edits)) {
+    const e = edits[key];
+    const vEl = document.getElementById("mo_" + key);
+    const dEl = document.getElementById("mo_" + key + "_d");
+    const nEl = document.getElementById("mo_" + key + "_n");
+    if (vEl) vEl.value = e.v;
+    if (dEl) dEl.value = e.d;
+    if (nEl) nEl.value = e.n;
+  }
+}
+
+function renderOverrides() {
+  const rows = document.getElementById("moRows");
+  if (!rows) return;
+  const edits = snapshotUserEdits();
+  rows.innerHTML = OVERRIDE_FIELDS.map(overrideRowHtml).join("");
+  restoreUserEdits(edits);
+}
+
+/** 从 gold/trend 响应里抽出宏观因子当前读数（该响应含 macro.factors[]） */
+function absorbMacroFactors(trendJson) {
+  const factors = trendJson && trendJson.macro && trendJson.macro.factors;
+  macroFactorState = Array.isArray(factors) ? "ready" : "failed";
+  if (!Array.isArray(factors)) { renderOverrides(); return; }
+  macroFactors = Object.fromEntries(factors.map(f => [f.key, {
+    value: f.value, data_date: f.data_date, source: f.source || "",
+  }]));
+  renderOverrides();
+}
+
+async function loadOverrides() {
+  try {
+    const r = await fetch(OVERRIDE_API);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    overrideState = await r.json();
+    renderOverrides();
+  } catch (e) {
+    const rows = document.getElementById("moRows");
+    if (rows) rows.innerHTML = `<div class="mo-empty">${t("weights.mo_load_fail", { msg: e.message })}</div>`;
+  }
+}
+
+/** 收集表单 → 请求体；值与日期都填了才生效（只填其一视为未设置） */
+function collectOverrides() {
+  const body = {};
+  for (const [key] of OVERRIDE_FIELDS) {
+    const raw = document.getElementById("mo_" + key).value.trim();
+    const asOf = document.getElementById("mo_" + key + "_d").value;
+    const note = document.getElementById("mo_" + key + "_n").value.trim();
+    if (raw === "" || !asOf) {
+      // 日期留空时视为「清除该因子覆盖」，避免半截数据静默生效
+      body[key] = null;
+      continue;
+    }
+    body[key] = { value: Number(raw), as_of: asOf, note: note || null };
+  }
+  return body;
+}
+
+function moMsg(text, cls) {
+  const el = document.getElementById("moMsg");
+  if (!el) return;
+  el.className = "msg" + (cls ? " " + cls : "");
+  el.textContent = text;
+}
+
+async function saveOverrides() {
+  const body = collectOverrides();
+  const bad = Object.entries(body).find(([, v]) => v !== null && !Number.isFinite(v.value));
+  if (bad) { moMsg(t("weights.mo_bad_value", { k: bad[0] }), "err"); return; }
+  moMsg(t("weights.mo_saving"), "");
+  try {
+    const r = await fetch(OVERRIDE_API, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || "HTTP " + r.status);
+    overrideState = await r.json();
+    renderOverrides();
+    // 覆盖值直接改写宏观面评分 → 必须重新取一次趋势，刷新下方实时预览
+    loadTrendForPreview();
+    moMsg(t("weights.mo_saved"), "ok");
+  } catch (e) { moMsg(t("weights.mo_save_fail", { msg: e.message }), "err"); }
+}
+
+/** 单因子清除：清空输入框后立即提交（其余因子的值原样带上，不误伤） */
+async function clearOverride(key) {
+  document.getElementById("mo_" + key).value = "";
+  document.getElementById("mo_" + key + "_d").value = "";
+  document.getElementById("mo_" + key + "_n").value = "";
+  await saveOverrides();
+}
+
+async function clearOverrides() {
+  const ok = await confirmDialog(t("weights.mo_confirm_clear"));
+  if (!ok) return;
+  for (const [key] of OVERRIDE_FIELDS) {
+    document.getElementById("mo_" + key).value = "";
+    document.getElementById("mo_" + key + "_d").value = "";
+    document.getElementById("mo_" + key + "_n").value = "";
+  }
+  await saveOverrides();
+}
+
 (async function init() {
   try {
     const r = await fetch(API);
@@ -513,6 +763,7 @@ async function resetAll() {
   } catch (e) {
     document.getElementById("trendRows").innerHTML = `<div class="desc">配置加载失败：${e.message}</div>`;
   }
+  loadOverrides();          // V0.110.0：宏观因子手动校准（与权重加载互不阻塞）
 })();
 </script>
   <script src="/static/health-summary.js"></script>
