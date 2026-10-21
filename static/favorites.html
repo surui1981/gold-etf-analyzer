@@ -262,5 +262,10 @@
 <script src="/static/toast.js" defer></script>
 <script src="/static/pwa.js" defer></script>
 <script src="/static/net-status.js" defer></script>
+<!-- V0.112.0 · 命令面板：顶栏「⌘ 搜索」按钮 + ⌘K/Ctrl+K。
+     此前只有 9/18 个页挂了本脚本，其余页面的顶栏搜索按钮点了没反应 ——
+     而按钮是 C1 给全部 18 页加的。派生时读 topnav.js 导出的 PM_Topnav.SCENES，
+     两个脚本都是 defer、惰性读取所以不依赖执行顺序。 -->
+<script src="/static/command-palette.js" defer></script>
 </body>
 </html>
