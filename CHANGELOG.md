@@ -4,6 +4,73 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.112.0] · 2026-10-21
+
+`命令面板修好` — UI + 门禁修复 · 无后端改动
+
+- ⌘ **修好 ⌘K 命令面板**（V0.68.0 建的设施，此前一直半残）
+  - 🐛 **全站没有任何可见入口**：`open()` 只由 Ctrl+K 触发 ⇒ **手机上 100% 打不开**
+  - 🐛 **菜单停在两代导航之前**：硬编码的 7 条平铺导航，V0.98 双层导航、V0.111
+    收敛到 8 场景后都没跟上 —— 今日要闻 / 报告存档 / 打分汇总 / 参数回测 / 白银 /
+    收藏 / 数据健康 / AI 全部缺席
+  - 💡 **根因不是忘了改，是没法改**：`SCENES` 只活在 `topnav.js` 的 IIFE 里不导出，
+    面板拿不到导航结构只能自己抄一份，抄的那份自然腐化。现导出
+    `window.PM_Topnav.SCENES`，面板在 `open()` 时**惰性派生**清单（8 场景 + 子页
+    去重后 17 个导航目标 + 2 个动作 = 19 条）—— 加减导航项面板自动跟随，
+    结构上不可能再腐化。惰性读取同时解开了与两个 defer 脚本的执行顺序耦合
+  - 🚪 **顶栏新增「⌘ 搜索」按钮**（18 个有顶栏的页全有）：手机上唯一能打开面板的
+    入口。走 `data-action` + document 委托，与导出按钮同一模式
+  - 📱 **9 个页补挂 `command-palette.js`**（此前只挂 9/18）：`ask` / `backtest` /
+    `data-health` / `favorites` / `headlines` / `home` / `report-archive` / `report` /
+    `silver`。`login` / `offline` / `reset-password` 无顶栏，不补
+  - 🧹 **删掉 / 修好 5 条「按下去什么都不发生」的死命令**（V0.77.1「失败态不伪装」同理）
+    - 切换时间区间 ×3：派发 `pm-range-change`，全站 **0 个监听方**
+    - 主题切换：派发 `pm-theme-change`，同样 0 个；且 `#pmThemeBtn` 本就常驻可见
+    - 帮助：V0.68 调的是 `PM_Help.show()`，而 `help.js` 导出的是 `{ showModal,
+      showTour, ... }` —— **从来没有 `show()`**。改调 `showModal()`
+  - 🎨 **清单按场景分组**、组头不可点；过滤匹配 标题 / URL / 所属场景名；
+    标签走 `I18n.t()`（只用 `fb` 会在 en-US 下显示中文，与顶栏对不上像 bug）
+  - 📱 **触屏适配**（`pointer: coarse`）：行高提到 44px 触摸目标、面板上移、
+    底部提示换成触屏文案；补深色主题样式
+  - 🔁 `i18n:change` 时若面板开着则重建，换语言不用关掉重开
+
+- 🎨 **顺带修顶栏按钮样式**：`nav-btn-cmd` / `nav-btn-export` 都是 `<button>`，
+  各页内联的 `.topnav a {...}` 规则套不上，`nav-btn-export` 一直以浏览器默认浅灰
+  外观落在深色顶栏上。样式补在 `theme.css`（而非散进 18 个内联块）。窄屏下
+  `min-height: 44px`、文字标签隐藏只留图标
+
+- 🔒 **修 `escHtml`**：V0.68 写成 `{ '&': '&', '<': '<', '>': '>', '"': '"' }` ——
+  前四个映射到自身是 no-op，含 `<` 或 `&` 的标签会原样进 `innerHTML`
+
+- 🚪 **修 `check_cluster_render.mjs` —— 这道门从 V0.99 起就一次都没真正跑过**
+  - V0.99 C4 把 `silver.html` 655 行拆成 `silver.html` 332 + `silver.js` 445，
+    A2 块要的 3 个函数全在 `silver.js`，门禁仍读 `silver.html` ⇒ `sliceBetween`
+    找不到起始标记直接抛异常
+  - 新增 `sliceFn()`（按大括号配对截取）。`sliceBetween` 的 `"\n}"` 结束标记
+    **只在函数顶格写时成立**，函数一旦缩进（在 IIFE 内）就会一路吞到文件里下一个
+    顶格 `}` —— 既可能让 `new Function()` 崩，也可能让 `includes()` 断言**假绿**
+    （A2「加载条改由 finally 收起」原本就是这么通过的）
+  - A7/A8 的 `sh` 改为 `silver.html + silver.js` 拼接：这些断言里既有查 JS 的
+    也有查 CSS 色值的（`#e8f7ee` 还在 html 的 `<style>` 里），拼接的语义就是原意
+    「白银这个页包含 X」，下次再拆文件不会又坏一遍
+  - 「含 11 条 NAV_LINKS」断言自 V0.98 起一直失配（actual 21）。改为在循环外
+    单跑的新块，断言 8 场景 + 21 导航目标 + `PM_Topnav` 导出 + 面板按钮接线
+    —— 原断言读 `topnav.js` 却在 9 页循环里，跑 9 遍、失败刷 9 行
+  - **结果：433 passed / 0 failed**（修之前是「启动即崩」，无从谈起通过率）
+
+- 🚦 **补 `check_i18n_keys.py` 的扫描缺口**（加 `"cmd."` 到严格清单的前提）
+  - 此前 JS 侧只扫 `i18n: "key"` 一种形态，漏掉两大类：`I18n.t('key')`
+    （`headlines.js` 11 处）与 `tr('key', 'fallback')`
+    —— 后者是本项目**既有约定**（V0.86 `decision-explainer.js` 首用），
+    约 15 个 `decision.explain_*` + 本次的 12 个 `cmd.*` 全在门外
+  - 补完后 in-scope **211 → 232**，且 **0 missing** ⇒ 这 21 个键三语本来就齐，
+    纯粹是门禁看不见。已负向验证：删 zh-TW 的 `cmd.help` / `headlines.empty`
+    均 `exit=1`
+  - ⚠️ 这是**既存缺口**，不是本次引入 —— `headlines.*` 与 `decision.explain_*`
+    在此之前一直不受门禁保护
+
+- 🌐 **i18n**：`nav.cmd_palette` ×3 + `cmd.*` 12 键 ×3 语
+
 ## [V0.111.1] · 2026-10-21
 
 `导航收敛` — hotfix · 无后端改动

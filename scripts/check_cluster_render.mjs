@@ -46,6 +46,34 @@ function sliceBetween(src, startMark, endMark) {
   if (j < 0) throw new Error("未找到结束标记：" + endMark);
   return src.slice(i, j + endMark.length);
 }
+
+/** 按大括号配对截取整个函数体。
+ *
+ *  sliceBetween 的 "\n}" 结束标记**只在函数顶格写时成立**：闭合行必须恰好是 `}`
+ * * 顶格*。函数一旦缩进（在 IIFE 内 / 有前导空格），闭合行变成 "\n  }"，
+ *  "\n}" 匹配不上，就会一路吞到文件里下一个顶格 "}" —— 切出来是半截代码。
+ *  两种后果都糟：
+ *    1. 喂给 new Function() 直接 SyntaxError，门禁崩在半路（V0.99 拆 silver.js 后
+ *       就是这样 —— A2 块把 silver.html 整个吞进去，抛未找到起始标记）；
+ *    2. 更隐蔽：若只是 includes() 断言，吞多了也「通过」，断言变成假绿。
+ *       A2 第 1 条「加载条改由 finally 收起」原本就是这么假绿的。
+ *  所以凡是目标函数不保证顶格的，一律用这个。
+ *
+ *  已知局限：字符串字面量 / 注释里的大括号会算错配对。调用前请确认目标函数内没有。
+ */
+function sliceFn(src, signature) {
+  const i = src.indexOf(signature);
+  if (i < 0) throw new Error("未找到起始标记：" + signature);
+  let depth = 0;
+  for (let k = src.indexOf("{", i); k < src.length; k++) {
+    if (src[k] === "{") depth++;
+    else if (src[k] === "}") {
+      depth--;
+      if (depth === 0) return src.slice(i, k + 1);
+    }
+  }
+  throw new Error("未找到函数结尾：" + signature);
+}
 /** 最小 DOM 桩：支持按 id 取元素 + innerHTML / textContent / style / classList / disabled
  *  （足够验证「渲染出了什么」；style 与 classList 供 V0.77.1 的失败态与接线断言使用） */
 function makeDoc() {
@@ -337,15 +365,20 @@ console.log("=".repeat(70));
 
   // ── A2 silver：失败时加载条必须收起 + 错误提到首屏 + 不暴露本机地址 ──
   {
-    const src = read("silver.html");
-    const lt = sliceBetween(src, "async function loadTrend(", "\n}");
+    // V0.112.0 修：读 silver.js 而非 silver.html。
+    // V0.99 C4（86c8b3d）把 silver.html 655 行拆成 silver.html 332 + silver.js 445，
+    // 下面 A2 要的 3 个函数（loadTrend / hideLoadBar / showTrendError）全在 silver.js 里
+    // （已 grep 确认 silver.html 中 0 处）。门禁没跟着改，sliceBetween 找不到起始标记
+    // 直接抛异常 —— 也就是说这道门从 V0.99 起就**一次都没真正跑过**，不是最近才坏的。
+    const src = read("silver.js");
+    const lt = sliceFn(src, "async function loadTrend(");
     ok("A2 加载条改由 finally 收起（失败路径也走到）", lt.includes("finally {") && lt.includes("hideLoadBar();"));
     ok("A2 失败分支接入 showTrendError", lt.includes("showTrendError(e);"));
 
     const code =
-      sliceBetween(src, "function hideLoadBar() {", "\n}") +
+      sliceFn(src, "function hideLoadBar() {") +
       "\n" +
-      sliceBetween(src, "function showTrendError(e) {", "\n}");
+      sliceFn(src, "function showTrendError(e) {");
     const doc = makeDoc();
     // 用参数遮蔽全局 console，否则被测代码的 console.warn 会把堆栈打进门禁输出
     new Function("document", "window", "console", code + "\nshowTrendError(new Error('Failed to fetch'));")(
@@ -487,7 +520,14 @@ console.log("=".repeat(70));
   {
     console.log("\n[A7] trend/silver 宏观阈值角标（V0.79.0 Step E Commit 4）");
     const bth = read("trend.html");
-    const sh = read("silver.html");
+    // V0.112.0 修：silver.html + silver.js 拼起来再断言。
+    // V0.99 C4（86c8b3d）把 silver.html 655 行拆成 silver.html 332 + silver.js 445，
+    // A7/A8 要的 macroDynamic / techComposed / macroBadgeText / I18n.t 全搬进了
+    // silver.js（silver.html 里 0 处），门禁没跟着改就整片变红。
+    // 拼接而非改成 silver.js：这些断言里有查 CSS 色值（#e8f7ee）的，那个还在
+    // silver.html 的 <style> 里 —— 只读 js 会把「标记在哪个文件」变成断言的隐含前提，
+    // 下次再拆文件又会坏一遍。拼接的语义就是原意：「白银这个页包含 X」。
+    const sh = read("silver.html") + "\n" + read("silver.js");
 
     // 7.1 trend.html 角标代码：动态/静态 badge + I18n.t + hint
     ok("A7 trend.html 含 macroDynamic 变量定义", bth.includes("macroDynamic"));
@@ -538,7 +578,14 @@ console.log("=".repeat(70));
   {
     console.log("\n[A8] V0.79.0 Step F · 技术面合成方式角标 + 权重配置页");
     const bth = read("trend.html");
-    const sh = read("silver.html");
+    // V0.112.0 修：silver.html + silver.js 拼起来再断言。
+    // V0.99 C4（86c8b3d）把 silver.html 655 行拆成 silver.html 332 + silver.js 445，
+    // A7/A8 要的 macroDynamic / techComposed / macroBadgeText / I18n.t 全搬进了
+    // silver.js（silver.html 里 0 处），门禁没跟着改就整片变红。
+    // 拼接而非改成 silver.js：这些断言里有查 CSS 色值（#e8f7ee）的，那个还在
+    // silver.html 的 <style> 里 —— 只读 js 会把「标记在哪个文件」变成断言的隐含前提，
+    // 下次再拆文件又会坏一遍。拼接的语义就是原意：「白银这个页包含 X」。
+    const sh = read("silver.html") + "\n" + read("silver.js");
     const wh = read("weights.html");
     const zhCN = read("i18n/zh-CN.js");
     const enUS = read("i18n/en-US.js");
@@ -955,6 +1002,34 @@ await Promise.all(pending);
   }
 }
 
+// V0.112.0 · 顶 nav 结构契约（取代 V0.84 时期写在 9 页循环里的「11 条 NAV_LINKS」断言）
+//
+// 放在循环外：断言读的是 topnav.js，与当前页无关，循环里跑 9 遍只是把失败刷 9 行。
+//
+// 断言两件事，缺一不可 —— 只数总数的话，下次有人把 13 个子页拆成 14 个、再把某个
+// 场景的 subpages 删空，总数可能不变而导航已经废了：
+//   1. 8 个顶级场景（V0.111.1 定的契约：数据健康降为「配置」子页后回到 8）
+//   2. 每个场景都有 path / ico / i18n / fb，且 subpages 里的每项都有 path / ico / i18n / fb
+{
+  console.log("\n[V0.112.0] topnav.js 双层导航结构契约");
+  const tn = read("topnav.js");
+  const sceneBlock = tn.slice(tn.indexOf("var SCENES = ["));
+  const sceneCount = (sceneBlock.match(/^\s{6}key:\s*"/gm) || []).length;
+  ok("topnav.js :: 8 个顶级场景", sceneCount === 8, `actual=${sceneCount}`);
+
+  const paths = (sceneBlock.match(/path:\s*"/g) || []).length;
+  ok("topnav.js :: 8 场景 + 13 子页 = 21 个导航目标", paths === 21, `actual=${paths}`);
+
+  // V0.112.0：命令面板的命令清单从这里派生。SCENES 若不再导出，open() 时拿不到
+  // 导航结构，面板会静默退化成「只有刷新/帮助两条」—— 那是个不会报错的坏状态，
+  // 所以在这里钉死。
+  ok("topnav.js :: 导出 window.PM_Topnav.SCENES（命令面板依赖）",
+     /window\.PM_Topnav\s*=\s*\{\s*SCENES:\s*SCENES\s*\}/.test(tn));
+  ok("topnav.js :: 顶栏有命令面板触发按钮", tn.includes("nav-btn-cmd"));
+  ok("topnav.js :: 命令面板按钮走事件委托（非内联 onclick）",
+     /closest\("\.nav-btn-cmd\[data-action='open-cmd'\]"\)/.test(tn));
+}
+
 // V0.84.0 · 状态条方案 C（顶 nav 收 1 行 + statusPanel 合并 freshness+warn）
 {
   console.log("\n[V0.84.0 C] 9 页面状态条 statusPanel 迁移（freshness + warn 合并 1 行）");
@@ -981,12 +1056,12 @@ await Promise.all(pending);
        !/\.topnav\s+\.topnav-meta\s*\{/.test(src));
     ok(`${page} :: 旧 [data-warn-toggle] 按钮已移除`, !src.includes('data-warn-toggle'));
     // 共享 topnav.js 内含 11 链接 + 1 行 markup
-    const topnavSrc = read("topnav.js");
-    ok(`topnav.js :: 含 11 条 NAV_LINKS 配置`,
-       (topnavSrc.match(/path:\s*"/g) || []).length === 11,
-       `actual=${(topnavSrc.match(/path:\s*"/g) || []).length}`);
+    // V0.112.0：原先断言「含 11 条 NAV_LINKS」，V0.98 双层导航把平铺 NAV_LINKS 换成
+    //   8 场景 + 子页的 SCENES 后就一直失配（actual 21）。顶 nav 的结构断言已移到
+    //   下面的 V0.112.0 块，只跑一次 —— 它读的是 topnav.js，跟当前循环的 page 无关，
+    //   放在循环里等于把同一条断言重复 9 遍、失败也刷 9 行。
     ok(`topnav.js :: 顶 nav 已收 1 行（无 .topnav-meta）`,
-       !topnavSrc.includes('topnav-meta'));
+       !read("topnav.js").includes('topnav-meta'));
     // V0.84.0：statusPanel 取代 warnFooter
     ok(`${page} :: <details id="statusPanel" class="status-panel"> 存在`,
        /<details id="statusPanel"[^>]*class="status-panel"/.test(src));

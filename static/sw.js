@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.111.1";  // C3 暂留：C4 一并做 4 处版本同步（否则 check_pwa_assets 必红）
+const VERSION = "v0.112.0";  // V0.112.0 · 命令面板修好（清单从 SCENES 派生 + 顶栏可见入口）
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
