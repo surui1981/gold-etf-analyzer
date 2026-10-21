@@ -210,11 +210,19 @@
           area.hidden = true;
         });
         area.querySelector(".save").addEventListener("click", async () => {
+          // ⚠ tags 必须发**数组**：ReportUpdateIn.tags 的类型是 list[str]，
+          // 直接把输入框的逗号串发过去 Pydantic v2 会拒 → 422。
+          // （上传那条路不受影响：/upload 的 tags 是 Form 字段，后端
+          //   normalize_tags() 本来就收逗号串并在 service 里归一。）
           const payload = {
             title: area.querySelector(".f-title").value.trim(),
             report_date: area.querySelector(".f-date").value || null,
             category: area.querySelector(".f-cat").value.trim(),
-            tags: area.querySelector(".f-tags").value,
+            tags: area
+              .querySelector(".f-tags")
+              .value.split(/[,，]/)
+              .map((s) => s.trim())
+              .filter(Boolean),
             summary: area.querySelector(".f-summary").value.trim(),
           };
           try {
