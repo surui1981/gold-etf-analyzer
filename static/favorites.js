@@ -189,9 +189,21 @@
             fmtBjtDateTime(item.archived_at)
           )}</span>
         </div>
-        <h3><a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(
-      item.title
-    )}</a></h3>
+        ${
+          // ⚠ V0.114.0：url 可空（金十/东财快讯没有原文链接）。
+          // 原先 `escapeHtml(item.url)` 在 url 为 null 时渲染成 `href=""` ——
+          // 那不是「无链接」，而是**指向当前页的链接**：点一下整页重新加载，
+          // 看起来像页面坏了。有链接才给 <a>，没链接给纯文本（V0.77.1）。
+          item.url
+            ? `<h3><a href="${escapeHtml(
+                item.url
+              )}" target="_blank" rel="noopener noreferrer">${escapeHtml(
+                item.title
+              )}</a></h3>`
+            : `<h3><span class="no-url" title="${escapeHtml(
+                t("headlines.no_url_title", "该来源未提供原文链接")
+              )}">${escapeHtml(item.title)}</span></h3>`
+        }
         ${item.summary ? `<div class="summary">${escapeHtml(item.summary)}</div>` : ""}
         ${
           tagsHtml

@@ -141,16 +141,29 @@
 
         // 标题（点击新 tab 跳原文）
         const title = (item.title || '').toString();
-        const titleAnchor = document.createElement('a');
-        titleAnchor.className = 'home-news-title';
-        titleAnchor.textContent = title;
-        titleAnchor.href = item.url || '#';
-        titleAnchor.target = '_blank';
-        titleAnchor.rel = 'noopener noreferrer';
+        // ⚠ V0.114.0：源没给链接时**不建 <a>**。原先 `item.url || '#'` 造出一个
+        // 点得动却什么也不发生的假链接（金十/东财快讯实测 0/20 条有链接）——
+        // V0.77.1 不给假 affordance。改渲染成不可点的纯文本，样式保持一致。
+        let titleEl;
+        if (item.url) {
+          const a = document.createElement('a');
+          a.className = 'home-news-title';
+          a.textContent = title;
+          a.href = item.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          titleEl = a;
+        } else {
+          const span = document.createElement('span');
+          span.className = 'home-news-title home-news-title-nourl';
+          span.textContent = title;
+          span.title = t('headlines.no_url_title', '该来源未提供原文链接');
+          titleEl = span;
+        }
 
         li.appendChild(timeSpan);
         li.appendChild(siteSpan);
-        li.appendChild(titleAnchor);
+        li.appendChild(titleEl);
 
         // V0.103 ⭐ 收藏按钮
         const favBtn = document.createElement('button');
@@ -158,7 +171,12 @@
         favBtn.className = 'home-news-fav';
         favBtn.textContent = '☆';
         favBtn.title = '收藏';
+        // ⚠ V0.114.0：多源后 external_id 不再全局唯一，必须连 source 一起用。
+        // data-ext 保持字符串 —— 金十 id 是 20 位（≈2e19），超出 JS 安全整数
+        // 范围 2249 倍，后端为此把它序列化成字符串，这里**不能** parseInt。
+        const itemSource = item.source || 'readhub';
         favBtn.dataset.ext = String(item.external_id);
+        favBtn.dataset.source = itemSource;
         favBtn.addEventListener('click', async (e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -171,7 +189,10 @@
             const resp = await fetch('/api/v1/favorites/items', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ news_external_id: item.external_id }),
+              body: JSON.stringify({
+                news_external_id: item.external_id,
+                news_source: itemSource,
+              }),
               credentials: 'same-origin',
             });
             if (resp.ok) {
@@ -194,7 +215,9 @@
           }
         });
         // 幂等：先查一次是否已收藏
-        fetch(`/api/v1/favorites/exists/${item.external_id}?source=readhub`, { credentials: 'same-origin' })
+        // ⚠ V0.114.0：原先写死 ?source=readhub。四源并存时会把别的源的收藏态
+        // 画到这张卡片上（id 撞号时）。必须用这条自己条目的 source。
+        fetch(`/api/v1/favorites/exists/${encodeURIComponent(String(item.external_id))}?source=${encodeURIComponent(itemSource)}`, { credentials: 'same-origin' })
           .then((r) => r.ok ? r.json() : null)
           .then((d) => {
             if (d && d.id) {

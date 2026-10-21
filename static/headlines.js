@@ -79,6 +79,55 @@
       .replace(/'/g, "&#39;");
   }
 
+  // V0.114.0：i18n 取值。字典没命中就返回 fallback，而不是像 I18n.t 那样
+  // 返回 key 字面量（页面会显示 "headlines.no_url_title" 这种东西）。
+  // 写成 tr("key", "fb") 形式是有意的 —— scripts/check_i18n_keys.py 的
+  // tr_call_re 只认字符串字面量实参，这样新 key 才进门禁的严格前缀扫描。
+  //
+  // ⚠ 本文件**故意**不叫 t()：全站其它文件（favorites.js:65 / report-archive.js:68）
+  // 的惯例是模块级 function t(key, fallback)，但本页 fmtBjtDate() 内部有
+  // `const t = new Date(iso)`（见下方 124 行）—— 同名会把翻译函数在那个函数
+  // 体内整个遮蔽，是个留给下一个人的地雷。tr 无此歧义。
+  //
+  // ⚠ V0.114.0：本页此前**从没有**模块级 t()，却在收藏按钮处理器里裸调了 2 处
+  // t("favorites.toast_archived", ...) → 抛 `ReferenceError: t is not defined`。
+  // 那 2 处在 catch 块内，异常无人接管 → 变成未处理拒绝，**收藏成功/409 两条
+  // 路径都不弹 toast**（用户点了收藏屏幕毫无反应）。已改成 tr()。
+  // 教训：加翻译助手前先 grep 本文件有没有同名调用方，别默认「惯例是 t()」。
+  function tr(key, fallback) {
+    try {
+      const v = window.I18n && window.I18n.t && window.I18n.t(key);
+      if (v && typeof v === "string") return v;
+    } catch (_) { /* fall through */ }
+    return fallback || key;
+  }
+
+  // V0.114.0：source key → 展示名。
+  // 原先直接渲染 `it.source`（"readhub" / "jin10"），单源时看着还行；四源之后
+  // 满屏 "jin10" "eastmoney" 是给用户看的吗？
+  //
+  // ⚠ 这里**必须把 4 个 key 逐一写成字面量**，不能拿 source 动态拼 key ——
+  // 门禁 check_i18n_keys.py 的 tr_call_re 只认**字符串字面量实参**，
+  // 拼出来的前缀会被它截成一个**不存在的伪 key**（前缀 + 空格 + 引号），
+  // 然后报「该 key 3 语都没定义」。
+  //
+  // 顺带一个同族教训：**这段注释自己就踩了那个坑**。原先为了举例，在注释里
+  // 写了带引号的完整调用形式，门禁不剥 JS 注释，于是把注释里的举例当成真代码
+  // 扫了出来，立刻报 3 个伪 missing。写「注释里有断言要跳过的模式」时，
+  // 连注释本身也别写那个模式 —— 参见 assertions-must-ignore-comments。
+  const SOURCE_LABELS = {
+    wallstcn: () => tr("headlines.source_wallstcn", "华尔街见闻"),
+    jin10: () => tr("headlines.source_jin10", "金十数据"),
+    eastmoney: () => tr("headlines.source_eastmoney", "东方财富"),
+    readhub: () => tr("headlines.source_readhub", "ReadHub"),
+  };
+
+  function sourceLabel(source) {
+    const key = source || "readhub";
+    const fn = SOURCE_LABELS[key];
+    return fn ? fn() : key;
+  }
+
   // ── 状态行渲染 ──
 
   function fmtRelative(iso) {
@@ -259,7 +308,16 @@
       btn.addEventListener("click", async (e) => {
         e.preventDefault();
         e.stopPropagation();
-        const extId = parseInt(btn.dataset.ext, 10);
+        // ⚠ V0.114.0 两个「不能想当然」的点：
+        // 1. 多源后 external_id **不再全局唯一** —— 同一个数字可能同时是华尔街
+        //    见闻的 3182985 和金十的某条。必须连 source 一起传，否则收藏到的
+        //    是「另一条同号新闻」。
+        // 2. 金十 id 是 20 位（≈2e19），超出 JS Number.MAX_SAFE_INTEGER ≈2249
+        //    倍，后端为此把它序列化成**字符串**。这里**绝不能** parseInt ——
+        //    那是把已经绕开的精度坑亲手挖回来（页面会把收藏发到不存在的行）。
+        //    当不透明标识符透传即可。
+        const extId = btn.dataset.ext;
+        const src = btn.dataset.source || "readhub";
         if (btn.classList.contains("archived")) {
           // 已收藏 → 跳到 /favorites 页（避免误以为点了会取消）
           location.href = "/favorites";
@@ -269,17 +327,21 @@
         try {
           await fetchJSON(
             `${API_BASE}/api/v1/favorites/items`,
-            { method: "POST", body: { news_external_id: extId }, timeoutMs: 10000 }
+            {
+              method: "POST",
+              body: { news_external_id: extId, news_source: src },
+              timeoutMs: 10000,
+            }
           );
           btn.classList.add("archived");
           btn.textContent = "★";
-          if (window.PM_Toast) window.PM_Toast.show(t("favorites.toast_archived", "已收藏"), "success");
+          if (window.PM_Toast) window.PM_Toast.show(tr("favorites.toast_archived", "已收藏"), "success");
         } catch (err) {
           // 409 = 已收藏（幂等）
           if (err.message && err.message.includes("409")) {
             btn.classList.add("archived");
             btn.textContent = "★";
-            if (window.PM_Toast) window.PM_Toast.show(t("favorites.toast_archived", "已收藏"), "success");
+            if (window.PM_Toast) window.PM_Toast.show(tr("favorites.toast_archived", "已收藏"), "success");
           } else {
             if (window.PM_Toast) window.PM_Toast.show("收藏失败: " + err.message, "error");
           }
@@ -294,20 +356,24 @@
   async function markArchivedFavs() {
     const $list = document.getElementById("newsList");
     if (!$list) return;
-    const extIds = Array.from($list.querySelectorAll(".fav-btn"))
-      .map((b) => parseInt(b.dataset.ext, 10))
-      .filter((n) => !isNaN(n));
-    if (extIds.length === 0) return;
-    // 并发查每个 external_id 是否已收藏（最多 50 个，超过会慢但用并发）
+    const pairs = Array.from($list.querySelectorAll(".fav-btn"))
+      .map((b) => ({ ext: b.dataset.ext, source: b.dataset.source || "readhub" }))
+      .filter((p) => p.ext !== undefined && p.ext !== "");
+    if (pairs.length === 0) return;
+    // ⚠ V0.114.0：查「是否已收藏」必须带 source，且回填时要按 (ext, source)
+    // 双向定位 —— 原先写死 `?source=readhub` + 只按 data-ext 找按钮，多源下会
+    // 把 A 源的收藏态画到 B 源的同号卡片上。
     await Promise.all(
-      extIds.map(async (ext) => {
+      pairs.map(async ({ ext, source }) => {
         try {
           const data = await fetchJSON(
-            `${API_BASE}/api/v1/favorites/exists/${ext}?source=readhub`,
+            `${API_BASE}/api/v1/favorites/exists/${ext}?source=${encodeURIComponent(source)}`,
             { timeoutMs: 8000 }
           );
           if (data && data.id) {
-            const btn = $list.querySelector(`.fav-btn[data-ext="${ext}"]`);
+            const btn = $list.querySelector(
+              `.fav-btn[data-ext="${ext}"][data-source="${source}"]`
+            );
             if (btn) {
               btn.classList.add("archived");
               btn.textContent = "★";
@@ -325,23 +391,30 @@
     const summary = it.summary ? `<div class="summary">${escapeHtml(it.summary)}</div>` : "";
     const site = escapeHtml(it.site_name || "");
     const time = `${fmtBjtDate(it.publish_date)} ${fmtBjtTime(it.publish_date)}`;
-    const url = escapeHtml(it.url || "#");
+    const src = escapeHtml(it.source || "readhub");
     const author = it.author_name
       ? `<span class="meta"> · ${escapeHtml(it.author_name)}</span>`
       : "";
     const langTag = it.language
       ? `<span class="meta"> · ${escapeHtml(it.language)}</span>`
       : "";
-    // V0.103 ⭐ 收藏按钮：外置用 `data-ext` 给 fetchJSON 复用
-    return `<article class="news-card" data-ext="${it.external_id}">
-      <button type="button" class="fav-btn" data-ext="${it.external_id}" title="收藏">☆</button>
+    // ⚠ V0.114.0：源没有给链接时，标题渲染成**不可点的纯文本**。
+    // 原先是 `it.url || "#"` —— 那是 V0.77.1 说的「假 affordance」：看起来
+    // 能点，点了却什么也不发生（金十/东财快讯实测 0/20 条有链接）。
+    const titleHtml = it.url
+      ? `<a href="${escapeHtml(it.url)}" target="_blank" rel="noopener noreferrer">${title}</a>`
+      : `<span class="no-url" title="${escapeHtml(tr("headlines.no_url_title", "该来源未提供原文链接"))}">${title}</span>`;
+    // V0.103 ⭐ 收藏按钮：外置用 `data-ext` 给 fetchJSON 复用。
+    // data-ext 保持**字符串**（金十 id 超 JS 安全整数范围，见 bindFavButtons 注释）
+    return `<article class="news-card" data-ext="${it.external_id}" data-source="${src}">
+      <button type="button" class="fav-btn" data-ext="${it.external_id}" data-source="${src}" title="${escapeHtml(tr("headlines.fav_add", "收藏"))}">☆</button>
       <div class="head">
         <span class="site">${site}</span>
         <span class="time">${escapeHtml(time)}</span>
       </div>
-      <h3><a href="${url}" target="_blank" rel="noopener noreferrer">${title}</a></h3>
+      <h3>${titleHtml}</h3>
       ${summary}
-      <div class="meta">${escapeHtml(it.source || "readhub")}${author}${langTag}</div>
+      <div class="meta">${escapeHtml(sourceLabel(it.source))}${author}${langTag}</div>
     </article>`;
   }
 
