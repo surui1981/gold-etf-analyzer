@@ -545,6 +545,12 @@ async def favorites_page() -> RedirectResponse:
     return RedirectResponse("/static/favorites.html")
 
 
+@app.get("/report-archive", include_in_schema=False)
+async def report_archive_page() -> RedirectResponse:
+    """报告存档页（V0.111.0）—— 上传 HTML 报告 + 元数据登记表检索。"""
+    return RedirectResponse("/static/report-archive.html")
+
+
 @app.get("/data-health", include_in_schema=False)
 async def data_health_page() -> RedirectResponse:
     """数据健康摘要页（V0.85.0）—— 6 数据源实时状态完整披露。

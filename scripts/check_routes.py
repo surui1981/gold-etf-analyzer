@@ -70,6 +70,7 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/ask",
     "/headlines",  # V0.102 今日要闻
     "/favorites",  # V0.103 我的收藏（/api/v1/favorites/* 9 端点）
+    "/report-archive",  # V0.111.0 报告存档（页面 + /api/v1/reports/* 8 端点）
     # V0.99.0：白银 silver 已存在 RESTful alias（V0.73.0 N+16 起，sge 端点不新增 alias）
     # V0.100：综合指数 pending 改造不新增 alias
     # V0.102：今日要闻新增 /headlines alias（页面 + /api/v1/news-feed/* 5 端点）
@@ -211,8 +212,15 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _start_in_process_server(app, port: int) -> threading.Thread:
-    """起 uvicorn.Server 在子线程（daemon=True，脚本退出即随之结束）。"""
+def _start_in_process_server(app, port: int) -> "uvicorn.Server":
+    """起 uvicorn.Server 在子线程，返回 ``server`` 句柄供调用方停机。
+
+    ⚠ 返回 server（不是 thread）：daemon 线程在解释器退出时不会等它收尾，
+    若此时它正在往 stdout 写日志，会撞上
+    ``Fatal Python error: _enter_buffered_busy ... at interpreter shutdown``
+    并让门禁以 134（SIGABRT）假失败收场。调用方**必须**在 finally 里
+    ``server.should_exit = True`` + ``thread.join()``。
+    """
     import uvicorn
 
     config = uvicorn.Config(
@@ -236,8 +244,22 @@ def _start_in_process_server(app, port: int) -> threading.Thread:
         time.sleep(0.05)
     if not server.started:
         server.should_exit = True
+        thread.join(timeout=5.0)
         raise RuntimeError("uvicorn 启动超时（5s 内未就绪）")
-    return thread
+
+    # 把线程挂到 server 上，调用方一句 stop_in_process_server() 就能干净收尾
+    server._check_routes_thread = thread  # type: ignore[attr-defined]
+    return server
+
+
+def _stop_in_process_server(server, timeout: float = 5.0) -> None:
+    """让 uvicorn 优雅退出并 join 线程，避免 daemon 线程抢在解释器收尾时写 stdout。"""
+    if server is None:
+        return
+    server.should_exit = True
+    thread = getattr(server, "_check_routes_thread", None)
+    if thread is not None:
+        thread.join(timeout=timeout)
 
 
 # ──────────────── CLI 入口 ────────────────
@@ -278,6 +300,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     # 决定 base URL
+    server = None
     if args.base:
         base = args.base.rstrip("/")
         # 外部 server 不需要管理生命周期
@@ -285,22 +308,25 @@ def main(argv: list[str]) -> int:
         port = args.port if args.port else _find_free_port()
         base = f"http://127.0.0.1:{port}"
         try:
-            _start_in_process_server(fastapi_app, port)
+            server = _start_in_process_server(fastapi_app, port)
         except Exception as exc:
             print(f"[FAIL] 起 in-process uvicorn 失败：{exc}", file=sys.stderr)
             return 1
 
-    # 验证
-    problems = check_routes(routes=routes, fetch=_default_fetch, base=base)
+    try:
+        # 验证
+        problems = check_routes(routes=routes, fetch=_default_fetch, base=base)
 
-    if problems:
-        print(f"[FAIL] 发现 {len(problems)} 个路由问题：")
-        for p in problems:
-            print(f"  - {p}")
-        return 1
+        if problems:
+            print(f"[FAIL] 发现 {len(problems)} 个路由问题：")
+            for p in problems:
+                print(f"  - {p}")
+            return 1
 
-    print(f"[OK] HTTP 路由门禁通过：{len(routes)} 条路由全部返回期望 status（base={base}）")
-    return 0
+        print(f"[OK] HTTP 路由门禁通过：{len(routes)} 条路由全部返回期望 status（base={base}）")
+        return 0
+    finally:
+        _stop_in_process_server(server)
 
 
 if __name__ == "__main__":

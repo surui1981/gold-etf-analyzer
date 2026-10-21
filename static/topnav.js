@@ -85,6 +85,11 @@
       ],
     },
     {
+      key: "archive", path: "/report-archive",
+      activeFor: ["/report-archive", "/static/report-archive.html"],
+      ico: "📁", i18n: "nav.archive", fb: "报告存档",
+    },
+    {
       key: "config", path: "/weights",
       activeFor: ["/weights", "/static/weights.html"],
       ico: "⚙️", i18n: "nav.scene_config", fb: "配置",

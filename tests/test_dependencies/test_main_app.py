@@ -48,6 +48,7 @@ ROOT_ALIASES = [
     ("/ask", "/static/ask.html"),  # V0.97.0 AI 智能分析页
     ("/headlines", "/static/headlines.html"),  # V0.102 今日要闻
     ("/favorites", "/static/favorites.html"),  # V0.103 我的收藏
+    ("/report-archive", "/static/report-archive.html"),  # V0.111.0 报告存档
 ]
 
 
@@ -111,7 +112,7 @@ class TestRootAliases:
             and not r.path.startswith("/sw")
         ]
         # 精确数：12 个 alias + / 本身 = 13 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 17, (
+        assert len(ROOT_ALIASES) == 18, (
             "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
         )
 
