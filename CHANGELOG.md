@@ -4,6 +4,56 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.111.0] · 2026-10-21
+
+`报告存档` — 功能 + 文档
+
+- 📁 **首页新增「报告存档」场景：上传 HTML 报告 + 元数据登记表检索**
+  （用户诉求：「首页添加一个报告上传的板块，用户可以上传 html 格式的报告，
+  并提供客户查看显示，然后建立存单方便用户查看」；「存单」= 元数据登记表）
+  - 🗄️ **存储**：新表 `reports`（user_id / title / stored_name / original_name /
+    size_bytes / report_date / category / tags / summary），手写迁移
+    `p2q3r4s5t6`。**不复用** `app_settings` KV —— 它无 `user_id`、整值替换、
+    内存 TTL 缓存，结构上做不了列表
+  - 🌐 **端点**：`/api/v1/reports/*` 8 个（upload / 列表 / 单条 / PATCH /
+    DELETE / content / categories / stats）。⚠ `/categories` 与 `/stats`
+    必须注册在 `/{report_id}` **之前** —— FastAPI 按声明顺序匹配，否则会被
+    当成 `report_id` 报 422（各有一条测试锁住）
+  - 🛡️ **上传校验 4 道**：扩展名 / ≤20MB / 去 BOM 后首字节必须是 `<` /
+    **分块读累计**（不把伪装成 `.html` 的 500MB 整个读进内存）。入库失败回收孤儿文件
+  - 🔒 **报告与主站同源 ⇒ 响应级 CSP sandbox**：
+    `sandbox allow-scripts allow-popups; connect-src 'none'; form-action 'none'`
+    。当前生产 `.env.prod` 没有 `AUTH_ENABLED` ⇒ 认证关闭、无 cookie、
+    `user_id` 恒为 1，连 `ADMIN_TOKEN` 校验都被跳过 —— 所以真实风险不是
+    「偷 session」，而是**报告里的 JS 能以你的身份调全部 `/api/v1/*` 写端点**。
+    `sandbox` 不带 `allow-same-origin` ⇒ 文档进 **opaque origin**（读不到
+    localStorage、够不到父页面）；`connect-src 'none'` 封死
+    fetch/XHR/sendBeacon/WebSocket。**刻意不给 `default-src`** —— 那会连带禁掉
+    外部 CSS/字体/图片把渲染打残
+  - 🗂️ **落盘规矩**：绝不落 `static/`（SW `cache-first` + 限流豁免区，进去就
+    永久回放）；用 `uuid4().hex`，原始文件名只作展示元数据、绝不参与路径拼接；
+    落 `data/reports/`（systemd `ReadWritePaths` 白名单内，换别处生产会
+    `Read-only file system` 而测试照过）
+  - 🎨 **UI**：`/report-archive` 新页（工具条搜索/分类/标签 + 卡片列表 +
+    侧栏统计 + 拖拽上传卡），卡片内联「编辑登记表」折叠区
+  - 🧭 **导航**：独立顶级场景放在「情报」之后 → 顶 nav 8→9 项，首页卡 7→8 张；
+    `main.py` 加 `/report-archive` 307 别名
+  - 🌐 i18n 51 键 × 3 语（`reports.*` 49 + `nav.archive` + `brand.archive`）；
+    `check_i18n_keys.py` 的 `V083_KEY_PREFIXES` 加 `reports.`（13→14 类）
+- 🐛 **测试当场逮住一个真 bug：`_escape_like` 转义了但没接上**
+  `repositories/reports.py` 把 `%` 转义成 `\%`，但每个 `.like()` 都没传
+  SQLAlchemy 的 `escape=`。SQLite 默认不把反斜杠当转义符 ⇒ 搜 `100%` 一条都
+  搜不到。**少传 `escape=` 比不转义更糟**：不转义是全命中（结果脏），错误
+  转义是零命中（用户以为搜索坏了）。已全部补 `escape="\\"` 并写进 docstring
+- 🐛 **修 `scripts/check_routes.py` 门禁假失败（SIGABRT 134）**
+  `_start_in_process_server` 返回 thread 但**成功路径从不置 `should_exit`**，
+  daemon uvicorn 线程在解释器收尾时仍写 stdout →
+  `Fatal Python error: _enter_buffered_busy ... at interpreter shutdown`。
+  多一条路由就改变时序（本改动下 4 次炸 1 次，基线 5 次不炸纯属运气）。
+  改为返回 server 句柄 + `try/finally` 优雅停机，修后连跑 6 次 exit=0
+- ✅ 37 条新测试 `tests/test_api/test_reports.py`；7 个 commit（C1 后端地基 →
+  C2 服务层 → C3 端点 → C4 前端 → C5 导航/别名/门禁修复 → C6 sw.js → C7 发版）
+
 ## [V0.110.0] · 2026-10-21
 
 `宏观因子手动校准 + docs 整理` — 功能 + 文档

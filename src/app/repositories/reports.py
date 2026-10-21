@@ -124,16 +124,16 @@ class ReportRepository:
             like = f"%{_escape_like(q)}%"
             stmt = stmt.where(
                 or_(
-                    Report.title.like(like),
-                    Report.summary.like(like),
-                    Report.original_name.like(like),
+                    Report.title.like(like, escape="\\"),
+                    Report.summary.like(like, escape="\\"),
+                    Report.original_name.like(like, escape="\\"),
                 )
             )
         if category:
             stmt = stmt.where(Report.category == category)
         if tag:
             # JSON 数组中精确字符串匹配：LIKE '%"<tag>"%'
-            stmt = stmt.where(Report.tags.like(f'%"{_escape_like(tag)}"%'))
+            stmt = stmt.where(Report.tags.like(f'%"{_escape_like(tag)}"%', escape="\\"))
         stmt = stmt.order_by(desc(Report.created_at), desc(Report.id))
         stmt = stmt.limit(max(1, min(limit, 200))).offset(max(0, offset))
         result = await self._session.execute(stmt)
@@ -159,15 +159,15 @@ class ReportRepository:
             like = f"%{_escape_like(q)}%"
             stmt = stmt.where(
                 or_(
-                    Report.title.like(like),
-                    Report.summary.like(like),
-                    Report.original_name.like(like),
+                    Report.title.like(like, escape="\\"),
+                    Report.summary.like(like, escape="\\"),
+                    Report.original_name.like(like, escape="\\"),
                 )
             )
         if category:
             stmt = stmt.where(Report.category == category)
         if tag:
-            stmt = stmt.where(Report.tags.like(f'%"{_escape_like(tag)}"%'))
+            stmt = stmt.where(Report.tags.like(f'%"{_escape_like(tag)}"%', escape="\\"))
         return int((await self._session.execute(stmt)).scalar_one() or 0)
 
     async def list_categories(self, *, user_id: int | None = None) -> list[str]:
@@ -242,5 +242,10 @@ class ReportRepository:
 
 
 def _escape_like(s: str) -> str:
-    """转义 LIKE 通配符，否则用户搜 ``100%`` 会匹配到任意行。"""
+    """转义 LIKE 通配符，否则用户搜 ``100%`` 会匹配到任意行。
+
+    ⚠ 转义字符是 ``\\``，所以每个 ``.like()`` **必须**同时传 ``escape="\\"``。
+    少传这个参数比不转义更糟：SQLite 默认不把反斜杠当转义符，于是 ``100\\%``
+    变成「字面反斜杠 + 通配符」，搜 ``100%`` 反而一条都搜不到（而不是全命中）。
+    """
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

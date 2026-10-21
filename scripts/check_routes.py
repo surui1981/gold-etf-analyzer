@@ -45,7 +45,10 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
+
+if TYPE_CHECKING:  # 仅供 _start_in_process_server 的返回注解用，运行时不导入
+    import uvicorn
 
 # ──────────────── 期望状态表（事实真相；与 test_main_app.py ROOT_ALIASES 同步） ────────────────
 
@@ -212,7 +215,7 @@ def _find_free_port() -> int:
         return s.getsockname()[1]
 
 
-def _start_in_process_server(app, port: int) -> "uvicorn.Server":
+def _start_in_process_server(app, port: int) -> uvicorn.Server:
     """起 uvicorn.Server 在子线程，返回 ``server`` 句柄供调用方停机。
 
     ⚠ 返回 server（不是 thread）：daemon 线程在解释器退出时不会等它收尾，
