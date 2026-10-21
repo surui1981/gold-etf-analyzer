@@ -4,6 +4,31 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.114.1] · 2026-10-22
+
+`修全站 favicon 404` — hotfix · 无新资源 · 详见 [v0.114.1.md](docs/releases/v0.114.1.md)
+
+> V0.114.0 的 puppeteer 实跑里，`/favicon.ico` 的 404 一直躺在「豁免清单」里，
+> 当时的判断是「全站性既存项、纯装饰、不在本轮范围」。**豁免存在过本身就是它坏了
+> 的证据** —— 留着它，下次真出同类 4xx 会跟着一起被跳过，门禁从此对这一类失明。
+
+- 🖼️ **根因**：浏览器约定 favicon 在**站点根** `/favicon.ico`，而 `StaticFiles` 只挂
+  `/static/`；21 个页面**全部**没声明 `rel="icon"`。20 页虽引了 `rel="manifest"`，
+  但 **manifest 的 icons 是 PWA 安装图标，不做标签页 favicon** ⇒ 照样 404
+- 🔧 两层修法（分层不是冗余）：
+  - **根作用域 `/favicon.ico` 路由**（真正止血的那层）—— 理由与既有 `/sw.js` 完全
+    相同。兜旧书签 / 收藏夹 / PWA 安装前首屏 / 不解析 link 的客户端
+  - **21 页补 `<link rel="icon">`**（声明式加固）—— 省一次根路径往返，路由若被
+    nginx 改写仍有效。`static/icon-192.png` 早就在仓库里，**不新增任何资源**
+  - ⚠️ 返回 192px PNG 而非真多尺寸 `.ico`；`content_type` 如实写 `image/png`，
+    **不撒谎**（撒谎会让部分浏览器拒绝解析）
+- 🧱 门禁：`check_pwa_assets` 从 3 项扩到 **4 项**（每页 rel=icon 存在 + href 指向
+  真实文件 + `.png` 须带 type）；`check_routes` 登记 `/favicon.ico` → 200，
+  路由数 **19 → 20**
+- 🧪 三条反向测试**各自变红**：删标签 / href 指不存在 / 去掉 type。4xx 检测机制本身
+  也反向验过（请求拦截器人为造 404，断言如实变红）
+- 🎯 验证脚本 **删掉**豁免：puppeteer **23 → 28 passed / 0 failed，零豁免**
+
 ## [V0.114.0] · 2026-10-22
 
 `新闻多源容灾` — 4 源链式 failover + 修「收藏无反馈」三层缺陷 · 详见 [v0.114.0.md](docs/releases/v0.114.0.md)

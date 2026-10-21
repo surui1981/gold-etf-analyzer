@@ -53,32 +53,16 @@ page.on("request", (req) => {
   }
 });
 const pageErrors = [];
-// /favicon.ico 是**全站性**的既存 404（20 个页面都没 rel=icon，服务端也没有该
-// 路由），与本轮多源改动无关，剔掉免得淹没真错误（V0.113.0 settings.js 那条
-// 裸调 apiJson 的 ReferenceError 同理）
-const IGNORABLE = [/favicon\.ico/];
-const isIgnorable = (t) => IGNORABLE.some((re) => re.test(t));
-const skipped = [];
-page.on("pageerror", (e) => {
-  const t = String(e);
-  isIgnorable(t) ? skipped.push(t) : pageErrors.push(t);
-});
+// V0.114.1 之前这里豁免过 /favicon.ico（21 个页面全缺 rel=icon，服务端也没有
+// 根作用域路由 ⇒ 每次访问必 404）。**豁免存在过本身就是它坏了的证据**，修好后
+// 直接删掉 —— 留着豁免等于把回归放进来下一次就不会被发现。
+// net::ERR_* 不放行：那是压根没拿到 response 的真网络失败。
+page.on("pageerror", (e) => pageErrors.push(String(e)));
 page.on("console", (m) => {
-  if (m.type() !== "error") return;
-  const t = m.text();
-  if (isIgnorable(t)) return skipped.push(t);
-  // 「Failed to load resource: the server responded with a status of NNN」是
-  // response 事件的**无 URL 重复消息** —— 带 URL 的那条下面已经判过了，
-  // 这里再记一遍会把已豁免的 404 重新算成错误。
-  // net::ERR_* 不放行：那是压根没拿到 response 的真网络失败。
-  if (/Failed to load resource: the server responded with a status of/.test(t))
-    return skipped.push(t);
-  pageErrors.push(t);
+  if (m.type() === "error") pageErrors.push(m.text());
 });
 page.on("response", (r) => {
-  if (r.status() < 400) return;
-  const t = `HTTP ${r.status()} ${r.url()}`;
-  isIgnorable(t) ? skipped.push(t) : pageErrors.push(t);
+  if (r.status() >= 400) pageErrors.push(`HTTP ${r.status()} ${r.url()}`);
 });
 
 console.log("=== V0.114.0 多源新闻 UI 实跑 ===");
@@ -291,8 +275,27 @@ for (const lang of ["zh-CN", "zh-TW", "en-US"]) {
   chk(!leak, `${lang}：无 i18n key 字面量泄漏`, JSON.stringify(texts));
 }
 
-chk(pageErrors.length === 0, "无 JS 运行时错误", pageErrors.slice(0, 3).join(" | "));
-console.log(`  （豁免 ${skipped.length} 条：${[...new Set(skipped)].slice(0, 2).join(" ; ")}）`);
+chk(pageErrors.length === 0, "无 JS 运行时错误（含 4xx 资源，V0.114.1 起不再豁免 favicon）",
+  pageErrors.slice(0, 3).join(" | "));
+
+// V0.114.1 专项：浏览器**必须**用上我们声明的图标，而不是继续去打根路径
+const iconState = await page.evaluate(() => {
+  const l = document.querySelector('link[rel="icon"]');
+  return { href: l ? l.getAttribute("href") : null, type: l ? l.getAttribute("type") : null };
+});
+console.log(`  rel=icon → ${JSON.stringify(iconState)}`);
+chk(iconState.href === "/static/icon-192.png", "页面声明了 rel=icon", JSON.stringify(iconState));
+chk(iconState.type === "image/png", "rel=icon 的 type 如实写 image/png（不撒谎）", iconState.type);
+const iconStatus = await page.evaluate(async (h) => (await fetch(h)).status, iconState.href);
+chk(iconStatus === 200, "声明的图标真的取得到", `HTTP ${iconStatus}`);
+const rootIcon = await fetch(`${BASE}/favicon.ico`);
+chk(rootIcon.status === 200, "根路径 /favicon.ico 不再 404（旧书签/抓取器兜底）",
+  `HTTP ${rootIcon.status}`);
+chk(
+  (rootIcon.headers.get("content-type") || "").startsWith("image/png"),
+  "/favicon.ico 的 Content-Type 与实际字节一致",
+  rootIcon.headers.get("content-type")
+);
 
 console.log("\n" + "=".repeat(60));
 console.log(`结果：${pass} passed / ${fail} failed`);

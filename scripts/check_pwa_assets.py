@@ -20,7 +20,12 @@ r"""校验 PWA 静态资源清单与实际服务端一致（PWA 资源门禁）�
 3. `static/manifest.json` 的 `shortcuts[].url`。它不在任何 JS / HTML 门禁的扫描范围内，
    实测曾指向 `/silver` / `/backtest`（404）—— PWA 长按图标的快捷方式点了打不开。
 
-本脚本把上述三件事机械化。
+4. 每个 HTML 页面是否声明 `<link rel="icon">`（V0.114.1）。浏览器约定在**站点根**
+   找 favicon；21 个页面曾全部不声明且根路径无路由 ⇒ 每次访问必一个 404。
+   根路由是止血层，但页面不声明就得绕一圈根路径，且该路由一旦被 nginx 改写或被
+   另一个前端服务接管，favicon 立刻回退成 404。
+
+本脚本把上述四件事机械化。
 
 判定「URL 能被服务端解析」的口径（纯静态，不启动服务）
 ------------------------------------------------------
@@ -248,6 +253,31 @@ def check_all(
     manifest_problems, counts = _check_manifest(routes, manifest, static_dir)
     problems.extend(manifest_problems)
 
+    # ④ 每个 HTML 页面都要声明 rel="icon"（V0.114.1）
+    #
+    # 浏览器约定在**站点根**找 favicon。根路由 /favicon.ico 是止血层，但页面自己
+    # 不声明 rel=icon 就得绕一圈根路径，且一旦该路由被 nginx 改写或被别的前端
+    # 服务接管，favicon 立刻回退成 404。
+    #
+    # ⚠️ 反向验证过「删掉某页的 rel=icon 会不会红」：**不会**（根路由兜住了）——
+    #   也就是说这条检查防的是**退化**（有人删标签 / 新增页面忘写），不是防当下的
+    #   404。正因为不显眼，才值得写成门禁而不是靠人记得。
+    for page in sorted(static_dir.glob("*.html")):
+        text = page.read_text(encoding="utf-8")
+        m = re.search(r'<link\s+rel="icon"\s+href="([^"]+)"([^>]*)>', text)
+        if not m:
+            problems.append(f"{_rel(page)}：缺少 <link rel=\"icon\"> —— 浏览器会退回根路径找 favicon")
+            continue
+        href = m.group(1)
+        if href.startswith("/"):
+            if (static_dir / href[len("/static/"):]).exists() is False:
+                problems.append(f"{_rel(page)}：rel=icon 指向 {href}，但该文件不存在")
+            elif 'type="image/png"' not in m.group(2) and href.endswith(".png"):
+                problems.append(
+                    f"{_rel(page)}：rel=icon 指向 .png 却没写 type=\"image/png\" —— "
+                    "媒体类型应与实际字节一致"
+                )
+
     info = Info(
         app_version=app_version,
         sw_version=sw_version,
@@ -291,7 +321,8 @@ def main(argv: list[str]) -> int:
     print(
         f"[OK] PWA 资源门禁通过：SW 缓存版本与应用版本一致（{info.expected}）、"
         f"SHELL_ASSETS {len(info.shell_urls)} 条全部可解析、"
-        f"manifest.json {sum(counts.values())} 个目标全部存在"
+        f"manifest.json {sum(counts.values())} 个目标全部存在、"
+        f"{len(list(STATIC.glob('*.html')))} 个页面的 rel=icon 全部存在且指向真实文件"
     )
     return 0
 
