@@ -100,7 +100,9 @@ class UserNewsFavoriteService:
         4. 插入；重复 → 抛 DuplicateFavoriteError → 409
         """
         snapshot: dict[str, Any] = {
-            "news_external_id": payload.news_external_id,
+            # ⚠ V0.114.0：列是 String(32)（金十 id 超出 SQLite int64）。
+            # Pydantic 把入参收成 int，这里显式转回字符串再落库。
+            "news_external_id": str(payload.news_external_id),
             "news_source": payload.news_source,
         }
         # 尝试从源表回填快照
@@ -122,10 +124,22 @@ class UserNewsFavoriteService:
                     }
                 )
 
+        # ⚠ V0.114.0：``url`` 从必填清单里**移出**。金十 / 东方财富的快讯接口根本不
+        #   提供链接（实测 30/30 条无 url 字段），原先的必填校验会让这类条目
+        #   **永远收藏不了**（422）。NULL = 「来源没给链接」，UI 侧渲染成不可点
+        #   纯文本（V0.77.1 不给假 affordance），与 news_feed 侧口径一致。
+        #
+        # ⚠ 但 url 仍要能被 **payload 兜底**：外部 URL 直传场景（V0.103）里
+        #   url 不在源表快照中，只能来自 payload。曾经它靠「在 missing 清单里」
+        #   被顺带拷进来 —— 移出清单后那次拷贝就没了，外部直传的收藏会**静默丢
+        #   掉链接**（不报错，收藏成功但点不开）。所以这里单独兜一次。
+        if not snapshot.get("url") and payload.url is not None:
+            snapshot["url"] = payload.url
+
         # 校验必填快照（外部 URL 收藏场景）
         missing = [
             k
-            for k in ("title", "url", "site_name", "publish_date")
+            for k in ("title", "site_name", "publish_date")
             if not snapshot.get(k)
         ]
         if missing:
@@ -137,7 +151,7 @@ class UserNewsFavoriteService:
         # 再次校验（外部 URL 收藏必填字段未传 → 422）
         missing = [
             k
-            for k in ("title", "url", "site_name", "publish_date")
+            for k in ("title", "site_name", "publish_date")
             if not snapshot.get(k)
         ]
         if missing:
@@ -148,9 +162,12 @@ class UserNewsFavoriteService:
                 detail=(
                     f"missing required snapshot fields: {missing}; "
                     "either provide news_external_id that exists in news_feed_items, "
-                    "or supply title/url/site_name/publish_date directly"
+                    "or supply title/site_name/publish_date directly"
                 ),
             )
+        # url 缺失（源条目本就无链接）→ 显式置 None，而不是让 dict 里缺这个 key
+        # （SQLAlchemy 会按列默认值处理，但显式更清晰，也避免「未传」与「无链接」混淆）
+        snapshot["url"] = snapshot.get("url") or None
 
         # tags 标准化 → JSON
         snapshot["user_tags"] = _dump_tags(payload.user_tags)
