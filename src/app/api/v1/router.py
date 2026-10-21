@@ -19,6 +19,7 @@ from app.api.v1.endpoints import (
     portfolio,
     position,
     push,
+    reports,  # V0.111.0 报告存档（HTML 上传 + 元数据登记表）
     resonance,
     review,
     scoring_wide,  # V0.92.0 历史打分数据汇总
@@ -43,6 +44,7 @@ api_router.include_router(snapshot.router)
 api_router.include_router(news.router)
 api_router.include_router(news_feed.router)  # V0.102 今日要闻
 api_router.include_router(user_news_favorite.router)  # V0.103 收藏/永久存储
+api_router.include_router(reports.router)  # V0.111.0 报告存档
 api_router.include_router(review.router)
 api_router.include_router(resonance.router)  # V0.70.0 P2 #7
 api_router.include_router(central_bank.router)

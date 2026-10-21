@@ -18,6 +18,7 @@ from app.repositories.market_providers import build_provider_bundle
 from app.repositories.news import NewsScoreRepository
 from app.repositories.news_feed import NewsFeedRepository  # V0.102 今日要闻
 from app.repositories.position import PositionRepository
+from app.repositories.reports import ReportRepository  # V0.111.0 报告存档
 from app.repositories.review import GoldPriceRepository
 from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
@@ -38,6 +39,7 @@ from app.services.news import NewsScoreService
 from app.services.news_feed import NewsFeedService  # V0.102 今日要闻
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
+from app.services.reports import ReportService  # V0.111.0 报告存档
 from app.services.resonance import ResonanceService
 from app.services.review import ReviewService
 from app.services.scoring import OpportunityScoringService
@@ -714,3 +716,17 @@ def get_scoring_wide_service(
         news_repo=news_repo,
         gold_repo=gold_repo,
     )
+
+
+def get_report_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> ReportRepository:
+    """报告存档仓储依赖（V0.111.0）。"""
+    return ReportRepository(session)
+
+
+def get_report_service(
+    repo: ReportRepository = Depends(get_report_repository),
+) -> ReportService:
+    """报告存档服务依赖（V0.111.0）。"""
+    return ReportService(repo=repo)
