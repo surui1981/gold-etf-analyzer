@@ -330,7 +330,9 @@
     //   - day 桶：bucket.hit=true→是（红） / false→否（绿） / null→待定（灰）
     //   - week/month 桶：bucket.hit=null（聚合无单值）→ 待定（灰）
     // 该列始终存在；group_by != day 时所有行均"待定"——提示用户切 day 才能看到命中颜色
-    let html = '<table><thead><tr>';
+    // V0.113.0：包 .table-scroll（窄屏横向滚动）。aria-label 复用上方小节标题的
+    // i18n key，不新造 key —— 3 张表同理。
+    let html = `<div class="table-scroll" tabindex="0" role="region" aria-label="${T('scoring.section_index', '4 指数时序')}"><table><thead><tr>`;
     html += `<th>${T('report.cover_period', '期间')}</th>`;
     html += `<th>${T('scoring.trend_index_mean', '综合指数均值')}</th>`;
     html += `<th>${T('scoring.trend_index_median', '综合指数中位')}</th>`;
@@ -370,7 +372,7 @@
       html += `<td class="num">${b.gold_ny_close != null ? fmt2(b.gold_ny_close) : '—'}</td>`;
       html += '</tr>';
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     el.innerHTML = html;
   }
 
@@ -381,7 +383,7 @@
       el.innerHTML = `<div class="empty">${T('scoring.empty', '暂无打分数据')}</div>`;
       return;
     }
-    let html = '<table><thead><tr>';
+    let html = `<div class="table-scroll" tabindex="0" role="region" aria-label="${T('scoring.section_tag', '依据标签频次')}"><table><thead><tr>`;
     html += `<th>${T('scoring.tag_filter', '依据标签')}</th>`;
     html += `<th>${T('scoring.tag_count', '出现次数')}</th>`;
     html += `<th>${T('scoring.hit_rate_t1', 'T+1 命中率')}</th>`;
@@ -397,7 +399,7 @@
       html += `<td class="num">${fmtPct(t.hit_rate_t5)}</td>`;
       html += '</tr>';
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     el.innerHTML = html;
   }
 
@@ -418,7 +420,7 @@
     html += '</div>';
     if (data.calibration && data.calibration.length > 0) {
       html += '<h3 style="font-size:13px; margin:14px 0 6px;">' + T('scoring.section_calibration', '分值校准') + '</h3>';
-      html += '<table><thead><tr>';
+      html += `<div class="table-scroll" tabindex="0" role="region" aria-label="${T('scoring.section_calibration', '分值校准')}"><table><thead><tr>`;
       html += `<th>${T('scoring.score_bucket', '分值分箱')}</th>`;
       html += `<th>${T('scoring.tag_count', '次数')}</th>`;
       html += `<th>${T('scoring.tag_hit_rate', '命中率')}</th>`;
@@ -426,7 +428,7 @@
       for (const c of data.calibration) {
         html += `<tr><td>${c.score_bucket}</td><td class="num">${c.total}</td><td class="num">${fmtPct(c.hit_rate)}</td></tr>`;
       }
-      html += '</tbody></table>';
+      html += '</tbody></table></div>';
     }
     el.innerHTML = html;
   }

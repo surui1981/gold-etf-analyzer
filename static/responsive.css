@@ -70,8 +70,11 @@ img, canvas, svg { max-width: 100%; }
   input:not([type=range]), select, textarea { width: 100%; max-width: 100%; box-sizing: border-box; }
   .quick-row { gap: 6px; }
 
-  /* 触控友好：按钮最小高度 */
-  button, .btn-save, .btn-reset, .chip, .cl-btn { min-height: 40px; }
+  /* 触控友好：按钮最小高度。
+     V0.113.0 起与 theme.css 的全站 44px 基线对齐 —— 这里是 40px，且本文件
+     在各页内联 <style> 之后加载、同特异性下胜出，所以不改它的话 theme.css
+     那条 44px 会被它压回 40px（全站实测 20 个按钮卡在 40px）。 */
+  button, .btn-save, .btn-reset, .chip, .cl-btn { min-height: 44px; }
   .chip { padding: 8px 14px; }
   .cl-btn { padding: 6px 14px; }
 

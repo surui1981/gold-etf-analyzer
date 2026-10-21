@@ -258,6 +258,9 @@
   <!-- Top 10 买家榜 -->
   <section class="panel">
     <div class="panel-title" data-i18n="central_bank.top_buyers_title">🏆 T12M Top 10 买家（按滚动 12 月合计降序）</div>
+    <!-- V0.113.0 · 表格横向滚动容器。Top10 表实测 434px 宽，390px 视口下溢出 71px；
+         tabindex/role/aria-label 让键盘也能聚焦滚动（WCAG 2.1.1） -->
+    <div class="table-scroll" tabindex="0" role="region" data-i18n-aria="central_bank.top_buyers_title">
     <table id="topTable">
       <thead>
         <tr>
@@ -270,6 +273,7 @@
       </thead>
       <tbody id="topBody"></tbody>
     </table>
+    </div>
   </section>
 
   <!-- 完整明细表 + 过滤器 -->

@@ -260,6 +260,8 @@
       "</tr>";
     }).join("");
     body.innerHTML =
+      // V0.113.0：窄屏横向滚动；aria-label 复用本节标题的 i18n key（5 张表同理）
+      '<div class="table-scroll" tabindex="0" role="region" aria-label="' + esc(i18n("report.section_positions")) + '">' +
       "<table>" +
         "<thead><tr>" +
           "<th>名称</th><th>代码</th>" +
@@ -270,7 +272,8 @@
           '<th class="num">收益率</th>' +
         "</tr></thead>" +
         "<tbody>" + rows + "</tbody>" +
-      "</table>";
+      "</table>" +
+      "</div>";
   }
 
   function renderTimeline(timeline) {
@@ -330,6 +333,8 @@
         "，决策点 " + timeline.decision_count +
       "</p>";
     body.innerHTML = meta +
+      // V0.113.0：窄屏横向滚动；aria-label 复用本节标题的 i18n key（5 张表同理）
+      '<div class="table-scroll" tabindex="0" role="region" aria-label="' + esc(i18n("report.section_timeline")) + '">' +
       "<table>" +
         "<thead><tr>" +
           "<th>日期</th><th>动作</th><th>代码</th>" +
@@ -338,7 +343,8 @@
           '<th class="num">趋势指数</th>' +
         "</tr></thead>" +
         "<tbody>" + rows.join("") + "</tbody>" +
-      "</table>";
+      "</table>" +
+      "</div>";
   }
 
   function renderNews(history, today) {
@@ -375,6 +381,8 @@
       "</tr>";
     }).join("");
     body.innerHTML =
+      // V0.113.0：窄屏横向滚动；aria-label 复用本节标题的 i18n key（5 张表同理）
+      '<div class="table-scroll" tabindex="0" role="region" aria-label="' + esc(i18n("report.section_news")) + '">' +
       "<table>" +
         "<thead><tr>" +
           "<th>日期</th><th>槽位</th>" +
@@ -382,7 +390,8 @@
           "<th>方向</th><th>备注</th>" +
         "</tr></thead>" +
         "<tbody>" + rows + "</tbody>" +
-      "</table>";
+      "</table>" +
+      "</div>";
   }
 
   function renderCurve(equity) {
@@ -420,6 +429,8 @@
         " / 最大回撤 " + fmtNum(sum.max_drawdown_pct, 2) + "%" +
       "</p>";
     body.innerHTML = meta +
+      // V0.113.0：窄屏横向滚动；aria-label 复用本节标题的 i18n key（5 张表同理）
+      '<div class="table-scroll" tabindex="0" role="region" aria-label="' + esc(i18n("report.section_curve")) + '">' +
       "<table>" +
         "<thead><tr>" +
           "<th>日期</th>" +
@@ -428,7 +439,8 @@
           '<th class="num">累计收益率</th>' +
         "</tr></thead>" +
         "<tbody>" + rows + "</tbody>" +
-      "</table>";
+      "</table>" +
+      "</div>";
   }
 
   function renderCentral(central) {
@@ -461,6 +473,8 @@
         " · 最新数据 " + (summary.latest_data_quarter || "?") +
       "</p>";
     body.innerHTML = meta +
+      // V0.113.0：窄屏横向滚动；aria-label 复用本节标题的 i18n key（5 张表同理）
+      '<div class="table-scroll" tabindex="0" role="region" aria-label="' + esc(i18n("report.section_central")) + '">' +
       "<table>" +
         "<thead><tr>" +
           "<th>国家</th><th>ISO</th><th>季度</th>" +
@@ -468,7 +482,8 @@
           "<th>来源</th>" +
         "</tr></thead>" +
         "<tbody>" + rows + "</tbody>" +
-      "</table>";
+      "</table>" +
+      "</div>";
   }
 
   // === Boot ===

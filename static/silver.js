@@ -244,6 +244,10 @@
     const fmt = (n) => (n >= 0 ? "+" : "") + n.toFixed(2) + "%";
     const col = (n) => (n > 0.5 ? "up" : n < -0.5 ? "down" : "");
     el.innerHTML = `
+      <!-- V0.113.0 · 表格横向滚动容器；aria-label 复用上方小节标题的 i18n key
+           （silver.premium_table_title），不新造 key -->
+      <div class="table-scroll" tabindex="0" role="region"
+           aria-label="${(window.I18n ? I18n.t('silver.premium_table_title') : null) || '多市场升贴水表（以 SGE 为锚）'}">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
         <thead>
           <tr style="background:var(--card)">
@@ -268,6 +272,7 @@
               <td style="padding:6px;text-align:right;background:#f5fbfa;font-weight:600">${fmt(premSge)}</td></tr>
         </tbody>
       </table>
+      </div>
       <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5">
         📐 升贴水 = (折算价 - SGE 基准) / SGE 基准 × 100%。SGE 列为锚定（0%）。
         汇率 CNY/USD = 7.1（固定参考，实时汇率请参考专门汇率工具）。

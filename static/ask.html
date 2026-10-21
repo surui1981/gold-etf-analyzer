@@ -193,11 +193,13 @@
   .input-bar { padding: 10px 12px; border-top: 1px solid var(--border);
     display: flex; gap: 8px; align-items: flex-end; flex-shrink: 0; width: 100%;
     background: var(--card); }
-  .input-bar textarea { flex: 1; resize: none; min-height: 38px; max-height: 120px; padding: 8px 10px;
+  /* V0.113.0：38 → 44。本页内联样式特异性高于 theme.css 的全站触摸基线，
+     不改这里 theme.css 那条会被它压过去（输入框和发送按钮都会卡在 38px）。 */
+  .input-bar textarea { flex: 1; resize: none; min-height: 44px; max-height: 120px; padding: 8px 10px;
     font-size: 13px; line-height: 1.55; border: 1px solid var(--border); border-radius: 8px;
     background: var(--bg); color: var(--text); font-family: inherit; outline: none; min-width: 0; }
   .input-bar textarea:focus { border-color: var(--accent); }
-  .input-bar .send-btn { padding: 0 18px; height: 38px; border: 0; border-radius: 8px;
+  .input-bar .send-btn { padding: 0 18px; min-height: 44px; height: 44px; border: 0; border-radius: 8px;
     background: var(--accent); color: #1f2329; font-size: 13px; font-weight: 600; cursor: pointer;
     font-family: inherit; white-space: nowrap; }
   .input-bar .send-btn:hover { filter: brightness(1.05); }
