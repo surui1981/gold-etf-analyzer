@@ -1039,6 +1039,7 @@ window.PM_I18N_zh_TW = {
   /* V0.91.0 · 復盤報告 PDF 一鍵匯出 + 跨頁上下文保留 */
   "status.summary_text": "資料時效",
   "nav.export": "導出複盤報告",
+  "nav.cmd_palette": "搜尋",
   "report.title": "複盤報告",
   "report.title_prefix": "黃金 ETF 複盤報告",
   "report.cover_period": "統計區間",

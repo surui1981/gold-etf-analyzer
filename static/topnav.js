@@ -111,6 +111,13 @@
     },
   ];
 
+  // V0.112.0：把 SCENES 导出去，供 command-palette.js 在**打开时**惰性读取，
+  // 用它自动派生命令清单（8 场景 + 13 子页）。此前 SCENES 只活在 IIFE 里，
+  // command-palette.js 拿不到导航结构 —— 那正是它的硬编码清单停在 V0.68.0
+  // 「7 条平铺导航」、两代导航都没跟上的根因。导出后清单与导航同源，
+  // 以后加减场景/子页不需要再动面板。
+  window.PM_Topnav = { SCENES: SCENES };
+
   // 兼容旧 topnav 字段：把每个 scene 摊平出可被 report/旧逻辑使用的 path/activeFor
   // （用于 brand 判定和 export 按钮不变）
   var BRAND_BY_PATH = {
@@ -164,13 +171,15 @@
       '</a>';
     }).join("\n        ");
     var exportHTML = buildExportButton();
-    return '<!-- V0.98 C7 · 双层导航顶 row：7 个场景入口 + brand + 导出按钮 -->\n' +
+    var cmdHTML = buildCmdButton();
+    return '<!-- V0.98 C7 · 双层导航顶 row：8 个场景入口 + brand + 搜索 + 导出按钮 -->\n' +
       '<nav class="topnav" aria-label="主导航">\n' +
       '  <div class="topnav-row">\n' +
       '    ' + brandHTML + '\n' +
       '    <div class="links">\n' +
       '      ' + linksHTML + '\n' +
       '    </div>\n' +
+      '    ' + cmdHTML + '\n' +
       '    ' + exportHTML + '\n' +
       '  </div>\n' +
       '</nav>';
@@ -210,6 +219,33 @@
       '<span class="nav-ico" aria-hidden="true">📄</span>' +
       '<span data-i18n="nav.export">导出复盘报告</span>' +
     '</button>';
+  }
+
+  // ────────────── 命令面板触发按钮（V0.112.0）──────────────
+  //
+  // 面板此前**全站没有可见入口**：open() 只由 command-palette.js 的 Ctrl+K 触发。
+  // 键盘快捷键在手机上不存在 ⇒ 手机端 100% 打不开。这是「两者同等」下最该补的洞。
+  //
+  // 用 data-action + document 委托（与导出按钮同一模式），而不是 onclick 内联：
+  // 顶栏整块 HTML 是 topMount.outerHTML 替换出来的，内联属性在这条路径上不划算。
+  // 页面上没有 command-palette.js 时点它会静默失败 —— 9 个未挂面板的页已在 V0.112.0
+  // C3 全部补齐，此处不再做存在性判断（顶栏按钮是 18 页共用的，加了反而更绕）。
+  function buildCmdButton() {
+    return '<button type="button" class="nav-btn-cmd" ' +
+      'aria-label="打开命令面板" ' +
+      'data-action="open-cmd">' +
+      '<span class="nav-ico" aria-hidden="true">⌘</span>' +
+      '<span class="nav-btn-cmd-txt" data-i18n="nav.cmd_palette">搜索</span>' +
+    '</button>';
+  }
+
+  function openCmdPalette() {
+    if (window.PM_CmdPalette && typeof window.PM_CmdPalette.open === "function") {
+      window.PM_CmdPalette.open();
+    } else {
+      // 面板脚本缺席时不弹「失败」框 —— 顶栏是常驻控件，不能因为它坏掉就拦住整条导航
+      console.warn("[topnav] PM_CmdPalette 未加载，命令面板不可用");
+    }
   }
 
   function openReport() {
@@ -256,10 +292,18 @@
     }
   }
 
-  // ────────────── 事件委托：导出按钮 ──────────────
+  // ────────────── 事件委托：导出按钮 + 命令面板按钮 ──────────────
 
   document.addEventListener("click", function (e) {
     var target = e.target;
+
+    var cmdBtn = target.closest && target.closest(".nav-btn-cmd[data-action='open-cmd']");
+    if (cmdBtn) {
+      e.preventDefault();
+      openCmdPalette();
+      return;
+    }
+
     var btn = target.closest && target.closest(".nav-btn-export[data-action='open-report']");
     if (!btn) return;
     e.preventDefault();

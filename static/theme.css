@@ -130,6 +130,42 @@
 [data-theme] .topnav a.active { color: #ffffff; }  /* WCAG: accent bg + 白字 ~6.5:1 */
 [data-theme="hc"] .topnav a.active { color: #000000; background: #ffff00; }
 
+/* V0.112.0 · 顶栏按钮（命令面板 + 导出复盘报告）
+ *
+ * 这两个是 <button> 不是 <a>，各页内联的 `.topnav a {...}` 一条都套不上
+ * —— 此前 .nav-btn-export 一直以浏览器默认外观（浅灰按钮）落在深色顶栏上。
+ * 借这次加搜索按钮一并补上：照 .topnav a 的视觉规格写，避免再散落进 18 个内联块
+ * （.subnav 那次已经踩过「样式复制 18 遍」的坑，见记忆 scoring-page-css-block-tech-debt）。
+ * 注意 display/font 等仍依赖各页 `.topnav a` 的写法不同，这里只给按钮自己的底色与边框。
+ */
+.topnav .nav-btn-cmd,
+.topnav .nav-btn-export {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: inherit; font-size: 13px; line-height: 1.2;
+  padding: 5px 11px; border-radius: 7px; cursor: pointer;
+  color: #d6d9dd; background: transparent;
+  border: 1px solid transparent;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.topnav .nav-btn-cmd:hover,
+.topnav .nav-btn-export:hover {
+  background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06);
+}
+.topnav .nav-btn-cmd:focus-visible,
+.topnav .nav-btn-export:focus-visible {
+  outline: 2px solid #f5d97a; outline-offset: 2px;
+}
+/* 触摸目标：手机上顶栏按钮不能小于 44px（V0.113.0 触摸目标标准的先行落地） */
+@media (max-width: 640px) {
+  .topnav .nav-btn-cmd,
+  .topnav .nav-btn-export { min-height: 44px; padding: 8px 14px; }
+  .topnav .nav-btn-cmd .nav-btn-cmd-txt { display: none; }  /* 窄屏只留 ⌘ 图标 */
+}
+[data-theme="hc"] .topnav .nav-btn-cmd,
+[data-theme="hc"] .topnav .nav-btn-export { color: #ffffff; }
+[data-theme="hc"] .topnav .nav-btn-cmd:hover,
+[data-theme="hc"] .topnav .nav-btn-export:hover { background: rgba(255,255,255,0.2); color: #ffff00; }
+
 /* =========================================================================
  * skip-to-content link（WCAG 2.4.1）
  * ========================================================================= */

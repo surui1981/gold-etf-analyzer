@@ -1135,6 +1135,7 @@ window.PM_I18N_en_US = {
   /* V0.91.0 · Review Report PDF export + cross-page context preservation */
   "status.summary_text": "Data freshness",
   "nav.export": "Export Report",
+  "nav.cmd_palette": "Search",
   "report.title": "Review Report",
   "report.title_prefix": "Gold ETF Review Report",
   "report.cover_period": "Period",

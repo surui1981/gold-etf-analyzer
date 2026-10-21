@@ -1135,6 +1135,7 @@ window.PM_I18N_ZH_CN = {
   /* V0.91.0 · 复盘报告 PDF 一键导出 + 跨页上下文保留 */
   "status.summary_text": "数据时效",
   "nav.export": "导出复盘报告",
+  "nav.cmd_palette": "搜索",
   "report.title": "复盘报告",
   "report.title_prefix": "黄金 ETF 复盘报告",
   "report.cover_period": "统计区间",
