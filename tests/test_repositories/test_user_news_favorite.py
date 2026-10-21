@@ -155,7 +155,7 @@ async def test_find_by_external_returns_match(db_session) -> None:  # noqa: ANN0
     repo = UserNewsFavoriteRepository(db_session)
     fav = await repo.find_by_external(70001, "readhub")
     assert fav is not None
-    assert fav.news_external_id == 70001
+    assert fav.news_external_id == "70001"
 
 
 async def test_find_by_external_returns_none(db_session) -> None:  # noqa: ANN001
@@ -173,7 +173,7 @@ async def test_list_items_filter_by_importance_min(db_session) -> None:  # noqa:
     await _seed_one(db_session, news_external_id=80003, importance=3)
     repo = UserNewsFavoriteRepository(db_session)
     items = await repo.list_items(importance_min=2)
-    assert {it.news_external_id for it in items} == {80002, 80003}
+    assert {it.news_external_id for it in items} == {"80002", "80003"}
     assert all(it.importance >= 2 for it in items)
 
 
@@ -192,7 +192,7 @@ async def test_list_items_filter_by_tag(db_session) -> None:  # noqa: ANN001
     repo = UserNewsFavoriteRepository(db_session)
     items = await repo.list_items(tag="美联储")
     assert len(items) == 1
-    assert items[0].news_external_id == 81001
+    assert items[0].news_external_id == "81001"
 
 
 async def test_list_items_filter_by_site(db_session) -> None:  # noqa: ANN001

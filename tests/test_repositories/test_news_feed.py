@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import date as date_t, datetime, time, timedelta, timezone
 
 import pytest
+from sqlalchemy import select
 
 from app.models.news_feed import NewsFeedItem
 from app.repositories.news_feed import NewsFeedRepository
@@ -85,7 +86,7 @@ async def test_list_items_default_returns_all_in_desc_order(db_session) -> None:
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items()
     assert len(items) == 3
-    assert [it.external_id for it in items] == [1001, 1002, 1003]
+    assert [it.external_id for it in items] == ["1001", "1002", "1003"]
 
 
 async def test_list_items_days_filters_recent(db_session) -> None:  # noqa: ANN001
@@ -105,7 +106,7 @@ async def test_list_items_by_date_filters_to_single_day(db_session) -> None:  # 
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(date=date_t(2026, 10, 18), tz_offset_minutes=0)
-    assert [it.external_id for it in items] == [1002]
+    assert [it.external_id for it in items] == ["1002"]
 
 
 async def test_list_items_date_with_tz_offset_includes_late_night(db_session) -> None:  # noqa: ANN001
@@ -118,7 +119,7 @@ async def test_list_items_date_with_tz_offset_includes_late_night(db_session) ->
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(date=date_t(2026, 10, 19), tz_offset_minutes=480)
-    assert [it.external_id for it in items] == [1001]
+    assert [it.external_id for it in items] == ["1001"]
 
 
 async def test_list_items_date_with_negative_tz_offset(db_session) -> None:  # noqa: ANN001
@@ -129,7 +130,7 @@ async def test_list_items_date_with_negative_tz_offset(db_session) -> None:  # n
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(date=date_t(2026, 10, 17), tz_offset_minutes=-300)
-    assert [it.external_id for it in items] == [1003]
+    assert [it.external_id for it in items] == ["1003"]
 
 
 async def test_list_items_date_overrides_days(db_session) -> None:  # noqa: ANN001
@@ -140,7 +141,7 @@ async def test_list_items_date_overrides_days(db_session) -> None:  # noqa: ANN0
     items = await repo.list_items(
         days=90, date=date_t(2026, 10, 18), tz_offset_minutes=0
     )
-    assert [it.external_id for it in items] == [1002]
+    assert [it.external_id for it in items] == ["1002"]
 
 
 # ──────────────── V0.104 · has_items_outside_day ────────────────
@@ -209,7 +210,7 @@ async def test_list_items_filter_category_returns_only_match(db_session) -> None
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(category="财经")
-    assert sorted([it.external_id for it in items]) == [1001, 1002]
+    assert sorted([it.external_id for it in items]) == ["1001", "1002"]
 
 
 async def test_list_items_filter_category_combined_with_site(db_session) -> None:  # noqa: ANN001
@@ -217,7 +218,7 @@ async def test_list_items_filter_category_combined_with_site(db_session) -> None
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(site_name="财联社", category="财经")
-    assert [it.external_id for it in items] == [1002]
+    assert [it.external_id for it in items] == ["1002"]
 
 
 async def test_list_items_filter_category_orthogonal_to_date(db_session) -> None:  # noqa: ANN001
@@ -231,7 +232,7 @@ async def test_list_items_filter_category_orthogonal_to_date(db_session) -> None
     items2 = await repo.list_items(
         date=date_t(2026, 10, 18), tz_offset_minutes=0, category="财经"
     )
-    assert [it.external_id for it in items2] == [1002]
+    assert [it.external_id for it in items2] == ["1002"]
 
 
 async def test_list_items_category_orthogonal_to_days(db_session) -> None:  # noqa: ANN001
@@ -239,7 +240,7 @@ async def test_list_items_category_orthogonal_to_days(db_session) -> None:  # no
     await _seed(db_session)
     repo = NewsFeedRepository(db_session)
     items = await repo.list_items(days=90, category="科技")
-    assert [it.external_id for it in items] == [1003]
+    assert [it.external_id for it in items] == ["1003"]
 
 
 async def test_list_categories_returns_distinct_sorted_by_count(db_session) -> None:  # noqa: ANN001
@@ -336,7 +337,7 @@ async def test_upsert_bulk_updates_category_on_conflict(db_session) -> None:  # 
     }])
     items = await repo.list_items(category="科技")
     # 1001 被 upsert 改为「科技」，1003 原本就是「科技」→ 共 2 条
-    assert sorted([it.external_id for it in items]) == [1001, 1003]
+    assert sorted([it.external_id for it in items]) == ["1001", "1003"]
     # 不带 filter 应仍 3 条（upsert 不增减行数）
     all_items = await repo.list_items()
     assert len(all_items) == 3
@@ -467,3 +468,103 @@ async def test_upsert_daily_aggregates_bilingual_and_categories(db_session) -> N
     en_total = sum(r.en_count for r in (row_17, row_18, row_19))
     zh_total = sum(r.zh_count for r in (row_17, row_18, row_19))
     assert (finance_total, tech_total, en_total, zh_total) == (2, 1, 1, 2)
+
+
+# ──────────────── V0.114.0 多源化 ────────────────
+
+
+def _multi_source_record(ext_id: int, source: str, **over) -> dict:
+    """构造一条 fetcher 形状的 record（与 news_sources_fetcher._build 输出一致）。"""
+    rec = {
+        "external_id": ext_id,
+        "source": source,
+        "title": f"来自 {source} 的新闻 {ext_id}",
+        "summary": "正文摘要",
+        "url": None,
+        "mobile_url": None,
+        "site_name": {"wallstcn": "华尔街见闻", "jin10": "金十数据", "eastmoney": "东方财富快讯"}[
+            source
+        ],
+        "language": "zh-cn",
+        "author_name": None,
+        "publish_date": datetime(2026, 10, 22, 1, 0, tzinfo=timezone.utc),
+        "category": "财经",
+    }
+    rec.update(over)
+    return rec
+
+
+async def test_upsert_same_ext_id_different_source_creates_two_rows(db_session) -> None:  # noqa: ANN001
+    """V0.114.0：UNIQUE 改成 (source, external_id)。
+
+    四源 id 空间互不相干，「同一个数字来自不同源」是常态而非异常 —— 单列
+    UNIQUE 会让第二条直接被 ON CONFLICT 吞掉，或（若 upsert 的
+    index_elements 没同步改）把 A 源的新闻标题改成 B 源的。
+    """
+    repo = NewsFeedRepository(db_session)
+    await repo.upsert_bulk(
+        [_multi_source_record(777, "wallstcn"), _multi_source_record(777, "jin10")]
+    )
+    rows = (
+        await db_session.execute(
+            select(NewsFeedItem).where(NewsFeedItem.external_id == "777")
+        )
+    ).scalars().all()
+    assert len(rows) == 2
+    assert {r.source for r in rows} == {"wallstcn", "jin10"}
+    assert {r.site_name for r in rows} == {"华尔街见闻", "金十数据"}
+
+
+async def test_upsert_same_source_same_ext_id_is_idempotent(db_session) -> None:  # noqa: ANN001
+    """同源同 id 二次抓取必须 upsert 而不是插新行（dedup 语义不变）。"""
+    repo = NewsFeedRepository(db_session)
+    await repo.upsert_bulk([_multi_source_record(888, "eastmoney")])
+    await repo.upsert_bulk(
+        [_multi_source_record(888, "eastmoney", title="改过的标题")]
+    )
+    rows = (
+        await db_session.execute(
+            select(NewsFeedItem).where(NewsFeedItem.external_id == "888")
+        )
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].title == "改过的标题"
+
+
+async def test_upsert_bulk_accepts_null_url(db_session) -> None:  # noqa: ANN001
+    """url 可空：金十/东财快讯没有原文链接（实测 0/20 条有）。"""
+    repo = NewsFeedRepository(db_session)
+    await repo.upsert_bulk(
+        [_multi_source_record(20261022052906788800, "jin10", url=None)]
+    )
+    row = await repo.find_by_external(20261022052906788800, "jin10")
+    assert row is not None
+    assert row.url is None
+
+
+async def test_find_by_external_is_source_scoped(db_session) -> None:  # noqa: ANN001
+    """收藏回填按 (ext, source) 查 —— 只按 ext 查会取到另一源的同号新闻。"""
+    repo = NewsFeedRepository(db_session)
+    await repo.upsert_bulk(
+        [_multi_source_record(999, "wallstcn"), _multi_source_record(999, "jin10")]
+    )
+    w = await repo.find_by_external(999, "wallstcn")
+    j = await repo.find_by_external(999, "jin10")
+    assert w is not None and j is not None
+    assert w.site_name == "华尔街见闻"
+    assert j.site_name == "金十数据"
+
+
+async def test_jin10_twenty_digit_id_roundtrips(db_session) -> None:  # noqa: ANN001
+    """金十 id 是 20 位（≈2.0e19），超出 int32 —— BigInteger 必须真的装得下。
+
+    装不下的话 SQLite 直接抛 OverflowError（实测踩过）—— 抓取整体失败，
+    failover 退到下一个源，多源能力等于没上线。
+    """
+    repo = NewsFeedRepository(db_session)
+    big = 20261022052906788800
+    await repo.upsert_bulk([_multi_source_record(big, "jin10")])
+    row = await repo.find_by_external(big, "jin10")
+    assert row is not None
+    # 列是 String(32)：值必须**逐字符**还原，任何截断都会变成另一条新闻
+    assert row.external_id == str(big)

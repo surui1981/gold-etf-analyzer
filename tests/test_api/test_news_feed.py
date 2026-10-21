@@ -10,6 +10,7 @@ import pytest
 
 from app.models.news_feed import NewsFeedItem
 from app.repositories.news_feed import NewsFeedRepository
+from app.repositories.news_sources_fetcher import NewsFetchResult
 
 
 # ──────────────── 公共 fixture：DB seed ────────────────
@@ -556,9 +557,12 @@ async def test_list_items_after_v01071_refresh_excludes_other(
     )
 
     async def _fake_fetch(**_kwargs):
-        return tuple(finance_records) + other_records
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(
+            items=tuple(finance_records) + other_records, source="readhub"
+        )
 
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch)
 
     # 触发 refresh endpoint
     r = await client.post("/api/v1/news-feed/refresh")

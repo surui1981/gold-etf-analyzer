@@ -7,10 +7,13 @@ tests/test_api/test_news_feed.py。
 V0.107.1：service.refresh() 在 fetcher 返回的 records 中再过滤
        category='其他'（defense-in-depth 防 fetcher 改动漏改）。
 
-Patch 注意事项：news_feed.py 用 ``from ... import fetch_readhub_feed``
+Patch 注意事项：news_feed.py 用 ``from ... import fetch_news_feed``
 在模块顶部拉取了局部引用；monkeypatch 必须打在
-``app.services.news_feed.fetch_readhub_feed``，否则 service 调的是
+``app.services.news_feed.fetch_news_feed``，否则 service 调的是
 原始 fetcher（与 records mock 不生效）。
+
+V0.114.0：抓取入口从 ``fetch_readhub_feed``（单源）换成 ``fetch_news_feed``
+（4 源链式 failover），返回值从裸 tuple 变成 ``NewsFetchResult(items, source)``。
 """
 
 from __future__ import annotations
@@ -20,6 +23,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+
+from app.repositories.news_sources_fetcher import NewsFetchResult
 
 
 # ──────────────── 公共 fixture ────────────────
@@ -62,11 +67,12 @@ async def test_refresh_drops_other_records_v01071(monkeypatch: pytest.MonkeyPatc
         _make_record("其他", ext_id=6),
     )
 
-    async def _fake_fetch_readhub_feed(**_kwargs):
-        return mixed_records
+    async def _fake_fetch_news_feed(**_kwargs):
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(items=mixed_records, source="readhub")
 
     # 注意：patch target 必须是 service 模块里的 import 引用
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 
     # mock 仓储：capture 入参 + 返 n=2（4 类 2 条 + 创投 + 商业）
     repo = MagicMock()
@@ -98,10 +104,11 @@ async def test_refresh_drops_all_other_records_v01071(monkeypatch: pytest.Monkey
     from app.services import news_feed as svc_module
     from app.services.news_feed import NewsFeedService
 
-    async def _fake_fetch_readhub_feed(**_kwargs):
-        return (_make_record("其他", ext_id=1), _make_record("其他", ext_id=2))
+    async def _fake_fetch_news_feed(**_kwargs):
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(items=(_make_record("其他", ext_id=1), _make_record("其他", ext_id=2)), source="readhub")
 
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 
     repo = MagicMock()
     repo.upsert_bulk = AsyncMock()
@@ -129,10 +136,11 @@ async def test_refresh_passes_through_valid_records_v01071(monkeypatch: pytest.M
         _make_record("商业", ext_id=4),
     )
 
-    async def _fake_fetch_readhub_feed(**_kwargs):
-        return valid_records
+    async def _fake_fetch_news_feed(**_kwargs):
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(items=valid_records, source="readhub")
 
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 
     repo = MagicMock()
 
@@ -170,10 +178,11 @@ async def test_refresh_drops_blacklisted_site_v01080(monkeypatch: pytest.MonkeyP
         _make_record("科技", ext_id=3),
     )
 
-    async def _fake_fetch_readhub_feed(**_kwargs):
-        return mixed_records
+    async def _fake_fetch_news_feed(**_kwargs):
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(items=mixed_records, source="readhub")
 
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 
     repo = MagicMock()
     captured: dict[str, Any] = {}
@@ -205,10 +214,11 @@ async def test_refresh_all_blacklisted_is_soft_failure_v01080(
         {**_make_record("科技", ext_id=2), "site_name": "maomu.com"},
     )
 
-    async def _fake_fetch_readhub_feed(**_kwargs):
-        return only_blacklisted
+    async def _fake_fetch_news_feed(**_kwargs):
+        # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
+        return NewsFetchResult(items=only_blacklisted, source="readhub")
 
-    monkeypatch.setattr(svc_module, "fetch_readhub_feed", _fake_fetch_readhub_feed)
+    monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 
     repo = MagicMock()
     repo.upsert_bulk = AsyncMock()
