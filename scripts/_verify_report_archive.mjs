@@ -17,7 +17,10 @@
 // 基线归零：上一次运行可能留下同名报告导致断言读到旧卡片，先按标题清场。
 import puppeteer from "puppeteer-core";
 
-const BASE = process.env.BASE_URL || "http://127.0.0.1:8890";
+// ⚠ V0.112.0：默认端口 8890 → 8888。8890 是早已不监听的开发端口，留着会让下一个人
+//   以为脚本坏了；8888 才是有文档的主入口（见记忆 lan-only-deployment）。
+//   8889/gold/ 是 nginx 备用入口且全站 /api/v1/* 404，不能用。
+const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
 const TITLE = "Puppeteer验证报告";
 const TAG = "verify-tag";
 
