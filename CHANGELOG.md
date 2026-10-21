@@ -4,6 +4,54 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.114.0] · 2026-10-22
+
+`新闻多源容灾` — 4 源链式 failover + 修「收藏无反馈」三层缺陷 · 详见 [v0.114.0.md](docs/releases/v0.114.0.md)
+
+> 今日要闻原本**只有 readhub 一个源**，而这轮实测中 readhub 直接超时了一次 ——
+> 单点无冗余不是理论风险，是已经发生过的事。
+
+- 🔁 **4 源链式 failover**（wallstcn ★ → jin10 → eastmoney → readhub 兜底），首个足量即止
+  - ✅ 端到端真重启 uvicorn 验 5 种场景：基线 `wallstcn/21` → A 挂 `jin10/16` →
+    B 挂 `eastmoney/16` → C 挂 `readhub/14` → **D 四源全挂返回 HTTP 200**
+    + `ok=False` + error 列全 4 源，`/items` 仍供末次数据（V0.84：绝不 500）
+  - 🧱 `external_id` Integer → **String(32)**。计划里写的是 BigInteger，**实测推翻**：
+    SQLite 的 INTEGER 是 int64（≈9.22e18），金十 id ≈2.02e19 ⇒ `OverflowError`。
+    再加 `models/base.py::SourceId` TypeDecorator，因为绑定发生在 Python 侧、
+    早于 SQLite affinity
+  - 🔑 `UNIQUE(external_id)` → `UNIQUE(source, external_id)`：多源后 id **不再全局唯一**，
+    同一个数字可能同时是华尔街见闻的 `3182985` 和金十的某条
+  - 🌐 实测**金十 / 东财 0/20 条有 url** ⇒ url 改可空，无链接时标题渲染成
+    `span.no-url` **不可点纯文本**（不合成 `href="#"`，V0.77.1）
+  - ⚠️ 东财成功码是**字符串** `"1"`，`code != 1` 会把成功当失败（踩过）
+
+- 🔔 **修「收藏从头到尾没有任何反馈」（三层，全是既存）**
+  - ① `toast.js` 从未导出 `show`，而全站 **14 处**在调 `PM_Toast.show(...)`
+  - ② `headlines.js` / `home.js` 只 guard `window.PM_Toast` ⇒ TypeError；
+    `favorites.js` / `report-archive.js` guard 到 `.show` 为 falsy ⇒ 静默不弹
+  - ③ `headlines.js` **模块作用域没有 `t()`**，却裸调 `t("favorites.toast_archived", ...)`
+    ⇒ `ReferenceError`，且抛在 **catch 块内**无人接管 ⇒ 未处理拒绝
+  - 三层用户可见后果**完全一样**：点了收藏，POST 成功，屏幕毫无反应
+  - 🩹 修法：`toast.js` 补 `show(msg, type)` 派发器（一次修好 14 处，含 `error`→`err`
+    别名 + 未知值退回 info 绝不抛错）；`headlines.js` 两处改 `tr()`
+  - ⚠️ `headlines.js` **故意**不叫 `t()`：本页 `fmtBjtDate()` 内部有 `const t = new Date(iso)`，
+    同名会把翻译函数整个遮蔽
+
+- 🧪 **57 个新测试**（`test_news_sources_fetcher.py`）＋ 6 个多源入库测试 ＋ 5 个收藏服务测试
+  · 相关 8 个文件 **195 passed / 1 failed**
+  - 🕵️ 那 1 个失败是**既存**（已 `git stash` 在未改动的 main 上复现）：
+    `test_list_items_filter_days` 的种子数据写死 2026-10-19，今天 10-22 ⇒ `days=1` 全被过滤。
+    修它要连带改 4 个测试语义（tz-offset 用例期望 id 从 1002 翻成 1001），会让发版 diff
+    混进无关改动，单独一轮处理
+  - 🖥️ puppeteer **23 条断言全绿**：4 源渲染 / 无 `href="#"` 假链接 / fav POST 带
+    `news_source` / 金十 20 位 id 全程字符串（点 `20261022055128917800` → POST 原样透传，
+    先前 `parseInt` 会静默舍入到 …7000）/ 点收藏真的弹出 toast / 3 语无 key 泄漏
+  - 🪞 验证脚本自身也修了两次：① 只能绿一次不算门禁（第二轮点同一张卡必然 409 幂等
+    分支）⇒ 点击前经 API 删上一轮收藏；② 只断言「请求发出去了」不够（服务端 4xx 时前端
+    同样发请求）⇒ 补真实响应码，顺手发现 POST 返回 **201** 不是 200
+
+- 🔢 版本号 4 处同步 0.114.0（`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`）
+
 ## [V0.113.0] · 2026-10-22
 
 `移动端可用性` — UI + 门禁 · 无后端改动 · 详见 [v0.113.0.md](docs/releases/v0.113.0.md)
