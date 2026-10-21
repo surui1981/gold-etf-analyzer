@@ -71,6 +71,10 @@ V083_KEY_PREFIXES = (
     "favorites.",
     # V0.111.0：报告存档（reports.* 全 3 语覆盖，49 键 + nav.archive + brand.archive）
     "reports.",
+    # V0.112.0：命令面板（cmd.* 12 键 + nav.cmd_palette）
+    #   文案由 command-palette.js 用 I18n.t() 取，缺键会静默回落到代码里的 fb 常量
+    #   —— 也就是说「忘了加 zh-TW」不会报错，只会悄悄显示简体，所以必须进严格清单。
+    "cmd.",
 )
 
 
@@ -111,16 +115,32 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
                 usage[k].add(rel)
     # 2) JS 模板字面量（仅 static/*.js，避开 i18n/ 自身）
     js_attr_re = re.compile(r'i18n:\s*["\']([A-Za-z0-9_.\-]+)["\']')
+    # V0.112.0：补 I18n.t('key') 形式。此前只扫 `i18n: "key"`（topnav.js 的 SCENES
+    #   对象字面量），而 JS 里另一大类写法 —— 直接调 I18n.t('some.key') —— 扫不到：
+    #   headlines.js 有 11 处、command-palette.js 有 12 处都落在门外。这些键要是某语
+    #   漏了，门禁不报，运行时 I18n.t() 又会回落到 key 字面量 / 代码里的 fb 常量 ——
+    #   两边都是「安静地显示错的东西」，正是本门禁要拦的那类静默回归。
+    #   注意只认**字符串字面量**实参：I18n.t(item.i18n) / I18n.t(key) 这类变量形式
+    #   扫不出来，也不该扫 —— 它们的 key 由别处（SCENES）已覆盖。
+    js_call_re = re.compile(r'I18n\.t\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
+    # V0.112.0：补 tr('key', 'fallback') 形式。tr(key, fallback) 是本项目**既有的**
+    #   i18n 约定（V0.86 decision-explainer.js 首用，本次 command-palette.js 沿用）——
+    #   字典没命中就返回 fallback，而不是像 I18n.t 那样返回 key 字面量。
+    #   此前这批键同样在门外：decision-explainer.js 约 15 个 decision.explain_*、
+    #   command-palette.js 12 个 cmd.*，漏一语都不会报。
+    #   实测 `tr(` 只出现在这两个文件里，且都是 i18n 用途，无同名误伤。
+    tr_call_re = re.compile(r'\btr\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
     for path in glob.glob(os.path.join(static_dir, "*.js")):
         rel = os.path.relpath(path, static_dir)
         with open(path, encoding="utf-8") as f:
             content = f.read()
-        for m in js_attr_re.finditer(content):
-            k = m.group(1)
-            if not k:
-                continue
-            all_keys.add(k)
-            usage[k].add(rel)
+        for rx in (js_attr_re, js_call_re, tr_call_re):
+            for m in rx.finditer(content):
+                k = m.group(1)
+                if not k:
+                    continue
+                all_keys.add(k)
+                usage[k].add(rel)
     return all_keys, usage
 
 
