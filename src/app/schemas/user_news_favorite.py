@@ -10,18 +10,30 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+from app.schemas.news_feed import js_safe_id
 
 
 class UserNewsFavoriteItemOut(BaseModel):
     """单条收藏 Out（V0.103）。"""
 
     id: int = Field(..., description="收藏主键")
-    news_external_id: int = Field(..., description="readhub news id（仅溯源）")
-    news_source: str = Field(default="readhub", description="数据源标识")
+    news_external_id: int = Field(
+        ..., description="源站 news id（仅溯源）。JSON 里可能是数字也可能是字符串，见 js_safe_id"
+    )
+    news_source: str = Field(
+        default="readhub", description="数据源标识：wallstcn / jin10 / eastmoney / readhub"
+    )
     title: str = Field(..., description="标题快照")
     summary: str = Field(default="", description="摘要快照")
-    url: str = Field(..., description="原文链接快照（外链跳转）")
+    url: str | None = Field(
+        default=None,
+        description=(
+            "原文链接快照（外链跳转）。V0.114.0 起可空："
+            "源条目本就无链接时（金十/东财快讯）收藏存 NULL"
+        ),
+    )
     mobile_url: str | None = Field(default=None, description="移动端 URL 快照")
     site_name: str = Field(..., description="来源站快照")
     language: str | None = Field(default=None, description="语种快照")
@@ -36,6 +48,11 @@ class UserNewsFavoriteItemOut(BaseModel):
     )
     archived_at: datetime = Field(..., description="收藏时间（UTC）")
     updated_at: datetime = Field(..., description="最后修改时间（笔记/tag/importance 改动）")
+
+    @field_serializer("news_external_id", when_used="json")
+    def _ser_news_external_id(self, value: int) -> int | str:
+        """超 JS 安全范围的 id（金十 20 位）序列化成字符串，见 ``js_safe_id``。"""
+        return js_safe_id(value)
 
 
 class UserNewsFavoriteCreateIn(BaseModel):

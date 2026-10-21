@@ -3,18 +3,44 @@
 from datetime import date as date_t
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
+
+# ⚠ V0.114.0：JS 的 Number 只能精确表示到 2^53-1 = 9007199254740991（约 9e15）。
+# 金十数据的 id 是 20 位数字（20261022052906788800 ≈ 2.0e19），**超出 2249 倍** ——
+# JSON 数字过一遍 JS 的 JSON.parse 会被**静默**舍入成 ...7000，页面再把它 POST
+# 回去就收藏到了一个**不存在的行**。不报错、不显形、只在真实数据上发生，测试
+# （用 1001/1002 这种小 id）永远测不出来。
+# 超过 2^53-1 的 id 一律序列化成字符串；Python 侧 int 是任意精度，值不丢。
+JS_MAX_SAFE_INTEGER = 2**53 - 1
+
+
+def js_safe_id(value: int) -> int | str:
+    """超出 JS 安全整数范围的 id → 字符串；范围内的保持数字（不破坏既有契约）。"""
+    return value if -JS_MAX_SAFE_INTEGER <= value <= JS_MAX_SAFE_INTEGER else str(value)
 
 
 class NewsFeedItemOut(BaseModel):
-    """readhub 单条新闻（Out）。"""
+    """多源单条新闻（Out）。
 
-    external_id: int = Field(..., description="readhub news id（dedup 主键）")
+    ``external_id`` 是 **dedup 主键的一半**（另一半是 ``source``）：四源并存时
+    同一个数字完全可能是不同源的新闻，必须连 ``source`` 一起用。
+
+    ⚠ ``external_id`` 在 JSON 里**可能是数字也可能是字符串** —— 见 ``js_safe_id``。
+    前端**不要**对它做 ``parseInt``（会重新引入精度丢失），当不透明标识符用即可。
+    """
+
+    external_id: int = Field(..., description="源站 news id（dedup 主键的一半）")
     title: str = Field(..., description="新闻标题")
     summary: str = Field(
         default="", description="新闻摘要（readhub 自带；空字符串代表无摘要）"
     )
-    url: str = Field(..., description="原文链接（浏览器外链 new tab 跳转）")
+    url: str | None = Field(
+        default=None,
+        description=(
+            "原文链接。V0.114.0 起可空：金十/东财快讯不提供链接，"
+            "UI 据此渲染成不可点的纯文本（V0.77.1 不给假 affordance）"
+        ),
+    )
     mobile_url: str | None = Field(
         default=None, description="移动端链接（readhub 部分条目标注）"
     )
@@ -27,12 +53,19 @@ class NewsFeedItemOut(BaseModel):
     )
     publish_date: datetime = Field(..., description="新闻发布时间（UTC，readhub 给定）")
     fetched_at: datetime = Field(..., description="本地入库时间（scheduler 6h 一次刷新）")
-    source: str = Field(default="readhub", description="数据源标识（预留多源）")
+    source: str = Field(
+        default="readhub", description="数据源标识：wallstcn / jin10 / eastmoney / readhub"
+    )
     # V0.105：分类（财经/科技/创投/商业/其他）；None=未分类（启动 backfill 过渡期）
     category: str | None = Field(
         default=None,
         description="V0.105 分类（财经/科技/创投/商业/其他）；启动 backfill_categories() 一次性补齐历史，None = 未分类",
     )
+
+    @field_serializer("external_id", when_used="json")
+    def _ser_external_id(self, value: int) -> int | str:
+        """超 JS 安全范围的 id 序列化成字符串（见 ``js_safe_id`` 注释）。"""
+        return js_safe_id(value)
 
 
 class NewsFeedListOut(BaseModel):
@@ -74,6 +107,13 @@ class NewsFeedRefreshOut(BaseModel):
     upserted: int = Field(..., ge=0, description="本次 upsert 行数；失败=0")
     error: str | None = Field(
         default=None, description="失败原因（ok=False 时填；ok=True 时 None）"
+    )
+    source: str | None = Field(
+        default=None,
+        description=(
+            "V0.114.0：本次生效的数据源 key（wallstcn/jin10/eastmoney/readhub）。"
+            "failover 是否真的在工作需要能被观测 —— 否则首选源长期挂掉也没人知道"
+        ),
     )
 
 

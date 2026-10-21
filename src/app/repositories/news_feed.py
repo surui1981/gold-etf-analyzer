@@ -44,7 +44,7 @@ class NewsFeedRepository:
     # ────────────── 写 ──────────────
 
     async def upsert_bulk(self, records: list[dict]) -> int:
-        """批量 upsert；按 ``external_id`` 唯一约束做 dedup。
+        """批量 upsert；按 ``(source, external_id)`` 唯一约束做 dedup。
 
         ``records`` 元素是 dict（key 对应 NewsFeedItem 字段），由 fetcher 给出
         已 normalize 的 payload；不在这里做业务校验。
@@ -52,18 +52,31 @@ class NewsFeedRepository:
         V0.105：``set_`` 里加 ``category=stmt.excluded.category``，让二次抓取
         时能覆盖（否则历史行永远 NULL，backfill 之外就再无机会分类）。
 
+        V0.114.0：``index_elements`` 从 ``["external_id"]`` 改成
+        ``["source", "external_id"]`` —— 必须与模型上的复合 UNIQUE 逐字对齐，
+        否则 SQLite 的 ON CONFLICT 找不到目标唯一索引，整条 upsert 静默退化成
+        「每次都 INSERT 新行」（同一条新闻在库里堆出 N 份）。
+        不显式写 ``source`` 的 record 走模型 ``server_default='readhub'``，
+        与 readhub 历史行的口径一致（readhub_fetcher._normalize 仍不写该字段）。
+
         Returns:
             受影响行数（SQLite 包含 INSERT 新行 + UPDATE 冲突行）
         """
         if not records:
             return 0
-        # 过滤掉 None external_id（readhub API 偶发，理论上不会）
+        # 过滤掉 None external_id（API 偶发，理论上不会）
         payload = [r for r in records if r.get("external_id") is not None]
         if not payload:
             return 0
+        # ⚠ V0.114.0：external_id 列是 String(32)。金十 id ≈2.02e19 超出 SQLite
+        # int64 上限，绑整数会直接 OverflowError；readhub 那边的 fetcher 又仍然
+        # 给整数。**在这一个入口统一归一成字符串** —— 比让 4 个 fetcher + 测试
+        # 各自记得转一遍可靠（漏一处就是 OverflowError）。
+        for r in payload:
+            r["external_id"] = str(r["external_id"])
         stmt = sqlite_insert(NewsFeedItem).values(payload)
         stmt = stmt.on_conflict_do_update(
-            index_elements=["external_id"],
+            index_elements=["source", "external_id"],
             set_={
                 "title": stmt.excluded.title,
                 "summary": stmt.excluded.summary,
@@ -179,15 +192,19 @@ class NewsFeedRepository:
         return [r[0] for r in rows]
 
     async def find_by_external(
-        self, external_id: int, source: str = "readhub"
+        self, external_id: int | str, source: str = "readhub"
     ) -> NewsFeedItem | None:
         """按 ``(external_id, source)`` 取单条（V0.103 收藏回填快照用）。
+
+        ⚠ V0.114.0：入参显式 ``str()`` 归一。调用方（收藏 service 收到的是
+        Pydantic int、老代码传的是 int）类型不一，而列是 String(32)；
+        SQLite 在 TEXT 亲和下不会把 '1001' 自动匹配整数 1001。
 
         Returns:
             匹配的行；不存在则 None。
         """
         stmt = select(NewsFeedItem).where(
-            NewsFeedItem.external_id == external_id,
+            NewsFeedItem.external_id == str(external_id),
             NewsFeedItem.source == source,
         )
         return (await self._session.execute(stmt)).scalar_one_or_none()

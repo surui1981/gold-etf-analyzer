@@ -34,7 +34,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, SourceId
 
 
 class UserNewsFavorite(Base):
@@ -47,17 +47,17 @@ class UserNewsFavorite(Base):
     __tablename__ = "user_news_favorites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    news_external_id: Mapped[int] = mapped_column(
-        Integer,
+    news_external_id: Mapped[str] = mapped_column(
+        SourceId,
         nullable=False,
-        comment="readhub news id（仅做溯源，无 FK；允许源端撤稿后收藏仍完整）",
+        comment="源站 news id（仅做溯源，无 FK）。文本型：金十 id 超出 SQLite int64 上限",
     )
     news_source: Mapped[str] = mapped_column(
         String(32),
         nullable=False,
         default="readhub",
         server_default="readhub",
-        comment="数据源标识（默认 readhub；预留多源扩展）",
+        comment="数据源标识：wallstcn / jin10 / eastmoney / readhub（V0.114.0 多源）",
     )
     title: Mapped[str] = mapped_column(
         Text,
@@ -71,10 +71,10 @@ class UserNewsFavorite(Base):
         server_default="",
         comment="收藏时的摘要快照",
     )
-    url: Mapped[str] = mapped_column(
+    url: Mapped[str | None] = mapped_column(
         Text,
-        nullable=False,
-        comment="收藏时的原文链接快照（直接打开此 URL，不回查源表）",
+        nullable=True,
+        comment="收藏时的原文链接快照（直接打开此 URL，不回查源表）。NULL = 源条目本就无链接（金十/东财）",
     )
     mobile_url: Mapped[str | None] = mapped_column(
         Text,

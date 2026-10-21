@@ -1,19 +1,24 @@
-"""新闻流 ORM 模型：readhub 财经新闻（V0.102 / V0.105 类目 / V0.107 按日聚合）
+"""新闻流 ORM 模型：多源财经新闻（V0.102 / V0.105 类目 / V0.107 按日聚合 / V0.114.0 多源）
 
-数据来源：
-- readhub 内部 API ``https://api.readhub.cn/news``（前端 hydrate 用，非官方但
-  匿名稳定，4h 一次抓取；V0.106 由 6h 调到 4h）。
+数据来源（V0.114.0 起 4 源链式 failover，见 ``repositories/news_sources_fetcher.py``）：
+- ★ 华尔街见闻 ``api-one.wallstcn.com/apiv1/content/lives``（有 URL，标题常缺）
+- 金十数据 ``flash-api.jin10.com/get_flash_list``（无 URL，id 20 位）
+- 东方财富 ``np-listapi.eastmoney.com/.../getFastNewsList``（无 URL）
+- readhub ``api.readhub.cn/news``（兜底；唯一提供 readhub 独占站点如格隆汇/财联社的源）
+- 4h 一次抓取（V0.106 由 6h 调到 4h）
 
 设计要点：
-- ``NewsFeedItem``（V0.102）
-  - ``external_id`` 是 readhub 的自增主键，整型，作为唯一约束做 dedup（同一新闻
-    不重复入库；二次抓取靠 ``on_conflict_do_update`` 走 upsert 路径）
+- ``NewsFeedItem``（V0.102，多源化于 V0.114.0）
+  - ``(source, external_id)`` **复合** UNIQUE 做 dedup（同一新闻不重复入库；
+    二次抓取靠 ``on_conflict_do_update`` 走 upsert 路径）
+  - ``external_id`` 是 **String(32)**：金十 id ≈2.02e19，连 SQLite 的 int64
+    （上限 9.22e18）都装不下，文本是唯一无损选择
   - ``site_name`` + ``language`` + ``publish_date`` + ``fetched_at`` 单列索引，
     覆盖 UI 的 4 类查询（按来源/语种筛选 + 倒序时间线 + 24h 新增数）
   - 全文字段（``title`` / ``summary`` / ``url`` / ``mobile_url``）一律 Text，
     避免 string length 截断（readhub 标题实测最长 200+ 字符）
   - 所有 nullable 字段遵循 V0.78.0 NULL 纪律：「未知就是未知」，不偷偷回退
-    0 / '' / 1970-01-01
+    0 / '' / 1970-01-01；``url`` 为 NULL 时 UI 渲染成不可点纯文本（V0.77.1）
   - ``category``（V0.105）：关键词分类器填入；启动 backfill_categories() 一次性
     补齐历史
 - ``NewsFeedDaily``（V0.107）：按 BJT 日聚合的物化宽表（仿 ``ScoringDailyWide``
@@ -33,30 +38,44 @@ from datetime import datetime
 from sqlalchemy import Date, DateTime, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base
+from app.models.base import Base, SourceId
 
 
 class NewsFeedItem(Base):
-    """readhub 财经新闻条目。
+    """多源财经新闻条目（V0.114.0：readhub → 4 源链式 failover）。
 
-    唯一约束：``external_id``（readhub 的 news id），作为 dedup 主键。
-    二次抓取时相同 ``external_id`` 的行：``title`` / ``summary`` / ``url`` /
-    ``site_name`` / ``language`` / ``author_name`` / ``publish_date`` 全量更新
-    （readhub 偶有标题微调或作者补录），``fetched_at`` 自然变最新。
+    唯一约束：``(source, external_id)``，作为 dedup 主键。
+    V0.114.0 之前是单列 ``external_id`` UNIQUE —— 那在单源时代成立，四源并存
+    时必然撞车（四个源的 id 空间互不相干，同号不同源是常态而非异常）。
+
+    二次抓取时相同 ``(source, external_id)`` 的行：``title`` / ``summary`` /
+    ``url`` / ``site_name`` / ``language`` / ``author_name`` / ``publish_date``
+    全量更新（源端偶有标题微调或作者补录），``fetched_at`` 自然变最新。
+
+    ``url`` **可空**（V0.114.0）：金十 / 东方财富的快讯接口根本不返回链接。
+    NULL = 「来源没有给链接」，UI 据此渲染**不可点的纯文本**（V0.77.1 不给假
+    affordance），不合成 ``#`` 假链接。
     """
 
     __tablename__ = "news_feed_items"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    external_id: Mapped[int] = mapped_column(
-        Integer,
-        comment="readhub 的 news id（dedup 主键，整型）",
+    # ⚠ V0.114.0 用 **String 而非 BigInteger**：金十 id ≈2.02e19，而 SQLite
+    # INTEGER 是 int64（上限 9.22e18），超了 2.2 倍 —— 绑值直接 OverflowError。
+    # BigInteger 只能解决 int32 溢出，解决不了 int64。文本是唯一无损选择。
+    external_id: Mapped[str] = mapped_column(
+        SourceId,
+        comment="源站 news id（dedup 主键的一半）。文本型：金十 id 20 位，超出 SQLite int64 上限",
     )
     title: Mapped[str] = mapped_column(Text, comment="新闻标题")
     summary: Mapped[str] = mapped_column(
-        Text, default="", server_default="", comment="新闻摘要（readhub 自带）"
+        Text, default="", server_default="", comment="新闻摘要（部分源只给正文，标题回退自正文）"
     )
-    url: Mapped[str] = mapped_column(Text, comment="原文链接（浏览器外链跳转）")
+    url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="原文链接。NULL = 来源未提供（金十/东财快讯），UI 渲染成不可点纯文本",
+    )
     mobile_url: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="移动端链接（部分来源提供）"
     )
@@ -84,7 +103,7 @@ class NewsFeedItem(Base):
         String(32),
         default="readhub",
         server_default="readhub",
-        comment="数据源标识：readhub（未来可扩 多家）",
+        comment="数据源标识：wallstcn / jin10 / eastmoney / readhub（V0.114.0 多源 failover）",
     )
     # V0.105：关键词分类器结果（财经/科技/创投/商业/其他）
     # - 入库时由 ``readhub_fetcher._normalize`` 调 ``classify()`` 填入
@@ -97,7 +116,10 @@ class NewsFeedItem(Base):
         comment="V0.105 分类（财经/科技/创投/商业/其他），_normalize() 关键词分类器填入；启动 backfill_categories() 一次性补齐历史",
     )
 
-    __table_args__ = (UniqueConstraint("external_id", name="uq_news_feed_external_id"),)
+    __table_args__ = (
+        # V0.114.0：单列 external_id UNIQUE → 复合（单源时代成立，四源并存必撞车）
+        UniqueConstraint("source", "external_id", name="uq_news_feed_source_external"),
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<NewsFeedItem #{self.external_id} {self.site_name} '{self.title[:24]}...'>"
