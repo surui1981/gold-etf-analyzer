@@ -19,7 +19,9 @@
 // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice(0,5)→slice(0,20)、limit=5→limit=20、3 骨架→5 骨架）
 // V0.103.0 正式发版：/favorites 档案管理页 + /api/v1/favorites/* 9 端点
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
-const VERSION = "v0.110.0";  // V0.110.0 · 宏观因子手动校准（macro_factor_overrides）+ 后端未部署时的降级说明
+// V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
+//   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
+const VERSION = "v0.111.0";  // V0.111.0 · 报告存档（HTML 上传 + 元数据登记表 + 新标签页沙箱查看）
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -85,6 +87,10 @@ const SHELL_ASSETS = [
     "/favorites",
     "/static/favorites.html",
     "/static/favorites.js",
+    // V0.111.0：报告存档（HTML 上传 + 元数据登记表检索）
+    "/report-archive",
+    "/static/report-archive.html",
+    "/static/report-archive.js",
     OFFLINE_URL,
     "/static/manifest.json",
     "/static/icon-192.png",
@@ -159,12 +165,14 @@ self.addEventListener("activate", (event) => {
             // V0.100.2 hotfix：home.html 今日要闻 Top 5 → Top 20（slice / limit / 骨架数），
             // 同样按上述模式清 RUNTIME_CACHE 旧 /home + /static/home.html。
             // V0.103：/favorites 同模式（新页进入 SHELL_ASSETS 时旧 RUNTIME_CACHE 里的 307 旧入口需清掉）。
+            // V0.111.0：/report-archive 同模式。
             .then(async () => {
                 const rt = await caches.open(RUNTIME_CACHE);
                 const stale = [
                     "/scoring", "/static/scoring.html",
                     "/home", "/static/home.html",
                     "/favorites", "/static/favorites.html",
+                    "/report-archive", "/static/report-archive.html",
                 ];
                 for (const url of stale) {
                     const hit = await rt.match(url);
