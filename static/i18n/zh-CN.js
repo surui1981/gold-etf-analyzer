@@ -1382,7 +1382,15 @@ window.PM_I18N_ZH_CN = {
   /* ── 今日要闻（V0.102）── */
   "headlines.page_title": "今日要闻 · 黄金 ETF 投资辅助工具",
   "headlines.h1": "📰 今日要闻",
-  "headlines.subtitle": "readhub 财经新闻流 · 每 4 小时自动刷新 · 仅供研究参考",  // V0.106.2 hotfix: 6h → 4h (V0.106)
+  "headlines.subtitle": "4 源财经快讯（华尔街见闻 / 金十 / 东财 / ReadHub）· 每 4 小时自动刷新 · 仅供研究参考",
+  // V0.114.0：4 源 failover。source 展示名（原先直接渲染 "jin10" 这类技术 key）
+  "headlines.source_wallstcn": "华尔街见闻",
+  "headlines.source_jin10": "金十数据",
+  "headlines.source_eastmoney": "东方财富",
+  "headlines.source_readhub": "ReadHub",
+  // 无原文链接时的标题提示（金十/东财快讯实测 0/20 条有链接）
+  "headlines.no_url_title": "该来源未提供原文链接",
+  "headlines.fav_add": "收藏",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "上次刷新",
   "headlines.chip_total": "总条数",
   "headlines.chip_24h": "24h 新增",

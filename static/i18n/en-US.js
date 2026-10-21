@@ -1382,7 +1382,13 @@ window.PM_I18N_en_US = {
   /* ── Headlines (V0.102) ── */
   "headlines.page_title": "Headlines · Gold ETF Investment Assistant",
   "headlines.h1": "📰 Today's Headlines",
-  "headlines.subtitle": "readhub financial news stream · refreshed every 4 hours · research only",  // V0.106.2 hotfix: 6h → 4h (V0.106)
+  "headlines.subtitle": "4-source financial flash feed (WallStreetCN / Jin10 / Eastmoney / ReadHub) · refreshed every 4 hours · research only",
+  "headlines.source_wallstcn": "WallStreetCN",
+  "headlines.source_jin10": "Jin10 Data",
+  "headlines.source_eastmoney": "Eastmoney",
+  "headlines.source_readhub": "ReadHub",
+  "headlines.no_url_title": "This source provides no article link",
+  "headlines.fav_add": "Save",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "Last refresh",
   "headlines.chip_total": "Total",
   "headlines.chip_24h": "24h new",

@@ -1286,7 +1286,13 @@ window.PM_I18N_zh_TW = {
   /* ── 今日要聞（V0.102）── */
   "headlines.page_title": "今日要聞 · 黃金 ETF 投資輔助工具",
   "headlines.h1": "📰 今日要聞",
-  "headlines.subtitle": "readhub 財經新聞流 · 每 4 小時自動刷新 · 僅供研究參考",  // V0.106.2 hotfix: 6h → 4h (V0.106)
+  "headlines.subtitle": "4 源財經快訊（華爾街見聞 / 金十 / 東財 / ReadHub）· 每 4 小時自動刷新 · 僅供研究參考",
+  "headlines.source_wallstcn": "華爾街見聞",
+  "headlines.source_jin10": "金十數據",
+  "headlines.source_eastmoney": "東方財富",
+  "headlines.source_readhub": "ReadHub",
+  "headlines.no_url_title": "此來源未提供原文連結",
+  "headlines.fav_add": "收藏",  // V0.106.2 hotfix: 6h → 4h (V0.106)
   "headlines.chip_last_refresh": "上次刷新",
   "headlines.chip_total": "總條數",
   "headlines.chip_24h": "24h 新增",
