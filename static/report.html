@@ -13,7 +13,9 @@
 <link rel="stylesheet" href="/static/print.css" media="print">
 <link rel="stylesheet" href="/static/toast.css">
 <link rel="stylesheet" href="/static/pwa.css">
-<link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+<!-- 图标交给 manifest.json（icon-192/512/maskable-512）。本页此前单独引
+     /static/favicon.svg，而 static/ 下**从来没有这个文件** ⇒ 每次访问都吃一个
+     404。全站 21 页里也只有本页引了它，直接删掉即可，不是新增约定。 -->
 <script src="/static/theme.js"></script>
 <style>
 /* report.html 屏上版式（仅 screen media；print 走 print.css） */
@@ -120,6 +122,12 @@
   </main>
 </div>
 
+<!-- V0.113.0 修既存缺陷：本页此前**只**引 i18n.js、漏了字典文件，于是 21 处
+     data-i18n 和 report.js 里所有 esc(i18n("report.*")) 全部渲染成 key 字面量
+     （页面正文直接显示 "report.section_positions"）。根因是 i18n.js:46 ——
+     非默认语言会动态插 <script>，唯独默认语言 zh-CN 走 syncLoadDefault()，
+     只读 window.PM_I18N_ZH_CN，**不会**自己去取字典文件。 -->
+<script src="/static/i18n/zh-CN.js"></script>
 <script src="/static/i18n.js" defer></script>
 <!-- V0.91.0：报告生成 + 渲染（消费 V0.90.0 timeline + 既有 8 端点） -->
 <script src="/static/report.js" defer></script>
