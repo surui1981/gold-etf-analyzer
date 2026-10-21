@@ -1139,6 +1139,7 @@ window.PM_I18N_en_US = {
   /* V0.112.0 · 命令面板（command-palette.js）—— 文案按 I18n.t() 取，
      缺键时回落到代码里的 fb 常量，所以三语之外也能正常显示 */
   "cmd.search_label": "Search commands",
+  "cmd.search_placeholder": "Search pages and actions…",
   "cmd.result_label": "Search results",
   "cmd.empty": "No matching command",
   "cmd.action_section": "Actions",

@@ -1139,6 +1139,7 @@ window.PM_I18N_ZH_CN = {
   /* V0.112.0 · 命令面板（command-palette.js）—— 文案按 I18n.t() 取，
      缺键时回落到代码里的 fb 常量，所以三语之外也能正常显示 */
   "cmd.search_label": "搜索命令",
+  "cmd.search_placeholder": "搜索页面、动作…",
   "cmd.result_label": "搜索结果",
   "cmd.empty": "无匹配命令",
   "cmd.action_section": "动作",

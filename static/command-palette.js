@@ -239,7 +239,8 @@
     panel.setAttribute('role', 'dialog');
     panel.setAttribute('aria-modal', 'true');
     panel.innerHTML =
-      '<input class="pm-cmd-input" aria-label="' + escHtml(tr('cmd.search_label', '搜索命令')) + '" />' +
+      '<input class="pm-cmd-input" placeholder="' + escHtml(tr('cmd.search_placeholder', '搜索页面、动作…')) + '"' +
+      ' aria-label="' + escHtml(tr('cmd.search_label', '搜索命令')) + '" />' +
       '<div class="pm-cmd-list" role="listbox" aria-label="' + escHtml(tr('cmd.result_label', '搜索结果')) + '"></div>' +
       '<div class="pm-cmd-foot"></div>';
     document.body.appendChild(panel);
