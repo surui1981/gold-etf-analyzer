@@ -127,7 +127,7 @@ async def _backfill_news_categories() -> None:
     - 幂等：只处理 ``category IS NULL`` 行
     - 性能：~64378 行 / 500 batch ≈ 130 批 × ~50ms ≈ 6-10s
 
-    启动后 4h scheduler 抓新条目时（V0.106 6h→4h），``readhub_fetcher._normalize()``
+    启动后 4h scheduler 抓新条目时（V0.106 6h→4h），各源 fetcher 的 normalize
     会即时调 ``classify()`` 填入 category，**新条目不会留 NULL**。
     """
     try:
@@ -300,12 +300,24 @@ async def _start_daily_scheduler() -> None:
     except Exception as exc:
         logger.error("central bank scheduler failed to start: %s", exc)
 
-    # V0.102 ── 今日要闻 6h 刷新协程：每 6h 抓一次 readhub，启动后 30s 立即补一次
+    # V0.102 ── 今日要闻刷新协程；V0.106 由 6h 加密到 4h
     try:
-        from app.services.scheduler import news_feed_loop
+        from app.services.scheduler import (
+            NEWS_FEED_INTERVAL_HOURS,
+            news_feed_loop,
+        )
 
         _spawn_background(news_feed_loop())
-        logger.info("news feed scheduler started (every 6h: 00/06/12/18 UTC)")
+        # ⚠ 触发时刻从 NEWS_FEED_INTERVAL_HOURS **推导**而不是写死。
+        # 原来这里写的是「every 6h: 00/06/12/18 UTC」，而实际调度是 4h ——
+        # 一条与真实行为相反的日志：排障时照着它去等 06:00，永远等不到。
+        # 与 scheduler.news_feed_loop 的 hours_label 同一算法。
+        _hours = "/".join(f"{h:02d}" for h in range(0, 24, NEWS_FEED_INTERVAL_HOURS))
+        logger.info(
+            "news feed scheduler started (every %dh: %s UTC, 4 sources with failover)",
+            NEWS_FEED_INTERVAL_HOURS,
+            _hours,
+        )
     except Exception as exc:
         logger.error("news feed scheduler failed to start: %s", exc)
 
@@ -535,7 +547,7 @@ async def central_bank_page() -> RedirectResponse:
 
 @app.get("/headlines", include_in_schema=False)
 async def headlines_page() -> RedirectResponse:
-    """今日要闻页（V0.102）—— readhub 财经新闻流，每 6h 刷新。"""
+    """今日要闻页（V0.102）—— 多源财经快讯，每 4h 刷新（V0.106 起）。"""
     return RedirectResponse("/static/headlines.html")
 
 

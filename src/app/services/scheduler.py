@@ -546,7 +546,11 @@ async def news_feed_loop() -> None:
     if not _is_news_feed_auto_refresh_enabled():
         logger.info(
             "News feed auto-refresh DISABLED by env %s=0; "
-            "use 'python -m app.scripts.refresh_news_feed' to refresh manually.",
+            # ⚠ 原先提示 `python -m app.scripts.refresh_news_feed` —— 那个模块
+            # 从来不存在（src/app/scripts/ 下只有 import_central_bank.py）。
+            # 用户关掉自动刷新后照着这条提示敲命令，只会拿到一个 no module named。
+            # 改成指向真实存在的 admin 端点。
+            "call POST /api/v1/news-feed/refresh to refresh manually.",
             NEWS_FEED_AUTO_REFRESH_ENV,
         )
         return

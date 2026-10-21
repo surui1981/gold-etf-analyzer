@@ -1,9 +1,14 @@
-"""今日要闻业务服务：readhub 财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合 / V0.107.1 弃入「其他」/ V0.108.0 站点黑名单）
+"""今日要闻业务服务：多源财经新闻编排（V0.102 / V0.104 单日模式 / V0.107 按日聚合 / V0.107.1 弃入「其他」/ V0.108.0 站点黑名单 / V0.114.0 多源 failover）
 
 设计要点
 --------
 - 编排 fetcher + repository：``refresh()`` 走 抓 → 过滤 → upsert → 返回行数
 - 编排层不做业务计算（不在此处做实体抽取 / 关键词 / 情感）
+- V0.114.0：``fetch_readhub_feed`` 换成 ``fetch_news_feed``（4 源链式
+  failover：wallstcn ★ → jin10 → eastmoney → readhub，首个足量即止）。
+  本层**不**关心用了哪个源 —— 那是 fetcher 层的职责；但把 ``source`` 透传
+  到响应里，因为「failover 是否真在工作」必须能被观测，否则首选源长期挂掉
+  也没人知道
 - **保留末次** UX：抓取失败时仍返回当前 DB 状态（status + items），让 UI
   显示「数据时效 chip」+ amber 提示，**不**在用户可见路径抛 500
   （参考 V0.84.0 状态条合并模式 + V0.77.1 失败态不再伪装正常）
@@ -27,11 +32,8 @@ from typing import Any
 
 from app.models.news_feed import NewsFeedDaily
 from app.repositories.news_feed import NewsFeedRepository
-from app.repositories.readhub_fetcher import (
-    SITE_BLOCKLIST,
-    ReadhubFetchError,
-    fetch_readhub_feed,
-)
+from app.repositories.news_sources_fetcher import NewsSourceError, fetch_news_feed
+from app.repositories.readhub_fetcher import SITE_BLOCKLIST
 from app.schemas.news_feed import (
     NewsFeedDailyListOut,
     NewsFeedDailyOut,
@@ -82,7 +84,7 @@ def _to_daily_out(row: NewsFeedDaily) -> NewsFeedDailyOut:
 
 
 class NewsFeedService:
-    """readhub 财经新闻业务编排。"""
+    """多源财经新闻业务编排（V0.114.0 起走 4 源 failover）。"""
 
     def __init__(self, repo: NewsFeedRepository) -> None:
         self._repo = repo
@@ -90,24 +92,26 @@ class NewsFeedService:
     # ────────────── 写：refresh 入口 ──────────────
 
     async def refresh(self, *, force: bool = False) -> dict[str, Any]:
-        """拉一次 readhub 落库。
+        """走 4 源链式 failover 拉一次新闻落库。
 
         Args:
             force: True → 跳过 fetcher 5min cache，强制重抓
 
         Returns:
-            ``{ok: bool, upserted: int, error: str | None}``：UI 据此显示
-            成功提示或 amber chip；失败时 ``ok=False`` + ``error`` 文案
-            （不抛异常——保留末次数据）
+            ``{ok: bool, upserted: int, error: str | None, source: str | None}``：
+            UI 据此显示成功提示或 amber chip；失败时 ``ok=False`` + ``error``
+            文案（不抛异常——保留末次数据）。
+            ``source`` 是本次生效的源 key，**failover 是否真在工作要能被观测**。
         """
         try:
-            records = await fetch_readhub_feed(use_cache=not force)
-        except ReadhubFetchError as exc:
-            logger.warning("news feed refresh failed: %s", exc)
-            return {"ok": False, "upserted": 0, "error": str(exc)}
+            result = await fetch_news_feed(use_cache=not force)
+        except NewsSourceError as exc:
+            logger.warning("news feed refresh failed (all sources): %s", exc)
+            return {"ok": False, "upserted": 0, "error": str(exc), "source": None}
         except Exception as exc:  # 兜底：任何意外都不让 500 冒到 UI
             logger.error("news feed refresh unexpected error: %s", exc)
-            return {"ok": False, "upserted": 0, "error": f"unexpected: {exc}"}
+            return {"ok": False, "upserted": 0, "error": f"unexpected: {exc}", "source": None}
+        records = result.items
 
         # V0.107.1：service 二次拦截「其他」——defense-in-depth（fetcher 层
         # _normalize 已弃入；本层在 fetcher 改动漏改时仍能拦住）
@@ -129,21 +133,29 @@ class NewsFeedService:
             )
 
         if not records:
-            # readhub 返回空 或 全部被弃入「其他」→ 当作软失败
+            # 源返回空 或 全部被弃入「其他」→ 当作软失败
             return {
                 "ok": False,
                 "upserted": 0,
                 "error": "no valid items after category filter",
+                "source": result.source,
             }
 
         try:
             n = await self._repo.upsert_bulk(list(records))
         except Exception as exc:
             logger.error("news feed upsert failed: %s", exc)
-            return {"ok": False, "upserted": 0, "error": f"upsert: {exc}"}
+            return {
+                "ok": False,
+                "upserted": 0,
+                "error": f"upsert: {exc}",
+                "source": result.source,
+            }
 
-        logger.info("news feed refresh OK: upserted=%d", n)
-        return {"ok": True, "upserted": int(n), "error": None}
+        logger.info(
+            "news feed refresh OK: upserted=%d from source=%s", n, result.source
+        )
+        return {"ok": True, "upserted": int(n), "error": None, "source": result.source}
 
     # ────────────── 读：list 入口 ──────────────
 

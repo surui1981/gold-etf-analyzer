@@ -148,6 +148,7 @@ async def refresh(
         ok=result["ok"],
         upserted=result["upserted"],
         error=result["error"],
+        source=result.get("source"),
     )
 
 
