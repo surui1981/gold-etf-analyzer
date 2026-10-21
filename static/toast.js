@@ -181,11 +181,32 @@
     }
   });
 
+  // show(msg, type)：全站 14 处调用方用的就是这个签名（含 favorites.js /
+  // report-archive.js 的 guard `window.PM_Toast && window.PM_Toast.show`）。
+  // V0.114.0 之前这里**没有导出** show → 两类坏法：
+  //   · headlines.js / home.js 只 guard `window.PM_Toast`，对象存在但 .show 是
+  //     undefined → 抛 TypeError，会连带中断后面的语句（收藏成功了却没提示）
+  //   · favorites.js / report-archive.js guard 到 .show，为 falsy → 整个 toast
+  //     静默不弹，用户点了收藏完全没有反馈
+  // 两类都是「点了收藏没反应」。这里补一个派发器一次性修好 14 处调用方。
+  const _LEVEL_ALIAS = { error: "err", danger: "err", warning: "warn", ok: "success" };
   window.PM_Toast = {
     info: function (msg, opts) { return show("info", msg, opts); },
     success: function (msg, opts) { return show("success", msg, opts); },
     warn: function (msg, opts) { return show("warn", msg, opts); },
     err: function (msg, opts) { return show("err", msg, opts); },
+    // 第二参既接受 level 字符串（info/success/warn/err，或调用方习惯的
+    // error/warning…），也接受 opts 对象（与 info/success 同签名）；
+    // 未知值退回 info，绝不抛错
+    show: function (msg, type, opts) {
+      if (type !== null && typeof type === "object") {
+        return show("info", msg, type);
+      }
+      const raw = typeof type === "string" ? type.toLowerCase() : "info";
+      const level = _LEVEL_ALIAS[raw] || raw;
+      const known = ["info", "success", "warn", "err"].indexOf(level) !== -1;
+      return show(known ? level : "info", msg, opts);
+    },
     dismiss: dismiss,
     clear: clear,
   };
