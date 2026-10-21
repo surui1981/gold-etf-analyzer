@@ -42,7 +42,7 @@
   //  - path: 顶 nav 点击时跳的 URL（场景默认页）
   //  - ico / i18n / fb: 顶 nav 显示
   //  - subpages: 子页数组（activeFor 按 pathname 匹配）
-  // 顶项无 subpages 的（首页 / 今日要闻 / AI / 健康）：path 是入口，subnav-mount 不渲染
+  // 顶项无 subpages 的（首页 / 今日要闻 / 报告存档 / AI）：path 是入口，subnav-mount 不渲染
   var SCENES = [
     {
       key: "home", path: "/home", activeFor: ["/home", "/static/home.html"],
@@ -96,17 +96,18 @@
       subpages: [
         { path: "/weights",              ico: "⚖️", i18n: "nav.weights",  fb: "权重配置", activeFor: ["/weights", "/static/weights.html"] },
         { path: "/static/settings.html", ico: "🔔", i18n: "nav.settings", fb: "通知中心", activeFor: ["/static/settings.html"] },
+        // V0.111.1：数据健康由顶级场景降为配置的第 3 个子页。它是运维诊断页、
+        // 不是内容门类，腾出的顶项位让 nav 回到 8 个真门类。
+        // 用 /data-health 别名（与 health-summary.js 的 chip 一致）而不是静态路径；
+        // activeFor 两个都列 —— 别名会 307 落到 /static/data-health.html，
+        // 直接输静态路径书签进来时也得高亮同一个场景。
+        { path: "/data-health", ico: "🩺", i18n: "nav.health", fb: "数据健康", activeFor: ["/data-health", "/static/data-health.html"] },
       ],
     },
     {
       key: "ai", path: "/ask",
       activeFor: ["/ask", "/static/ask.html"],
       ico: "🤖", i18n: "nav.ask", fb: "AI 智能分析",
-    },
-    {
-      key: "health", path: "/static/data-health.html",
-      activeFor: ["/static/data-health.html"],
-      ico: "🩺", i18n: "nav.health", fb: "数据健康",
     },
   ];
 

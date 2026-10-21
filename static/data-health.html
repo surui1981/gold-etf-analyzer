@@ -164,6 +164,11 @@
 <div class="wrap">
   <!-- V0.83.2 · 共享顶 nav（topnav.js 同步注入，roadmap §4.1 M）：brand + 11 链接 + 时效/警示 meta -->
   <div id="topnav-mount"></div>
+  <!-- V0.111.1 · 数据健康降为「配置」的第 3 个子页后补挂 subnav ——
+       本页原先是独立顶级场景，不渲染二级导航行；降级后必须与其余子页一致，
+       否则进本页顶 nav 只高亮「配置」却看不到自己在这组子页里的位置。
+       .subnav 样式由 theme.css 提供（本页已引），无需内联复制。 -->
+  <div id="subnav-mount"></div>
   <script src="/static/topnav.js"></script>
 
   <!-- V0.85.0 · 数据时效迁移到 /data-health.html（summary = 4-chip 健康摘要）+ 警示 pill

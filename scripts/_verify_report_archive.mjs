@@ -56,6 +56,11 @@ const browser = await puppeteer.launch({
 });
 
 const page = await browser.newPage();
+// ⚠ 必须给一个够大的视口。puppeteer 默认 800x600，顶 nav 在窄宽下会折行成多行、
+//   撑高后的 sticky 层（z-index 100）正好盖住上传按钮 —— page.click() 于是把点击
+//   派发给了顶栏的 pmThemeBtn，脚本表现为「点了没反应 / 上传超时」。
+//   1280x720 / 1352x900 实测正常，这也是真实用户的使用尺寸。
+await page.setViewport({ width: 1352, height: 900 });
 const consoleErrors = [];
 const badResponses = [];
 page.on("console", (m) => {
@@ -79,6 +84,8 @@ const cards = await page.$$eval(".home-scene", (els) =>
     title: (e.querySelector(".scene-title") || {}).textContent || "",
   }))
 );
+// V0.111.1 定稿：首页 8 张板块。数据健康归到「配置」子页但仍保留自己的首页卡，
+// 所以首页卡数（8）与顶 nav 场景数（8）相等，却不是一一对应。
 ok("首页 8 张场景卡", cards.length === 8, `实际 ${cards.length}`);
 const archiveCard = cards.find((c) => c.href === "/report-archive");
 ok("存在 scene-archive 卡", !!archiveCard);
@@ -96,7 +103,8 @@ const navAll = await page.$$eval(".topnav a, .topnav-item", (els) =>
   }))
 );
 const navItems = navAll.filter((n) => !n.cls.includes("brand"));
-ok("顶 nav 9 个场景项", navItems.length === 9, `实际 ${navItems.length}（含 brand 共 ${navAll.length}）`);
+// V0.111.1：数据健康降为「配置」子页后，顶 nav 由 9 项回到 8 项
+ok("顶 nav 8 个场景项", navItems.length === 8, `实际 ${navItems.length}（含 brand 共 ${navAll.length}）`);
 const navArchive = navItems.find((n) => (n.href || "").includes("report-archive"));
 ok("nav 含报告存档", !!navArchive);
 // 文案含 emoji 前缀（📁），所以用 includes 而不是等值
