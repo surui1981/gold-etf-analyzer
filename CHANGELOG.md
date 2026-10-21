@@ -4,6 +4,89 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.113.0] · 2026-10-22
+
+`移动端可用性` — UI + 门禁 · 无后端改动 · 详见 [v0.113.0.md](docs/releases/v0.113.0.md)
+
+> 本项目第一次**在 390px 真实视口下逐页实测**。此前所有「响应式」都是桌面浏览器
+> 缩窄窗口看出来的，没量过触控手指够不够得着。三类缺陷，而且**全都不报错**。
+
+- 📱 **横向溢出 18/18 页归零**（此前 4 页表格溢出：`/scoring` **221px**、
+  `/report` 175px、`/silver` 123px、`/central_bank` 71px；另 6 页因引导提示框硬编码
+  宽度各多 11px）
+  - 🧱 `.table-scroll`（`overflow-x:auto` + `overscroll-behavior-x:contain`）
+    基元进 `theme.css`，**11 张宽表**套用：`scoring.js` 3 / `report.js` 5 /
+    `silver.js` 1 / `silver.html` 1 / `central_bank.html` 1
+  - ♿ 每处带 `tabindex="0"` + `role="region"` + `aria-label`（WCAG 2.1.1
+    键盘可滚动）。**CSS 做不到，只能写在标记里**
+  - 🌍 `aria-label` **复用小节标题已有的 i18n key**，静态页用 `data-i18n-aria`
+    跟着语言翻 ⇒ **本轮新增 0 个 i18n key**
+  - ⚠️ 基元**刻意不加** `min-width: max-content`：落地前写过带它的草案，验证时
+    发现含长文本的表格在**桌面端**也被拖出滚动条才删掉
+
+- 👆 **44px 触摸目标（WCAG 2.5.5 / Apple HIG 44pt），18/18 页归零**
+  （此前 `/headlines` 单页 115 个，其余页零星 1–30 个）
+  - 📐 `@media (max-width: 640px), (pointer: coarse)` 取**或** —— 平板横屏不窄
+    但一定触摸，手机竖屏很窄但可能接鼠标，只认一个都会漏
+  - 🚫 **刻意不放大**正文段落流里的文字链（`/headlines` 有 23 个，撑到 44px 会把
+    排版撕碎）与 checkbox/radio 方块本体（触摸区域是包它的 `<label>`）
+  - ⚠️ **`responsive.css` 的 40px 会压回 44px** —— 它在各页内联 `<style>` **之后**
+    加载、同特异性胜出。光改 `theme.css` 的话全站 20 个按钮仍卡在 40px
+
+- ⌨️ **聚焦被 sticky 顶栏遮挡 17 处 → 0**
+  - 🐛 **17 处里 16 处是同一个 bug**：关闭的命令面板只有 `opacity:0`，而
+    **`opacity:0` 的元素仍在 tab 序列里**（WCAG 2.4.3 / 2.4.7）。键盘用户进页面
+    第一个 Tab 到的就是这个看不见的搜索框，且正好落在顶栏底下 ⇒ 看着像「点不动」。
+    18 页里 16 页中招。**只影响键盘用户，鼠标用户完全无感** ⇒ 一直没人发现
+  - 💡 关闭态改 `visibility: hidden`（参与 transition，淡出结束后才真正移出 tab
+    序列），打开态 `visible`
+  - 🎯 `scroll-padding-top`（浏览器滚动对齐预留）跟随顶栏**实测**高度，挂
+    `resize` + `ResizeObserver` + `document.fonts.ready` + `i18n:change`
+
+- 🐛 **顺手修 3 个既存缺陷**（验证时撞见的，都属 V0.77.1「静默展示错误内容」）
+  - **`/report` + `/reset-password` 漏引 i18n 字典文件 ⇒ 整页渲染成 key 字面量**
+    （21 + 11 处）。根因 `i18n.js:46`：非默认语言会动态插 `<script>` 取字典，
+    **唯独默认语言 zh-CN 走 `syncLoadDefault()`**，只读 `window.PM_I18N_ZH_CN`，
+    不自己去取 ⇒ **漏引没有任何机制会报错**
+  - **`/report` 每访问一次吃一个 favicon 404**（单独引 `favicon.svg`，而该文件
+    从来不存在；全站仅此一页引，图标已由 manifest.json 承担）
+  - **`help.js` 提示框硬编码 320px 宽度** —— 窄屏媒体查询已改成
+    `calc(100vw - 24px)`，拿桌面的 320 钳位 ⇒ 6 页各多 11px 横向溢出
+
+- 🚪 **门禁 7 道全绿**，`check_cluster_render` **461 passed / 0 failed**（+28 断言）
+  - 🎯 三个新基元都是**静默失效**型（写坏了不报错、DevTools 不显形），必须钉住：
+    `.table-scroll` 4 条 / 44px 规则 7 条 / `responsive.css` 同步 2 条 /
+    命令面板 `visibility` 2 条 / `topnav` `scroll-padding-top` 2 条 /
+    11 张表源码契约 11 条
+  - ⚠️ **本轮踩到的最大的坑**：44px 规则为了排版折成两行，换行 + 缩进被 CSS
+    解析成**后代组合器**（匹配「input 里的 input」）⇒ 输入框实测停在 27–35px，
+    而 `min-height: 44px` 就在文件里、`.matches()` 全绿 —— **就是没生效**。
+    所以门禁那条核心断言查的不是「文件里有没有 `min-height: 44px`」（查不出死
+    规则），而是「**选择器有没有被折成后代组合器**」
+  - ⚠️ **门禁自己也踩了同一个坑**：第一版扫 `.pm-cmd` 规则里的 `visibility: hidden`，
+    反向验证时**把真声明删掉门禁依然全绿** —— 因为该规则上方解释「为什么需要它」的
+    ⚠ 注释里就写着 `visibility:hidden` 字样。改成**只扫字符串字面量**。这与
+    `check_static_js` 里的「注释里的 `<script>` 字面量让正则吞掉真脚本」同类：
+    **注释里的「代码样文字」不能当代码**
+  - ✅ `check_i18n_keys` 新增字典文件加载检查（20 页）
+  - ✅ `check_static_js` 在 `node --check` 前**先剥 HTML 注释**（注释里的
+    `<script>` 字面量会让非贪婪 `.*?</script>` 吞到下一个真 `</script>`，
+    报出的语法错误指向真实代码之外的行）
+  - 🧪 **反向验证 9 个注入缺陷，9 条各自变红**。只看退出码会把崩溃当通过，所以
+    每条都要求红在**指定那条**断言上；其中 1 条第一版红在别处（同块里
+    `input[type=range]` 也带 44px，把「块内存在 44px 规则」顶住了）⇒ 断言改成
+    判「input 规则**确实**带 44px（选择器与声明同属一条规则）」
+
+- ✅ **新增 `scripts/_verify_mobile.mjs`（33 断言，18 页 × 390px 实跑）：全绿**
+  逐页横向溢出 + 触摸目标 + 聚焦遮挡（合并在一次 `page.evaluate` 里）· 滚动容器
+  真能滚 / `tabindex` / `role` / 无障碍名**不是 i18n key 字面量** · 11 张表源码契约 ·
+  三语下 `aria-label` 跟着翻 · 关闭面板不可聚焦**且打开时仍然可见可聚焦**（别把功能
+  改没了）· `scroll-padding-top == 顶栏实测高度`
+- ✅ **回归全绿**：`_verify_cmd_palette` 30 · `_verify_nav_8` 26 ·
+  `_verify_report_archive` 43（本轮动了 `topnav.js` / `command-palette.js` /
+  `theme.css` / `responsive.css`，回归面不算小）
+- 🔢 版本号 4 处同步 0.113.0（`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`）
+
 ## [V0.112.0] · 2026-10-21
 
 `命令面板修好` — UI + 门禁修复 · 无后端改动

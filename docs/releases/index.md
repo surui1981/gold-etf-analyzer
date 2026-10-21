@@ -96,6 +96,7 @@
 |------|----------|------|
 | 数据时效透明（freshness 角标 + 健康度） | V0.52.0 | [CHANGELOG](../../CHANGELOG.md) |
 | 响应式 + 移动端适配（768 / 480 / 360 三档） | V0.53.0 | [CHANGELOG](../../CHANGELOG.md) |
+| **窄屏可用性实测基线**（表格横向滚动容器 + 44px 触摸目标 + 聚焦不被顶栏遮挡） | **V0.113.0** | [v0.113.0.md](v0.113.0.md) |
 | 操作闭环防错（二次确认 + 软删除 + 撤销） | V0.55.0 | [CHANGELOG](../../CHANGELOG.md) |
 | 主动提醒（浏览器通知 + 提醒条） | V0.56.0 | [CHANGELOG](../../CHANGELOG.md) |
 | 新手引导与帮助体系（tour + glossary + 15 项 inline tooltip） | V0.58.0 | [CHANGELOG](../../CHANGELOG.md) |
