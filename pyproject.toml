@@ -37,6 +37,11 @@ dependencies = [
     # 但「代码直接 import 的包」必须显式声明 —— 由 scripts/check_deps.py 机械校验。
     # 不锁上界：实际版本交由 fastapi 的约束决定（当前解析为 starlette 1.6.0）。
     "starlette>=1.0",
+    # V0.111.0：报告存档上传。FastAPI 遇到 UploadFile / Form(...) 参数时**按需**
+    # import python-multipart，缺了不是启动期报错而是**该端点请求时 500**
+    # （RuntimeError: Form data requires "python-multipart" to be installed）。
+    # 所以它属于运行时依赖，不能放 dev extra。
+    "python-multipart>=0.0.20",
 ]
 
 [project.optional-dependencies]

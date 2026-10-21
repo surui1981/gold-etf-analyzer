@@ -12,6 +12,7 @@ from app.models import (  # noqa: F401
     news,
     position,
     push,
+    reports,  # V0.111.0 报告存档（HTML 上传 + 元数据登记表）
     review,
     scoring_wide,
     settings,
