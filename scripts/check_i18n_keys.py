@@ -69,6 +69,8 @@ V083_KEY_PREFIXES = (
     "headlines.",
     # V0.103：我的收藏（favorites.* 全 3 语覆盖，47 键 + nav.favorites + brand.favorites）
     "favorites.",
+    # V0.111.0：报告存档（reports.* 全 3 语覆盖，49 键 + nav.archive + brand.archive）
+    "reports.",
 )
 
 
