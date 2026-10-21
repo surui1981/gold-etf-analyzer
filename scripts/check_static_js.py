@@ -90,8 +90,24 @@ def _find_node() -> str | None:
     return sorted(candidates)[-1] if candidates else None
 
 
+HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+
+
 def _inline_scripts(html: str) -> list[str]:
-    return [b for b in SCRIPT_RE.findall(html) if b.strip()]
+    """提取内联脚本。**先剥 HTML 注释**再匹配 SCRIPT_RE。
+
+    不剥的话，注释里只要出现字面量 ``<script>``（写注释说明「缺了这个标签」
+    时太自然了），SCRIPT_RE 的非贪婪 ``.*?</script>`` 就会从那个假标签一路
+    吞到下一个真 ``</script>`` —— 把注释正文 + 真脚本的起始标签当成一段
+    内联脚本去 node --check，于是报出「语法错误 + 调用了未定义的函数」，
+    两处都指向真实代码之外的行，排查成本极高（V0.113.0 修 report.html 的
+    i18n 注释时被它咬了一次）。
+
+    代价：脚本体内的 ``<!--`` 也会被剥掉。JS 里的 ``<!--`` 是远古 HTML 注释
+    写法，本仓 0 处，且 check_static_js 本身要求 ES6 风格，实际风险为零；
+    已在提交时用上面的扫描确认过全仓命中数为 0。
+    """
+    return [b for b in SCRIPT_RE.findall(HTML_COMMENT_RE.sub("", html)) if b.strip()]
 
 
 def _shared_js_ids() -> set[str]:

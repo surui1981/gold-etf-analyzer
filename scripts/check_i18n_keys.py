@@ -173,6 +173,36 @@ def report_missing(missing: dict[str, list[str]], usage: dict[str, set[str]], ti
     return fail
 
 
+def check_dict_loaded() -> int:
+    """有 data-i18n 的页必须引字典文件，否则整页渲染成 key 字面量。
+
+    这不是「key 缺失」类的问题 —— key 在 3 语字典里全都有，门禁原本一路绿灯，
+    而 /report 的正文当时直接显示着 `report.section_positions`。
+    根因在 i18n.js:46：非默认语言会动态插 <script>，**唯独默认语言 zh-CN 走
+    syncLoadDefault()**，只读 window.PM_I18N_ZH_CN，不自己去取字典文件。
+    所以漏引字典文件这件事没有任何机制会报错，只能静态扫。
+    """
+    print("\n" + "-" * 70)
+    print("字典文件加载检查（有 data-i18n 的页必须引 /static/i18n/zh-CN.js）")
+    fail = 0
+    scanned = 0
+    for name in sorted(os.listdir(STATIC_DIR)):
+        if not name.endswith(".html"):
+            continue
+        path = os.path.join(STATIC_DIR, name)
+        with open(path, encoding="utf-8") as f:
+            src = f.read()
+        if "data-i18n" not in src:
+            continue
+        scanned += 1
+        if "/static/i18n/zh-CN.js" not in src:
+            print(f"  [FAIL] {name} 用了 data-i18n 但没引字典文件 → 整页会渲染成 key 字面量")
+            fail += 1
+    if not fail:
+        print(f"  [OK]   {scanned} 个带 data-i18n 的页全部引了字典文件")
+    return fail
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--all", action="store_true", help="扫描全部 HTML key（仅报告，不失败）")
@@ -209,6 +239,9 @@ def main() -> int:
                 missing[lang].append(k)
 
     fail = report_missing(missing, usage, f"{scope_label} key 3 语覆盖")
+
+    # 1b) 字典文件是否真的被页面加载（V0.113.0 新增）
+    fail += check_dict_loaded()
 
     # 2) --all 模式额外报告 V0.83 namespace 之外的 gap（不失败）
     if args.all:

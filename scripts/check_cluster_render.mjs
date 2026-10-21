@@ -1159,6 +1159,160 @@ await Promise.all(pending);
      /60000.*120000.*300000.*600000/s.test(hsSrc));
 }
 
+// ══════════════════════════════════════════════════════════════════════════
+// V0.113.0 · 移动端可用性基元（表格滚动容器 + 44px 触摸目标 + 聚焦不被顶栏遮挡）
+//
+// 这三样都属于「**静默失效**」型基元 —— 写坏了不报错、不抛异常、语法完全正确，
+// 只是在窄屏上「看着还行但很难用」：
+//   · .table-scroll 被删 ⇒ 表格照样渲染，只是整页横溢出（/scoring 曾溢出 221px）
+//   · 44px 规则折行 ⇒ 选择器里的换行被解析成**后代组合器**，规则永不命中，
+//     而且不报错、不在 DevTools 里显形。本轮真踩过：输入框实测停在 27-35px，
+//     而 `min-height: 44px` 这串字符就在文件里 —— 所以下面那条断言查的是
+//     「规则**活着**吗」，不是「字符串里有 44px 吗」。
+//   · scroll-padding-top 缺失 ⇒ 浏览器滚动对齐不知道上面压着 sticky 顶栏，
+//     Tab 会把焦点送到顶栏底下，看着像「点不动」。
+// 静态门禁（check_static_js）查不出这三类，所以钉在这里。
+// ══════════════════════════════════════════════════════════════════════════
+{
+  console.log("\n[V0.113.0] 移动端可用性基元（table-scroll / 44px / scroll-padding-top）");
+  const theme = read("theme.css");
+  const responsive = read("responsive.css");
+  const palette = read("command-palette.js");
+  const topnav = read("topnav.js");
+
+  // ── A. .table-scroll 基元（theme.css）──
+  // 注意 indexOf 找的是 ".table-scroll {"（带花括号）：上方用法注释里
+  // 写的是 <div class="table-scroll">，不带 `{`，不会误命中。
+  const tsAt = theme.indexOf(".table-scroll {");
+  const tsBody = tsAt < 0 ? ""
+    : theme.slice(theme.indexOf("{", tsAt) + 1, theme.indexOf("}", tsAt));
+  ok("theme.css :: .table-scroll 基元存在", tsAt >= 0);
+  ok("theme.css :: .table-scroll overflow-x: auto（横向滚动容器）",
+     !!tsBody && /overflow-x:\s*auto/.test(tsBody));
+  ok("theme.css :: .table-scroll overscroll-behavior-x: contain（横向拖到头不连带整页回弹）",
+     !!tsBody && /overscroll-behavior-x:\s*contain/.test(tsBody));
+  // 故意不加 min-width / min-width:max-content：加了会让含长文本的表格在桌面端
+  // 也横向溢出（V0.113.0 落地前先写过一版，验证时发现桌面 1352px 也被拖出滚动条才删掉）。
+  ok("theme.css :: .table-scroll 不设 min-width（加了会让长文表格在桌面端也溢出）",
+     !!tsBody && !/min-width/.test(tsBody));
+
+  // ── B. 44px 触摸目标：关键是断言**规则活着**，不是断言字符串里有 44px ──
+  // 触发条件取「或」：窄视口 **或** 触摸输入 —— 平板横屏不窄但一定是触摸，反之亦然。
+  const MQ = "@media (max-width: 640px), (pointer: coarse) {";
+  const mqAt = theme.indexOf(MQ);
+  const mqRaw = mqAt < 0 ? "" : theme.slice(mqAt + MQ.length, theme.indexOf("\n}", mqAt));
+  ok('theme.css :: 44px 规则挂在「(max-width:640px), (pointer:coarse)」媒体查询下',
+     mqAt >= 0);
+  // ⚠ 必须**先剥注释**再找规则：本文件那条 ⚠ 注释里就写着 `min-height: 44px` 字样，
+  //   直接 indexOf 会命中注释里的那处，于是 lastIndexOf("{") 一路退到媒体查询自己
+  //   的花括号（在块外，index=-1），切出来的「选择器」其实是整段块 —— 断言照样
+  //   跑，只是判的东西完全不是它声称要判的那个。
+  const mqBody = mqRaw.replace(/\/\*[\s\S]*?\*\//g, "");
+
+  // 定位声明 min-height: 44px 的那条规则（mqBody 内第一个 {…min-height…}）
+  const t44 = mqBody.indexOf("min-height: 44px");
+  const t44Open = t44 < 0 ? -1 : mqBody.lastIndexOf("{", t44);
+  const t44Close = t44 < 0 ? -1 : mqBody.indexOf("}", t44);
+  // 选择器原文 = 上一条规则（上一个 }）之后、本规则 { 之前 —— 声明在 { **后面**，
+  // 从 { 起切只会切到 `min-height: 44px;` 那几行，判的就不是选择器了。
+  const sel44 = t44 < 0 ? "" : mqBody.slice(mqBody.lastIndexOf("}", t44Open) + 1, t44Open);
+  // ⚠ 断言要落在 **input 那条规则**上，不能写成「媒体查询块内存在 min-height: 44px」——
+  //   同块里还有 input[type=range] / label:has() 两条也带 44px，删掉 input 规则后
+  //   它照样满足（反向验证第 3 项实测）。判「选择器与声明同属一条规则」才判得准。
+  ok("theme.css :: input 规则确实带 min-height: 44px（选择器与声明同属一条规则）",
+     /input:not\(\[type="hidden"\]\)[^{}]*\{\s*min-height:\s*44px;/.test(mqBody));
+
+  // ⚠ 核心断言：选择器里若出现「不是逗号后面」的换行，CSS 会把它读成**后代组合器**。
+  //   `input:not(a):not(b)` 折成两行 → 匹配「input 里的 input」→ 永不命中，且零报错。
+  //   （合法的选择器换行必须跟在 , 之后，否则同理失效。）
+  const hasDescendantCombinator = /[^,\s][ \t]*\n[ \t]*\S/.test(sel44);
+  ok('theme.css :: 44px 规则的选择器**没有被折成后代组合器**（折行 = 规则永不命中且不报错）',
+     !hasDescendantCombinator,
+     hasDescendantCombinator ? "选择器里有非逗号处的换行：" + JSON.stringify(sel44.slice(0, 200)) : "");
+  ok('theme.css :: input 复合选择器 5 个 :not() 完整相邻（hidden/checkbox/radio/file/color）',
+     /input:not\(\[type="hidden"\]\):not\(\[type="checkbox"\]\):not\(\[type="radio"\]\):not\(\[type="file"\]\):not\(\[type="color"\]\)/.test(sel44));
+
+  // min-height 对 inline 盒子无效 —— role=button 的 span/a 必须先转 inline-flex 才吃得到
+  ok('theme.css :: span/a[role=button] 转 inline-flex（min-height 对 inline 盒子无效）',
+     /span\[role="button"\],\s*a\[role="button"\]\s*\{[^}]*display:\s*inline-flex/.test(mqBody));
+  // range：news.html 把轨道压成 height:8px，min-height 优先级高于 height ⇒ 44px 可点区
+  ok("theme.css :: input[type=range] 也有 44px（min-height 压过 height:8px 的轨道）",
+     /input\[type="range"\]\s*\{\s*min-height:\s*44px/.test(mqBody));
+  // checkbox/radio 本体不放大，放大包它的 label —— 触摸区域是 label
+  ok("theme.css :: checkbox/radio 的触摸区域放在包裹 label 上（label:has）",
+     /label:has\(>\s*input\[type="checkbox"\][^)]*\)[\s\S]*?min-height:\s*44px/.test(mqBody));
+
+  // ── C. responsive.css 必须与 theme.css 对齐 ──
+  // 本文件在各页内联 <style> **之后**加载，同特异性下胜出 —— 它写 40px 的话，
+  // theme.css 那条 44px 会被压回去（全站实测 20 个按钮卡在 40px）。
+  ok("responsive.css :: 按钮基线已与 theme.css 对齐为 44px",
+     /button,\s*\.btn-save,\s*\.btn-reset,\s*\.chip,\s*\.cl-btn\s*\{\s*min-height:\s*44px;/.test(responsive));
+  ok("responsive.css :: 不再有 min-height: 40px 触摸基线（会压回 theme.css 的 44px）",
+     !/min-height:\s*40px/.test(responsive));
+
+  // ── D. 命令面板关闭后必须移出 tab 序列 ──
+  // opacity:0 的元素**仍在 tab 序列里**：键盘用户进页面第一个 Tab 到的就是这个
+  // 看不见的搜索框，且正好落在 sticky 顶栏底下，看着像「点不动」（WCAG 2.4.3 / 2.4.7）。
+  // 实测 18 页里 16 页中招。
+  //
+  // ⚠ 只看**字符串字面量**（真正发到浏览器的那部分 CSS），不能直接扫源码：
+  //   上面那段解释为什么需要 visibility 的 ⚠ 注释里就写着 `visibility:hidden`，
+  //   直接正则扫会把注释当声明 —— 删掉真声明后门禁照样全绿（反向验证第 6 项实测）。
+  //   这跟 V0.113.0 在 check_static_js 里踩的注释吞脚本是同一类坑：注释里的
+  //   「代码样文字」不能当代码。
+  const cssLiterals = (src, startMark, endMark) =>
+    (sliceBetween(src, startMark, endMark).match(/'([^']*)'/g) || []).join("\n");
+  const pmClosed = cssLiterals(palette, "'.pm-cmd {',", "'}'");
+  const pmOpenRule = cssLiterals(palette, "'body.pm-cmd-open .pm-cmd {", "'}'");
+  ok("command-palette.js :: .pm-cmd 关闭态 visibility: hidden",
+     palette.includes("'.pm-cmd {',") && /visibility:\s*hidden/.test(pmClosed));
+  ok("command-palette.js :: body.pm-cmd-open 时 visibility: visible（别把功能改没了）",
+     /visibility:\s*visible/.test(pmOpenRule));
+
+  // ── E. scroll-padding-top 跟随顶栏实测高度 ──
+  ok("topnav.js :: syncScrollPadding 按顶栏**实测**高度写 scroll-padding-top",
+     /function syncScrollPadding\(\)[\s\S]*?getBoundingClientRect\(\)\.height/.test(topnav) &&
+     /documentElement\.style\.scrollPaddingTop\s*=\s*h\s*\+\s*"px"/.test(topnav));
+  // 顶栏高度会变（字体加载 / i18n 切换 / 子页挂载），一次性硬编码跟不住
+  ok("topnav.js :: scroll-padding-top 跟随顶栏高度变化（resize + ResizeObserver）",
+     /addEventListener\("resize", syncScrollPadding\)/.test(topnav) &&
+     /new ResizeObserver\(syncScrollPadding\)/.test(topnav));
+
+  // ── F. 11 张宽表的源码契约（与数据无关）──
+  // 为什么不在这里数 DOM：其中 9 张表是 JS 在**数据到达后**才渲染的（升贴水表在
+  // 报价未就绪时根本不建；report 5 段各自有 show(sec) 门控），按数据计数会把
+  // 「数据没到」误报成「包裹漏了」。DOM 侧的数量交给 _verify_mobile.mjs。
+  const WRAP_CONTRACT = {
+    "scoring.js": 3,
+    "report.js": 5,
+    "silver.js": 1,
+    "silver.html": 1,
+    "central_bank.html": 1,
+  };
+  let wrapTotal = 0;
+  for (const [file, want] of Object.entries(WRAP_CONTRACT)) {
+    // 先去掉整行注释再数，否则「// ……见 .table-scroll」这种说明会被算进去
+    const code = read(file).split("\n").filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join("\n");
+    const got = (code.match(/class="table-scroll"/g) || []).length;
+    wrapTotal += got;
+    ok(`${file} :: ${want} 张宽表全部有 .table-scroll 包裹`, got === want, `actual=${got}`);
+
+    // 无障碍三件套 CSS 做不到，只能写在标记里 —— 每处开标签逐一查
+    const missing = [];
+    let at = -1;
+    while ((at = code.indexOf('class="table-scroll"', at + 1)) >= 0) {
+      const tag = code.slice(code.lastIndexOf("<", at), code.indexOf(">", at));
+      if (!/tabindex="0"/.test(tag)) missing.push("缺 tabindex=0");
+      if (!/role="region"/.test(tag)) missing.push("缺 role=region");
+      // 静态页用 data-i18n-aria 让标签跟着语言翻；JS 模板用 aria-label 直写
+      if (!/(aria-label|data-i18n-aria)=/.test(tag)) missing.push("缺 aria-label");
+    }
+    ok(`${file} :: 每个滚动容器都带 tabindex/role/aria-label`, missing.length === 0, missing.join("; "));
+  }
+  ok("11 张宽表全部有横向滚动容器（此前 /scoring 整页横溢出 221px）",
+     wrapTotal === 11, `actual=${wrapTotal}`);
+}
+
 console.log("\n" + "=".repeat(70));
 console.log(`结果：${pass} passed / ${fail} failed`);
 console.log("=".repeat(70));
