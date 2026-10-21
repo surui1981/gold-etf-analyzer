@@ -292,6 +292,38 @@
     }
   }
 
+  // ────────────── V0.113.0 · scroll-padding-top 跟随顶栏实测高度 ──────────────
+  //
+  // 顶栏是 sticky，窄屏下高 118–328px（V0.113.0 的 44px 触摸规则又把它撑高了）。
+  // 浏览器把聚焦元素「滚进视野」时是按视口边缘算的，不知道上面压着一个 sticky 层，
+  // 于是键盘 Tab / 锚点跳转会把目标送到顶栏底下 —— 实测 portfolio 的「提醒」按钮
+  // 和 report-archive 的搜索框聚焦后中心 y 落在顶栏内，点不到也看不见焦点。
+  //
+  // scroll-padding-top 就是浏览器滚动对齐时要预留的边距（与 scroll-margin 同理，
+  // 但只写一处、不必给每个可聚焦元素挂类）。高度必须**实测**：写死一个数会在
+  // 断点切换、字体缩放、触摸规则生效与否之间失配。
+  function syncScrollPadding() {
+    var nav = document.querySelector(".topnav");
+    if (!nav) return;
+    var h = Math.ceil(nav.getBoundingClientRect().height);
+    if (!h) return;
+    document.documentElement.style.scrollPaddingTop = h + "px";
+  }
+  syncScrollPadding();
+  window.addEventListener("resize", syncScrollPadding);
+  // 顶栏自身高度会因字体加载 / i18n 切换 / 子页挂载而变，ResizeObserver 才跟得住
+  if (window.ResizeObserver) {
+    var ro = new ResizeObserver(syncScrollPadding);
+    var navEl = document.querySelector(".topnav");
+    if (navEl) ro.observe(navEl);
+  }
+  // 字体晚到会改变顶栏高度；document.fonts.ready 之后再对一次
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(syncScrollPadding);
+  }
+  // i18n 切换会重写顶栏文案，长度变了高度就变了
+  document.addEventListener("i18n:change", syncScrollPadding);
+
   // ────────────── 事件委托：导出按钮 + 命令面板按钮 ──────────────
 
   document.addEventListener("click", function (e) {

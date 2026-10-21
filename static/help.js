@@ -469,9 +469,16 @@
   }
 
   function positionTip(tip, spot, rect, pos) {
-    const tipW = 320;
-    const tipH = tip.offsetHeight || 120;
+    // ⚠ V0.113.0：宽度必须**实测**，不能硬编码 320。help.css 的窄屏媒体查询把
+    //   #pmhTourTip 改成 width: calc(100vw - 24px)（390px 视口下 = 366px），拿桌面的
+    //   320 去钳位会让提示框右侧伸出视口 —— 实测在 trend / portfolio / trades / news /
+    //   weights / settings 六页上造成 11px 横向滚动条（puppeteer isMobile:false 复现）。
     const margin = 12;
+    const availW = Math.max(0, window.innerWidth - margin * 2);
+    // offsetWidth 可能为 0（未布局 / 祖先 display:none），所以再兜一层可用宽度，
+    // 保证下面 clamp 的取值区间 [margin, innerWidth - tipW - margin] 始终非空。
+    const tipW = Math.min(tip.offsetWidth || 320, availW);
+    const tipH = tip.offsetHeight || 120;
     let top, left;
     if (rect) {
       if (pos === "top") {
@@ -495,7 +502,7 @@
     // viewport 边界保护
     left = Math.max(margin, Math.min(window.innerWidth - tipW - margin, left));
     top = Math.max(margin, Math.min(window.innerHeight - tipH - margin, top));
-    tip.style.left = left + "px";
+    tip.style.left = left + window.scrollX + "px";
     tip.style.top = top + window.scrollY + "px";
   }
 

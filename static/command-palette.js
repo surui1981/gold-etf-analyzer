@@ -170,8 +170,16 @@
       '  border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.3);',
       '  opacity: 0; pointer-events: none; transition: opacity .14s ease, transform .14s ease;',
       '  z-index: 301; overflow: hidden;',
+      // ⚠ V0.113.0：关闭时必须 visibility:hidden，不能只靠 opacity:0。
+      //   opacity:0 的元素**仍在 tab 序列里** —— 键盘用户一进页面 Tab 到的第一个
+      //   东西就是这个看不见的搜索框（WCAG 2.4.3 焦点顺序 / 2.4.7 焦点可见）。
+      //   实测 18 页里有 16 页能把它聚焦到、而且落在 sticky 顶栏底下，看着像
+      //   「点不动」，其实是被透明面板吃掉了。
+      //   visibility 参与过渡（离散跳变）所以能配 transition，关闭时淡出结束后
+      //   才真正移出 tab 序列。
+      '  visibility: hidden; transition: opacity .14s ease, transform .14s ease, visibility .14s ease;',
       '}',
-      'body.pm-cmd-open .pm-cmd { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }',
+      'body.pm-cmd-open .pm-cmd { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; visibility: visible; }',
       '.pm-cmd-input {',
       '  width: 100%; box-sizing: border-box; padding: 14px 18px;',
       '  font-size: 16px; border: none; border-bottom: 1px solid #e6e8eb;',
