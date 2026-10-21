@@ -13,6 +13,8 @@ curl GET → 落地页可达」**。本脚本补上集成层验证：起 in-proc
 --------
 - 11 个页面 alias → ``307`` 重定向（``RedirectResponse``）
 - ``/sw.js``        → ``200``（``FileResponse``）
+- ``/favicon.ico``  → ``200``（``FileResponse``，V0.114.1：浏览器约定在站点根找
+  favicon，此前 21 个页面全缺 ``rel=icon`` 且根路径无路由 ⇒ 每次访问必 404）
 - ``/docs``         → ``200``（test 环境 auth=false，默认开启 Swagger）
 - ``/static/...``   → ``200``（sample：``/static/trend.html``，验证 StaticFiles 工作）
 
@@ -84,6 +86,7 @@ EXPECTED_ALIAS_PATHS: list[str] = [
 EXPECTED_STATUS: dict[str, int] = {
     **{p: 307 for p in EXPECTED_ALIAS_PATHS},
     "/sw.js": 200,
+    "/favicon.ico": 200,
     "/docs": 200,  # dev/test 模式默认开启
     "/static/trend.html": 200,  # StaticFiles mount 健康度抽样
 }

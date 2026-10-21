@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from app import __version__
@@ -676,4 +676,27 @@ async def service_worker() -> FileResponse:
             "Service-Worker-Allowed": "/",
             "Cache-Control": "no-cache",
         },
+    )
+
+
+# V0.114.1：/favicon.ico 走根作用域路由，理由同 /sw.js —— 浏览器约定在**站点根**
+# 找 favicon，而 StaticFiles mount 只覆盖 /static/。
+#
+# 21 个页面现已各自带 <link rel="icon" href="/static/icon-192.png">，正常导航不会再
+# 打这个路径；这个路由兜的是仍然会打的情况：旧书签、收藏夹、PWA 安装前的首屏，
+# 以及某些不解析 link 标签的客户端（curl / 抓取器 / 早期浏览器）。
+#
+# ⚠️ 返回的是 192px PNG，不是真 .ico —— 实测 21 个页面全部 404 才是真问题，
+# 补一个多尺寸真 ico 纯属锦上添花，收益/维护成本不成比例。content_type 如实写
+# image/png，媒体类型与字节一致，别撒谎（撒谎会让某些浏览器拒绝解析）。
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> FileResponse:
+    """站点根 favicon（复用 PWA 图标，避免 /favicon.ico 404）。"""
+    icon = STATIC_DIR / "icon-192.png"
+    if not icon.exists():
+        return Response(status_code=404)
+    return FileResponse(
+        icon,
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
     )
