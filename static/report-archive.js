@@ -425,6 +425,18 @@
     });
 
     const drop = document.getElementById("dropZone");
+    // V0.114.2：这里**故意没有** click 处理器。
+    //
+    // 原先 fileInput 是 `display: none` 且此处只挂 drag 事件 —— 点了没反应是
+    // 所有浏览器都有的 bug（Chrome 实测 filechooser 都不触发），Firefox 只是先
+    // 被用户撞见。现在 fileInput 改成铺满 .drop 的透明覆盖层（见
+    // report-archive.html 的 .drop input[type="file"]），真实点击直接落在原生
+    // 控件上、由浏览器自己弹对话框，全程不经过 JS。
+    //
+    // ⚠️ 不要「优化」成 display:none + input.click()：Firefox 会因为元素未渲染
+    //    而拒绝唤起文件选择器，Chrome 却放行 —— 正是最难测出来的那类差异。
+    //
+    // 拖拽照常：drag 事件从覆盖层冒泡到 .drop，这几个监听器照旧命中。
     ["dragenter", "dragover"].forEach((ev) =>
       drop.addEventListener(ev, (e) => {
         e.preventDefault();
