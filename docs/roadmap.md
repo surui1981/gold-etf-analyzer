@@ -6,11 +6,18 @@
 >
 > **当前推进计划见 [next-steps.md](next-steps.md)**（V0.117.0 起，全部条目已实测复现）。
 > 本文件的 §2.2 / §2.3 内容仍然有效，已并入 next-steps.md §三。
+>
+> ⚠️ **另见 [app-improvement-path.md](app-improvement-path.md)（2026-10-23 新增）** ——
+> 应用整体改进路径。它实测发现本文件 §2.3 的前提是错的：
+> 原文写「已有 ~21,900 条评估基线」，实测 `scoring_daily_wide` 只有 **47 行**。
+> **K 项（§2.3）的 go/no-go 依据必须先按 app-improvement-path §二 B2 修正。**
 
 > **目标读者**：开发者（路线决策）｜ **状态**：⚠️ 历史档案 ｜ **最近更新**：2026-08~10
 >
 > **配套文档**：
-> - [next-steps.md](next-steps.md) — **当前推进计划**（V0.117.0 起）
+> - [app-improvement-path.md](app-improvement-path.md) — **应用整体改进路径**（四层演进路线，全部条目已实测）
+> - [next-steps.md](next-steps.md) — 当前推进计划（V0.117.0 起，缺陷清单）
+> - [improvement-path.md](improvement-path.md) — ⚠️ 已归档（V0.50~V0.78 实施路线与 UX 度量，内容全部交付）
 > - [parameter-evaluation.md](parameter-evaluation.md) — 参数评估（11 项改进需求与诊断，10/11 已交付）
 > - [development.md §11](development.md) — 历史改进计划 / P1-P3 大路线（已全部落地）
 > - [ux-roadmap.md](ux-roadmap.md) — V0.68-V0.76 UX 应用/能力路线（**整份已交付，作为历史档案保留**）
