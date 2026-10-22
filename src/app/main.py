@@ -321,6 +321,24 @@ async def _start_daily_scheduler() -> None:
     except Exception as exc:
         logger.error("news feed scheduler failed to start: %s", exc)
 
+    # V0.115.0 ── COMEX 黄金库存刷新协程；每日 08:10 BJT
+    # 排在 07:00 快照 / 07:30 央行购金 / 08:00 新闻之后，错开源与时间点。
+    try:
+        from app.services.scheduler import (
+            GOLD_INV_TRIGGER_HOUR_BJT,
+            GOLD_INV_TRIGGER_MINUTE_BJT,
+            gold_inventory_loop,
+        )
+
+        _spawn_background(gold_inventory_loop())
+        logger.info(
+            "gold inventory scheduler started (%02d:%02d BJT daily)",
+            GOLD_INV_TRIGGER_HOUR_BJT,
+            GOLD_INV_TRIGGER_MINUTE_BJT,
+        )
+    except Exception as exc:
+        logger.error("gold inventory scheduler failed to start: %s", exc)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:

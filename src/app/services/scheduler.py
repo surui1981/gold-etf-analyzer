@@ -580,3 +580,122 @@ async def news_feed_loop() -> None:
         )
         await asyncio.sleep(wait)
         await _refresh_news_feed()
+
+
+# V0.115.0 ── COMEX 黄金库存自动刷新 ────────────────────────────
+
+# 触发时刻 08:10 BJT。刻意跟已有几个触发点错开：
+#   07:00 BJT 每日快照（daily_capture_loop）
+#   07:30 BJT 央行购金（月度）
+#   00/04/08/12/16/20 UTC 今日要闻（4h）
+# 08:10 落在 08:00 那次新闻抓取之后 10 分钟，不抢同一个源，也不在 A 股开盘
+# （09:30）之前 —— 库存是慢变量，晚十分钟没有任何信息损失。
+GOLD_INV_TRIGGER_HOUR_BJT = 8
+GOLD_INV_TRIGGER_MINUTE_BJT = 10
+
+# 环境变量开关：COMEX 库存自动刷新（默认启用；设为 "0"/"false"/"no" 关闭）
+GOLD_INVENTORY_AUTO_REFRESH_ENV = "GOLD_INVENTORY_AUTO_REFRESH"
+
+# 启动后 bootstrap 延迟：避开 lifespan 启动期资源争抢（同新闻流的 30s）。
+# 只在「表空 / 最新观测超过 1 天」时才真抓，避免每次重启全量 upsert 1200+ 行。
+GOLD_INV_BOOTSTRAP_DELAY_SECONDS = 45.0
+
+
+def _is_gold_inventory_auto_refresh_enabled() -> bool:
+    """读环境变量判断 COMEX 库存自动刷新是否启用（V0.115.0）。"""
+    raw = os.environ.get(GOLD_INVENTORY_AUTO_REFRESH_ENV, "1").strip().lower()
+    return raw not in ("0", "false", "no", "off", "")
+
+
+def next_gold_inventory_run_utc(now_utc: datetime | None = None) -> datetime:
+    """计算下一次 COMEX 库存刷新的 UTC 时间（每日 08:10 BJT）。
+
+    今日触发点已过 → 明日同一时刻。
+
+    Examples:
+        BJT 2026-10-22 07:00 → BJT 2026-10-22 08:10 = 2026-10-22 00:10 UTC
+        BJT 2026-10-22 09:00 → BJT 2026-10-23 08:10 = 2026-10-23 00:10 UTC
+    """
+    now = now_utc or datetime.now(timezone.utc)
+    now_bjt = now.astimezone(BJT)
+    cand = now_bjt.replace(
+        hour=GOLD_INV_TRIGGER_HOUR_BJT,
+        minute=GOLD_INV_TRIGGER_MINUTE_BJT,
+        second=0,
+        microsecond=0,
+    )
+    if cand > now_bjt:
+        return cand.astimezone(timezone.utc)
+    return (cand + timedelta(days=1)).astimezone(timezone.utc)
+
+
+async def _refresh_gold_inventory() -> int:
+    """执行一次 COMEX 库存抓取 + 落库。
+
+    Returns:
+        upserted 行数；失败返回 0。失败仅日志，不抛 —— 单个源挂掉不该
+        影响调度循环下一次触发（首页该卡显示「—」，不是整站失联）。
+    """
+    from app.repositories.db import async_session_factory
+    from app.repositories.gold_inventory import GoldInventoryRepository
+    from app.services.gold_inventory import GoldInventoryService
+
+    try:
+        async with async_session_factory() as session:
+            service = GoldInventoryService(repo=GoldInventoryRepository(session))
+            return await service.refresh()
+    except Exception as exc:
+        logger.error("gold inventory auto-refresh unexpected error: %s", exc)
+        return 0
+
+
+async def gold_inventory_loop() -> None:
+    """无限循环：每日 08:10 BJT 刷新 COMEX 黄金库存。
+
+    通过环境变量 ``GOLD_INVENTORY_AUTO_REFRESH`` 控制开关；默认启用。
+    启动后 45s 做一次 **条件** bootstrap —— 仅当表为空或最新观测超过 1 天
+    才抓，否则跳过（重启不该每次都重写 1200+ 行）。
+    """
+    if not _is_gold_inventory_auto_refresh_enabled():
+        logger.info(
+            "Gold inventory auto-refresh DISABLED by env %s=0; "
+            "use 'python -m app.scripts.import_gold_inventory' to refresh manually.",
+            GOLD_INVENTORY_AUTO_REFRESH_ENV,
+        )
+        return
+
+    logger.info(
+        "Gold inventory auto-refresh scheduler started: daily at %02d:%02d BJT "
+        "(env %s controls switch)",
+        GOLD_INV_TRIGGER_HOUR_BJT,
+        GOLD_INV_TRIGGER_MINUTE_BJT,
+        GOLD_INVENTORY_AUTO_REFRESH_ENV,
+    )
+
+    await asyncio.sleep(GOLD_INV_BOOTSTRAP_DELAY_SECONDS)
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.gold_inventory import GoldInventoryRepository
+        from app.services.gold_inventory import GoldInventoryService
+
+        async with async_session_factory() as session:
+            svc = GoldInventoryService(repo=GoldInventoryRepository(session))
+            if await svc.is_stale():
+                logger.info("gold inventory bootstrap: table empty or stale, fetching")
+                await svc.refresh()
+            else:
+                logger.info("gold inventory bootstrap skipped: table already current")
+    except Exception as exc:
+        logger.error("gold inventory bootstrap failed: %s", exc)
+
+    while True:
+        next_run = next_gold_inventory_run_utc()
+        wait = max(0.0, (next_run - datetime.now(timezone.utc)).total_seconds())
+        logger.info(
+            "Gold inventory scheduler: next run at %s (in %.0f seconds, %.1f hours)",
+            next_run.isoformat(),
+            wait,
+            wait / 3600,
+        )
+        await asyncio.sleep(wait)
+        await _refresh_gold_inventory()

@@ -12,6 +12,7 @@ from app.repositories.account import AccountRepository
 from app.repositories.analysis import AnalysisRepository
 from app.repositories.central_bank import CentralBankPurchaseRepository
 from app.repositories.db import async_session_factory
+from app.repositories.gold_inventory import GoldInventoryRepository  # V0.115.0 COMEX 库存
 from app.repositories.macro_factor_history import MacroFactorHistoryRepository  # V0.79.0 Step E
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.market_providers import build_provider_bundle
@@ -33,6 +34,7 @@ from app.services.central_bank import CentralBankService
 from app.services.compare import GoldCompareService
 from app.services.decision import DecisionService
 from app.services.freshness import FreshnessService
+from app.services.gold_inventory import GoldInventoryService  # V0.115.0 COMEX 库存
 from app.services.macro import MacroFactorService  # V0.79.0 Step E
 from app.services.macro_thresholds import MacroThresholdCalculator  # V0.79.0 Step E
 from app.services.news import NewsScoreService
@@ -71,6 +73,20 @@ def get_central_bank_service(
 ) -> CentralBankService:
     """央行购金业务服务依赖。"""
     return CentralBankService(repo=repo)
+
+
+async def get_gold_inventory_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> GoldInventoryRepository:
+    """COMEX 黄金库存 DB 仓储依赖（V0.115.0）。"""
+    return GoldInventoryRepository(session)
+
+
+def get_gold_inventory_service(
+    repo: GoldInventoryRepository = Depends(get_gold_inventory_repository),
+) -> GoldInventoryService:
+    """COMEX 黄金库存业务服务依赖（V0.115.0）。"""
+    return GoldInventoryService(repo=repo)
 
 
 async def get_macro_factor_history_repository(

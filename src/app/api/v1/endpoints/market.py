@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, Query
 from app.dependencies import (
     get_compare_service,
     get_freshness_service,
+    get_gold_inventory_service,
     get_market_data_repository,
     get_trend_service,
 )
 from app.repositories.market_data import MarketDataRepository
+from app.schemas.gold_inventory import GoldInventoryOut
 from app.schemas.market import (
     FreshnessOut,
     GoldCompareOut,
@@ -31,6 +33,7 @@ from app.schemas.market import (
 )
 from app.services.compare import GoldCompareService
 from app.services.freshness import FreshnessService
+from app.services.gold_inventory import GoldInventoryService
 from app.services.trend import TrendService, moving_average
 
 router = APIRouter(prefix="/market", tags=["market"])
@@ -130,6 +133,36 @@ async def gold_gram_quote(
         change_pct=quote.change_pct,
         updated_at=quote.updated_at,
     )
+
+
+@router.get(
+    "/gold/inventory",
+    response_model=GoldInventoryOut,
+    summary="COMEX 黄金交易所库存序列 + 1w/1m/3m/1y 变化（V0.115.0）",
+)
+async def gold_inventory(
+    days: int = Query(
+        90,
+        ge=20,
+        le=750,
+        description="返回序列覆盖的自然日数（默认 90）。变化率另按 1w/1m/3m/1y 固定回看，不受此参数影响。",
+    ),
+    service: GoldInventoryService = Depends(get_gold_inventory_service),
+) -> GoldInventoryOut:
+    """COMEX 黄金仓库库存（吨）日频序列。
+
+    与同组另外两类数据的口径必须分清，**不要混谈**：
+
+    | 数据 | 回答的问题 | 端点 |
+    |---|---|---|
+    | COMEX 库存（本端点） | 交易所仓库里还剩多少 | ``/market/gold/inventory`` |
+    | 央行购金 | 各国央行买了多少 | ``/central-bank/summary`` |
+    | ETF 份额 | 基金被动持有多少 | —（本项目未采集） |
+
+    空表返回 ``points=[]`` + ``latest_tonnes=null`` + ``degraded=true``，
+    前端据此显示「—」。**不会**编一个数出来。
+    """
+    return await service.snapshot(days=days)
 
 
 @router.get(
