@@ -75,6 +75,8 @@ V083_KEY_PREFIXES = (
     #   文案由 command-palette.js 用 I18n.t() 取，缺键会静默回落到代码里的 fb 常量
     #   —— 也就是说「忘了加 zh-TW」不会报错，只会悄悄显示简体，所以必须进严格清单。
     "cmd.",
+    # V0.115.0：首页贵金属走势区（home.* 整个 namespace 纳入，67 键，实测 3 语零缺口）
+    "home.",
 )
 
 

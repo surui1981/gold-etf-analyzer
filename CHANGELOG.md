@@ -4,6 +4,36 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.115.0] · 2026-10-22
+
+`首页贵金属走势区（金价 / 黄金库存 / 央行购金）` — feature · 详见 [v0.115.0.md](docs/releases/v0.115.0.md)
+
+> 用户：「我们在主页页面内容缺少贵金属走势的页面，包括 金价变化、黄金库存变化、央行购金变化，
+> 卡片放在今日要闻前面。」
+
+- 🥇 首页新增**贵金属走势区**（`.home-scenes` 8 张板块卡与今日要闻之间的独立整行 section），
+  三张卡：**金价变化**（XAU + 518880 + Au99.99 + 60 日走势线）/ **黄金库存变化** /
+  **央行购金变化**（WGC 全球合计季度 + 较上季吨数增减）
+  - ⇒ `.home-scene` 卡数**仍是 8**，顶 nav `SCENES` 不动，既有门禁断言零影响
+- 📦 **COMEX 黄金库存从零建**：模型 + 迁移 `s1t2u3v4w5x` + 子进程隔离 fetcher
+  （akshare 内嵌 V8 会崩 uvicorn）+ repo + service + `GET /market/gold/inventory`
+  + 每日 08:10 BJT 调度 + CLI。实测 **1234 行 / 2021-10 起 / 最新 727.96 吨 / 近 1 年 -41.65%**
+- 🔎 数据源是**实测选出来的**：否掉 `spot_quotations_sge`（无库存字段）与
+  `fund_etf_scale_sse`（单截面且陈旧 21 个月、且不是库存口径）
+- 🐛 **1y 变化率恒为 `None`** —— `snapshot()` 用 `date.today()` 当回看起点，
+  但最新观测日落后今天 2 天，「一年前」那点落到窗口外。1m/3m 正常、**只有 1y 静默为空**
+- 🐛 **`IntegrityError: NOT NULL ... source`** —— Core `insert()` **绕过 ORM 的 Python 侧
+  `default`**（只认 `server_default`），迁移写了而模型没写 = schema 漂移
+- 🐛 **2 处既有静默失效**（顺带）：hero 两个 chip 读的字段后端根本不返回
+  （`price` vs `price_usd`、`overall_status` vs 只有 `degraded`）
+  ⇒ 金价 / 时效 chip 从上线起一直停在 `金价 --` / `时效 --`
+- ✅ 门禁：`_verify_home_metals.mjs` 34 条断言 + **反向验证 4 处**（挪位置 / 打桩
+  `drawSpark` / 改回错字段名 / zh-TW 退简体，逐条确认变红）
+- ✅ `check_i18n_keys.py` 新增 `"home."` 前缀 —— in-scope 240 → **307**，**0 missing**
+  （此前首页文案根本不在严格清单里，漏同步只会静默回落）
+
+---
+
 ## [V0.114.2] · 2026-10-22
 
 `修点上传没有文件对话框` — hotfix · 1 处 CSS · 详见 [v0.114.2.md](docs/releases/v0.114.2.md)
