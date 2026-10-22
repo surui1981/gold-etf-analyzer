@@ -60,16 +60,74 @@
       .replace(/'/g, '&#39;');
   }
 
-  /** 简易 XSS 清洗：移除 <script>/<iframe>，剥离 on* 事件与 javascript: URI。 */
+  // ────────────── HTML 清洗（V0.116.0 重写）──────────────
+  //
+  // ⚠️ 旧实现是**正则清洗**，而且正则写错了：
+  //     /\s(onc(?:lick|load|error|...)\s*=\s*["'][^"']*["'])/gi
+  //     `on` 后面多了个 `c` ⇒ `onc(?:…)` 只能拼出 `onclick`，
+  //     另外 7 个分支（load / error / mouseover / …）写的是全名，永远接不到 `onc` 后面。
+  //     实测 8 个事件处理器里只拦住 1 个，`<img src=y onerror="…">` 原样进了 DOM。
+  //     即使拼对，正则清洗本身也挡不住 `<div style="background:url(javascript:…)">`。
+  //
+  // 现在改成**白名单 + DOM 遍历**，没有正则 ⇒ 不存在「漏写一个字符」这类坑。
+  //   - DROP：整个节点连子节点一起删（script / svg 这类内容不可信）
+  //   - KEEP：保留标签；不在两个集合里的标签 unwrap（保留文字，丢标签）
+  //   - 属性：只有 a[href] / a[title] 能活，其余一律 removeAttribute
+  //     （on* 和 style 是「不在白名单」被删的，不需要单独写规则去堵）
+  var SANITIZE_DROP = {
+    script: 1, style: 1, iframe: 1, object: 1, embed: 1, noscript: 1,
+    template: 1, svg: 1, math: 1, textarea: 1, title: 1, xmp: 1,
+    frame: 1, frameset: 1, base: 1, link: 1, meta: 1, form: 1, input: 1,
+    button: 1, select: 1, option: 1, audio: 1, video: 1, source: 1, img: 1,
+  };
+  var SANITIZE_KEEP = {
+    p: 1, br: 1, strong: 1, b: 1, em: 1, i: 1, del: 1, s: 1, code: 1, pre: 1,
+    blockquote: 1, ul: 1, ol: 1, li: 1, dl: 1, dt: 1, dd: 1,
+    h1: 1, h2: 1, h3: 1, h4: 1, h5: 1, h6: 1, hr: 1,
+    table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, th: 1, td: 1, caption: 1,
+    a: 1, span: 1, div: 1, sup: 1, sub: 1, small: 1, mark: 1,
+  };
+  // href 允许的协议 —— 别的（含 javascript: / data: / vbscript:）一律丢属性
+  var SAFE_HREF_RE = /^(?:https?:\/\/|mailto:|\/|#)/i;
+
+  function sanitizeNode(node) {
+    var kids = Array.prototype.slice.call(node.children || []);
+    kids.forEach(function (child) {
+      var tag = (child.tagName || '').toLowerCase();
+      if (SANITIZE_DROP[tag]) {
+        child.parentNode.removeChild(child);   // 连内容一起删
+        return;
+      }
+      if (!SANITIZE_KEEP[tag]) {
+        sanitizeNode(child);
+        var parent = child.parentNode;
+        while (child.firstChild) parent.insertBefore(child.firstChild, child);
+        parent.removeChild(child);             // unwrap：留文字，丢标签
+        return;
+      }
+      // 属性白名单
+      Array.prototype.slice.call(child.attributes).forEach(function (attr) {
+        var name = attr.name.toLowerCase();
+        var ok = false;
+        if (tag === 'a' && name === 'href') ok = SAFE_HREF_RE.test(String(attr.value).trim());
+        else if (tag === 'a' && name === 'title') ok = true;
+        if (!ok) child.removeAttribute(attr.name);
+      });
+      sanitizeNode(child);
+    });
+  }
+
   function sanitizeHtml(html) {
     if (!html) return '';
-    return String(html)
-      .replace(/<script[\s\S]*?<\/script>/gi, '')
-      .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-      .replace(/<object[\s\S]*?<\/object>/gi, '')
-      .replace(/<embed[\s\S]*?<\/embed>/gi, '')
-      .replace(/\s(onc(?:lick|load|error|mouseover|focus|blur|change|submit)\s*=\s*["'][^"']*["'])/gi, '')
-      .replace(/(href|src)\s*=\s*["']\s*javascript:[^"']*["']/gi, '$1="#"');
+    var doc;
+    try {
+      doc = new DOMParser().parseFromString(String(html), 'text/html');
+    } catch (e) {
+      return '';
+    }
+    if (!doc || !doc.body) return '';
+    sanitizeNode(doc.body);
+    return doc.body.innerHTML;
   }
 
   function renderMarkdown(text) {
@@ -84,6 +142,106 @@
       return '<p>' + escapeHtml(text) + '</p>';
     }
   }
+
+  // ────────────── 渲染后增强（V0.116.0）──────────────
+  //
+  // marked 只管语义，不管「能不能用」：宽表在窄栏里没法横滚、代码块没法复制、
+  // 链接点了就把对话状态丢了。这三样在这里补。
+  //
+  // ⚠️ 必须**幂等**：流式路径 flushBubble() 每 80ms 重写一次 innerHTML，
+  //    增强永远跟在「先 innerHTML= 再增强」之后，所以天然不会叠加。
+  //    但复制按钮在流式期间**不挂**（isFinal=false）—— 否则每秒重建 12 次按钮。
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    // 降级：textarea + execCommand（非安全上下文 / 老浏览器）
+    return new Promise(function (resolve, reject) {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      ok ? resolve() : reject(new Error('copy_failed'));
+    });
+  }
+
+  function enhanceBubble(bubble, isFinal) {
+    if (!bubble) return;
+    // 1) 表格套横向滚动容器（复用 theme.css 的 .table-scroll 全站约定）
+    Array.prototype.slice.call(bubble.querySelectorAll('table')).forEach(function (table) {
+      if (table.parentNode && table.parentNode.classList.contains('table-scroll')) return;
+      var box = document.createElement('div');
+      box.className = 'table-scroll';
+      // 全站约定：滚动容器要可聚焦，键盘用户才横滚得动（见 theme.css:177 注释）
+      box.setAttribute('tabindex', '0');
+      box.setAttribute('role', 'region');
+      table.parentNode.insertBefore(box, table);
+      box.appendChild(table);
+    });
+
+    // 2) 链接新窗口打开（否则点进去对话状态就没了）+ 断 opener
+    Array.prototype.slice.call(bubble.querySelectorAll('a[href]')).forEach(function (a) {
+      if (/^(?:#|\/)/.test(a.getAttribute('href') || '')) return;  // 页内锚点/站内路由不跳
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    // 3) 代码块复制按钮（仅终稿；流式期间挂它没意义且会抖）
+    // ⚠ 按钮排在自己的**工具条行**里，不叠在代码上。两个原因都是实测出来的：
+    //    ① <pre> 自己 overflow-x:auto，按钮放它里面横向一滚就被带走了；
+    //    ② 即使放外面做绝对定位 + 给 <pre> 加 padding-right，**滚动容器上的
+    //       padding-right 只在滚动末端生效** —— scrollLeft=0 时长代码行照样从
+    //       按钮底下穿过去（截图里第一行 JSON 被 ⧉ 压住）。
+    //    工具条行是唯一既不被带走、也永不遮挡内容的排法。
+    if (!isFinal) return;
+    Array.prototype.slice.call(bubble.querySelectorAll('pre')).forEach(function (pre) {
+      var host = pre.parentNode;
+      if (host && host.classList.contains('code-block')) return;  // 幂等：已套过
+      var code = pre.querySelector('code');
+      var box = document.createElement('div');
+      box.className = 'code-block';
+      pre.parentNode.insertBefore(box, pre);
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-code-btn';
+      btn.textContent = '⧉';
+      btn.setAttribute('aria-label', '复制代码');
+      btn.title = '复制代码';
+      btn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var text = code ? code.textContent : pre.textContent;
+        copyText(text).then(function () {
+          btn.textContent = '✓';
+          btn.classList.add('done');
+          setTimeout(function () {
+            btn.textContent = '⧉';
+            btn.classList.remove('done');
+          }, 1200);
+        }).catch(function () {
+          btn.textContent = '✗';
+          setTimeout(function () { btn.textContent = '⧉'; }, 1200);
+        });
+      });
+      box.appendChild(btn);   // 先按钮（工具条行在上）
+      box.appendChild(pre);   // 再代码
+    });
+  }
+
+  // V0.116.0 测试钩子：enhanceBubble / sanitizeHtml 都在 IIFE 里，
+  // 门禁没法从外面调到。参照既有 window.I18n.__test_setLang 的做法挂出来。
+  // ⚠ 只读调试用；调用方仍须自己把 innerHTML 填好再调 enhanceBubble。
+  window.__askTest = {
+    sanitizeHtml: sanitizeHtml,
+    renderMarkdown: renderMarkdown,
+    enhanceBubble: enhanceBubble,
+    copyText: copyText,
+  };
 
   function formatTime(iso) {
     if (!iso) return '';
@@ -424,9 +582,13 @@
     if (m.output_tokens != null) meta.appendChild(el('span', { text: '↑ ' + m.output_tokens }));
     if (m.latency_ms != null) meta.appendChild(el('span', { text: Math.round(m.latency_ms / 100) / 10 + 's' }));
 
-    var wrap = el('div', { class: 'bubble' });
+    // ⚠️ V0.116.0：这里**只留一个 .bubble**。原来外层还套了一个 `.bubble`，
+    //    而 `.message.assistant .bubble` 两个都匹配 ⇒ 双边框 + 16px/24px 内边距。
+    //    meta 作为 bubble 的兄弟节点挂在同一个容器里，视觉不变。
+    var wrap = el('div', { class: 'bubble-wrap' });
     wrap.appendChild(bubble);
     if (meta.children.length) wrap.appendChild(meta);
+    enhanceBubble(bubble, true);
 
     return el('div', { class: 'message assistant' }, [
       el('div', { class: 'avatar', text: 'AI' }),
@@ -599,6 +761,9 @@
       if (liveBubble && window.marked && window.marked.parse) {
         try {
           liveBubble.innerHTML = renderMarkdown(pendingText);
+          // 表格滚动容器 / 链接 target 在流式期间就给（否则用户先看到溢出的表）
+          // 复制按钮不挂 —— message_stop 会 renderMessages() 重画一次，那时才是终稿
+          enhanceBubble(liveBubble, false);
         } catch (e) {
           liveBubble.textContent = pendingText;
         }
