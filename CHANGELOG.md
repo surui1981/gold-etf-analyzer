@@ -4,6 +4,36 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.114.2] · 2026-10-22
+
+`修点上传没有文件对话框` — hotfix · 1 处 CSS · 详见 [v0.114.2.md](docs/releases/v0.114.2.md)
+
+> 用户报「点击报告上传，浏览器中没有文件上传的对话框」并附「我用的是 Firefox」。
+> **Firefox 是对的线索，但不是原因** —— Chrome 实跑同样不弹。
+
+- 🐛 上传区file input 是 `display: none`，而 `.drop` 上**只挂了 drag 事件、没有
+  click 处理器** ⇒ 提示文案承诺的「点击选择」根本没有实现，唯一能用的路径是把
+  文件**拖进来**，而文案完全没提。**所有浏览器都一样坏**
+- 🔧 修法：把 `display: none` 换成**铺满 `.drop` 的透明覆盖层**（`opacity:0` +
+  `position:absolute` + `z-index:2`）。真实点击落在**原生 file input** 上 ⇒
+  浏览器默认行为就是弹对话框，**点击路径上不经过任何 JS**
+  - ⚠️ **不用**「`display:none` + JS 调 `input.click()`」：Chrome 放行、Firefox
+    拒绝（元素未渲染不允许唤起文件选择器）—— 不加注释就会在 Chrome 测得通过、
+    上线后只在 Firefox 静默失效
+  - ⚠️ 用 `opacity:0` 而非 `visibility:hidden`：后者会让控件在部分浏览器里
+    **不可聚焦**，键盘用户彻底够不着（V0.113.0 口径）。配 `:focus-within`
+    给 `.drop` 一圈可见焦点环
+  - ♿ 拖拽不受影响：drag 事件从覆盖层冒泡到 `.drop`，原有监听器照旧命中
+- 🧪 新增 `scripts/_verify_upload_dialog.mjs`（10 断言），**反向验证 6 条变红**，
+  含决定性的一条：退回 `display:none` 后 `elementFromPoint` 命中的是无处理器的
+  `<SPAN>`
+- ⚠️ **判据选错的教训**：第一版用 `page.on("filechooser")` 当判据，结果是红的。
+  基线测试证明**这个 headless Chrome 连裸 `<input type=file>` 真实点击都不发
+  `filechooser`** —— 那条断言测的是 puppeteer 的能力，**比没有断言更坏（假绿）**。
+  换成 `elementFromPoint(落点)` 才是真判据
+- ⚠️ **未在 Firefox 实跑验证**：`puppeteer browsers install firefox` 因网络受限
+  下不下来，请在 Firefox 里确认一次再收工
+
 ## [V0.114.1] · 2026-10-22
 
 `修全站 favicon 404` — hotfix · 无新资源 · 详见 [v0.114.1.md](docs/releases/v0.114.1.md)
