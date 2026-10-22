@@ -4,6 +4,31 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.116.0] · 2026-10-22
+
+`AI 对话文本格式重做（清洗器 / 移动端裁切 / 排版）` — fix · 详见 [v0.116.0.md](docs/releases/v0.116.0.md)
+
+> 用户：「当前应用在 AI 对话中对文本格式支持不够完善，能不能进行很好的改进。」
+
+- 🔐 **清洗器换成本地 DOM 白名单**（约 40 行，无正则、不引第三方）
+  - 旧实现是**正则**，而且**正则写错了**：`onc(?:lick|load|error|…)` 里 `on` 后面多了个 `c`
+    ⇒ 只能拼出 `onclick`，另外 7 个事件处理器**永远接不到 `onc` 后面**。
+    实测 `<img src=y onerror="…">` 属性原样进了 DOM；`style` 属性根本不在清洗范围内
+  - ⇒ DROP 集合连子节点一起删，KEEP 集合外 unwrap，属性只留 `a[href]`（限 http/https/mailto/站内）
+- 📱 **移动端不再横向裁切**：390px 视口下长 URL 曾把对话列撑到 **613px**、裁掉约 200px 且**滚不到**；
+  `<pre>` 代码块撑到 431px（裁 17px）
+  - ⇒ `.ask-main` → `.message-stream` → `.message` → `.bubble` 的 flex 链条**一路 `min-width: 0`**
+  - ⇒ `overflow-wrap: anywhere`（`break-word` 不影响 min-content，挡不住撑宽）
+  - ⇒ 用户气泡走 `textContent` 无 `<p>` 包裹，需要**单独**一条规则
+- 🎨 **排版补齐**：`h1`–`h6` 字号阶梯 + 间距、`hr` 分隔线间距（原 `* { margin: 0 }` 把它清零了，
+  实测 `hr` top=682 紧贴下一段 top=684）
+- 🫧 **去双气泡**：`renderAssistantMsg` 原本内外套了**两个** `.bubble` ⇒ 双边框 + 16px/24px 双份内边距
+- ➕ **渲染后增强管道** `enhanceBubble()`：表格套 `.table-scroll`（键盘可横滚）、
+  代码块加复制按钮（排在自己的工具条行，**不叠在代码上** —— 滚动容器的 padding-right 只在滚动末端生效，截图实测过）、外链补 `target/blank` + `rel`；流式期间不挂按钮
+- 📝 **提示词显式要 markdown**（原来模型只是「碰巧」在用）+ 5 条 pytest（含规则号连续性）
+- 🚦 新门禁 `scripts/_verify_ask_format.mjs` **97 条断言**，每条都做过反向验证
+  （回退实现确认能变红 —— 过程中抓出 4 处门禁自身的假绿/误报）
+
 ## [V0.115.0] · 2026-10-22
 
 `首页贵金属走势区（金价 / 黄金库存 / 央行购金）` — feature · 详见 [v0.115.0.md](docs/releases/v0.115.0.md)
