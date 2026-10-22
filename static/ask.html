@@ -158,20 +158,82 @@
   .message.user .avatar { background: var(--accent); color: #1f2329; }
   .message.assistant .avatar { background: #4a5160; color: #fff; }
   .message.tool .avatar { background: #3a4452; color: #f5d97a; font-size: 11px; }
-  .message .bubble { padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.7;
-    max-width: calc(100% - 50px); word-wrap: break-word; }
   .message.user .bubble { background: var(--accent); color: #1f2329; }
   .message.assistant .bubble { background: var(--bg); border: 1px solid var(--border); color: var(--text); }
   .message.tool .bubble { background: #2c333d; color: #b0b6c0; font-family: ui-monospace, "SF Mono", Menlo, monospace;
     font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+  /* V0.116.0：不再把外层容器也叫 .bubble —— 内外都匹配 `.message.assistant .bubble`
+     会渲染出双边框 + 双份 padding。外层只做布局，视觉仍由内层 .bubble 负责。 */
+  .message .bubble-wrap { min-width: 0; max-width: calc(100% - 50px); }
+  /* V0.116.0：flex item 默认 min-width:auto ⇒ 不可断词的内容（长 URL / 长代码行）
+     会把整列撑出视口，而外层是 overflow:auto 的滚动容器，超出部分**够不着**。
+     实测 390px 视口下长 URL 把列撑到 613px、尾巴裁掉约 200px 且滚不到。
+     min-width:0 允许收缩 + overflow-wrap:anywhere 负责断词，两头都要。 */
+  .message, .message .bubble { min-width: 0; }
+  /* ⚠ 链条要一路通到最外层：.ask-main 和 .message-stream 自己也都是 flex item，
+     不给 min-width:0 的话它们的 automatic minimum size 会取内容最小宽度 ——
+     实测一个带长 JSON 的 <pre> 就能把整列顶到 431px（视口 390px），
+     哪怕 <pre> 自己 overflow-x:auto 内部能滚。 */
+  .ask-main, .message-stream { min-width: 0; }
+  .message .bubble p, .message .bubble li,
+  .message .bubble td, .message .bubble th { overflow-wrap: anywhere; }
+  /* ⚠ 这一条不能少：**用户气泡走 textContent，文本是 .bubble 的直接子文本节点，
+     没有 <p> 包裹** ⇒ 上面按 `p/li/td/th` 写的规则根本命中不到它。
+     实测漏掉这条时，用户发一条长 URL 会把气泡撑到 525px（视口只有 352px），
+     多出的 173px 被 .message-stream 横向滚走、**够不着**。
+     `anywhere` 与 `break-word` 的关键差别就在 min-content 计算：
+     break-word 不影响最小内容宽度，所以挡不住「把整列撑宽」。 */
+  .message .bubble { overflow-wrap: anywhere; }
+  /* ⚠ 上面 min-width:0 与 overflow-wrap:anywhere **两条都不能退回**，但布局断言
+     分不出是谁在起作用 —— 少了任何一条，390px 下的元素右缘都还在视口内，
+     门禁照样全绿（实测过，两条都是 93 passed 假绿）。
+     所以 _verify_ask_format.mjs §2 额外直接断言 getComputedStyle 的
+     overflowWrap / minWidth，把两条规则分别钉死。 */
+  .message .bubble { padding: 8px 12px; border-radius: 10px; font-size: 13px; line-height: 1.7;
+    max-width: calc(100% - 50px); }
   .message .bubble p { margin: 0 0 6px; }
   .message .bubble p:last-child { margin-bottom: 0; }
+  /* V0.116.0：ask.html:39 的 `* { margin:0; padding:0 }` 把 h/hr/strong 的
+     默认间距全清了，而下面只补回了 p/ul/ol/table/blockquote —— 标题和
+     `---` 分隔线因此贴脸（实测 h2 margin 0/0、hr 紧贴下一段 2px）。
+     字号按 13px 正文重新定档，不直接用浏览器默认的 1.5em（那是 19.5px，太撑）。 */
+  .message .bubble h1, .message .bubble h2, .message .bubble h3,
+  .message .bubble h4, .message .bubble h5, .message .bubble h6 {
+    font-weight: 600; color: var(--text); line-height: 1.45; margin: 10px 0 4px; }
+  .message .bubble h1 { font-size: 17px; }
+  .message .bubble h2 { font-size: 15.5px; }
+  .message .bubble h3 { font-size: 14px; }
+  .message .bubble h4, .message .bubble h5, .message .bubble h6 { font-size: 13px; }
+  .message .bubble :is(h1,h2,h3,h4,h5,h6):first-child { margin-top: 0; }
+  .message .bubble hr { border: 0; border-top: 1px solid var(--border); margin: 10px 0; }
+  .message .bubble strong { font-weight: 600; color: var(--text); }
+  .message .bubble em { font-style: italic; }
+  .message .bubble del { color: var(--muted); }
   .message .bubble code { background: rgba(0,0,0,.08); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
-  .message .bubble pre { background: #1f2329; color: #eef0f3; padding: 8px 10px; border-radius: 6px; overflow-x: auto; margin: 6px 0; }
+  .message .bubble pre { background: #1f2329; color: #eef0f3; padding: 8px 10px; border-radius: 6px;
+    overflow-x: auto; margin: 6px 0; max-width: 100%; }
   .message .bubble pre code { background: transparent; color: inherit; padding: 0; }
+  /* V0.116.0：代码块包装层 + 复制按钮（终稿才挂，见 ask.js enhanceBubble）
+     按钮在**自己的工具条行**里（flex column），不叠在代码上 ——
+     见 ask.js enhanceBubble 里的两条实测理由。 */
+  .message .bubble .code-block { display: flex; flex-direction: column; margin: 6px 0;
+    max-width: 100%; min-width: 0; background: #1f2329; border-radius: 6px; overflow: hidden; }
+  .message .bubble .code-block pre { margin: 0; border-radius: 0; min-width: 0; }
+  .message .bubble .copy-code-btn { align-self: flex-end; margin: 4px 4px 0 0;
+    min-width: 22px; height: 22px; padding: 0 5px; border-radius: 5px; cursor: pointer;
+    background: rgba(255,255,255,.12); color: #eef0f3; border: 1px solid rgba(255,255,255,.2);
+    font-size: 12px; line-height: 1; }
+  .message .bubble .copy-code-btn:hover { background: rgba(255,255,255,.22); }
+  .message .bubble .copy-code-btn.done { background: #1f7a35; border-color: #1f7a35; }
   .message .bubble ul, .message .bubble ol { margin: 6px 0 6px 18px; }
-  .message .bubble table { border-collapse: collapse; margin: 6px 0; font-size: 12px; }
-  .message .bubble th, .message .bubble td { border: 1px solid var(--border); padding: 3px 8px; }
+  .message .bubble li { margin: 2px 0; }
+  .message .bubble ul ul, .message .bubble ol ol,
+  .message .bubble ul ol, .message .bubble ol ul { margin: 2px 0 2px 16px; }
+  .message .bubble table { border-collapse: collapse; margin: 0; font-size: 12px; }
+  /* V0.116.0：enhanceBubble 会把 table 套进 .table-scroll；滚动容器本身不该
+     再有外边距（原来 margin 在 table 上，套壳后会变成双重间距）。 */
+  .message .bubble .table-scroll { margin: 6px 0; max-width: 100%; }
+  .message .bubble th, .message .bubble td { border: 1px solid var(--border); padding: 3px 8px; text-align: left; }
   .message .bubble th { background: var(--bg); }
   .message .bubble a { color: var(--accent); }
   .message .bubble blockquote { border-left: 3px solid var(--accent); margin: 6px 0; padding-left: 10px; color: var(--muted); }
