@@ -9,6 +9,7 @@ from app.models import (  # noqa: F401
     analysis,
     central_bank,
     daily_macro_factor,
+    gold_inventory,  # V0.115.0 COMEX 黄金库存日频（首页「贵金属走势」）
     news,
     position,
     push,
