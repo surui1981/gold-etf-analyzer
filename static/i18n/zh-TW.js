@@ -1269,6 +1269,37 @@ window.PM_I18N_zh_TW = {
   "home.cat_vc": "創投",
   "home.cat_business": "商業",
   "home.cat_other": "其他",
+  /* V0.115.0：首頁「貴金屬走勢」三卡（金價 / 黃金庫存 / 央行購金）。
+     ⚠ 三條線的口徑刻意分開標註 —— COMEX 庫存 ≠ 央行持有量 ≠ ETF 持倉，
+     混談會得出完全錯誤的結論，所以單位與來源都進 i18n 而不是硬編碼。 */
+  "home.metals_title": "貴金屬走勢",
+  "home.metals_more": "查看更多 →",
+  "home.metals_as_of": "資料截止",
+  "home.metals_unavailable": "暫不可用",
+  /* 卡 1 · 金價變化 */
+  "home.metals_price": "金價變化",
+  "home.metals_price_unit": "美元/盎司",
+  "home.metals_xau": "紐約金 XAU",
+  "home.metals_price_etf": "黃金 ETF 518880",
+  "home.metals_price_gram": "上海金 Au99.99",
+  "home.metals_price_fail": "金價取數失敗",
+  /* 卡 2 · 黃金庫存變化（COMEX 交易所倉庫庫存）*/
+  "home.metals_inv": "黃金庫存變化",
+  "home.metals_inv_unit": "噸",
+  "home.metals_inv_comex": "COMEX 庫存",
+  "home.metals_inv_fail": "庫存取數失敗",
+  /* 回看視窗標籤 */
+  "home.metals_win_1w": "1 週",
+  "home.metals_win_1m": "1 月",
+  "home.metals_win_1y": "1 年",
+  /* 卡 3 · 央行購金變化（WGC Gold Demand Trends 全球合計）*/
+  "home.metals_cb": "央行購金變化",
+  "home.metals_cb_unit": "噸/季",
+  "home.metals_cb_t12m": "近 12 個月",
+  "home.metals_cb_countries": "覆蓋國家",
+  "home.metals_cb_qoq": "較上季",
+  "home.metals_cb_qoq_na": "無上季可比",
+  "home.metals_cb_fail": "央行購金取數失敗",
   /* V0.99 C5：白銀頁 3-market 選擇器 + 升貼水表 i18n */
   "silver.headline_title_3market": "📊 白銀即時評估摘要 · 趨勢指數 × 三市場報價",
   "silver.market_etf": "ETF（562800）",

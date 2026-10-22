@@ -165,11 +165,59 @@
   .home-news-skeleton { color: var(--muted); }
   .home-news-error { color: var(--muted); font-style: italic; }
 
+  /* V0.115.0 贵金属走势（金价 / 黄金库存 / 央行购金）—— 插在 .home-scenes 与
+     底部今日要闻之间。三张卡横排；窄屏塌成单列。
+     刻意**不**进 .home-scenes grid：那 8 张是 260px 的纯链接磁贴，放不下
+     走势图，且插进去会把首页板块卡数变成 11，连带 2 个门禁脚本的硬编码卡数。 */
+  .home-metals { padding: 16px 20px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .home-metals-head { display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  .home-metals h3 { font-size: 15px; font-weight: 600; margin: 0; }
+  .metal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 12px; }
+  .metal-card { padding: 14px; border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .metal-head { display: flex; align-items: center; gap: 8px; }
+  .metal-ico { font-size: 18px; line-height: 1; }
+  .metal-title { font-size: 14px; font-weight: 600; margin: 0; flex: 1;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .metal-badge { font-size: 10px; padding: 1px 7px; border-radius: 999px;
+    background: rgba(0,0,0,0.04); color: var(--muted); white-space: nowrap; }
+  [data-theme="dark"] .metal-badge { background: rgba(255,255,255,0.06); }
+  .metal-badge.is-warn { background: #fff8e6; border: 1px solid #f5d77a; color: #b35309; }
+  [data-theme="dark"] .metal-badge.is-warn { background: #3a2f12; color: #f5d77a; }
+  .metal-main { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .metal-value { font-size: 24px; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums; word-break: break-all; }
+  .metal-unit { font-size: 11px; color: var(--muted); }
+  .metal-chg { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+    min-height: 18px; }
+  .metal-up { color: var(--up, #c92a2a); }
+  .metal-down { color: var(--down, #1f7a35); }
+  .metal-flat { color: var(--muted); }
+  .metal-spark { width: 100%; height: 40px; display: block; }
+  .metal-spark path { fill: none; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+  .metal-spark .metal-spark-line { stroke: var(--accent, #2563eb); }
+  .metal-spark .metal-spark-area { stroke: none; opacity: .12; }
+  .metal-sub { list-style: none; padding: 0; margin: auto 0 0; display: flex;
+    flex-direction: column; gap: 4px; }
+  .metal-sub li { display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px; font-size: 12px; color: var(--muted); }
+  .metal-sub b { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
+    white-space: nowrap; }
+  .metal-note { font-size: 10px; color: var(--muted); }
+  /* 整卡不可用：压暗 + 顶部 amber 描边，明确「这不是数据，是没取到」 */
+  .metal-card.is-empty { opacity: .72; border-color: #f5d77a; }
+  [data-theme="dark"] .metal-card.is-empty { border-color: #8a6d1f; }
+
   /* 移动端 */
   @media (max-width: 768px) {
     .home-scenes { grid-template-columns: 1fr; gap: 12px; }
     .home-scene.scene-ai { flex-direction: column; align-items: flex-start; }
     .home-scene.scene-ai .scene-ico { font-size: 36px; }
+    .metal-grid { grid-template-columns: 1fr; }
+    /* 1352px 下横排，窄屏塌单列；走势图保持固定高度不塌陷 */
+    .metal-spark { height: 36px; }
   }
 </style>
 </head>
@@ -280,6 +328,88 @@
       </div>
       <span class="home-ai-cta" data-i18n="home.scene_ai_btn">进入 AI 助手</span>
     </a>
+  </section>
+
+  <!-- V0.115.0 贵金属走势：插在 .home-scenes 之后、今日要闻（.home-bottom）之前。
+       三条数据线的口径刻意分标注，不混谈：
+         金价   = 交易所/现货报价（/market/gold*）
+         库存   = COMEX 仓库库存（/market/gold/inventory），≠ 央行持有量 ≠ ETF 份额
+         央行购金 = 各国央行季度净买入（/central-bank/purchases） -->
+  <section class="home-metals" id="homeMetals" aria-labelledby="homeMetalsTitle">
+    <div class="home-metals-head">
+      <h3 id="homeMetalsTitle" data-i18n="home.metals_title">贵金属走势</h3>
+      <div class="home-metals-actions">
+        <span class="metal-badge is-loading" id="homeMetalsChip">--</span>
+        <a class="home-news-more" href="/central-bank" data-i18n="home.metals_more">查看更多 →</a>
+      </div>
+    </div>
+    <div class="metal-grid">
+
+      <!-- 卡 1：金价变化 -->
+      <article class="metal-card" id="metalCardPrice">
+        <div class="metal-head">
+          <span class="metal-ico" aria-hidden="true">🟡</span>
+          <h4 class="metal-title" data-i18n="home.metals_price">金价变化</h4>
+          <span class="metal-badge" id="metalPriceBadge"></span>
+        </div>
+        <div class="metal-main">
+          <span class="metal-value" id="metalPriceValue">--</span>
+          <span class="metal-unit" data-i18n="home.metals_price_unit">美元/盎司</span>
+        </div>
+        <div class="metal-chg" id="metalPriceChg"></div>
+        <svg class="metal-spark" id="metalPriceSpark" viewBox="0 0 120 36"
+             preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ul class="metal-sub">
+          <li><span data-i18n="home.metals_price_etf">黄金 ETF 518880</span><b id="metalPriceEtf">--</b></li>
+          <li><span data-i18n="home.metals_price_gram">上海金 Au99.99</span><b id="metalPriceGram">--</b></li>
+        </ul>
+        <div class="metal-note" id="metalPriceNote"></div>
+      </article>
+
+      <!-- 卡 2：黄金库存变化 -->
+      <article class="metal-card" id="metalCardInv">
+        <div class="metal-head">
+          <span class="metal-ico" aria-hidden="true">📦</span>
+          <h4 class="metal-title" data-i18n="home.metals_inv">黄金库存变化</h4>
+          <span class="metal-badge" id="metalInvBadge"></span>
+        </div>
+        <div class="metal-main">
+          <span class="metal-value" id="metalInvValue">--</span>
+          <span class="metal-unit" data-i18n="home.metals_inv_unit">吨</span>
+        </div>
+        <div class="metal-chg" id="metalInvChg"></div>
+        <svg class="metal-spark" id="metalInvSpark" viewBox="0 0 120 36"
+             preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ul class="metal-sub">
+          <li><span data-i18n="home.metals_win_1w">1 周</span><b id="metalInv1w">--</b></li>
+          <li><span data-i18n="home.metals_win_1m">1 月</span><b id="metalInv1m">--</b></li>
+          <li><span data-i18n="home.metals_win_1y">1 年</span><b id="metalInv1y">--</b></li>
+        </ul>
+        <div class="metal-note" id="metalInvNote"></div>
+      </article>
+
+      <!-- 卡 3：央行购金变化 -->
+      <article class="metal-card" id="metalCardCb">
+        <div class="metal-head">
+          <span class="metal-ico" aria-hidden="true">🏦</span>
+          <h4 class="metal-title" data-i18n="home.metals_cb">央行购金变化</h4>
+          <span class="metal-badge" id="metalCbBadge"></span>
+        </div>
+        <div class="metal-main">
+          <span class="metal-value" id="metalCbValue">--</span>
+          <span class="metal-unit" data-i18n="home.metals_cb_unit">吨/季</span>
+        </div>
+        <div class="metal-chg" id="metalCbChg"></div>
+        <svg class="metal-spark" id="metalCbSpark" viewBox="0 0 120 36"
+             preserveAspectRatio="none" aria-hidden="true"></svg>
+        <ul class="metal-sub">
+          <li><span data-i18n="home.metals_cb_t12m">近 12 个月</span><b id="metalCbT12m">--</b></li>
+          <li><span data-i18n="home.metals_cb_countries">覆盖国家</span><b id="metalCbCountries">--</b></li>
+        </ul>
+        <div class="metal-note" id="metalCbNote"></div>
+      </article>
+
+    </div>
   </section>
 
   <section class="home-bottom">

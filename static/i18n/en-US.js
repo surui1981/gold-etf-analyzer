@@ -1365,6 +1365,38 @@ window.PM_I18N_en_US = {
   "home.cat_vc": "VC",
   "home.cat_business": "Business",
   "home.cat_other": "Other",
+  /* V0.115.0: home "Precious Metals" cards (gold price / COMEX inventory / central bank buying).
+     The three series have deliberately separate labels — COMEX warehouse inventory is
+     NOT central-bank holdings and NOT ETF shares; conflating them yields exactly the
+     wrong conclusion, so units and sources go through i18n rather than hardcoding. */
+  "home.metals_title": "Precious Metals",
+  "home.metals_more": "View more →",
+  "home.metals_as_of": "Data through",
+  "home.metals_unavailable": "Unavailable",
+  /* Card 1 · Gold price */
+  "home.metals_price": "Gold Price",
+  "home.metals_price_unit": "USD/oz",
+  "home.metals_xau": "COMEX XAU",
+  "home.metals_price_etf": "Gold ETF 518880",
+  "home.metals_price_gram": "SGE Au99.99",
+  "home.metals_price_fail": "Gold price unavailable",
+  /* Card 2 · COMEX warehouse inventory */
+  "home.metals_inv": "Gold Inventory",
+  "home.metals_inv_unit": "tonnes",
+  "home.metals_inv_comex": "COMEX Inventory",
+  "home.metals_inv_fail": "Inventory unavailable",
+  /* Look-back window labels */
+  "home.metals_win_1w": "1 week",
+  "home.metals_win_1m": "1 month",
+  "home.metals_win_1y": "1 year",
+  /* Card 3 · Central bank gold buying (WGC Gold Demand Trends, world total) */
+  "home.metals_cb": "Central Bank Buying",
+  "home.metals_cb_unit": "t/quarter",
+  "home.metals_cb_t12m": "Last 12 months",
+  "home.metals_cb_countries": "Countries",
+  "home.metals_cb_qoq": "QoQ",
+  "home.metals_cb_qoq_na": "No prior quarter",
+  "home.metals_cb_fail": "Central bank data unavailable",
   /* V0.99 C5: silver page 3-market selector + premium table i18n */
   "silver.headline_title_3market": "📊 Silver Real-time Assessment · Trend Index × 3 Markets",
   "silver.market_etf": "ETF (562800)",

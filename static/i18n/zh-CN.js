@@ -1365,6 +1365,37 @@ window.PM_I18N_ZH_CN = {
   "home.cat_vc": "创投",
   "home.cat_business": "商业",
   "home.cat_other": "其他",
+  /* V0.115.0：首页「贵金属走势」三卡（金价 / 黄金库存 / 央行购金）。
+     ⚠ 三条线的口径刻意分开标注 —— COMEX 库存 ≠ 央行持有量 ≠ ETF 份额，
+     混谈会得出完全错误的结论，所以单位与来源都进 i18n 而不是硬编码。 */
+  "home.metals_title": "贵金属走势",
+  "home.metals_more": "查看更多 →",
+  "home.metals_as_of": "数据截止",
+  "home.metals_unavailable": "暂不可用",
+  /* 卡 1 · 金价变化 */
+  "home.metals_price": "金价变化",
+  "home.metals_price_unit": "美元/盎司",
+  "home.metals_xau": "纽约金 XAU",
+  "home.metals_price_etf": "黄金 ETF 518880",
+  "home.metals_price_gram": "上海金 Au99.99",
+  "home.metals_price_fail": "金价取数失败",
+  /* 卡 2 · 黄金库存变化（COMEX 交易所仓库库存）*/
+  "home.metals_inv": "黄金库存变化",
+  "home.metals_inv_unit": "吨",
+  "home.metals_inv_comex": "COMEX 库存",
+  "home.metals_inv_fail": "库存取数失败",
+  /* 回看窗口标签 */
+  "home.metals_win_1w": "1 周",
+  "home.metals_win_1m": "1 月",
+  "home.metals_win_1y": "1 年",
+  /* 卡 3 · 央行购金变化（WGC Gold Demand Trends 全球合计）*/
+  "home.metals_cb": "央行购金变化",
+  "home.metals_cb_unit": "吨/季",
+  "home.metals_cb_t12m": "近 12 个月",
+  "home.metals_cb_countries": "覆盖国家",
+  "home.metals_cb_qoq": "较上季",
+  "home.metals_cb_qoq_na": "无上季可比",
+  "home.metals_cb_fail": "央行购金取数失败",
   /* V0.99 C5：白银页 3-market 选择器 + 升贴水表 i18n */
   "silver.headline_title_3market": "📊 白银实时评估摘要 · 趋势指数 × 三市场报价",
   "silver.market_etf": "ETF（562800）",
