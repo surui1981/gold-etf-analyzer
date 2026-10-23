@@ -55,15 +55,16 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **64** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **39** 段 / 38 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **48** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **100** 个（本地） | 按版本 checkout 的锚点 |
+| git tag | **100** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
 
 > **39 段 ≠ 38 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **100 个 tag 是本地数**：GitHub 上只有 **52** 个（46 个本轮补打的 + 2 个原作者
-> 建好却忘了推的，另有 48 个待推 —— 详见 §4.2）。
+> **100 个 tag 本地与远端一致**（2026-10-24 已全部推送）：远端 100 = 本地 100，
+> 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
+> **指向不一致的 0 个**。其中 annotated 94 / lightweight 6，两侧分布相同。
 
 > **`## [Unreleased]` 段不算在上面 39 段里** —— 它是「已改完、还没进版本」的变更，
 > 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的约定放在文件头。
@@ -160,17 +161,19 @@ V0.101 / V0.102 两段加了显式说明 —— **它们从未 bump 过版本号
 所属的 commit **就是**发版点。这比在 commit message 里 grep 版本号可靠 ——
 后者会撞上「功能批次标签」（V0.101 / V0.102 从未 bump 过版本号，grep 会把它们错认成发版点）。
 
-现在：`git describe --tags` → `v0.116.0-3-g638946f`，tag 总数 100。
+现在：`git describe --tags` → `v0.116.0-5-gd1aff31`，tag 总数 100（本地 = 远端）。
+（`-5-gd1aff31` 是**在 `d1aff31` 这个 commit 处实测**的快照值 ——
+`git describe` 的计数每加一个 commit 就 +1，所以别把它当常量，直接跑命令看当前值。）
 
-> ⚠️ **本地 tag 未推送到 GitHub**（用户明确选择「本地补打，暂不推送」）。
-> 要推：`git push origin --tags`。
+> ✅ **tag 已全部推送到 GitHub**（2026-10-24）：远端 100 = 本地 100。
 >
-> 📌 **推的时候会是 48 个，不是 46 个** —— 本地比远端多 48 个 tag，
+> 📌 **实际推了 48 个，不是 46 个** —— 本地比远端多 48 个 tag，
 > 但只有 46 个是本轮新建的；另外 **2 个（`v0.83.0` / `v0.83.1`）是原作者
-> 2026-10-10 就建好、但一直忘了推的**（远端从 v0.83.2 起才有）。
-> 也就是说：**本地原有 54 个里，只有 52 个在 GitHub 上** ——
+> 2026-10-10 就建好、但一直忘了推的**（远端原先从 v0.83.2 起才有）。
+> 也就是说：**本地原有 54 个里，原先只有 52 个在 GitHub 上** ——
 > 这个差值比「本轮补打几个」更容易让人以为推漏了，其实是没推过。
-> 实测：远端 tag 数 52，本地 100，`comm` 比对差 48。
+> 推之前逐个核过：48 个 tag 指向的 commit **全部是 `origin/main` 的祖先**，
+> 不会在 GitHub 上留悬空 tag。
 >
 > ⚠️ **历史 tag 的两处不一致保持原样，没追溯改写**：
 >
@@ -253,7 +256,7 @@ python3 scripts/_reverse_check_links_scope.py   # 7 个用例，含 2 个防误�
 
 # 按版本 checkout
 git checkout v0.116.0        # tag 锚点（checkout 后记得 git checkout main 回来）
-git describe --tags           # → v0.116.0-3-g638946f
+git describe --tags           # → v0.116.0-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
 ```
 
 ---
