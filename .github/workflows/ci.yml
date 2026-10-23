@@ -11,12 +11,13 @@
 #      check_pwa_assets.py（SW 缓存版本 / SHELL_ASSETS / manifest）
 #      check_links.py（markdown 死链与锚点）
 #      check_deps.py（代码三方 import vs pyproject 声明）
+#   6. V0.116.1 新增 check_version_sync.py（4 处版本号同步 / CHANGELOG 版本段降序 / version-status 基线）
 #
-# 注：第 6 道门禁 scripts/check_cluster_render.mjs 需 Node，不在本 job 直接执行；
+# 注：第 7 道门禁 scripts/check_cluster_render.mjs 需 Node，不在本 job 直接执行；
 #     它由 tests/test_ui_cluster_render.py 包进 pytest（机器无 node 时该用例 skip）。
 #
 # 门禁执行策略（V0.78.2 起）
-#   - 全部八道门禁带 `if: always() && steps.install.outcome == 'success'`：
+#   - 全部九道门禁带 `if: always() && steps.install.outcome == 'success'`：
 #     ① `always()` 保证前序失败时本门禁仍执行 —— 每道门禁必须自己给出结论，
 #        不被别人的失败掩盖（GitHub 默认 `if: success()` 会让其后 step 全 skip，
 #        而 skip 在界面上与「通过」仅一线之隔）；
@@ -111,7 +112,7 @@ jobs:
         if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_docs_claims.py
 
-      # V0.78.1 新增三道静态门禁；V0.78.2 起本 job 的**全部八道门禁**都带
+      # V0.78.1 新增三道静态门禁；V0.78.2 起本 job 的**全部九道门禁**都带
       # `if: always() && steps.install.outcome == 'success'` ——
       # 前一道失败不再让后一道被 skip（详见本文件头部「门禁执行策略」）。
       - name: PWA assets gate (sw.js VERSION / SHELL_ASSETS / manifest.json)
@@ -121,6 +122,14 @@ jobs:
       - name: Links gate (dead links / anchors in markdown)
         if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_links.py
+
+      # V0.116.1 新增：版本号 4 处同步 + CHANGELOG 顺序 + version-status 基线。
+      # 此前 pyproject.toml ↔ uv.lock 这一对**无人看管** ——
+      # 改了 pyproject 忘了跑 `uv lock`，本地跑任何门禁都是绿的，
+      # 只有 CI 的 `uv sync --frozen` 会炸，而那报错离根因很远。
+      - name: Version sync gate (4 version points / CHANGELOG order / version-status baseline)
+        if: always() && steps.install.outcome == 'success'
+        run: uv run python scripts/check_version_sync.py
 
       - name: Dependency declaration gate (src+tests imports vs pyproject)
         if: always() && steps.install.outcome == 'success'

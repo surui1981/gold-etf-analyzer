@@ -125,6 +125,65 @@ def test_repo_docs_have_no_broken_links() -> None:
     assert links > 50, "链接总数异常偏少，可能是扫描范围被改坏了"
 
 
+# ───────────────── 2026-10-24 · link reference definition 与根 CHANGELOG ─────────────────
+#
+# 背景：两个盲区，都是「缺陷存在但任何门禁都报不出来」——
+#   ① 根 CHANGELOG.md 原本根本不在扫描范围内（只扫 README.md + docs/**），
+#      于是 CHANGELOG 正文里 4 条指向不存在的 release notes 的内联死链一直没人管；
+#   ② link reference definition（`[label]: target`）压根不被检查 ——
+#      内联链接正则抓不到这种写法，于是 CHANGELOG 底部 5 条坏定义同样是绿的。
+#      **它们是死链，只是长得不像链接。**
+
+
+def test_detects_missing_ref_def_target(tmp_path: Path) -> None:
+    """负向：`[label]: missing.md` 指向不存在的文件必须被检出。"""
+    doc = tmp_path / "a.md"
+    doc.write_text("[标签]: missing.md\n", encoding="utf-8")
+    problems, links, _ = check_links.check_files([doc], skip_dirs=set())
+    assert len(problems) == 1
+    assert "链接目标不存在" in problems[0]
+    assert "link reference definition" in problems[0]
+    assert links == 1
+
+
+def test_ref_def_inside_code_block_is_ignored(tmp_path: Path) -> None:
+    """正向：代码块里的 `[label]: target` 只是示例文字，不得误报。
+
+    误报比漏报更糟 —— 会让后来者失去对门禁的信任。
+    """
+    doc = tmp_path / "a.md"
+    doc.write_text(
+        "```markdown\n[示例标签]: docs/releases/v0.555.5-not-a-real-link.md\n```\n",
+        encoding="utf-8",
+    )
+    problems, links, _ = check_links.check_files([doc], skip_dirs=set())
+    assert problems == []
+    assert links == 0
+
+
+def test_external_ref_def_is_skipped(tmp_path: Path) -> None:
+    """正向：外部 URL 的定义不检查，也不计入链接数。"""
+    doc = tmp_path / "a.md"
+    doc.write_text("[外链]: https://example.com/compare/v1...HEAD\n", encoding="utf-8")
+    problems, links, _ = check_links.check_files([doc], skip_dirs=set())
+    assert problems == []
+    assert links == 0
+
+
+def test_repo_changelog_is_in_scan_scope() -> None:
+    """根 CHANGELOG.md 必须在死链门禁的扫描范围内。
+
+    回归防护：它曾被漏掉，于是 CHANGELOG 里的死链谁也看不见。
+    """
+    assert REPO_ROOT / "CHANGELOG.md" in check_links.DOC_FILES
+
+
+def test_repo_changelog_has_no_broken_links() -> None:
+    """CHANGELOG 自身的死链必须为零（含 link reference definition）。"""
+    problems, _, _ = check_links.check_files([REPO_ROOT / "CHANGELOG.md"], skip_dirs=set())
+    assert problems == [], f"CHANGELOG 里有失效链接：{problems}"
+
+
 # ───────────────────── V0.110.0 · release notes 索引完整性 ─────────────────────
 #
 # V0.110.0 背景：docs/releases/index.md 停在 V0.100.2，V0.103~V0.109 共 9 份

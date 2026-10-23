@@ -20,6 +20,7 @@
 | **调评估参数 / 加新参数** | [parameter-evaluation.md](parameter-evaluation.md) |
 | **调权重（前端可改的那部分）** | 应用内 `/weights` 页 → [api-reference.md](api-reference.md) 的 settings 段 |
 | 知道"哪个能力是哪个版本加的" | [releases/index.md](releases/index.md) |
+| **知道"当前是哪个版本"** | [version-status.md](version-status.md) |
 | 查某个版本的实现细节 | [releases/](releases/) 对应的 `vX.Y.Z.md` |
 | 知道下一步要做什么 | [roadmap.md](roadmap.md) |
 | 了解**某个功能为什么当初这么做** | [reports/](reports/) 历史分析报告 |
@@ -40,9 +41,10 @@ docs/
 │   ├── development.md           怎么开发
 │   ├── deployment.md            怎么部署
 │   ├── parameter-evaluation.md  评估参数清单与调参建议
+│   ├── version-status.md        应用版本状态（单一真源：现在到底是哪个版本）
 │   └── roadmap.md               路线图（唯一权威的"下一步"）
 │
-├── releases/              39 份 release notes + index.md（能力 × 版本对照）
+├── releases/              48 份 release notes + index.md（能力 × 版本对照）
 ├── parameter-evaluation/  参数调优的专项报告（逐份带日期与 commit）
 └── reports/               阶段性分析报告（历史存档，见该目录 README）
 ```
@@ -80,7 +82,8 @@ docs/
 | 脚本 | 拦什么 | 扫描范围 |
 |------|-------|---------|
 | `check_docs_claims.py` | 文档里写的**表名 / localStorage key / 静态页 / API 端点**在代码里不存在 | `README.md` + `docs/*.md`（**非递归**） |
-| `check_links.py` | 死链 + 锚点失效；**以及 release notes 未被 `releases/index.md` 登记** | `README.md` + `docs/**`（**递归**） |
+| `check_links.py` | 死链 + 锚点失效（含 `[label]: target` 这种**长得不像链接**的 link reference definition）；**以及 release notes 未被 `releases/index.md` 登记** | `README.md` + **根 `CHANGELOG.md`** + `docs/**`（**递归**） |
+| `check_version_sync.py` | 4 处版本号不一致；CHANGELOG 版本段乱序/重复；当前版本缺 notes 或未登记；**`version-status.md` 基线过期** | 版本文件 + CHANGELOG + `docs/releases/index.md` + `docs/version-status.md` |
 | `check_routes.py` | 路由与文档双向验证 | 运行时 |
 
 **三条踩过的坑**：
@@ -99,5 +102,8 @@ docs/
 
 - **抬头三行**：`# 标题` + `> **目标读者**：… ｜ **状态**：活跃/归档 ｜ **最近更新**：YYYY-MM-DD`。
 - **当前文档不带版本号**，版本号只出现在 `releases/index.md` 与 `CHANGELOG.md`。
+  - **唯一例外**：`version-status.md` —— 它**就是**讲版本号的，所以必须带。
+    为防它悄悄过期，`check_version_sync.py` 会校验它声明的基线 == 应用版本，
+    **发版时忘了更新它，门禁立刻变红**。
 - **能力首次落地**才登记进 `releases/index.md`；同一能力的后续小修不登记。
 - 文件名：release notes 用 `vX.Y.Z.md`（与 git tag 一致）；其余用英文 kebab-case。

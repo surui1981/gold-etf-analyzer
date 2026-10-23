@@ -11,13 +11,28 @@ r"""校验 markdown 文档内部链接有效（第 6 道门禁 · 死链 / 锚�
 （旧链接把「全角括号被删后不留分隔符」与「中点只产生一个连字符」两处都写错了），
 它自 `867b579` 起存在了多个版本而无人发现。
 
-本脚本把这件事机械化：扫描 `README.md` 与 `docs/**/*.md` 的 markdown 链接，断言
+本脚本把这件事机械化：扫描 `README.md`、根 `CHANGELOG.md` 与 `docs/**/*.md` 的 markdown 链接，断言
 
   1. **目标文件存在**（相对路径按所在文档目录解析）；
   2. **锚点在目标文件里能解析** —— 支持三种锚点来源：
      - ATX 标题（`## 标题`）
      - Setext 标题（`标题` + 下一行 `===` / `---`）
      - 显式 HTML 锚（`<a id="...">` / `<a name="...">`）
+  3. **link reference definition**（`[label]: target`）的目标也存在。
+
+2026-10-24 补上的两处盲区（都是实测发现的，不是理论推断）
+--------------------------------------------------------
+① **根 `CHANGELOG.md` 原本根本不在扫描范围内** ——
+   门禁只扫 `README.md` + `docs/**`。于是 CHANGELOG 里 4 条指向不存在的
+   release notes 的内联死链，在任何门禁下都是绿的。纳入扫描后当场抓到。
+
+② **link reference definition 压根不被检查** ——
+   内联链接正则抓不到 `[label]: target` 这种写法。于是 CHANGELOG 底部 5 条坏定义
+   （4 条指向不存在的 release notes + 1 条指向 `example.com` 占位 URL）同样是绿的。
+   **它们是死链，只是长得不像链接。**
+
+只修实例不修类别 = 缺陷会复发。两处新能力都有反向验证：
+`scripts/_reverse_check_links_scope.py`（7 个用例，含 2 个「不该报红」的防误报用例）。
 
 锚点 slug 规则（必须与 GitHub 实际渲染一致）
 --------------------------------------------
@@ -48,9 +63,17 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# 扫描范围：README + docs 下全部 md（**递归**，与 check_docs_claims.py 的非递归范围不同，
+# 扫描范围：README + **根 CHANGELOG.md** + docs 下全部 md
+# （**递归**，与 check_docs_claims.py 的非递归范围不同，
 # 因为死链是「点不开」的缺陷，历史报告里的坏链接同样应修）。
-DOC_FILES: list[Path] = [ROOT / "README.md", *sorted((ROOT / "docs").rglob("*.md"))]
+#
+# ⚠ 根 `CHANGELOG.md` 是 2026-10-24 才纳入的 —— 此前它根本不在扫描范围内，
+# 于是 CHANGELOG 里 4 条指向不存在的 release notes 的内联死链一直没人管。
+DOC_FILES: list[Path] = [
+    ROOT / "README.md",
+    ROOT / "CHANGELOG.md",
+    *sorted((ROOT / "docs").rglob("*.md")),
+]
 
 # 历史快照目录：跳过锚点校验，只看文件存在性
 ANCHOR_SKIP_DIRS = {ROOT / "docs" / "reports"}
@@ -60,11 +83,26 @@ EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "tel:", "data:", "ftp://"
 # `[text](target)` 与 `![alt](target)`；允许可选的 "title"
 LINK_RE = re.compile(r"!?\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+[\"'][^\"']*[\"'])?\s*\)")
 
+# `[label]: target` —— markdown 的 **link reference definition**。
+# 2026-10-24 实测：内联链接正则**抓不到**这种写法，于是 CHANGELOG 底部
+# 5 条坏定义（4 条指向不存在的 release notes + 1 条指向 example.com 占位 URL）
+# 在任何门禁下都是绿的 —— 它们是**死链**，只是长得不像链接。
+# 匹配要求：行首（≤3 空格缩进；4 空格缩进在 markdown 里是代码块）、
+# 标签不含 `]`、目标非空、允许可选的 "title"。
+REF_DEF_RE = re.compile(
+    r"^(?P<ind>[ \t]{0,3})(?P<label>\[[^\]\n]+\]):[ \t]*(?P<dest>\S+)"
+    r"(?:[ \t]+[\"'(].*[\"')])?[ \t]*$",
+    re.M,
+)
+
+# fenced code block 的开闭标记（``` 或 ~~~，允许缩进与语言标注）
+FENCE_RE = re.compile(r"^[ \t]{0,3}(?P<fence>```+|~~~+)")
+
 ATX_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*#*\s*$", re.M)
 # Setext 标题：文本行**紧接**下一行 `===` / `---`（中间不得有空行）。
 # ⚠ 必须用 `\n` 而非 `\s*\n`：后者会把「普通段落 + 空行 + 水平分隔线 `---`」误判成标题，
 #    实测在 4 份文档上凭空产生 **118 个垃圾锚点**（把锚点集合从 ~60 撑到 ~120），
-#    直接推高误报概率 —— 详见 `_calib_links.py` 的权威对账输出。
+#    直接推高误报概率 —— 该结论来自对 GitHub blob HTML 渲染结果的逐条对账。
 SETEXT_RE = re.compile(r"^(?![#\s|>\-])(.+?)[ \t]*\n(={3,}|-{3,})[ \t]*$", re.M)
 HTML_ANCHOR_RE = re.compile(r"<a\s+[^>]*(?:id|name)\s*=\s*\"([^\"]+)\"", re.I)
 
@@ -90,7 +128,7 @@ def slug_candidates(text: str) -> set[str]:
     ⚠ 本函数故意返回**多个候选**（而非 GitHub 的唯一正解），原则是
     「**宁愿多给候选，也不要误报**」—— 误报会让后来者失去对门禁的信任。
 
-    两处容错，均由 `_calib_links.py` 对 GitHub blob HTML 的权威对账确定：
+    两处容错，均由对 GitHub blob HTML 渲染结果的逐条对账确定：
 
     1. **字符集**：宽字符集（`\\w`）会保留 `①` 这类 Unicode 数字符号，而 GitHub 会删除它。
        实例：`docs/api-reference.md` 的「V0.75.0 第 ① 步」→ GitHub 生成 `第--步`。
@@ -141,6 +179,32 @@ def _link_targets(text: str) -> list[tuple[int, str]]:
     return out
 
 
+def _ref_def_targets(text: str) -> list[tuple[int, str]]:
+    """返回 link reference definition 的 (行号, 目标) 列表。
+
+    **跳过 fenced code block**：代码块里写 `[label]: target` 只是示例文字，
+    markdown 不会把它当定义。按块配对（``` / ~~~ 各自独立配对）来剔除。
+    """
+    out: list[tuple[int, str]] = []
+    in_fence = False
+    fence_marker = ""
+    for line_no, line in enumerate(text.split("\n"), 1):
+        fm = FENCE_RE.match(line)
+        if fm:
+            marker = fm.group("fence")[0] * 3
+            if not in_fence:
+                in_fence, fence_marker = True, marker
+            elif marker == fence_marker:
+                in_fence, fence_marker = False, ""
+            continue
+        if in_fence:
+            continue
+        m = REF_DEF_RE.match(line)
+        if m:
+            out.append((line_no, m.group("dest")))
+    return out
+
+
 def _in_anchor_skip_dir(path: Path, skip_dirs: set[Path] | None = None) -> bool:
     dirs = ANCHOR_SKIP_DIRS if skip_dirs is None else skip_dirs
     return any(d in path.parents for d in dirs)
@@ -169,6 +233,7 @@ def check_files(
             rel_doc = doc.as_posix()
         text = doc.read_text(encoding="utf-8")
         links = _link_targets(text)
+        ref_defs = _ref_def_targets(text)
         n_anchor = 0
         doc_problems = 0
         skip_anchor = _in_anchor_skip_dir(doc, skip_dirs)
@@ -186,9 +251,7 @@ def check_files(
                 if anchor and not skip_anchor:
                     n_anchor += 1
                     if anchor not in anchors_of(doc):
-                        problems.append(
-                            f"{rel_doc}:{line_no} 锚点 #{anchor} 在本文件中不存在"
-                        )
+                        problems.append(f"{rel_doc}:{line_no} 锚点 #{anchor} 在本文件中不存在")
                         doc_problems += 1
                 continue
 
@@ -208,10 +271,51 @@ def check_files(
                     )
                     doc_problems += 1
 
+        # link reference definition（`[label]: target`）——
+        # 它长得不像链接，但同样是死链时同样点不开。
+        for line_no, target in ref_defs:
+            if target.startswith(EXTERNAL_PREFIXES):
+                continue
+            total_links += 1
+
+            path_part, _, anchor = target.partition("#")
+            anchor = anchor.strip()
+
+            if not path_part:
+                if anchor and not skip_anchor:
+                    n_anchor += 1
+                    if anchor not in anchors_of(doc):
+                        problems.append(
+                            f"{rel_doc}:{line_no} 锚点 #{anchor} 在本文件中不存在"
+                            "（link reference definition）"
+                        )
+                        doc_problems += 1
+                continue
+
+            target_path = (doc.parent / path_part).resolve()
+            if not target_path.exists():
+                problems.append(
+                    f"{rel_doc}:{line_no} 链接目标不存在：{target}（link reference definition）"
+                )
+                doc_problems += 1
+                continue
+
+            if anchor and not skip_anchor and not target_path.is_dir():
+                n_anchor += 1
+                if anchor not in anchors_of(target_path):
+                    problems.append(
+                        f"{rel_doc}:{line_no} 锚点失效：{target}"
+                        "（link reference definition，目标文件无该锚点）"
+                    )
+                    doc_problems += 1
+
         total_anchors += n_anchor
         if verbose:
             mark = "FAIL" if doc_problems else "OK  "
-            print(f"  [{mark}] {rel_doc}  链接 {len(links)} · 待校验 {n_anchor} 锚点")
+            print(
+                f"  [{mark}] {rel_doc}  链接 {len(links)} + 定义 {len(ref_defs)}"
+                f" · 待校验 {n_anchor} 锚点"
+            )
 
     return problems, total_links, total_anchors
 

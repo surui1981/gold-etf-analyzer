@@ -192,6 +192,7 @@
 
 - **能力全景**（本表）回答"项目有什么、什么时候加的"
 - **[CHANGELOG.md](../../CHANGELOG.md)** 回答"发版节点"（发行时刻 + 类型分类）
+- **[docs/version-status.md](../version-status.md)** 回答"**现在到底是哪个版本**"（4 处版本号一致性 / 各来源覆盖矩阵 / 已知缺口 / 怎么自己查）
 - **[docs/roadmap.md §1](../roadmap.md#1-历史里程碑截至-v01000)** 回答"历史里程碑 + 当前焦点 + 推进主线"
 - **[docs/releases/](.)** 单文件 release notes 回答"该版本的实现细节（commit 链 / 验证步骤 / 风险）"
 

@@ -4,6 +4,66 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [Unreleased]
+
+`版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 未 bump 版本号，随下一次发版上线
+
+> **本轮是维护性变更，不是新版本**：应用版本仍为 **V0.116.0**（4 处版本号未动）。
+> 放在 `[Unreleased]` 而不是新起 `[V0.116.1]`，是因为**应用代码没有变化** ——
+> 新起一个版本号会让 `/openapi.json` 报出一个与代码不对应的版本。
+> 详见 [docs/version-status.md](docs/version-status.md)。
+
+### Added
+
+- 📊 **[docs/version-status.md](docs/version-status.md)（新）—— 应用版本状态的单一真源**
+  - 4 处版本号（`src/app/__init__.py` / `pyproject.toml` / `uv.lock` / `static/sw.js`）的**位置 / 值 / 谁读它 / 不同步的后果**
+  - 4 个来源的**覆盖矩阵**（bump 史 64 / CHANGELOG 39 段 / release notes 48 / tag 100）与**故意保留的缺口**（各附原因与逐个版本号）
+  - 「怎么自己查」：可直接复制的 grep 命令 + 门禁命令
+- 🚦 **新门禁 `scripts/check_version_sync.py`（9 条断言）** —— 覆盖之前**无人看管**的 `pyproject.toml` ↔ `uv.lock` 一对
+  （改了 pyproject 忘了 `uv lock`，本地跑任何门禁都绿，只有 CI 的 `uv sync --frozen` 会炸，而那报错离根因很远）
+  - 另含 **CHANGELOG 版本段严格降序、无重复** —— 这条正是抓出下面 4 处历史错位的判据
+  - 另含 `version-status.md` 基线版本校验 —— **防这份单一真源文档悄悄过期后开始撒谎**
+- 🧪 **`scripts/_reverse_check_version_sync.py`（11 个反向用例）** —— 注入 11 种故障，逐条确认门禁能变红
+  - 过程中抓出**门禁自己的一个假绿**：index.md 登记检查原先用裸子串匹配 `v0.116.0.md`，
+    改成 `v0.116.0.md.x` 仍全绿 —— 已改为匹配 markdown **链接目标**
+- 🏷️ **本地补打 46 个 git tag**（v0.85.0 ~ v0.116.0 + 6 个从未 bump `__version__` 的版本），tag 总数 54 → 100
+  - 版本 → commit 的依据是 **`__version__` bump 史**，不是 commit message 里 grep 版本号
+    （后者会撞上「功能批次标签」：V0.101 / V0.102 从未 bump 过版本号）
+  - ⚠️ **本地 tag 未推送**（`git push origin --tags` 可补推）
+
+### Fixed
+
+- 🐛 **CHANGELOG 的版本归属曾经是乱的** —— 实测到 4 处，查发版史会**查错版本**：
+
+  | 问题 | 实测证据（改前） |
+  |---|---|
+  | `## [V0.105.0]` 出现两次，第一次是**空壳**（只有 header + `---`） | 全文 35 段 / 32 个唯一版本号 |
+  | `## [V0.104.0]` 出现两次，**第一次那段里混装着 5 个别的版本**（V0.102.0 / V0.103.0 / V0.100.1 / V0.100.2 / V0.103.1） | 第一次那段 line 801-845、4809 字 |
+  | V0.100.0 的段被拆成两半：主体在 line 846-868，**它的 `### Discipline`（line 900-904）+ `[详情]` 链接被甩到第二个 V0.104.0 段之后**，中间没有任何 `## [V0.100.0]` header | 改前文件共 1154 行 |
+  | 顺序错乱：V0.100.0 夹在两个 V0.104.0 之间；V0.107.0 排在 V0.107.1 前面 | — |
+
+  - ⇒ **「今日要闻」那段真实交付原本挂在 V0.104.0 名下**，而 V0.104.0 真正的内容（日期分页）在另一处
+  - ⇒ 改法：按**行号切片逐字搬运**（不是重新誊写），重排为严格降序；
+    补上此前缺失的 V0.103.1 / V0.103.0 / V0.102.0 / V0.101.0 / V0.100.2 / V0.100.1 六段
+  - ⇒ **内容保全已验证**：改前改后全文行多重集比对，**只有 2 行消失**（那两个重复 header 各从 2 份变 1 份），
+    新增 32 行 = 29 行包装文字 + 3 行 V0.101.0 的内容 bullet（该 3 个 commit 已核验存在且 subject 对得上）
+  - ⇒ 补记了 **V0.101 / V0.102 从未作为版本号发版**的事实 —— 它们只是 commit message 里的功能批次标签
+- 🐛 **CHANGELOG 底部的 link reference 定义有 5 条是坏的**（4 条指向不存在的 release notes + 1 条指向 `example.com` 占位 URL）
+  - ⇒ 坏的那 5 条已删除；**且今后由 `check_links.py` 门禁管住**（此前根 `CHANGELOG.md` 根本不在死链扫描范围内）
+- 🐛 **`## [Unreleased]` 段落原本是空的、且落在文件中间**（line 652，夹在 V0.107.0 与 V0.106.2 之间）
+  - ⇒ 已移到文件头，填上本轮内容
+- 🐛 **`docs/README.md` 里「39 份 release notes」是过期的**（实际 48 份）—— 已更正，并补上 `version-status.md` 的入口与新门禁
+
+### Discipline
+
+- **版本号只认 4 处**：`src/app/__init__.py` 的 `__version__` 是唯一真源，
+  `pyproject.toml` / `uv.lock` / `static/sw.js` 是它的副本 —— 本轮新增门禁把这条从「靠自觉」变成「靠门禁」
+- **发版记录的唯一权威是 CHANGELOG 的版本段顺序** —— 顺序乱了 = 版本归属乱了 = 查发版史会查错
+- **单一真源文档必须会过期** —— 所以 `version-status.md` 的基线版本进了门禁：
+  发版时忘了更新它，门禁立刻变红，而不是让它慢慢开始撒谎
+
+---
+
 ## [V0.116.0] · 2026-10-22
 
 `AI 对话文本格式重做（清洗器 / 移动端裁切 / 排版）` — fix · 详见 [v0.116.0.md](docs/releases/v0.116.0.md)
@@ -555,6 +615,49 @@
 - 📊 **只读实测**：真实 readhub 20 raw → 13 normalized，财经占比 52.9% → **61.5%**（+8.6pp），耗时 1250ms
 - ⚠️ **已知问题（留 V0.109）**：`_BIZ_KW` 的「发布」过泛，会把战事新闻判成商业（关键词精度问题，非站点问题）；`test_list_items_filter_days` 的日期轮转失败经 `git stash` 验证为 pre-existing
 
+## [V0.107.1] · 2026-10-20
+
+`今日要闻分类聚焦（财经 32→60+ / 科技 33→50+ / 创投 23→35+ / 商业 22→30+）+ fetcher 弃入「其他」+ page_size 50 + service 二次 gate` — 4 commit hotfix
+
+### Added
+
+- ✨ **关键词字典焦点化扩充**（`src/app/repositories/news_classifier.py`）
+  - **财经** 32 → 67：新增「行情」（牛市 / K线 / 黄金ETF / PE）、「主体」（比特币 / ETH / 离岸 / 外汇 / 储备）、「宏观」（衰退 / 通缩 / 缩表）、「人物」（鲍威尔 / 耶伦 / 巴菲特 / 芒格）、「机构」（贝莱德 / 桥水 / 高盛 / 中金 / 中信 / 瑞银 / 摩根士丹利）— 用户原话「主要聚焦于财经方面的新闻」重点扩充
+  - **科技** 33 → 49：删「英伟达」duplicate（修旧版 L44 bug）+ 硬件公司（比亚迪 / 特斯拉 / SpaceX / 台积电 / 中芯国际 / 宁德时代 / 三星 / 英特尔 / AMD / 高通 / 联发科 / Meta / 亚马逊 / Oracle / IBM）+ 前沿（机器人 / 无人机 / 储能 / 自动驾驶 / 脑机接口 / 可穿戴）+ 节点（3nm / 5nm / 7nm / 5 纳米 / 7 纳米）
+  - **创投** 23 → 36：行为（风投 / 退出 / 并购 / M&A / FA / 财顾 / 路演 / BP / 商业计划书）+ 身份（创始人 / 联创 / 合伙人 / GP / LP）+ 事件（增发 / 配股 / 可转债 / 债转股 / 借壳 / 回购 / 对赌）
+  - **商业** 22 → 32：扩张（出海 / 跨境 / 国际化 / 海外）+ 渠道（电商 / 直播带货 / 抖音 / 微信 / 品牌）+ 经营（份额 / 用户 / 流量 / 增长 / 净利润 / 扭亏 / 亏损 / 增亏 / 渗透率）
+  - 优先级保留 `财经 > 科技 > 创投 > 商业 > 其他` 不变
+
+### Changed
+
+- 🔧 **fetcher 弃入「其他」**（`src/app/repositories/readhub_fetcher.py` L130-146）
+  - `_normalize()` 末尾加 `if category == "其他": return None` —— 不写入 DB，落 `logger.debug`
+- 🔧 **page_size 20 → 50**（同上 L62）
+  - readhub max 100，实测 50 P99 <2s，4h 周期足够覆盖
+  - fetcher 文档 + User-Agent V0.102 → V0.107.1 同步
+- 🔧 **service 二次 gate**（`src/app/services/news_feed.py` L96-126）
+  - `refresh()` 在 fetcher 返回 records 后再 `tuple(...)` filter `category in (财经/科技/创投/商业)`
+  - 全被弃入 → 软失败 `ok=False + error='no valid items after category filter'`，保留「保留末次」 UX（参考 V0.84 状态条合并模式）
+  - 落入条目打印 `logger.info dropped N`
+
+### Fixed
+
+- 🐛 **`_TECH_KW` 重复「英伟达」bug**（V0.105 旧版 L44 末尾）—— 字典去重
+
+### Discipline
+
+- **测试覆盖**：3 测试文件 + 1 新增文件（test_news_classifier 10→30 / test_readhub_fetcher 16→18 / test_news_feed_service 新建 3 / test_news_feed API +2 / 仓储 test_news_feed 24 不变）；40 测试 PASSED（1 pre-existing failure `test_list_items_filter_days` 由 seed 日期漂移导致，与 V0.107.1 无关，不阻塞发版）
+- **维护线覆盖率**：本次仅修改 backend + tests，UI / API schema 不变；`check_pwa_assets.py` sw.js VERSION bump 必跑门禁已通过
+- **不在 5 类 list 中间移除「其他」常量**（CATEGORIES 5 类保持兼容；新写入 daily `other_count = 0`）
+
+### Why hotfix 不开 docs 单条
+
+V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetcher 弃入「其他」），无新功能模块；纳入 V0.107 综合 release notes 统一记录，并在 `docs/releases/v0.107.1.md` 留独立 summary。
+
+---
+
+---
+
 ## [V0.107.0] · 2026-10-19
 
 `今日要闻 按天聚合 + 刷新 UX 改进` — news_feed_daily 物化宽表 + alembic 双 head 合并 + 刷新 toast
@@ -603,53 +706,6 @@
 > 能力 × 版本对照（"哪个能力在哪个版本落地"）见 [docs/releases/index.md](docs/releases/index.md)
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 与 [Conventional Commits](https://www.conventionalcommits.org/zh-hans/) 规范。
-
----
-
-## [Unreleased]
-
----
-
-## [V0.107.1] · 2026-10-20
-
-`今日要闻分类聚焦（财经 32→60+ / 科技 33→50+ / 创投 23→35+ / 商业 22→30+）+ fetcher 弃入「其他」+ page_size 50 + service 二次 gate` — 4 commit hotfix
-
-### Added
-
-- ✨ **关键词字典焦点化扩充**（`src/app/repositories/news_classifier.py`）
-  - **财经** 32 → 67：新增「行情」（牛市 / K线 / 黄金ETF / PE）、「主体」（比特币 / ETH / 离岸 / 外汇 / 储备）、「宏观」（衰退 / 通缩 / 缩表）、「人物」（鲍威尔 / 耶伦 / 巴菲特 / 芒格）、「机构」（贝莱德 / 桥水 / 高盛 / 中金 / 中信 / 瑞银 / 摩根士丹利）— 用户原话「主要聚焦于财经方面的新闻」重点扩充
-  - **科技** 33 → 49：删「英伟达」duplicate（修旧版 L44 bug）+ 硬件公司（比亚迪 / 特斯拉 / SpaceX / 台积电 / 中芯国际 / 宁德时代 / 三星 / 英特尔 / AMD / 高通 / 联发科 / Meta / 亚马逊 / Oracle / IBM）+ 前沿（机器人 / 无人机 / 储能 / 自动驾驶 / 脑机接口 / 可穿戴）+ 节点（3nm / 5nm / 7nm / 5 纳米 / 7 纳米）
-  - **创投** 23 → 36：行为（风投 / 退出 / 并购 / M&A / FA / 财顾 / 路演 / BP / 商业计划书）+ 身份（创始人 / 联创 / 合伙人 / GP / LP）+ 事件（增发 / 配股 / 可转债 / 债转股 / 借壳 / 回购 / 对赌）
-  - **商业** 22 → 32：扩张（出海 / 跨境 / 国际化 / 海外）+ 渠道（电商 / 直播带货 / 抖音 / 微信 / 品牌）+ 经营（份额 / 用户 / 流量 / 增长 / 净利润 / 扭亏 / 亏损 / 增亏 / 渗透率）
-  - 优先级保留 `财经 > 科技 > 创投 > 商业 > 其他` 不变
-
-### Changed
-
-- 🔧 **fetcher 弃入「其他」**（`src/app/repositories/readhub_fetcher.py` L130-146）
-  - `_normalize()` 末尾加 `if category == "其他": return None` —— 不写入 DB，落 `logger.debug`
-- 🔧 **page_size 20 → 50**（同上 L62）
-  - readhub max 100，实测 50 P99 <2s，4h 周期足够覆盖
-  - fetcher 文档 + User-Agent V0.102 → V0.107.1 同步
-- 🔧 **service 二次 gate**（`src/app/services/news_feed.py` L96-126）
-  - `refresh()` 在 fetcher 返回 records 后再 `tuple(...)` filter `category in (财经/科技/创投/商业)`
-  - 全被弃入 → 软失败 `ok=False + error='no valid items after category filter'`，保留「保留末次」 UX（参考 V0.84 状态条合并模式）
-  - 落入条目打印 `logger.info dropped N`
-
-### Fixed
-
-- 🐛 **`_TECH_KW` 重复「英伟达」bug**（V0.105 旧版 L44 末尾）—— 字典去重
-
-### Discipline
-
-- **测试覆盖**：3 测试文件 + 1 新增文件（test_news_classifier 10→30 / test_readhub_fetcher 16→18 / test_news_feed_service 新建 3 / test_news_feed API +2 / 仓储 test_news_feed 24 不变）；40 测试 PASSED（1 pre-existing failure `test_list_items_filter_days` 由 seed 日期漂移导致，与 V0.107.1 无关，不阻塞发版）
-- **维护线覆盖率**：本次仅修改 backend + tests，UI / API schema 不变；`check_pwa_assets.py` sw.js VERSION bump 必跑门禁已通过
-- **不在 5 类 list 中间移除「其他」常量**（CATEGORIES 5 类保持兼容；新写入 daily `other_count = 0`）
-
-### Why hotfix 不开 docs 单条
-
-V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetcher 弃入「其他」），无新功能模块；纳入 V0.107 综合 release notes 统一记录，并在 `docs/releases/v0.107.1.md` 留独立 summary。
-
----
 
 ---
 
@@ -766,10 +822,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 
 ## [V0.105.0] · 2026-10-19
 
----
-
-## [V0.105.0] · 2026-10-19
-
 `headlines 分类筛选（5 类 + 多 switch）` — 5 commit
 
 ### Added
@@ -800,6 +852,80 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 
 ## [V0.104.0] · 2026-10-19
 
+`headlines 按日期分页（单日模式 + 日期导航）` — 4 commit / 1 hotfix
+
+### Added
+
+- 📅 **headlines 单日模式 + 日期导航** —— 用户原话「我们在 headlines 添加按照新闻日期的分页功能」
+  - 🔌 `GET /api/v1/news-feed/items` 新增 2 个 query param：`date`（YYYY-MM-DD）+ `tz_offset_minutes`（带符号，BJT = +480）；与现有 `days` 互斥
+  - 🏷️ `NewsFeedListOut` 新增 3 字段：`current_date`（回显的 date）/ `has_older`（前一天是否有新闻）/ `has_newer`（后一天是否有新闻）
+  - 🗄️ `NewsFeedRepository.list_items` 新增 `date` + `tz_offset_minutes` 参数；新增 `has_items_outside_day()` 2 个 EXISTS 查询（无 COUNT，走索引）
+  - 🖥️ `headlines.html` 工具栏新增 `#dateNav`：◀ / `<input type="date">` / ▶ / 回到今日（4 控件 + 13 行 CSS）
+  - 🖥️ `headlines.js` `enterDateMode()` + `refreshDateNav()`：currentDate state + 单日/范围模式互斥 + 翻页按钮 disabled
+  - 🌐 i18n +3 keys × 3 语 = 9 条翻译：`headlines.btn_today` / `.btn_prev_day_title` / `.btn_next_day_title`
+  - 🧪 仓储 4 例 + API 6 例 + puppeteer 4 状态验收（`scripts/_verify_date_nav.mjs`）
+
+### Fixed
+
+- 🐛 `refreshDateNav()` 同步 `btnToday.hidden`（修复 loadAll 失败时回到今日按钮状态不重置的 UX bug）— **C4 修**
+
+### Discipline
+
+- `total` 字段语义保留 `len(items)`，不升级为「匹配总数」；与现有 6 个测试一致
+- 现有 `days` 模式 SQL 与 V0.103 byte-identical（`date=None` 时不进入 date 分支），0 字段破坏
+- 时区偏移符号约定：JS `getTimezoneOffset()` 返回 WEST，反转后东八区 = +480；2 个测试用例固化
+- 改 static HTML/JS → bump SW VERSION v0.103.2 → v0.104.0（按 V0.100.1 沉淀教训）
+
+[详情](docs/releases/v0.104.0.md)
+
+---
+
+## [V0.103.1] · 2026-10-19
+
+`情报 5 子页 subnav 显示不一致（hotfix）` — 3 commit
+
+### Fixed
+
+- 🔧 **V0.103.1 hotfix · 5 个情报子页 subnav 显示不一致** —— 用户报告「情报下面的五个超链接展示形式和其他页面不一致」
+
+  - 根因：5 个 intel 子页（消息面评估 / 央行购金 / 白银追踪 / 今日要闻 / 我的收藏）渲染同一段 `<nav class="subnav">`（topnav.js 统一生成），但容器 + 样式不一致：news/central_bank/silver 3 老页有内联 `.subnav` CSS + mount INSIDE `.wrap`（900/1040/960px），headlines/favorites 2 新页无内联 CSS + mount OUTSIDE `.wrap`（裸链接铺满 body 宽）
+  - 修复：3 commit
+    - C1 `b55b035 refactor(theme)`：`.subnav` 18 行从 news.html:112-131 抽到 `static/theme.css`，5 子页共用
+    - C2 `6379f42 refactor(static)`：news/central_bank/silver 3 老页 `<div id="topnav-mount">` + `<div id="subnav-mount">` 一起从 `<main>` 内的 `<div class="wrap">` 移到 `<main>` 之前（OUTSIDE 任何宽度限制，与 headlines/favorites 对齐），同时删 3 处 byte-identical 内联 CSS 块
+    - C3 验证：puppeteer 5 子页截图比对（`scripts/_verify_subnav_5sub.mjs`），5 个 subnav 统一为 1352px 全宽 + `rgb(255,255,255)` bg + `10px` radius + 5 tabs + 当前页 active 高亮
+  - 4 处版本同步 bump 到 `v0.103.1`（`__version__` / `pyproject.toml` / `sw.js VERSION` / `CHANGELOG.md`）—— 改 static HTML 必须 bump SW VERSION 是 V0.100.1 沉淀教训
+
+---
+
+## [V0.103.0] · 2026-10-19
+
+`我的收藏（今日要闻「收藏 / 永久存储 / 档案管理」）` — 7 commit / V0.103 正式发版
+
+### Added
+
+- ⭐ **我的收藏**（今日要闻「收藏 / 永久存储 / 档案管理」）—— 7 commit / V0.103 正式发版
+
+  - 🗄️ `user_news_favorites` 表 + alembic 迁移（V0.103 n0a1b2c3d4，down_revision=m9g0a1b2c3 V0.102）；单表 + 16 字段（11 快照 + 3 user_meta + 2 timestamp）；`UNIQUE(news_external_id, news_source)` dedup 主键 + 3 索引（archived_at 倒序 / (importance, archived_at) 复合 / site_name）
+  - 🏗️ ORM `UserNewsFavorite` + `UserNewsFavoriteRepository`（CRUD + 6 维 list：days / site_name / tag LIKE 模式 / importance_min / sort=recent|importance|publish + 分页；3 聚合：list_sites / list_tags 字母序 / get_status 6 维）
+  - 🛠️ `UserNewsFavoriteService` 编排（_normalize_tags 去重 + 字母序；add 时优先从 `news_feed_items` 回填快照保证与 readhub 一致，外部 URL 收藏走客户端直传；`DuplicateFavoriteError` → 409）+ 5 Pydantic schema（ItemOut 16 字段 / CreateIn 12 字段 / UpdateIn 3 字段 / ListOut / StatusOut 6 维）
+  - 🔌 9 REST 端点：`GET /api/v1/favorites/{items,items/{id},sites,tags,stats,exists/{ext}}` + `POST /items` + `PATCH /items/{id}` + `DELETE /items/{id}`（POST/PATCH/DELETE 走 `Depends(require_user)`，单用户模式自动回退 LEGACY_USER，V0.97.0 hotfix 防 401）
+  - 🖥️ `/favorites` 档案管理页（fork headlines.html；toolbar：时间 4 段 / 来源 / 标签 / 重要度 / 排序；4 status chip：总数 / ★3 / 7d / 来源站；主列表：卡片含重要度徽章 + tag chip + inline 笔记 + 重要度升降 + 取消收藏；280px stats 侧栏：5 卡（重要度 / 标签 / 来源 / 月度 / KPI））+ 3 语 i18n 47 keys + topnav intel 第 5 子页
+  - 🔗 `/headlines` 与 `/home` 每条新闻加 `⭐ 收藏` 按钮（POST → toast；409 = 幂等；初次渲染 GET /exists/{ext} 并发检查）
+  - 🧪 仓储 18 例 + API 22 例 + 单用户回退端到端 1 例（`test_favorites_endpoint_works_in_single_user_mode`）+ 4 门禁同步（`check_routes` 17→18 alias，`check_pwa_assets` SHELL_ASSETS +3 条，`check_i18n_keys` V083_KEY_PREFIXES + `favorites.`，`test_main_app` ROOT_ALIASES 16→17）
+
+[详情](docs/releases/v0.103.0.md)
+
+---
+
+## [V0.102.0] · 2026-10-19
+
+`今日要闻（readhub 财经新闻流）` — 6 commit
+
+> ⚠️ **V0.102 从未作为版本号发版** —— `__version__` 从 `v0.100.2` 直接跳到 `v0.103.0`，
+> 本批次**没有 git tag、没有 release notes 文件、没有版本号 bump**。
+> 它只是 commit message 里的功能批次标签，代码已上线并随 V0.103.0 一同发布。
+> 此处按批次补记，以免「今日要闻」这段真实交付在发版史里查无此文。
+
 ### Added
 
 - 📰 **今日要闻**（readhub 财经新闻流） —— 6 commit
@@ -812,15 +938,41 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
   - 🖥️ `/headlines` 静态页（headlines.html + headlines.js，silver 模式拆分；3 chip 顶栏：last_refresh + total + 24h；工具栏 时间/来源/语种 下拉；BJT 日分组卡片；新 tab 跳原文）+ 3 语 i18n 21 keys + topnav 接入「情报」第 4 子页
   - 🧪 22 测试 + 4 门禁同步（`check_routes` 16→17 alias，`check_pwa_assets` SHELL_ASSETS +3 条，`check_i18n_keys` V083_KEY_PREFIXES + `headlines.`，`test_main_app` ROOT_ALIASES 15→16）
 
-- ⭐ **我的收藏**（今日要闻「收藏 / 永久存储 / 档案管理」）—— 7 commit / V0.103 正式发版
+---
 
-  - 🗄️ `user_news_favorites` 表 + alembic 迁移（V0.103 n0a1b2c3d4，down_revision=m9g0a1b2c3 V0.102）；单表 + 16 字段（11 快照 + 3 user_meta + 2 timestamp）；`UNIQUE(news_external_id, news_source)` dedup 主键 + 3 索引（archived_at 倒序 / (importance, archived_at) 复合 / site_name）
-  - 🏗️ ORM `UserNewsFavorite` + `UserNewsFavoriteRepository`（CRUD + 6 维 list：days / site_name / tag LIKE 模式 / importance_min / sort=recent|importance|publish + 分页；3 聚合：list_sites / list_tags 字母序 / get_status 6 维）
-  - 🛠️ `UserNewsFavoriteService` 编排（_normalize_tags 去重 + 字母序；add 时优先从 `news_feed_items` 回填快照保证与 readhub 一致，外部 URL 收藏走客户端直传；`DuplicateFavoriteError` → 409）+ 5 Pydantic schema（ItemOut 16 字段 / CreateIn 12 字段 / UpdateIn 3 字段 / ListOut / StatusOut 6 维）
-  - 🔌 9 REST 端点：`GET /api/v1/favorites/{items,items/{id},sites,tags,stats,exists/{ext}}` + `POST /items` + `PATCH /items/{id}` + `DELETE /items/{id}`（POST/PATCH/DELETE 走 `Depends(require_user)`，单用户模式自动回退 LEGACY_USER，V0.97.0 hotfix 防 401）
-  - 🖥️ `/favorites` 档案管理页（fork headlines.html；toolbar：时间 4 段 / 来源 / 标签 / 重要度 / 排序；4 status chip：总数 / ★3 / 7d / 来源站；主列表：卡片含重要度徽章 + tag chip + inline 笔记 + 重要度升降 + 取消收藏；280px stats 侧栏：5 卡（重要度 / 标签 / 来源 / 月度 / KPI））+ 3 语 i18n 47 keys + topnav intel 第 5 子页
-  - 🔗 `/headlines` 与 `/home` 每条新闻加 `⭐ 收藏` 按钮（POST → toast；409 = 幂等；初次渲染 GET /exists/{ext} 并发检查）
-  - 🧪 仓储 18 例 + API 22 例 + 单用户回退端到端 1 例（`test_favorites_endpoint_works_in_single_user_mode`）+ 4 门禁同步（`check_routes` 17→18 alias，`check_pwa_assets` SHELL_ASSETS +3 条，`check_i18n_keys` V083_KEY_PREFIXES + `favorites.`，`test_main_app` ROOT_ALIASES 16→17）
+## [V0.101.0] · 2026-10-18
+
+`Python 3.13 迁移收口（C1 / C2 / C3a）` — 3 commit
+
+> ⚠️ **V0.101 从未作为版本号发版** —— 同 V0.102，`__version__` 未经过 0.101.0。
+> 3 个 commit 已合入主干并随 V0.103.0 发布。
+
+### Changed
+
+- 🐍 `pyproject.toml` `requires-python` 升 `>=3.13` + ruff `target-version = "py313"` + README 同步 — **C1 `21f9fc5`**
+- 🐍 CI 矩阵收口 3.13 only（撤掉 3.11 / 3.12 组合） — **C2 `a20d881`**
+- 🐳 Dockerfile 双 stage 基础镜像 `3.12-slim` → `3.13-slim` — **C3a `84a0f34`**
+
+---
+
+## [V0.100.2] · 2026-10-19
+
+`home.html 今日要闻 Top 5 → Top 20（hotfix）` — 1 commit
+
+### Fixed
+
+- 🔧 **V0.100.2 hotfix · home.html 今日要闻 Top 5 → Top 20** —— 用户要求首页显示更多新闻
+
+  - 改动：`static/home.js` `limit=5` → `limit=20`、`slice(0, 5)` → `slice(0, 20)`；`static/home.html` 3 骨架 → 5 骨架（视觉占位）
+  - 4 处版本同步 bump 到 `v0.100.2`（按 V0.100.1 沉淀的「改 static 必须 bump」教训，参见 memory `v01001-sw-bump-on-static-change`）
+
+[详情](docs/releases/v0.100.2.md)
+
+---
+
+## [V0.100.1] · 2026-10-19
+
+`home.html 今日要闻不显示新闻标题（SW 缓存击穿 hotfix）` — 1 commit
 
 ### Fixed
 
@@ -828,18 +980,8 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 
   - 根因：`static/sw.js` VERSION 卡在 `v0.100.0`，但 home.html / home.js 已在 bfeb39f 改 readhub 流；activate 阶段按 cache name `gold-shell-v0.100.0` / `gold-runtime-v0.100.0` 不清旧 cache，浏览器持续回放 stale 入口（cache-first 命中 `RUNTIME_CACHE` 旧 `/home` 307 + 旧 `/static/home.html`）
   - 修复：`__version__` / `pyproject.toml` / `sw.js VERSION` 同步 bump `v0.100.1`（4 处版本同步门禁，参照 V0.100.0 release notes 第 105-111 行清单）；activate 阶段新增 `/home` + `/static/home.html` 的 `RUNTIME_CACHE` stale 清理（套 V0.92.0 `/scoring` 同模式）；新增 `pwa_assets` 门禁必跑
-- 🔧 **V0.100.2 hotfix · home.html 今日要闻 Top 5 → Top 20** —— 用户要求首页显示更多新闻
 
-  - 改动：`static/home.js` `limit=5` → `limit=20`、`slice(0, 5)` → `slice(0, 20)`；`static/home.html` 3 骨架 → 5 骨架（视觉占位）
-  - 4 处版本同步 bump 到 `v0.100.2`（按 V0.100.1 沉淀的「改 static 必须 bump」教训，参见 memory `v01001-sw-bump-on-static-change`）
-- 🔧 **V0.103.1 hotfix · 5 个情报子页 subnav 显示不一致** —— 用户报告「情报下面的五个超链接展示形式和其他页面不一致」
-
-  - 根因：5 个 intel 子页（消息面评估 / 央行购金 / 白银追踪 / 今日要闻 / 我的收藏）渲染同一段 `<nav class="subnav">`（topnav.js 统一生成），但容器 + 样式不一致：news/central_bank/silver 3 老页有内联 `.subnav` CSS + mount INSIDE `.wrap`（900/1040/960px），headlines/favorites 2 新页无内联 CSS + mount OUTSIDE `.wrap`（裸链接铺满 body 宽）
-  - 修复：3 commit
-    - C1 `b55b035 refactor(theme)`：`.subnav` 18 行从 news.html:112-131 抽到 `static/theme.css`，5 子页共用
-    - C2 `6379f42 refactor(static)`：news/central_bank/silver 3 老页 `<div id="topnav-mount">` + `<div id="subnav-mount">` 一起从 `<main>` 内的 `<div class="wrap">` 移到 `<main>` 之前（OUTSIDE 任何宽度限制，与 headlines/favorites 对齐），同时删 3 处 byte-identical 内联 CSS 块
-    - C3 验证：puppeteer 5 子页截图比对（`scripts/_verify_subnav_5sub.mjs`），5 个 subnav 统一为 1352px 全宽 + `rgb(255,255,255)` bg + `10px` radius + 5 tabs + 当前页 active 高亮
-  - 4 处版本同步 bump 到 `v0.103.1`（`__version__` / `pyproject.toml` / `sw.js VERSION` / `CHANGELOG.md`）—— 改 static HTML 必须 bump SW VERSION 是 V0.100.1 沉淀教训
+[详情](docs/releases/v0.100.1.md)
 
 ---
 
@@ -866,36 +1008,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 🐛 后端综合指数不再被「未打分消息面」以中性 50 稀释（剔整面归一化后 macro 自动按 0.4/0.7=57.1% 加权） — **C2 ✅**
 - 🐛 test_main_app.ROOT_ALIASES 13 → 15 同步（V0.97.0 /ask + V0.98 /home 后预存漂移） — **C5 ✅**
 - 🐛 check_routes / check_routes_test 3 处硬断言同步（14/13/16 → 16/15/18） — **C5 ✅**
-
----
-
-## [V0.104.0] · 2026-10-19
-
-`headlines 按日期分页（单日模式 + 日期导航）` — 4 commit / 1 hotfix
-
-### Added
-
-- 📅 **headlines 单日模式 + 日期导航** —— 用户原话「我们在 headlines 添加按照新闻日期的分页功能」
-  - 🔌 `GET /api/v1/news-feed/items` 新增 2 个 query param：`date`（YYYY-MM-DD）+ `tz_offset_minutes`（带符号，BJT = +480）；与现有 `days` 互斥
-  - 🏷️ `NewsFeedListOut` 新增 3 字段：`current_date`（回显的 date）/ `has_older`（前一天是否有新闻）/ `has_newer`（后一天是否有新闻）
-  - 🗄️ `NewsFeedRepository.list_items` 新增 `date` + `tz_offset_minutes` 参数；新增 `has_items_outside_day()` 2 个 EXISTS 查询（无 COUNT，走索引）
-  - 🖥️ `headlines.html` 工具栏新增 `#dateNav`：◀ / `<input type="date">` / ▶ / 回到今日（4 控件 + 13 行 CSS）
-  - 🖥️ `headlines.js` `enterDateMode()` + `refreshDateNav()`：currentDate state + 单日/范围模式互斥 + 翻页按钮 disabled
-  - 🌐 i18n +3 keys × 3 语 = 9 条翻译：`headlines.btn_today` / `.btn_prev_day_title` / `.btn_next_day_title`
-  - 🧪 仓储 4 例 + API 6 例 + puppeteer 4 状态验收（`scripts/_verify_date_nav.mjs`）
-
-### Fixed
-
-- 🐛 `refreshDateNav()` 同步 `btnToday.hidden`（修复 loadAll 失败时回到今日按钮状态不重置的 UX bug）— **C4 修**
-
-### Discipline
-
-- `total` 字段语义保留 `len(items)`，不升级为「匹配总数」；与现有 6 个测试一致
-- 现有 `days` 模式 SQL 与 V0.103 byte-identical（`date=None` 时不进入 date 分支），0 字段破坏
-- 时区偏移符号约定：JS `getTimezoneOffset()` 返回 WEST，反转后东八区 = +480；2 个测试用例固化
-- 改 static HTML/JS → bump SW VERSION v0.103.2 → v0.104.0（按 V0.100.1 沉淀教训）
-
-[详情](docs/releases/v0.104.0.md)
 
 ### Discipline
 
@@ -1070,8 +1182,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - commit `2e956d3`
 - **注**：本版未发版本号（V0.92.0 维护线无 sw.js VERSION 改动需求）
 
-[详情](docs/releases/v0.95.1.md)
-
 ---
 
 ## [V0.94.0] · 2026-09-XX
@@ -1084,8 +1194,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 与 V0.96.0 第 3 Tab「命中分析」功能不重叠（verdict 是当日决策摘要 + tab 是时序走势）
 - i18n 新增 verdict 相关 keys × 3 语
 - 门禁：check_routes / check_pwa_assets / check_i18n_keys 全过
-
-[详情](docs/releases/v0.94.0.md)
 
 ---
 
@@ -1101,8 +1209,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - **纪律**：T+0 含打分时刻已发生的盘内信息，**不**用于评估「预测能力」，仅作快速 sanity check
 - `ScoringWideRepository.upsert` 字段白名单加 `actual_change_pct_t0` / `hit_t0`（V0.79.0 #162 教训）
 
-[详情](docs/releases/v0.93.0.md)
-
 ---
 
 ## [V0.92.1] · 2026-08-XX
@@ -1117,8 +1223,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 「待定」色 = `var(--muted)` 灰（pending：等待 T+1/T+3/T+5 就绪）
 - `ScoringSummaryBucket` 新增 `hit: bool | None` 字段 —— 仅 `group_by=day` 且桶内恰 1 行时承载
 - i18n 新增 8 keys × 3 语（hit_filter / hit_filter_all/yes/no / hit_col / hit_col_yes/no/pending）
-
-[详情](docs/releases/v0.92.1.md)
 
 ---
 
@@ -1138,7 +1242,6 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 
 ---
 
-[Unreleased]: https://example.com/compare/v0.99.0...HEAD
 [V0.99.0]: docs/releases/v0.99.0.md
 [V0.98.0]: docs/releases/v0.98.0.md
 [V0.97.2 hotfix]: docs/releases/v0.97.2-hotfix.md
@@ -1146,8 +1249,4 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 [V0.97.1]: docs/releases/v0.97.1.md
 [V0.97.0]: docs/releases/v0.97.0.md
 [V0.96.0]: docs/releases/v0.96.0.md
-[V0.95.1]: docs/releases/v0.95.1.md
-[V0.94.0]: docs/releases/v0.94.0.md
-[V0.93.0]: docs/releases/v0.93.0.md
-[V0.92.1]: docs/releases/v0.92.1.md
 [V0.92.0]: docs/releases/v0.92.0.md

@@ -15,6 +15,7 @@
 > **目标读者**：开发者（路线决策）｜ **状态**：⚠️ 历史档案 ｜ **最近更新**：2026-08~10
 >
 > **配套文档**：
+> - [version-status.md](version-status.md) — **应用版本状态（单一真源）**：现在到底是哪个版本 / 4 处版本号一致性 / 各来源覆盖矩阵与已知缺口 / 怎么自己查
 > - [app-improvement-path.md](app-improvement-path.md) — **应用整体改进路径**（四层演进路线，全部条目已实测）
 > - [next-steps.md](next-steps.md) — 当前推进计划（V0.117.0 起，缺陷清单）
 > - [improvement-path.md](improvement-path.md) — ⚠️ 已归档（V0.50~V0.78 实施路线与 UX 度量，内容全部交付）
