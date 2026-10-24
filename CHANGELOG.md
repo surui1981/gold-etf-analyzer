@@ -4,13 +4,18 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
-## [Unreleased]
+## [V0.116.1] · 2026-10-24
 
-`版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 未 bump 版本号，随下一次发版上线
+`CI 修绿（ruff lint / ruff format / pytest 三步预存红）` + `版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 详见 [v0.116.1.md](docs/releases/v0.116.1.md)
 
-> **本轮是维护性变更，不是新版本**：应用版本仍为 **V0.116.0**（4 处版本号未动）。
-> 放在 `[Unreleased]` 而不是新起 `[V0.116.1]`，是因为**应用代码没有变化** ——
-> 新起一个版本号会让 `/openapi.json` 报出一个与代码不对应的版本。
+> 起因：CI 从 V0.108.0 起**每一次 push 都是红的**，且失败步骤始终是同 3 步 ——
+> `ruff lint`（290 errors）/ `ruff format --check`（79 个文件要重排）/ `pytest`（10 failed）。
+> 这 3 步**都不在本轮改动范围内**（对拍 `HEAD~2` 确认全部预存），但**长期红着的 CI 不能当质量信号**
+> —— 每次发版都要重新花 25 分钟 + 一个 worktree 对拍才能确定「不是我搞坏的」。
+> 本轮把它们修绿，并顺带修掉 ruff 暴露出的真 bug。
+>
+> ⚠ **本轮改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件）
+> ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION** ⇒ 版本号 **V0.116.0 → V0.116.1**（4 处已同步）。
 > 详见 [docs/version-status.md](docs/version-status.md)。
 
 ### Added
@@ -35,7 +40,63 @@
       远端原先从 v0.83.2 起才有。也就是说本地原有 54 个里原先只有 52 个在 GitHub 上。
     - 推之前逐个核对过：48 个 tag 指向的 commit **全部是 `origin/main` 的祖先**，不会留悬空 tag。
 
+### Changed
+
+- 🔧 **ruff `check --fix` + `format` 全量跑通（`src` + `tests` + `scripts`，308 个文件）**
+  - `ruff check`：**290 → 0 errors**（257 条自动修 + 33 条手工改）
+  - `ruff format --check`：**79 个文件要重排 → 0**（`scripts/` 另有 11 个；CI 不 lint `scripts/`，本地一并守）
+  - **语义零变化的证明**：逐文件 **AST 比对**（`ast.dump`）——
+    99 个改动的 Python 文件里 **49 个 AST 完全等价**（纯格式）；
+    其余 50 个的实质改动逐条列出并人工核对（含 1 处**我自己改出**的语义 bug，见下）
+  - ⚠ `ruff format` 会把「一行 7 个关键词」的紧凑表炸成一行一个 ⇒
+    `news_classifier.py` 的 4 张关键词表用 ruff 官方 `# fmt: off` 保住原有排版
+    （分组注释 `# ── 行情 ──` 只在紧凑排版下读得懂）；该文件 638 → 340 行
+  - ⚠ **`scripts/check_docs_claims.py` 一度被我改成无条件 `return`**，把「首段是目录名
+    ⇒ 判为模块路径」那条判据变成了**死代码**（AST 比对时发现）⇒ 改回
+    `return len(segments) >= 4 and segments[3] in {...}`（语义等价且仍过 SIM103）
+
 ### Fixed
+
+- 🐛 **CI 的 3 步预存红全部修绿**（`ruff lint` / `ruff format check` / `pytest`）
+  - **pytest 10 failed → 0**。10 条全是**预存**（在干净 worktree 里对拍 `HEAD` 逐条复现：
+    9 条单跑即红 + 1 条须整文件跑才红），根因逐条修掉：
+
+    | 文件 / 用例 | 根因 | 修法 |
+    |---|---|---|
+    | `test_ai_chat_endpoints.py::test_send_message_stream_error_event_yields_error` | **同文件内测试顺序污染**（不是 flaky）：`sse_starlette` 的 `AppStatus.should_exit_event` 是**类级全局**且惰性创建，`anyio.Event` 首次 await 时把 `_loop` 绑死；pytest-asyncio 每个用例新建 loop ⇒ 后面的用例 await 了别的 loop 上的 Event | `tests/conftest.py` 加 autouse fixture，每个用例前重置 `should_exit_event` **与** `should_exit`（只重置前者不够，后者同样会短路关闭信号） |
+    | `test_news_feed.py::test_list_items_filter_days` | seed 用**写死的 2026-10-19**，而 cutoff 是**相对当下**的 `now - days` ⇒ 测试随日历腐烂 | seed 改**相对今天**（`_D0/_D1/_D2`），`days=2` 留 12 小时余量；实测 400 天 × 24 小时零失败 |
+    | `test_i18n_coverage.py::test_all_data_i18n_keys_resolve_in_zh_cn` | `ask.html` 用了 `data-i18n="status.warnings"`，**该键 3 语都没有** | 改用已有的 `status.warn_pill_label` |
+    | `test_i18n_dict.py::test_no_empty_values` / `test_no_duplicate_keys` | `weights.mo_loading` **重复定义**；`en-US.js` 的 `ai.msg_count_unit` 是**空串** | 删重复键 + 新增 `weights.mo_loading_short`；`ai.msg_count_unit` 填 `"msgs"` |
+    | `test_scripts_check_pwa_assets.py::test_shell_entry_referencing_const_is_expanded` | 夹具造的 HTML **没有 `<link rel="icon">`** ⇒ 门禁正确地判它不合格 | 夹具改成合法 HTML（含 icon link）+ 造出 `icon-192.png` |
+    | `test_scripts_check_routes.py` ×3 | 断言**写死的个数**（16 / 15 / 18），alias 数一路涨到 18 后**恒红** | 改成**集合相等**断言（alias ∪ 额外端点）+ 新增「无重复项」断言 |
+    | `test_admin_users.py::test_anonymous_returns_401_or_403` | 断言「匿名应被拒」，但 V0.97.0 起单用户模式（`auth_enabled=false`，本仓库默认）`require_user` 会**回退到 LEGACY_USER** ⇒ 实际 200 | 拆成**两条模式专属**用例：单用户模式断言回退身份 + `is_self`；多用户模式（monkeypatch `auth_enabled=true`）断言 401 |
+
+  - 🐛 **顺手修掉 1 条「绿着但什么都没保护」的断言**（`ruff` 的 F841 顺带指出来的）
+
+    | 用例 | 病根 | 修法 |
+    |---|---|---|
+    | `test_main_app.py::test_root_alias_count_matches` | 这条**在 HEAD 上是绿的**（不是 pytest 失败，是 ruff 的 F841 把它挖出来的）：`assert len(ROOT_ALIASES) == 18` —— **常量比常量**（`ROOT_ALIASES` 是测试文件里自己写的列表），且辛苦算出来的 `root_gets` **从头到尾没被用过** ⇒ 什么都没保护 | 改成与 `app.routes` **双向集合比对** + 逐条查跳转目标文件**真实存在** |
+
+- 🐛 **ruff 顺带抓出 1 处真 bug**（不是 lint 噪音）
+  - 🔴 **`market.py` 的 `HTTPException` 没 import** —— SGE 白银行情 / 历史数据失败时
+    本该抛 **503**，实际会变成 **NameError → 500**。`ruff` 报 F821 才暴露出来。
+
+- 🐛 **顺手修掉 3 处「重复定义 / 死代码」** —— 这类东西 lint 抓不到，靠逐行读 diff 才发现
+  - 🔴 `dependencies.py` 里有**两份字节完全相同**的 `get_scoring_wide_service` ——
+    后一份**遮蔽**前一份 ⇒ **改其中一份不生效**，是最难查的那类 bug
+    （同类还有一份 `get_scoring_wide_repository`）
+  - 🔴 `news_classifier.py` 里有**两份内容不同**的 `_SITE_HINTS`（40 条 vs 34 条）——
+    后一份（V0.109.1 的「只有垂直媒体参与兜底」）遮蔽前一份 ⇒ 前一份是**死代码**，
+    但读起来完全像生效的。AST 核对确认**区间内无人读它**后才删。
+  - 🟡 `ai_chat/service.py` 的 `had_error` 变量 —— 赋值 4 次、**从未被读**
+
+- 🧪 **新增门禁 `scripts/_verify_i18n_keys.mjs`（23 条断言）** —— 本轮改了 3 处 i18n，
+  pytest 的 `test_i18n_coverage` 只能证明「键存在」，证不了「**文案真的被翻译到 DOM 上**」
+  - ⚠️ 关键点：`ask.html` 原来的 `data-i18n-attr="placeholder|ai.input_placeholder"`
+    **i18n.js 根本不读这个属性** ⇒ placeholder **从来没被翻译过**（改前 en-US 下显示中文）
+  - ⇒ 改成 `data-i18n-placeholder`（i18n.js 认的 5 个属性之一）
+  - ⇒ 门禁查 `getAttribute("placeholder")` 的**实际值**（不是查 `data-lang`），三语各验一遍
+  - ⇒ **反向验证过**：改回 `data-i18n-attr` 后门禁真红 3 条（「只绿一次」不算门禁）
 
 - 🐛 **CHANGELOG 的版本归属曾经是乱的** —— 实测到 4 处，查发版史会**查错版本**：
 

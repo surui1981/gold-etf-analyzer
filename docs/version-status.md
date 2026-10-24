@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.116.0** ｜ **最近更新：2026-10-24** ｜ **状态：一致，无漂移**
+> **基线：V0.116.1** ｜ **最近更新：2026-10-24** ｜ **状态：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.116.0**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.116.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写。**
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.116.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.116.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.116.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.116.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.116.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.116.1` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.116.1` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.116.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.116.0
+GET /openapi.json  →  info.version = 0.116.1
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -52,12 +52,12 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **64** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **39** 段 / 38 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **48** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **100** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **65** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **40** 段 / 39 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **49** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
+| git tag | **101** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
 
-> **39 段 ≠ 38 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **40 段 ≠ 39 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
@@ -66,9 +66,9 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
 > **指向不一致的 0 个**。其中 annotated 94 / lightweight 6，两侧分布相同。
 
-> **`## [Unreleased]` 段不算在上面 39 段里** —— 它是「已改完、还没进版本」的变更，
-> 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的约定放在文件头。
-> 本轮整合工作就记在那里（应用版本仍是 **0.116.0**，4 处版本号一个字没动）。
+> **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
+> **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
+> 按 V0.100.1 规则**必须 bump `sw.js` VERSION** ⇒ 应用代码变了 ⇒ 不能留在 Unreleased。
 > 门禁 `check_version_sync.py` 只匹配 `## [V...]`，**不把 Unreleased 当版本段** ——
 > 所以 Unreleased 存在不会让「CHANGELOG 最新版本段 == 应用版本」这条断言失真。
 
@@ -94,24 +94,25 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 完整推理 | ✅ [app-improvement-path.md](app-improvement-path.md) |
 | 缺陷清单 | ✅ [next-steps.md](next-steps.md) |
 | **代码** | ❌ 一行都没有 |
-| `__version__` | ❌ 仍是 `0.116.0` |
+| `__version__` | ❌ 仍是 `0.116.1` |
 | CHANGELOG 段 | ❌ 无（未发版） |
 | git tag | ❌ 无（未发版） |
 
 **判据**：文件头写着 `planning · 未实施` 的 release notes = 方向记录，不是交付记录。
 [releases/index.md](releases/index.md) 里对应行带 📋。
 
-### 另一条在途线：CHANGELOG 的 `## [Unreleased]`
+### 另一条线：CHANGELOG 的 `## [Unreleased]`（已转正为 V0.116.1）
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ 本轮版本状态整合（发版史对账 / 单一真源文档 / 两道新门禁 / 46 个本地 tag） |
-| `__version__` | ❌ 仍是 `0.116.0` —— **应用代码没变，不该新起版本号** |
-| git tag | ❌ 无（未发版） |
+| 内容 | ✅ 版本状态整合（发版史对账 / 单一真源文档 / 两道新门禁 / 46 个本地 tag）**+ CI 修绿**（ruff ×2 + 10 个预存 pytest 失败） |
+| `__version__` | ✅ 已 bump 到 `0.116.1`（4 处同步） |
+| git tag | ✅ `v0.116.1` |
 
-> **为什么这轮不叫 V0.116.1**：新起一个版本号会让 `/openapi.json` 报出一个
-> 与代码不对应的版本。本轮改的是**记录与门禁**，不是应用行为 ——
-> 放进 `[Unreleased]`，随下一次真正的发版一起上线。
+> **原本计划不改版本号**：当时那轮只改**记录与门禁**、不动应用代码，
+> 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的约定该留在 `[Unreleased]`。
+> 后来的 CI 修绿这轮**改了 `static/*.html` 与 `static/i18n/*.js`** ⇒ 按 V0.100.1 必须 bump sw.js
+> ⇒ 应用代码变了 ⇒ 整段转正为 `## [V0.116.1]`。
 > （仓库里有同样的先例：`V0.97.2 hotfix` 段明确写了「不 bump 版本号」。）
 
 ---
@@ -161,7 +162,7 @@ V0.101 / V0.102 两段加了显式说明 —— **它们从未 bump 过版本号
 所属的 commit **就是**发版点。这比在 commit message 里 grep 版本号可靠 ——
 后者会撞上「功能批次标签」（V0.101 / V0.102 从未 bump 过版本号，grep 会把它们错认成发版点）。
 
-现在：`git describe --tags` → `v0.116.0-5-gd1aff31`，tag 总数 100（本地 = 远端）。
+现在：`git describe --tags` → `v0.116.1-<N>-g<sha>`，tag 总数 101（本地 = 远端）。
 （`-5-gd1aff31` 是**在 `d1aff31` 这个 commit 处实测**的快照值 ——
 `git describe` 的计数每加一个 commit 就 +1，所以别把它当常量，直接跑命令看当前值。）
 
@@ -207,8 +208,8 @@ V0.101 / V0.102 两段加了显式说明 —— **它们从未 bump 过版本号
 
 **9 条断言全部做过反向验证**（注入故障 → 必须变红）：
 `scripts/_reverse_check_version_sync.py`，**11 个用例全绿**。
-验证过程中抓出**门禁自己的一个假绿**：登记检查原先用裸子串匹配 `v0.116.0.md`，
-把 index.md 里改成 `v0.116.0.md.x` 仍然全绿 —— 已改为匹配 markdown **链接目标**。
+验证过程中抓出**门禁自己的一个假绿**：登记检查原先用裸子串匹配当前版本的 `vX.Y.Z.md`，
+把 index.md 里改成 `vX.Y.Z.md.x` 仍然全绿 —— 已改为匹配 markdown **链接目标**。
 
 ### 4.4 死链门禁本身有 2 个盲区 —— 顺手补上（`check_links.py`）
 
@@ -255,8 +256,8 @@ python3 scripts/check_links.py
 python3 scripts/_reverse_check_links_scope.py   # 7 个用例，含 2 个防误报
 
 # 按版本 checkout
-git checkout v0.116.0        # tag 锚点（checkout 后记得 git checkout main 回来）
-git describe --tags           # → v0.116.0-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
+git checkout v0.116.1        # tag 锚点（checkout 后记得 git checkout main 回来）
+git describe --tags           # → v0.116.1-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
 ```
 
 ---

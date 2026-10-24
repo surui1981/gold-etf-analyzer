@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.116.0";  // V0.116.0 · /ask AI 回复排版重做（清洗器换 DOM 白名单 / 移动端不裁切 / 标题分隔线间距 / 表格横滚 + 代码复制），改 ask.html|ask.js 必 bump
+const VERSION = "v0.116.1";  // V0.116.1 · CI 修绿（ruff check --fix + ruff format + 10 个预存 pytest 失败）+ 版本状态整合 + ask/weights 的 i18n 键修正，改 ask.html|weights.html|i18n/*.js 必 bump
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
