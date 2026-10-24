@@ -62,9 +62,9 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **100 个 tag 本地与远端一致**（2026-10-24 已全部推送）：远端 100 = 本地 100，
+> **101 个 tag 本地与远端一致**（2026-10-24 已全部推送，含 V0.116.1）：远端 101 = 本地 101，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated 94 / lightweight 6，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated 95 / lightweight 6，两侧分布相同。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -105,7 +105,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ 版本状态整合（发版史对账 / 单一真源文档 / 两道新门禁 / 46 个本地 tag）**+ CI 修绿**（ruff ×2 + 10 个预存 pytest 失败） |
+| 内容 | ✅ 版本状态整合（发版史对账 / 单一真源文档 / 两道新门禁 / tag 补推与核对）**+ CI 修绿**（ruff ×2 + 10 个预存 pytest 失败） |
 | `__version__` | ✅ 已 bump 到 `0.116.1`（4 处同步） |
 | git tag | ✅ `v0.116.1` |
 
