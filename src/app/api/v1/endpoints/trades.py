@@ -87,9 +87,15 @@ async def export_trades(
     summary="V0.90.0\uff1a\u51b3\u7b56\u65f6\u95f4\u7ebf\uff08trades + snapshots \u6309\u65e5\u5bf9\u9f50 + \u7a7a\u95f2\u6bb5\u6298\u53e0\uff09",
 )
 async def trades_timeline(
-    account_id: int | None = Query(None, description="\u8d26\u672c ID\uff1b\u4e0d\u4f20=\u5168\u90e8\u8d26\u672c"),
-    from_date: date | None = Query(None, description="\u4e0b\u754c\uff08\u542b\uff09\uff1b\u9ed8\u8ba4 90 \u5929\u524d"),
-    to_date: date | None = Query(None, description="\u4e0a\u754c\uff08\u542b\uff09\uff1b\u9ed8\u8ba4\u4eca\u65e5"),
+    account_id: int | None = Query(
+        None, description="\u8d26\u672c ID\uff1b\u4e0d\u4f20=\u5168\u90e8\u8d26\u672c"
+    ),
+    from_date: date | None = Query(
+        None, description="\u4e0b\u754c\uff08\u542b\uff09\uff1b\u9ed8\u8ba4 90 \u5929\u524d"
+    ),
+    to_date: date | None = Query(
+        None, description="\u4e0a\u754c\uff08\u542b\uff09\uff1b\u9ed8\u8ba4\u4eca\u65e5"
+    ),
     compress_threshold_days: int = Query(
         7,
         ge=0,

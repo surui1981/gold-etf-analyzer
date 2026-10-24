@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.ai_chat import DEFAULT_MODEL
-
 
 # ────────────── Conversation ──────────────
 
@@ -41,8 +40,8 @@ class AICreateConversationIn(BaseModel):
 class AIUpdateConversationIn(BaseModel):
     """改对话请求体（rename / archive / unarchive）。"""
 
-    title: Optional[str] = None
-    is_archived: Optional[bool] = None
+    title: str | None = None
+    is_archived: bool | None = None
 
 
 # ────────────── Message ──────────────
@@ -58,13 +57,13 @@ class AIMessageOut(BaseModel):
     user_id: int
     role: str  # user / assistant / tool
     content: str
-    tool_name: Optional[str] = None
-    tool_input: Optional[dict[str, Any]] = None
-    tool_call_id: Optional[str] = None
-    input_tokens: Optional[int] = None
-    output_tokens: Optional[int] = None
-    latency_ms: Optional[int] = None
-    error_code: Optional[str] = None
+    tool_name: str | None = None
+    tool_input: dict[str, Any] | None = None
+    tool_call_id: str | None = None
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    latency_ms: int | None = None
+    error_code: str | None = None
     created_at: datetime
 
 
@@ -81,8 +80,9 @@ class AIConversationDetailOut(BaseModel):
 class AISendMessageIn(BaseModel):
     """发送 1 条用户消息请求体。"""
 
-    content: str = Field(..., min_length=1, max_length=8000,
-                         description="用户输入文本（自动 sanitize）")
+    content: str = Field(
+        ..., min_length=1, max_length=8000, description="用户输入文本（自动 sanitize）"
+    )
 
 
 class AIChatTurnOut(BaseModel):

@@ -162,9 +162,7 @@ class DailySnapshotService:
         row = await self._repo.get_by_date(snapshot_date)
         return SnapshotOut.model_validate(row) if row else None
 
-    async def get_in_range(
-        self, start: date, end: date
-    ) -> list[SnapshotOut]:
+    async def get_in_range(self, start: date, end: date) -> list[SnapshotOut]:
         """V0.90.0：按日期区间取快照列表（含 ``macro_detail`` 反序列化）。
 
         薄包装：转发到 ``SnapshotRepository.list_in_range``，把 ORM rows 转

@@ -152,17 +152,27 @@ async def _seed(
     macro_json: str | None = '{"DXY": {"value": 104.5}, "US10Y": {"value": 4.2}}',
 ) -> None:
     """直接向 DB 插入测试快照（绕过 capture_today，避免触发行情/宏观依赖）。"""
-    db_session.add(DailySnapshot(
-        snapshot_date=snapshot_date,
-        symbol="518880",
-        name="黄金ETF华安",
-        close=5.5, change_pct=1.0, high=5.6, low=5.4,
-        ma20=5.45, ma40=5.40, direction="up",
-        tech_index=65.0, macro_index=58.0, news_index=60.0,
-        trend_index=61.0, index_level="偏多",
-        macro_detail=macro_json or "",
-        data_source="live",
-    ))
+    db_session.add(
+        DailySnapshot(
+            snapshot_date=snapshot_date,
+            symbol="518880",
+            name="黄金ETF华安",
+            close=5.5,
+            change_pct=1.0,
+            high=5.6,
+            low=5.4,
+            ma20=5.45,
+            ma40=5.40,
+            direction="up",
+            tech_index=65.0,
+            macro_index=58.0,
+            news_index=60.0,
+            trend_index=61.0,
+            index_level="偏多",
+            macro_detail=macro_json or "",
+            data_source="live",
+        )
+    )
     await db_session.commit()
 
 
@@ -243,18 +253,14 @@ class TestInRangeEndpoint:
 
     async def test_400_on_inverted_range(self, client: AsyncClient) -> None:
         """``start > end`` → 400 + code=invalid_date_range。"""
-        resp = await client.get(
-            "/api/v1/snapshots/in-range?start=2026-10-10&end=2026-10-01"
-        )
+        resp = await client.get("/api/v1/snapshots/in-range?start=2026-10-10&end=2026-10-01")
         assert resp.status_code == 400
         detail = resp.json()["detail"]
         assert detail["code"] == "invalid_date_range"
 
     async def test_400_on_range_too_wide(self, client: AsyncClient) -> None:
         """范围 > 730 天（2 年）→ 400 + code=date_range_too_wide。"""
-        resp = await client.get(
-            "/api/v1/snapshots/in-range?start=2020-01-01&end=2026-12-31"
-        )
+        resp = await client.get("/api/v1/snapshots/in-range?start=2020-01-01&end=2026-12-31")
         assert resp.status_code == 400
         detail = resp.json()["detail"]
         assert detail["code"] == "date_range_too_wide"
@@ -272,13 +278,9 @@ class TestInRangeEndpoint:
         assert resp.status_code == 200
         assert resp.json()["total"] == 1
 
-    async def test_empty_range_returns_empty(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_empty_range_returns_empty(self, client: AsyncClient) -> None:
         """合法范围 + DB 空 → 200 + 空 list（不抛 404）。"""
-        resp = await client.get(
-            "/api/v1/snapshots/in-range?start=2026-07-01&end=2026-07-07"
-        )
+        resp = await client.get("/api/v1/snapshots/in-range?start=2026-07-01&end=2026-07-07")
         assert resp.status_code == 200
         assert resp.json()["total"] == 0
         assert resp.json()["snapshots"] == []

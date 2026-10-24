@@ -47,6 +47,26 @@ const SHELL_ASSETS = [
 ];
 """
 
+# 合成 HTML 页的最小骨架。
+#
+# ⚠ **必须带 `<link rel="icon">`**（V0.114.1 起门禁 ④ 会逐个 `static/*.html` 检查）——
+# 夹具早于这条检查，造的是 `// stub`，于是门禁**误报**「缺少 rel=icon」，
+# 把本该验证「常量引用会被展开」的正向用例染红（V0.116.1 修 CI 预存红之一）。
+#
+# 格式照抄真实 `static/offline.html:10`：`<link rel="icon" href="..." type="image/png">`
+# —— 门禁用 `<link\s+rel="icon"\s+href="([^"]+)"([^>]*)>` 匹配，
+# 且 .png 必须带 `type="image/png"`，否则另一条断言也会红。
+ICON_NAME = "icon-192.png"
+_HTML_STUB = (
+    "<!DOCTYPE html>\n"
+    '<html lang="zh-CN">\n'
+    "<head>\n"
+    f'<link rel="icon" href="/static/{ICON_NAME}" type="image/png">\n'
+    "</head>\n"
+    "<body></body>\n"
+    "</html>\n"
+)
+
 
 def _render_entry(entry: str) -> str:
     r"""把一个条目渲染成 sw.js 里的一行。
@@ -86,7 +106,12 @@ def _build_fixture(
     static_dir = tmp_path / "static"
     static_dir.mkdir(exist_ok=True)
     for name in extra_static:
-        (static_dir / name).write_text("// stub\n", encoding="utf-8")
+        if name.endswith(".html"):
+            (static_dir / name).write_text(_HTML_STUB, encoding="utf-8")
+        else:
+            (static_dir / name).write_text("// stub\n", encoding="utf-8")
+    # 门禁 ④ 还会验证 rel=icon **指向的文件真实存在** ⇒ 图标文件必须一起造出来
+    (static_dir / ICON_NAME).write_bytes(b"\x89PNG\r\n\x1a\n")
 
     entries = "\n".join(_render_entry(e) for e in shell_entries)
     (static_dir / "sw.js").write_text(

@@ -52,11 +52,11 @@ V083_KEY_PREFIXES = (
     # C2 (freshness diff + help.js dedup)：
     "help.source_warn_prompt",
     # C3 (8 页面迁移 warn-footer)：
-    "warn.",                # warn.title / warn.b*_strong / warn.b*_rest / warn.collapse_toggle / warn.dismiss_session
-    "central_bank.warn_",   # 央行页 4 项特定键（含 _pre/_wgc 后缀）
-    "silver.warn_b",        # 白银页第 5 条特定键
-    "backtest.warn_b",      # 回测页 5 条特定键
-    "health.warn_b",        # 数据健康页 3 条 HTML 整段键
+    "warn.",  # warn.title / warn.b*_strong / warn.b*_rest / warn.collapse_toggle / warn.dismiss_session
+    "central_bank.warn_",  # 央行页 4 项特定键（含 _pre/_wgc 后缀）
+    "silver.warn_b",  # 白银页第 5 条特定键
+    "backtest.warn_b",  # 回测页 5 条特定键
+    "health.warn_b",  # 数据健康页 3 条 HTML 整段键
     # C3 brand / nav：topnav 整批迁移，沿用既有 namespace（已 3 语覆盖，仅在 HTML 引用）
     "brand.",
     "nav.",
@@ -82,10 +82,7 @@ V083_KEY_PREFIXES = (
 
 def is_v083_key(key: str) -> bool:
     """判断 key 是否属于 V0.83 触及的命名空间。"""
-    for prefix in V083_KEY_PREFIXES:
-        if key == prefix or key.startswith(prefix):
-            return True
-    return False
+    return any(key == prefix or key.startswith(prefix) for prefix in V083_KEY_PREFIXES)
 
 
 def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
@@ -249,7 +246,9 @@ def main() -> int:
     if args.all:
         out_of_scope = sorted(used - scope)
         if out_of_scope:
-            print(f"\n  [INFO] V0.83 命名空间外 {len(out_of_scope)} 个 key（预存 gap，独立 ticket 跟踪）")
+            print(
+                f"\n  [INFO] V0.83 命名空间外 {len(out_of_scope)} 个 key（预存 gap，独立 ticket 跟踪）"
+            )
 
     # 3) 未使用 key 软提示（不失败）
     unused = set()

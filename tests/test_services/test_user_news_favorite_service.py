@@ -29,7 +29,7 @@ from app.services.user_news_favorite import UserNewsFavoriteService
 _PUB = datetime(2026, 10, 22, 1, 30, tzinfo=timezone.utc)
 
 
-async def _seed_feed_item(db, **over) -> NewsFeedItem:  # noqa: ANN001
+async def _seed_feed_item(db, **over) -> NewsFeedItem:
     """插入一条 news_feed_items 行（默认**无 URL**，模拟金十/东财快讯）。"""
     row = NewsFeedItem(
         external_id=over.pop("external_id", 20261022052906788800),
@@ -50,16 +50,14 @@ async def _seed_feed_item(db, **over) -> NewsFeedItem:  # noqa: ANN001
     return row
 
 
-def _svc(db) -> UserNewsFavoriteService:  # noqa: ANN001
-    return UserNewsFavoriteService(
-        UserNewsFavoriteRepository(db), NewsFeedRepository(db)
-    )
+def _svc(db) -> UserNewsFavoriteService:
+    return UserNewsFavoriteService(UserNewsFavoriteRepository(db), NewsFeedRepository(db))
 
 
 # ──────────────── url 可空 ────────────────
 
 
-async def test_favorite_url_less_feed_item_succeeds(db_session) -> None:  # noqa: ANN001
+async def test_favorite_url_less_feed_item_succeeds(db_session) -> None:
     """金十/东财条目没有原文链接 —— 收藏必须成功，而不是 422。"""
     await _seed_feed_item(db_session, external_id=1, source="jin10")
     payload = UserNewsFavoriteCreateIn(news_external_id=1, news_source="jin10")
@@ -70,7 +68,7 @@ async def test_favorite_url_less_feed_item_succeeds(db_session) -> None:  # noqa
     assert out.news_source == "jin10"
 
 
-async def test_favorite_without_feed_item_and_no_url_422s(db_session) -> None:  # noqa: ANN001
+async def test_favorite_without_feed_item_and_no_url_422s(db_session) -> None:
     """⚠ 反向保护：url 不再必填**不等于**其它字段也不必填。
 
     外部直传场景下 title / site_name / publish_date 缺一仍必须 422 ——
@@ -83,7 +81,7 @@ async def test_favorite_without_feed_item_and_no_url_422s(db_session) -> None:  
     assert "title" in ei.value.detail
 
 
-async def test_favorite_external_url_still_works(db_session) -> None:  # noqa: ANN001
+async def test_favorite_external_url_still_works(db_session) -> None:
     """外部 URL 直传（V0.103 场景）不受影响。"""
     payload = UserNewsFavoriteCreateIn(
         news_external_id=555,
@@ -100,7 +98,7 @@ async def test_favorite_external_url_still_works(db_session) -> None:  # noqa: A
 # ──────────────── 多源 dedup ────────────────
 
 
-async def test_same_id_different_source_are_two_favorites(db_session) -> None:  # noqa: ANN001
+async def test_same_id_different_source_are_two_favorites(db_session) -> None:
     """external_id 不再全局唯一 —— (id, source) 才是 dedup 主键。
 
     页面上两张卡片（华尔街见闻 3182985 / 金十某条）id 相同不代表同一条新闻。
@@ -113,7 +111,7 @@ async def test_same_id_different_source_are_two_favorites(db_session) -> None:  
     assert a.id != b.id
 
 
-async def test_twenty_digit_id_roundtrips_through_favorite(db_session) -> None:  # noqa: ANN001
+async def test_twenty_digit_id_roundtrips_through_favorite(db_session) -> None:
     """金十 20 位 id 全链路无损：入库 → 收藏 → 读回。
 
     列是 String(32)（int64 装不下 2.02e19）。任何一处把它转成 int 都会
@@ -127,8 +125,6 @@ async def test_twenty_digit_id_roundtrips_through_favorite(db_session) -> None: 
     )
     assert out.news_external_id == big
 
-    rows = (
-        await db_session.execute(select(UserNewsFavorite))
-    ).scalars().all()
+    rows = (await db_session.execute(select(UserNewsFavorite))).scalars().all()
     assert len(rows) == 1
     assert rows[0].news_external_id == str(big)

@@ -52,7 +52,9 @@ class AdminTokenStatus(BaseModel):
     """
 
     has_session: bool = Field(..., description="pm_admin_session cookie 是否有效签名")
-    ttl_seconds: int = Field(..., description="cookie 总 TTL（秒；has_session=false 时也返回，便于 UI 提示）")
+    ttl_seconds: int = Field(
+        ..., description="cookie 总 TTL（秒；has_session=false 时也返回，便于 UI 提示）"
+    )
     auth_enabled: bool = Field(..., description="后端是否启用认证（false → cookie 无意义）")
 
 

@@ -225,7 +225,10 @@ async def test_v01100_put_macro_overrides_unknown_key_ignored(client: AsyncClien
     """未知因子键被忽略（Pydantic 默认忽略多余字段），不污染存储。"""
     resp = await client.put(
         "/api/v1/settings/macro-overrides",
-        json={"dxy": {"value": 96.8, "as_of": "2026-10-21"}, "spx": {"value": 1, "as_of": "2026-10-21"}},
+        json={
+            "dxy": {"value": 96.8, "as_of": "2026-10-21"},
+            "spx": {"value": 1, "as_of": "2026-10-21"},
+        },
     )
     assert resp.status_code == 200
     assert "spx" not in resp.json()
@@ -281,8 +284,11 @@ async def test_v01100_put_weights_invalidates_served_cache(client: AsyncClient) 
         "/api/v1/settings/weights",
         json={
             "trend": {
-                "structure": 0.3, "momentum": 0.2, "support": 0.2,
-                "momentum_rsi": 0.15, "drawdown": 0.15,
+                "structure": 0.3,
+                "momentum": 0.2,
+                "support": 0.2,
+                "momentum_rsi": 0.15,
+                "drawdown": 0.15,
             },
             "macro": {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.2, "cb_gold": 0.2},
             "combine": {"tech": 0.4, "macro": 0.4, "news": 0.2},

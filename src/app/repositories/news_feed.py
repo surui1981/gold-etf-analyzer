@@ -22,7 +22,8 @@
 
 from __future__ import annotations
 
-from datetime import date as date_t, datetime, time, timedelta, timezone
+from datetime import date as date_t
+from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import and_, case, desc, distinct, func, literal, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -166,16 +167,8 @@ class NewsFeedRepository:
 
         实现：2 个 LIMIT 1 存在性查询（不走 COUNT，比 ``EXISTS`` 子查询更直白）。
         """
-        older_stmt = (
-            select(literal(1))
-            .where(NewsFeedItem.publish_date < day_start)
-            .limit(1)
-        )
-        newer_stmt = (
-            select(literal(1))
-            .where(NewsFeedItem.publish_date >= day_end)
-            .limit(1)
-        )
+        older_stmt = select(literal(1)).where(NewsFeedItem.publish_date < day_start).limit(1)
+        newer_stmt = select(literal(1)).where(NewsFeedItem.publish_date >= day_end).limit(1)
         has_older = (await self._session.execute(older_stmt)).first() is not None
         has_newer = (await self._session.execute(newer_stmt)).first() is not None
         return has_older, has_newer
@@ -215,9 +208,7 @@ class NewsFeedRepository:
         last_refresh = (
             await self._session.execute(select(func.max(NewsFeedItem.fetched_at)))
         ).scalar_one_or_none()
-        total = (
-            await self._session.execute(select(func.count(NewsFeedItem.id)))
-        ).scalar_one()
+        total = (await self._session.execute(select(func.count(NewsFeedItem.id)))).scalar_one()
         last_24h_cutoff = now - timedelta(hours=24)
         last_24h = (
             await self._session.execute(
@@ -285,9 +276,7 @@ class NewsFeedRepository:
             for row in rows:
                 cat = classify(row.title, row.summary, row.site_name)
                 await self._session.execute(
-                    update(NewsFeedItem)
-                    .where(NewsFeedItem.id == row.id)
-                    .values(category=cat)
+                    update(NewsFeedItem).where(NewsFeedItem.id == row.id).values(category=cat)
                 )
             await self._session.commit()
             total += len(rows)
@@ -332,33 +321,22 @@ class NewsFeedRepository:
         day_start, day_end = self._bjt_day_bounds(target_date)
 
         # 1. 单行聚合：5 类目计数 + 独立站点 + 中英文 + 首末时间
-        agg_stmt = (
-            select(
-                func.count(NewsFeedItem.id).label("total"),
-                func.sum(case((NewsFeedItem.category == "财经", 1), else_=0)).label(
-                    "finance"
-                ),
-                func.sum(case((NewsFeedItem.category == "科技", 1), else_=0)).label(
-                    "tech"
-                ),
-                func.sum(case((NewsFeedItem.category == "创投", 1), else_=0)).label("vc"),
-                func.sum(case((NewsFeedItem.category == "商业", 1), else_=0)).label("biz"),
-                func.sum(case((NewsFeedItem.category == "其他", 1), else_=0)).label(
-                    "other"
-                ),
-                func.count(distinct(NewsFeedItem.site_name)).label("unique_sites"),
-                func.sum(case((NewsFeedItem.language == "en", 1), else_=0)).label("en"),
-                func.sum(case((NewsFeedItem.language.like("zh%"), 1), else_=0)).label(
-                    "zh"
-                ),
-                func.min(NewsFeedItem.publish_date).label("first_pub"),
-                func.max(NewsFeedItem.publish_date).label("last_pub"),
-            )
-            .where(
-                and_(
-                    NewsFeedItem.publish_date >= day_start,
-                    NewsFeedItem.publish_date < day_end,
-                )
+        agg_stmt = select(
+            func.count(NewsFeedItem.id).label("total"),
+            func.sum(case((NewsFeedItem.category == "财经", 1), else_=0)).label("finance"),
+            func.sum(case((NewsFeedItem.category == "科技", 1), else_=0)).label("tech"),
+            func.sum(case((NewsFeedItem.category == "创投", 1), else_=0)).label("vc"),
+            func.sum(case((NewsFeedItem.category == "商业", 1), else_=0)).label("biz"),
+            func.sum(case((NewsFeedItem.category == "其他", 1), else_=0)).label("other"),
+            func.count(distinct(NewsFeedItem.site_name)).label("unique_sites"),
+            func.sum(case((NewsFeedItem.language == "en", 1), else_=0)).label("en"),
+            func.sum(case((NewsFeedItem.language.like("zh%"), 1), else_=0)).label("zh"),
+            func.min(NewsFeedItem.publish_date).label("first_pub"),
+            func.max(NewsFeedItem.publish_date).label("last_pub"),
+        ).where(
+            and_(
+                NewsFeedItem.publish_date >= day_start,
+                NewsFeedItem.publish_date < day_end,
             )
         )
         row = (await self._session.execute(agg_stmt)).one()
@@ -399,9 +377,7 @@ class NewsFeedRepository:
         stmt = select(NewsFeedDaily).where(NewsFeedDaily.date == target_date)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_daily(
-        self, *, start: date_t, end: date_t
-    ) -> list[NewsFeedDaily]:
+    async def list_daily(self, *, start: date_t, end: date_t) -> list[NewsFeedDaily]:
         """V0.107：取 BJT 日期区间 [start, end] 的聚合行（闭区间，倒序）。
 
         闭区间（含 start 和 end）+ 倒序（最近日期在前），与 ``list_items`` 的
@@ -414,9 +390,7 @@ class NewsFeedRepository:
         )
         return list((await self._session.execute(stmt)).scalars().all())
 
-    async def backfill_daily(
-        self, *, start_date: date_t, end_date: date_t | None = None
-    ) -> int:
+    async def backfill_daily(self, *, start_date: date_t, end_date: date_t | None = None) -> int:
         """V0.107：逐日重建 [start_date, end_date] 闭区间（仿 backfill_categories）。
 
         Args:

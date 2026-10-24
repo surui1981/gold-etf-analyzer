@@ -212,4 +212,6 @@ class NewsFeedDaily(Base):
     # 索引：date 已是主键（隐含 B-Tree 索引），无需额外单列索引
 
     def __repr__(self) -> str:  # pragma: no cover
-        return f"<NewsFeedDaily {self.date} total={self.total_count} finance={self.finance_count} ...>"
+        return (
+            f"<NewsFeedDaily {self.date} total={self.total_count} finance={self.finance_count} ...>"
+        )

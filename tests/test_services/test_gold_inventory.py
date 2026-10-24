@@ -174,7 +174,9 @@ async def test_is_stale_boundary_one_day_old(db_session: AsyncSession) -> None:
 
     边界就在这儿，少一天不补、多一天补。
     """
-    await _seed(db_session, [{"inv_date": TODAY - timedelta(days=1), "tonnes": 728.0, "ounces": None}])
+    await _seed(
+        db_session, [{"inv_date": TODAY - timedelta(days=1), "tonnes": 728.0, "ounces": None}]
+    )
     assert await _svc(db_session).is_stale() is False
 
 
@@ -184,13 +186,17 @@ async def test_is_stale_when_latest_is_three_days_old(db_session: AsyncSession) 
     ⚠ 别把这条理解成「周末是源故障」：判定纯粹按 ``max_age_days=1``，
     长周末之后回填一次是对的 —— 幂等 upsert，重抓同一天不会增行。
     """
-    await _seed(db_session, [{"inv_date": TODAY - timedelta(days=3), "tonnes": 728.0, "ounces": None}])
+    await _seed(
+        db_session, [{"inv_date": TODAY - timedelta(days=3), "tonnes": 728.0, "ounces": None}]
+    )
     assert await _svc(db_session).is_stale() is True
 
 
 async def test_is_stale_honours_custom_max_age(db_session: AsyncSession) -> None:
     """``max_age_days`` 可调：周报口径传 7 就不会每天回填。"""
-    await _seed(db_session, [{"inv_date": TODAY - timedelta(days=5), "tonnes": 728.0, "ounces": None}])
+    await _seed(
+        db_session, [{"inv_date": TODAY - timedelta(days=5), "tonnes": 728.0, "ounces": None}]
+    )
     svc = _svc(db_session)
     assert await svc.is_stale(max_age_days=1) is True
     assert await svc.is_stale(max_age_days=7) is False

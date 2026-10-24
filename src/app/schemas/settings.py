@@ -103,7 +103,9 @@ class MacroFactorOverrideSet(BaseModel):
     def active(self) -> dict[str, MacroFactorOverride]:
         """返回已设置覆盖的因子（key → override），供 MacroFactorService 消费。"""
         return {
-            key: getattr(self, key) for key in MACRO_FACTOR_KEYS if getattr(self, key, None) is not None
+            key: getattr(self, key)
+            for key in MACRO_FACTOR_KEYS
+            if getattr(self, key, None) is not None
         }
 
     def is_empty(self) -> bool:

@@ -262,20 +262,14 @@ async def fetch_readhub_feed(
                 return out
             # 5xx / 429 → 重试；4xx 业务错误直接抛
             if 500 <= resp.status_code < 600 or resp.status_code == 429:
-                last_exc = ReadhubFetchError(
-                    f"readhub HTTP {resp.status_code}: {resp.text[:200]}"
-                )
+                last_exc = ReadhubFetchError(f"readhub HTTP {resp.status_code}: {resp.text[:200]}")
                 continue
-            raise ReadhubFetchError(
-                f"readhub HTTP {resp.status_code}: {resp.text[:200]}"
-            )
+            raise ReadhubFetchError(f"readhub HTTP {resp.status_code}: {resp.text[:200]}")
         except ReadhubFetchError:
             raise
         except (httpx.TimeoutException, httpx.NetworkError) as exc:
             last_exc = ReadhubFetchError(f"readhub network error: {exc}")
-            logger.warning(
-                "readhub fetch attempt %d network error: %s", attempt, exc
-            )
+            logger.warning("readhub fetch attempt %d network error: %s", attempt, exc)
             continue
         except (json.JSONDecodeError, KeyError) as exc:
             raise ReadhubFetchError(f"readhub response parse error: {exc}") from exc

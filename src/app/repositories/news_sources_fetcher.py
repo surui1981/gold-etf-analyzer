@@ -319,9 +319,7 @@ def _normalize_wallstcn(raw: dict[str, Any]) -> dict | None:
     )
 
 
-async def fetch_wallstcn_feed(
-    *, limit: int = 30, use_cache: bool = True
-) -> tuple[dict, ...]:
+async def fetch_wallstcn_feed(*, limit: int = 30, use_cache: bool = True) -> tuple[dict, ...]:
     """抓华尔街见闻快讯（首选源）。
 
     Args:
@@ -345,9 +343,7 @@ async def fetch_wallstcn_feed(
     )
     items_raw = (payload or {}).get("data", {}).get("items") if isinstance(payload, dict) else None
     if not isinstance(items_raw, list):
-        raise NewsSourceError(
-            f"wallstcn response data.items not list: {type(items_raw).__name__}"
-        )
+        raise NewsSourceError(f"wallstcn response data.items not list: {type(items_raw).__name__}")
     out = tuple(
         rec
         for rec in (_normalize_wallstcn(r) for r in items_raw if isinstance(r, dict))
@@ -483,9 +479,7 @@ def _normalize_eastmoney(raw: dict[str, Any]) -> dict | None:
     )
 
 
-async def fetch_eastmoney_feed(
-    *, page_size: int = 20, use_cache: bool = True
-) -> tuple[dict, ...]:
+async def fetch_eastmoney_feed(*, page_size: int = 20, use_cache: bool = True) -> tuple[dict, ...]:
     """抓东方财富快讯。
 
     ⚠ 两个 2026-10-22 实测才发现的服务端约束（缺任一都只返回

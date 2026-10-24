@@ -71,7 +71,6 @@ def test_next_run_default_uses_now_utc() -> None:
     """不传 now_utc 参数：默认 ``datetime.now(timezone.utc)``，结果应当 < 4h 之后的整点。"""
     nxt = next_news_feed_run_utc()
     # 下一个 4h 触发点距 now 不超过 4h
-    from datetime import timedelta
 
     now = datetime.now(timezone.utc)
     diff = (nxt - now).total_seconds()

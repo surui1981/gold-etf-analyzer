@@ -928,7 +928,7 @@ class AkshareSgeSilverHistoryProvider:
             return await asyncio.wait_for(asyncio.to_thread(_fetch), timeout=30)
         except Exception as exc:
             self._last_was_fallback = True
-            raise RuntimeError(f"SGE silver fetch failed: {exc}")
+            raise RuntimeError(f"SGE silver fetch failed: {exc}") from exc
 
 
 class AkshareSilverHistoryProvider:
@@ -1023,9 +1023,7 @@ class AkshareSilverHistoryProvider:
             return sub
         errors.append("sina lof (sz161226) empty")
 
-        raise RuntimeError(
-            f"all silver ETF sources failed for {symbol}: {'; '.join(errors)}"
-        )
+        raise RuntimeError(f"all silver ETF sources failed for {symbol}: {'; '.join(errors)}")
 
     async def _fetch_ny_silver(self, days: int) -> list[GoldKline]:
         """NY 路径：futures_foreign_hist 子进程隔离（与 GC 同路径）。"""

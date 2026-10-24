@@ -16,15 +16,14 @@ V0.107.1 新增：
 from __future__ import annotations
 
 from app.repositories.news_classifier import (
-    CATEGORIES,
     _BIZ_KW,
     _FINANCE_KW,
     _SITE_HINTS,
     _TECH_KW,
     _VC_KW,
+    CATEGORIES,
     classify,
 )
-
 
 # ────────────── 4 类各 1 例 ──────────────
 
@@ -62,18 +61,12 @@ def test_classify_finance_overrides_vc_when_both_hit() -> None:
 
     样例：「收购」既可创投可商业，但「美元」是财经，财经胜。
     """
-    assert (
-        classify("美元基金 收购某创业公司 估值 10 亿", "完成 B 轮融资", "财经网")
-        == "财经"
-    )
+    assert classify("美元基金 收购某创业公司 估值 10 亿", "完成 B 轮融资", "财经网") == "财经"
 
 
 def test_classify_tech_overrides_business() -> None:
     """科技关键词与商业关键词并存 → 科技优先。"""
-    assert (
-        classify("苹果发布新 iPhone 财报 营收增长", "新品发布会 芯片升级", "虎嗅")
-        == "科技"
-    )
+    assert classify("苹果发布新 iPhone 财报 营收增长", "新品发布会 芯片升级", "虎嗅") == "科技"
 
 
 def test_classify_empty_title_uses_site_name() -> None:
@@ -206,10 +199,7 @@ def test_classify_biz_new_keyword_revenue_v01071() -> None:
 
 def test_classify_finance_overrides_vc_new_v01071() -> None:
     """V0.107.1：财经关键词「贝莱德」与创投「收购」并存 → 财经胜。"""
-    assert (
-        classify("贝莱德收购某基金", "", "华尔街见闻")
-        == "财经"
-    )
+    assert classify("贝莱德收购某基金", "", "华尔街见闻") == "财经"
 
 
 def test_classify_finance_overrides_tech_new_v01071() -> None:
@@ -228,8 +218,13 @@ def test_classify_whitelist_finance_site_v01080() -> None:
     ``test_wire_service_no_site_fallback_v01091``。
     """
     for site in (
-        "金融界", "同花顺财经", "中国证券报", "上海证券报",
-        "证券时报", "每日经济新闻", "金十数据",
+        "金融界",
+        "同花顺财经",
+        "中国证券报",
+        "上海证券报",
+        "证券时报",
+        "每日经济新闻",
+        "金十数据",
     ):
         assert classify("", "", site) == "财经", f"{site} 应归财经"
 
@@ -237,8 +232,17 @@ def test_classify_whitelist_finance_site_v01080() -> None:
 def test_classify_whitelist_tech_site_v01080() -> None:
     """V0.108.0：白名单科技站名 → 科技。"""
     for site in (
-        "IT 之家", "IT之家", "快科技", "C114 通信网", "钛媒体", "品玩",
-        "爱范儿", "机器之心", "雷峰网", "techradar.com", "9to5Mac",
+        "IT 之家",
+        "IT之家",
+        "快科技",
+        "C114 通信网",
+        "钛媒体",
+        "品玩",
+        "爱范儿",
+        "机器之心",
+        "雷峰网",
+        "techradar.com",
+        "9to5Mac",
     ):
         assert classify("", "", site) == "科技", f"{site} 应归科技"
 
@@ -374,8 +378,12 @@ class TestWordBoundary:
         """汉字邻居不算 ASCII 字母边界，中文财经写法必须仍命中。"""
         from app.repositories.news_classifier import _hit
 
-        for phrase, kw in (("科创 50etf 交投", "ETF"), ("btc 突破新高", "BTC"),
-                           ("英伟达 gpu 供货", "GPU"), ("aigc 大模型", "AIGC")):
+        for phrase, kw in (
+            ("科创 50etf 交投", "ETF"),
+            ("btc 突破新高", "BTC"),
+            ("英伟达 gpu 供货", "GPU"),
+            ("aigc 大模型", "AIGC"),
+        ):
             assert _hit(phrase, (kw,)), f"{kw} 应命中 {phrase!r}"
 
     def test_eth_no_longer_matches_ethiopia(self) -> None:
@@ -452,11 +460,17 @@ class TestContentFirstSiteFallback:
         cases = [
             ("印度东部踩踏事故致 17 人死亡", "", "财联社"),
             ("伊拉克首都一弹药仓库发生爆炸", "", "财联社"),
-            ("法国多地发生大规模抗议 数百人被捕",
-             "法国多地 17 日发生游行示威和抗议活动，部分地区出现暴力行为。",
-             "第一财经"),
-            ("格隆汇 10 月 18 日｜胡塞武装军事发言人叶海亚・萨雷亚：在过去 24 小时内，"
-             "沙特战斗机对首都萨那以及塔伊", "", "格隆汇"),
+            (
+                "法国多地发生大规模抗议 数百人被捕",
+                "法国多地 17 日发生游行示威和抗议活动，部分地区出现暴力行为。",
+                "第一财经",
+            ),
+            (
+                "格隆汇 10 月 18 日｜胡塞武装军事发言人叶海亚・萨雷亚：在过去 24 小时内，"
+                "沙特战斗机对首都萨那以及塔伊",
+                "",
+                "格隆汇",
+            ),
             ("胡塞武装方面称沙特空袭也门萨达省致 9 死 11 伤", "", "华尔街见闻"),
         ]
         for title, summary, site in cases:
@@ -470,8 +484,7 @@ class TestContentFirstSiteFallback:
         「通讯社」= 选题覆盖全球快讯的财经媒体。它们发纯市场内容时仍会被
         内容词典命中（不靠站名），但内容无关时必须掉进「其他」。
         """
-        for wire in ("财联社", "格隆汇", "第一财经", "界面新闻",
-                     "经济观察报", "华尔街见闻"):
+        for wire in ("财联社", "格隆汇", "第一财经", "界面新闻", "经济观察报", "华尔街见闻"):
             assert classify("", "", wire) == "其他", f"{wire} 不该站名兜底"
             assert wire not in _SITE_HINTS, f"{wire} 不该在 _SITE_HINTS 里"
 
@@ -481,10 +494,12 @@ class TestContentFirstSiteFallback:
         # 只有「半导体」(科技)，财经信号全在摘要里（「财政部/基金/经济/
         # 世界银行」）。刻意保留真实摘要，证明内容优先确实吃到摘要。
         for title, summary, site in (
-            ("韩国财长：半导体市场景气至少维持至明年",
-             "韩国财政部长李炯日周六表示，半导体行业繁荣将至少延续至 2027 年；"
-             "他在曼谷出席国际货币基金组织与世界银行年会间隙接受 CNBC 采访时称",
-             "格隆汇"),
+            (
+                "韩国财长：半导体市场景气至少维持至明年",
+                "韩国财政部长李炯日周六表示，半导体行业繁荣将至少延续至 2027 年；"
+                "他在曼谷出席国际货币基金组织与世界银行年会间隙接受 CNBC 采访时称",
+                "格隆汇",
+            ),
             ("欧洲央行维持利率不变 拉加德发表讲话", "", ""),
             ("日本央行调整负利率区间", "", ""),
             ("OPEC+ 宣布延长减产协议", "", ""),
@@ -495,13 +510,11 @@ class TestContentFirstSiteFallback:
 
     def test_vertical_sites_still_fallback(self) -> None:
         """垂直媒体的站名兜底能力保留（英文科技评测场景不可替代）。"""
-        for site in ("techradar.com", "9to5Mac", "IT 之家", "快科技",
-                     "金十数据", "36Kr", "创业邦"):
+        for site in ("techradar.com", "9to5Mac", "IT 之家", "快科技", "金十数据", "36Kr", "创业邦"):
             got = classify("", "", site)
             assert got != "其他", f"{site} 应能站名兜底"
         # 英文产品评测：无中文关键词，全靠站名
-        assert classify("I tested the Sony Bravia 9 II for weeks", "",
-                        "techradar.com") == "科技"
+        assert classify("I tested the Sony Bravia 9 II for weeks", "", "techradar.com") == "科技"
 
     def test_longest_site_hint_wins(self) -> None:
         """带后缀的站名走最长匹配。"""

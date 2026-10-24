@@ -15,8 +15,7 @@ from datetime import date
 import pytest
 
 from app.models.snapshot import DailySnapshot
-from app.schemas.snapshot import SnapshotOut, SnapshotListOut
-
+from app.schemas.snapshot import SnapshotListOut, SnapshotOut
 
 # ──────────────── 测试 fixture：DailySnapshot ORM 模拟 ────────────────
 
@@ -55,9 +54,7 @@ class TestMacroDetailDeserialization:
 
     def test_macro_detail_str_json_is_parsed_to_dict(self) -> None:
         """从 ORM 读出的 str JSON 字符串 → 自动反序列化为 dict（V0.90.0 修复的核心路径）。"""
-        row = _make_snapshot_row(
-            macro_detail='{"DXY": {"value": 104.5}, "US10Y": {"value": 4.2}}'
-        )
+        row = _make_snapshot_row(macro_detail='{"DXY": {"value": 104.5}, "US10Y": {"value": 4.2}}')
         out = SnapshotOut.model_validate(row)
 
         assert isinstance(out.macro_detail, dict)
@@ -67,9 +64,7 @@ class TestMacroDetailDeserialization:
     def test_macro_detail_dict_input_is_passed_through(self) -> None:
         """dict 入参：直接透传（不重新 JSON 化）。"""
         out = SnapshotOut.model_validate(
-            _make_snapshot_row(
-                macro_detail={"DXY": {"value": 104.5}, "CPI": {"value": 3.1}}
-            )
+            _make_snapshot_row(macro_detail={"DXY": {"value": 104.5}, "CPI": {"value": 3.1}})
         )
         assert out.macro_detail == {"DXY": {"value": 104.5}, "CPI": {"value": 3.1}}
 
@@ -105,8 +100,7 @@ class TestMacroDetailDeserialization:
             out = SnapshotOut.model_validate(row)
         assert out.macro_detail is None
         assert any(
-            "顶层非 dict" in r.message or "JSON 反序列化失败" in r.message
-            for r in caplog.records
+            "顶层非 dict" in r.message or "JSON 反序列化失败" in r.message for r in caplog.records
         )
 
     def test_macro_detail_unexpected_type_returns_none(
@@ -142,9 +136,7 @@ class TestExistingFieldsUnchanged:
 
     def test_tech_detail_remains_str_type(self) -> None:
         """``tech_detail`` 保持 ``str | None``（V0.79.0 任务 #162 既有契约不破坏）。"""
-        out = SnapshotOut.model_validate(
-            _make_snapshot_row(tech_detail='{"trend": {"score": 70}}')
-        )
+        out = SnapshotOut.model_validate(_make_snapshot_row(tech_detail='{"trend": {"score": 70}}'))
         assert isinstance(out.tech_detail, str)
         assert out.tech_detail == '{"trend": {"score": 70}}'
 

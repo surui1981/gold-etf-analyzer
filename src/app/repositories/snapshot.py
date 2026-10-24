@@ -19,9 +19,7 @@ class SnapshotRepository:
         stmt = select(DailySnapshot).where(DailySnapshot.snapshot_date == snapshot_date)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
-    async def list_in_range(
-        self, start: date, end: date
-    ) -> list[DailySnapshot]:
+    async def list_in_range(self, start: date, end: date) -> list[DailySnapshot]:
         """V0.90.0：按日期范围查询快照，按日期正序（含首尾）。
 
         用于：

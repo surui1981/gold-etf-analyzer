@@ -196,9 +196,7 @@ async def test_trend_index_components() -> None:
     # V0.100：消息面未打分 → news_score=None；剔 news 后归一化（tech×0.3/0.7 + macro×0.4/0.7）
     tech_sum = sum(i.contribution for i in result.indicators)
     assert tech_sum == pytest.approx(98.5, abs=0.5)
-    assert result.index.score == pytest.approx(
-        tech_sum * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.5
-    )
+    assert result.index.score == pytest.approx(tech_sum * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.5)
     # 宏观参考 + 消息面
     assert result.macro.score == 50.0
     assert result.news.score is None  # V0.100：未打分 = None（非中性 50）
@@ -822,8 +820,6 @@ async def test_trend_news_scored_normalizes_with_full_weight() -> None:
     # news 进入 components，三面全有效
     assert set(result.index.components) == {"tech", "macro", "news"}
     tech_score = result.index.components["tech"]
-    assert result.index.score == pytest.approx(
-        tech_score * 0.3 + 60.0 * 0.4 + 70.0 * 0.3, abs=0.15
-    )
+    assert result.index.score == pytest.approx(tech_score * 0.3 + 60.0 * 0.4 + 70.0 * 0.3, abs=0.15)
     # summary 不应出现「消息面未打分」pending 文案
     assert "消息面未打分" not in result.index.summary

@@ -43,9 +43,7 @@ class UserNewsFavoriteItemOut(BaseModel):
         default_factory=list, description="用户自定义 tag 数组（去重 + 字母序）"
     )
     user_note: str = Field(default="", description="用户自由笔记")
-    importance: int = Field(
-        default=1, ge=1, le=3, description="重要度 1-3 星"
-    )
+    importance: int = Field(default=1, ge=1, le=3, description="重要度 1-3 星")
     archived_at: datetime = Field(..., description="收藏时间（UTC）")
     updated_at: datetime = Field(..., description="最后修改时间（笔记/tag/importance 改动）")
 
@@ -60,9 +58,7 @@ class UserNewsFavoriteCreateIn(BaseModel):
 
     # 必填：定位源
     news_external_id: int = Field(..., description="readhub news id（与 source 组成 dedup 主键）")
-    news_source: str = Field(
-        default="readhub", description="数据源标识（默认 readhub）"
-    )
+    news_source: str = Field(default="readhub", description="数据源标识（默认 readhub）")
     # 可选：直接外部 URL 收藏时手动传；news_feed_items 命中时由后端自动补全
     title: str | None = Field(default=None, description="标题快照（外部直传时必填）")
     summary: str | None = Field(default=None, description="摘要快照")
@@ -73,9 +69,7 @@ class UserNewsFavoriteCreateIn(BaseModel):
     author_name: str | None = Field(default=None, description="作者快照")
     publish_date: datetime | None = Field(default=None, description="新闻发布时间快照")
     # 可选：用户元数据
-    user_tags: list[str] = Field(
-        default_factory=list, description="用户自定义 tag 数组"
-    )
+    user_tags: list[str] = Field(default_factory=list, description="用户自定义 tag 数组")
     user_note: str = Field(default="", description="用户自由笔记")
     importance: int = Field(default=1, ge=1, le=3, description="重要度 1-3 星")
 
@@ -83,15 +77,9 @@ class UserNewsFavoriteCreateIn(BaseModel):
 class UserNewsFavoriteUpdateIn(BaseModel):
     """PATCH 请求体：user_tags / user_note / importance 任选。"""
 
-    user_tags: list[str] | None = Field(
-        default=None, description="新的 tag 数组（None=不改）"
-    )
-    user_note: str | None = Field(
-        default=None, description="新笔记（None=不改）"
-    )
-    importance: int | None = Field(
-        default=None, ge=1, le=3, description="新重要度（None=不改）"
-    )
+    user_tags: list[str] | None = Field(default=None, description="新的 tag 数组（None=不改）")
+    user_note: str | None = Field(default=None, description="新笔记（None=不改）")
+    importance: int | None = Field(default=None, ge=1, le=3, description="新重要度（None=不改）")
 
 
 class UserNewsFavoriteListOut(BaseModel):

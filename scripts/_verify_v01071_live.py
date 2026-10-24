@@ -51,10 +51,12 @@ async def main() -> None:
     for cat in ("财经", "科技", "创投", "商业", "其他"):
         n = cat_counter.get(cat, 0)
         marker = "✅" if cat != "其他" or n == 0 else "❌"
-        print(f"    {marker} {cat:6s} = {n:3d}  ({n/len(records)*100:.1f}%)")
+        print(f"    {marker} {cat:6s} = {n:3d}  ({n / len(records) * 100:.1f}%)")
 
     if cat_counter.get("其他", 0) > 0:
-        print(f"  ⚠️  fetcher 漏弃入 {cat_counter.get('其他')} 条「其他」——这正是 service 二次 gate 要兜底的")
+        print(
+            f"  ⚠️  fetcher 漏弃入 {cat_counter.get('其他')} 条「其他」——这正是 service 二次 gate 要兜底的"
+        )
     else:
         print("  ✅ fetcher 已完全弃入「其他」（service gate 无需补救）")
 
@@ -62,7 +64,11 @@ async def main() -> None:
     print("\n[3] 4 类目样本（每类前 3 条标题）:")
     for cat in ("财经", "科技", "创投", "商业"):
         samples = [r for r in records if r.get("category") == cat][:3]
-        print(f"\n  ── 财经类 {len(samples)}/{cat_counter.get(cat, 0)} ──" if cat == "财经" else f"\n  ── {cat} {len(samples)}/{cat_counter.get(cat, 0)} ──")
+        print(
+            f"\n  ── 财经类 {len(samples)}/{cat_counter.get(cat, 0)} ──"
+            if cat == "财经"
+            else f"\n  ── {cat} {len(samples)}/{cat_counter.get(cat, 0)} ──"
+        )
         for r in samples:
             title = r["title"][:60]
             print(f"    • {title}{'...' if len(r['title']) > 60 else ''}")
@@ -77,8 +83,7 @@ async def main() -> None:
         result = await svc.refresh(force=True)
         print(f"  refresh() 结果: {json.dumps(result, ensure_ascii=False)}")
         print(
-            f"  ✅ ok={result['ok']}  upserted={result['upserted']}  "
-            f"error={result.get('error')!r}"
+            f"  ✅ ok={result['ok']}  upserted={result['upserted']}  error={result.get('error')!r}"
         )
 
         # ── Step 5: 重建当日 daily 摘要 ──

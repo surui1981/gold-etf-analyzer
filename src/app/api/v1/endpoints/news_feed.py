@@ -161,9 +161,7 @@ async def refresh(
     summary="V0.107 指定 BJT 日的聚合行（无则 null）",
 )
 async def get_daily(
-    date: date_t = Query(
-        ..., description="BJT 日期（YYYY-MM-DD）；目标聚合日"
-    ),
+    date: date_t = Query(..., description="BJT 日期（YYYY-MM-DD）；目标聚合日"),
     service: NewsFeedService = Depends(get_news_feed_service),
 ) -> NewsFeedDailyOut | None:
     """取单日聚合（UI /headlines 顶 chip + /home 底 chip 用）。
@@ -195,7 +193,5 @@ async def list_daily(
     if (end - start).days > 90:
         from fastapi import HTTPException
 
-        raise HTTPException(
-            status_code=400, detail="range too large (max 90 days)"
-        )
+        raise HTTPException(status_code=400, detail="range too large (max 90 days)")
     return await service.list_daily(start=start, end=end)

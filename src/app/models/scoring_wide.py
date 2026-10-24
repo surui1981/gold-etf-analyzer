@@ -64,7 +64,9 @@ class ScoringDailyWide(Base):
     tech_index: Mapped[float | None] = mapped_column(Float, nullable=True, comment="技术面指数")
     macro_index: Mapped[float | None] = mapped_column(Float, nullable=True, comment="宏观参考指数")
     news_index: Mapped[float | None] = mapped_column(Float, nullable=True, comment="消息面指数")
-    trend_index: Mapped[float | None] = mapped_column(Float, nullable=True, comment="综合趋势评估指数")
+    trend_index: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="综合趋势评估指数"
+    )
     index_level: Mapped[str | None] = mapped_column(
         String(16), nullable=True, comment="指数等级 strong_bullish/bullish/..."
     )
@@ -121,12 +123,8 @@ class ScoringDailyWide(Base):
     hit_t1: Mapped[bool | None] = mapped_column(
         Boolean, nullable=True, comment="T+1 命中（按当日 news 方向）"
     )
-    hit_t3: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True, comment="T+3 命中"
-    )
-    hit_t5: Mapped[bool | None] = mapped_column(
-        Boolean, nullable=True, comment="T+5 命中"
-    )
+    hit_t3: Mapped[bool | None] = mapped_column(Boolean, nullable=True, comment="T+3 命中")
+    hit_t5: Mapped[bool | None] = mapped_column(Boolean, nullable=True, comment="T+5 命中")
     # V0.93.0：T+0 outcome —— 当日 close vs 上一交易日 close 的命中判定。
     # 定位「快速反馈」（打分时刻已发生盘内信息，仅 sanity check，不作预测能力评估）。
     actual_change_pct_t0: Mapped[float | None] = mapped_column(

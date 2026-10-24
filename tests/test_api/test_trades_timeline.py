@@ -13,14 +13,12 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 
-import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.account import Account
 from app.models.position import Position, TradeRecord
 from app.models.snapshot import DailySnapshot
-
 
 # ──────────────── 测试 fixture ────────────────
 
@@ -87,10 +85,18 @@ async def _seed_snapshot(
         snapshot_date=snapshot_date,
         symbol="518880",
         name="黄金ETF华安",
-        close=5.5, change_pct=1.0, high=5.6, low=5.4,
-        ma20=5.45, ma40=5.40, direction="up",
-        tech_index=65.0, macro_index=58.0, news_index=60.0,
-        trend_index=61.0, index_level="偏多",
+        close=5.5,
+        change_pct=1.0,
+        high=5.6,
+        low=5.4,
+        ma20=5.45,
+        ma40=5.40,
+        direction="up",
+        tech_index=65.0,
+        macro_index=58.0,
+        news_index=60.0,
+        trend_index=61.0,
+        index_level="偏多",
         macro_detail=macro_json,
         data_source="live",
     )
@@ -106,14 +112,9 @@ async def _seed_snapshot(
 class TestTradesTimelineEndpoint:
     """``GET /api/v1/trades/timeline`` 端点集成测试。"""
 
-    async def test_empty_returns_one_idle_segment_covering_range(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_empty_returns_one_idle_segment_covering_range(self, client: AsyncClient) -> None:
         """空 DB + 合法窗口：返回 1 个 idle 段覆盖全范围 + decision_count=0。"""
-        resp = await client.get(
-            "/api/v1/trades/timeline"
-            "?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
         body = resp.json()
 
@@ -138,14 +139,16 @@ class TestTradesTimelineEndpoint:
         target_day = date(2026, 10, 5)
         target_dt = datetime(2026, 10, 5, 14, 30)
         await _seed_trade(
-            db_session, pos.id, side="buy", quantity=100.0, price=5.0,
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
             traded_at=target_dt,
         )
         await _seed_snapshot(db_session, target_day)
 
-        resp = await client.get(
-            f"/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
         body = resp.json()
 
@@ -173,15 +176,17 @@ class TestTradesTimelineEndpoint:
         acc = await _seed_account(db_session)
         pos = await _seed_position(db_session, acc.id)
         await _seed_trade(
-            db_session, pos.id, side="buy", quantity=100.0, price=5.0,
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
             traded_at=datetime(2026, 10, 5, 14, 30),
         )
         # 只插入 10-03 快照（trade 当日 10-05 缺 → 回退 10-04 → 10-03）
         await _seed_snapshot(db_session, date(2026, 10, 3))
 
-        resp = await client.get(
-            f"/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
         segs = resp.json()["segments"]
 
@@ -195,37 +200,33 @@ class TestTradesTimelineEndpoint:
         acc = await _seed_account(db_session)
         pos = await _seed_position(db_session, acc.id)
         await _seed_trade(
-            db_session, pos.id, side="buy", quantity=100.0, price=5.0,
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
             traded_at=datetime(2026, 10, 5, 14, 30),
         )
         # 完全没快照
 
-        resp = await client.get(
-            f"/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
         segs = resp.json()["segments"]
 
         decision_seg = next(s for s in segs if s["type"] == "decision")
         assert decision_seg["snapshot"] is None
 
-    async def test_idle_segment_beyond_threshold_is_compressed(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_idle_segment_beyond_threshold_is_compressed(self, client: AsyncClient) -> None:
         """空闲段 > compress_threshold → compressed=True（默认 7 天）。"""
         # 10 天窗口 + 无 trade → 1 个 idle 段（10 天 > 7 阈值 → compressed）
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10")
         assert resp.status_code == 200
         segs = resp.json()["segments"]
         assert len(segs) == 1
         assert segs[0]["compressed"] is True
         assert segs[0]["idle_days"] == 10
 
-    async def test_compress_threshold_zero_disables_compression(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_compress_threshold_zero_disables_compression(self, client: AsyncClient) -> None:
         """compress_threshold_days=0 → 永远不压缩。"""
         resp = await client.get(
             "/api/v1/trades/timeline"
@@ -239,9 +240,7 @@ class TestTradesTimelineEndpoint:
         assert segs[0]["compressed"] is False
         assert segs[0]["idle_days"] == 31
 
-    async def test_default_90_day_window_when_no_dates(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_default_90_day_window_when_no_dates(self, client: AsyncClient) -> None:
         """不传 from_date / to_date → 默认 90 天窗口（to_date=今日）。"""
         resp = await client.get("/api/v1/trades/timeline")
         assert resp.status_code == 200
@@ -255,23 +254,17 @@ class TestTradesTimelineEndpoint:
 
     async def test_400_on_inverted_range(self, client: AsyncClient) -> None:
         """``from > to`` → 400 + code=invalid_date_range。"""
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-10&to_date=2026-10-01"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-10&to_date=2026-10-01")
         assert resp.status_code == 400
         assert resp.json()["detail"]["code"] == "invalid_date_range"
 
     async def test_400_on_range_too_wide(self, client: AsyncClient) -> None:
         """范围 > 730 天 → 400 + code=date_range_too_wide。"""
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2020-01-01&to_date=2026-12-31"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2020-01-01&to_date=2026-12-31")
         assert resp.status_code == 400
         assert resp.json()["detail"]["code"] == "date_range_too_wide"
 
-    async def test_422_on_negative_compress_threshold(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_422_on_negative_compress_threshold(self, client: AsyncClient) -> None:
         """compress_threshold_days=-1 → 422（Query ge=0）。"""
         resp = await client.get(
             "/api/v1/trades/timeline"
@@ -282,9 +275,7 @@ class TestTradesTimelineEndpoint:
 
     async def test_422_on_malformed_dates(self, client: AsyncClient) -> None:
         """日期格式非法 → 422。"""
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=bad&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=bad&to_date=2026-10-07")
         assert resp.status_code == 422
 
     async def test_filter_by_account_id(
@@ -298,15 +289,16 @@ class TestTradesTimelineEndpoint:
 
         # 两个账本各 1 笔 trade，**同日**（同段塞 2 个 decision）
         same_day = datetime(2026, 10, 5, 10, 0)
-        await _seed_trade(db_session, pos1.id, side="buy",
-                          quantity=100.0, price=5.0, traded_at=same_day)
-        await _seed_trade(db_session, pos2.id, side="buy",
-                          quantity=200.0, price=5.0, traded_at=same_day)
+        await _seed_trade(
+            db_session, pos1.id, side="buy", quantity=100.0, price=5.0, traded_at=same_day
+        )
+        await _seed_trade(
+            db_session, pos2.id, side="buy", quantity=200.0, price=5.0, traded_at=same_day
+        )
 
         # account_id=1 → 只 1 笔 trade
         resp = await client.get(
-            f"/api/v1/trades/timeline?account_id={acc1.id}"
-            "&from_date=2026-10-01&to_date=2026-10-07"
+            f"/api/v1/trades/timeline?account_id={acc1.id}&from_date=2026-10-01&to_date=2026-10-07"
         )
         assert resp.status_code == 200
         body = resp.json()
@@ -323,14 +315,16 @@ class TestTradesTimelineEndpoint:
         # 同日 3 笔 trade（早/午/晚）
         for hour in (9, 12, 15):
             await _seed_trade(
-                db_session, pos.id, side="buy", quantity=100.0, price=5.0,
+                db_session,
+                pos.id,
+                side="buy",
+                quantity=100.0,
+                price=5.0,
                 traded_at=datetime(2026, 10, 5, hour, 0),
             )
         await _seed_snapshot(db_session, day)
 
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
         body = resp.json()
         assert body["decision_count"] == 3
@@ -346,17 +340,25 @@ class TestTradesTimelineEndpoint:
         acc = await _seed_account(db_session)
         pos = await _seed_position(db_session, acc.id)
         # 10-03 trade；10-05 snapshot；10-05 另 1 trade
-        await _seed_trade(db_session, pos.id, side="buy",
-                          quantity=100.0, price=5.0,
-                          traded_at=datetime(2026, 10, 3, 10, 0))
-        await _seed_snapshot(db_session, date(2026, 10, 5))
-        await _seed_trade(db_session, pos.id, side="sell",
-                          quantity=50.0, price=5.5,
-                          traded_at=datetime(2026, 10, 5, 14, 0))
-
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10"
+        await _seed_trade(
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
+            traded_at=datetime(2026, 10, 3, 10, 0),
         )
+        await _seed_snapshot(db_session, date(2026, 10, 5))
+        await _seed_trade(
+            db_session,
+            pos.id,
+            side="sell",
+            quantity=50.0,
+            price=5.5,
+            traded_at=datetime(2026, 10, 5, 14, 0),
+        )
+
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10")
         assert resp.status_code == 200
         body = resp.json()
         # active_days = {10-03, 10-05} = 2
@@ -370,18 +372,26 @@ class TestTradesTimelineEndpoint:
         acc = await _seed_account(db_session)
         pos = await _seed_position(db_session, acc.id)
         # 10-02 trade；10-03 snapshot；10-05 trade；10-08 snapshot
-        await _seed_trade(db_session, pos.id, side="buy",
-                          quantity=100.0, price=5.0,
-                          traded_at=datetime(2026, 10, 2, 10, 0))
+        await _seed_trade(
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
+            traded_at=datetime(2026, 10, 2, 10, 0),
+        )
         await _seed_snapshot(db_session, date(2026, 10, 3))
-        await _seed_trade(db_session, pos.id, side="sell",
-                          quantity=50.0, price=5.5,
-                          traded_at=datetime(2026, 10, 5, 14, 0))
+        await _seed_trade(
+            db_session,
+            pos.id,
+            side="sell",
+            quantity=50.0,
+            price=5.5,
+            traded_at=datetime(2026, 10, 5, 14, 0),
+        )
         await _seed_snapshot(db_session, date(2026, 10, 8))
 
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-10")
         assert resp.status_code == 200
         segs = resp.json()["segments"]
         types = [s["type"] for s in segs]
@@ -394,19 +404,20 @@ class TestTradesTimelineEndpoint:
         """trade 当日**有**快照时，优先用当日（不回退）。"""
         acc = await _seed_account(db_session)
         pos = await _seed_position(db_session, acc.id)
-        await _seed_trade(db_session, pos.id, side="buy",
-                          quantity=100.0, price=5.0,
-                          traded_at=datetime(2026, 10, 5, 14, 30))
+        await _seed_trade(
+            db_session,
+            pos.id,
+            side="buy",
+            quantity=100.0,
+            price=5.0,
+            traded_at=datetime(2026, 10, 5, 14, 30),
+        )
         # 当日 10-05 快照 + 前日 10-04 快照
         await _seed_snapshot(db_session, date(2026, 10, 4))
         await _seed_snapshot(db_session, date(2026, 10, 5))
 
-        resp = await client.get(
-            "/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07"
-        )
+        resp = await client.get("/api/v1/trades/timeline?from_date=2026-10-01&to_date=2026-10-07")
         assert resp.status_code == 200
-        decision_seg = next(
-            s for s in resp.json()["segments"] if s["type"] == "decision"
-        )
+        decision_seg = next(s for s in resp.json()["segments"] if s["type"] == "decision")
         # 用当日，不回退
         assert decision_seg["snapshot"]["snapshot_date"] == "2026-10-05"

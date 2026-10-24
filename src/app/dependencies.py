@@ -2,9 +2,17 @@
 
 from collections.abc import AsyncIterator
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+if TYPE_CHECKING:
+    # 只在类型检查时导入 —— 运行期不引入，避免与 app.services.* 的循环依赖
+    # （V0.116.1：下面几处字符串注解 ``"ScoringWideService | None"`` 引用了
+    # 一个模块级**不存在**的名字，ruff F821 报 undefined-name。
+    # 运行时靠函数体内的局部 import，不受影响。）
+    from app.services.scoring_wide import ScoringWideService
 
 from app.config import get_settings
 from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
@@ -25,6 +33,7 @@ from app.repositories.settings import SettingRepository
 from app.repositories.snapshot import SnapshotRepository
 from app.repositories.telemetry import TelemetryRepository
 from app.repositories.user import SessionRepository, UserRepository
+from app.repositories.user_news_favorite import UserNewsFavoriteRepository  # V0.103
 from app.services.account import AccountService
 from app.services.alert import AlertDispatcher  # V0.72.0 P3-b
 from app.services.analysis import AnalysisService
@@ -50,6 +59,7 @@ from app.services.snapshot import DailySnapshotService
 from app.services.telemetry import TelemetryService
 from app.services.trades import TradeHistoryService
 from app.services.trend import TrendService
+from app.services.user_news_favorite import UserNewsFavoriteService  # V0.103
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
@@ -232,12 +242,6 @@ def get_news_feed_service(
     return NewsFeedService(repo=repo)
 
 
-# V0.103 ── 用户新闻收藏（今日要闻「收藏 / 永久存储」）
-
-from app.repositories.user_news_favorite import UserNewsFavoriteRepository  # V0.103
-from app.services.user_news_favorite import UserNewsFavoriteService  # V0.103
-
-
 async def get_user_news_favorite_repository(
     session: AsyncSession = Depends(get_db_session),
 ) -> UserNewsFavoriteRepository:
@@ -246,9 +250,7 @@ async def get_user_news_favorite_repository(
 
 
 def get_user_news_favorite_service(
-    fav_repo: UserNewsFavoriteRepository = Depends(
-        get_user_news_favorite_repository
-    ),
+    fav_repo: UserNewsFavoriteRepository = Depends(get_user_news_favorite_repository),
     feed_repo: NewsFeedRepository = Depends(get_news_feed_repository),
 ) -> UserNewsFavoriteService:
     """用户新闻收藏业务服务依赖（注入 feed_repo 用于 POST 时回填快照）。"""
@@ -540,6 +542,7 @@ async def require_user(
         from sqlalchemy import select
         from sqlalchemy.orm import load_only
         from sqlalchemy.orm.attributes import set_committed_value
+
         async with async_session_factory() as session:
             legacy = (
                 await session.execute(
@@ -547,8 +550,11 @@ async def require_user(
                     .where(User.id == LEGACY_USER_ID)
                     .options(
                         load_only(
-                            User.id, User.email, User.display_name,
-                            User.is_active, User.password_hash,
+                            User.id,
+                            User.email,
+                            User.display_name,
+                            User.is_active,
+                            User.password_hash,
                         )
                     )
                 )
@@ -663,16 +669,9 @@ def get_scoring_wide_service_for_etl() -> "ScoringWideService | None":
         服务应 log.warning 后跳过，不影响主流程 —— V0.79.0 任务 #162 教训）。
     """
     try:
-        from app.repositories.db import async_session_factory
-        from app.services.scoring_wide import ScoringWideService
-
         # 用同步 session_factory 走一次性会话（写时 hook 不在请求路径上，
         # 跨请求共用一个事件循环的场景下用独立会话最安全）。
         # 异步封装由调用方 await 处理。
-        from app.repositories.scoring_wide import ScoringWideRepository
-        from app.repositories.news import NewsScoreRepository
-        from app.repositories.review import GoldPriceRepository
-        from app.repositories.snapshot import SnapshotRepository
 
         class _LazyService:
             """轻量占位：实际 rebuild 在调用方 async 上下文中现场 await session。"""
@@ -682,7 +681,7 @@ def get_scoring_wide_service_for_etl() -> "ScoringWideService | None":
 
         # 真实实现：见 ``rebuild_for_date`` 全局函数（在 main 启动时挂载）。
         return _get_or_build_wide_svc()
-    except Exception:  # noqa: BLE001
+    except Exception:
         return None
 
 
@@ -706,32 +705,6 @@ def _get_or_build_wide_svc() -> "ScoringWideService | None":
 # 定义在文件末尾以避免前向引用：get_scoring_wide_service 依赖
 # get_snapshot_repository / get_news_repository / get_gold_price_repository
 # ─────────────────────────────────────────────────────────────────
-
-
-async def get_scoring_wide_repository(
-    session: AsyncSession = Depends(get_db_session),
-):
-    """打分数据宽表仓储依赖（V0.92.0）。"""
-    from app.repositories.scoring_wide import ScoringWideRepository
-
-    return ScoringWideRepository(session)
-
-
-def get_scoring_wide_service(
-    repo=Depends(get_scoring_wide_repository),
-    snapshot_repo: SnapshotRepository = Depends(get_snapshot_repository),
-    news_repo: NewsScoreRepository = Depends(get_news_repository),
-    gold_repo: GoldPriceRepository = Depends(get_gold_price_repository),
-):
-    """打分数据宽表服务依赖（V0.92.0）。"""
-    from app.services.scoring_wide import ScoringWideService
-
-    return ScoringWideService(
-        repo=repo,
-        snapshot_repo=snapshot_repo,
-        news_repo=news_repo,
-        gold_repo=gold_repo,
-    )
 
 
 def get_report_repository(

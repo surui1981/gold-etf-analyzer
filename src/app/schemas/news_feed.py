@@ -31,9 +31,7 @@ class NewsFeedItemOut(BaseModel):
 
     external_id: int = Field(..., description="源站 news id（dedup 主键的一半）")
     title: str = Field(..., description="新闻标题")
-    summary: str = Field(
-        default="", description="新闻摘要（readhub 自带；空字符串代表无摘要）"
-    )
+    summary: str = Field(default="", description="新闻摘要（readhub 自带；空字符串代表无摘要）")
     url: str | None = Field(
         default=None,
         description=(
@@ -41,16 +39,12 @@ class NewsFeedItemOut(BaseModel):
             "UI 据此渲染成不可点的纯文本（V0.77.1 不给假 affordance）"
         ),
     )
-    mobile_url: str | None = Field(
-        default=None, description="移动端链接（readhub 部分条目标注）"
-    )
+    mobile_url: str | None = Field(default=None, description="移动端链接（readhub 部分条目标注）")
     site_name: str = Field(..., description="来源站：华尔街见闻 / 36Kr / 财联社 / 格隆汇")
     language: str | None = Field(
         default=None, description="语种代码：zh-cn / en（V0.78.0 NULL 纪律：未知则 None）"
     )
-    author_name: str | None = Field(
-        default=None, description="作者名（部分条目无作者）"
-    )
+    author_name: str | None = Field(default=None, description="作者名（部分条目无作者）")
     publish_date: datetime = Field(..., description="新闻发布时间（UTC，readhub 给定）")
     fetched_at: datetime = Field(..., description="本地入库时间（scheduler 6h 一次刷新）")
     source: str = Field(
@@ -138,15 +132,9 @@ class NewsFeedDailyOut(BaseModel):
     unique_sites_count: int = Field(..., ge=0, description="当日独立来源站数")
     en_count: int = Field(..., ge=0, description="英文条数（language='en'）")
     zh_count: int = Field(..., ge=0, description="中文条数（language 任意 zh- 前缀）")
-    first_publish_at: datetime | None = Field(
-        default=None, description="当日首篇发布时间（UTC）"
-    )
-    last_publish_at: datetime | None = Field(
-        default=None, description="当日末篇发布时间（UTC）"
-    )
-    last_refresh_at: datetime = Field(
-        ..., description="最近一次 refresh 触发本行重建的时间（UTC）"
-    )
+    first_publish_at: datetime | None = Field(default=None, description="当日首篇发布时间（UTC）")
+    last_publish_at: datetime | None = Field(default=None, description="当日末篇发布时间（UTC）")
+    last_refresh_at: datetime = Field(..., description="最近一次 refresh 触发本行重建的时间（UTC）")
 
 
 class NewsFeedDailyListOut(BaseModel):

@@ -1281,4 +1281,3 @@ class MarketDataRepository:
             )
             for k in raw
         ]
-

@@ -27,7 +27,6 @@ import pytest
 
 from app.repositories import central_bank_data as cbd
 
-
 # ──────────────── 公共 fixture：清缓存 + monkeypatch 入口 ────────────────
 
 
@@ -101,12 +100,20 @@ class TestQuarterlyPurchase:
     def test_equality_by_value(self) -> None:
         """相同字段的两个实例相等（dataclass 自动 __eq__）。"""
         a = cbd.QuarterlyPurchase(
-            country_iso="POL", country_name="波兰", quarter="2026Q1",
-            tonnes_net=5.0, source="x", data_date=date(2026, 3, 31),
+            country_iso="POL",
+            country_name="波兰",
+            quarter="2026Q1",
+            tonnes_net=5.0,
+            source="x",
+            data_date=date(2026, 3, 31),
         )
         b = cbd.QuarterlyPurchase(
-            country_iso="POL", country_name="波兰", quarter="2026Q1",
-            tonnes_net=5.0, source="x", data_date=date(2026, 3, 31),
+            country_iso="POL",
+            country_name="波兰",
+            quarter="2026Q1",
+            tonnes_net=5.0,
+            source="x",
+            data_date=date(2026, 3, 31),
         )
         assert a == b
 
@@ -210,28 +217,19 @@ class TestParseChartSeries:
 
     def test_null_values_to_zero(self) -> None:
         """series 里有 "null"/"Null"/null → 转 0.0。"""
-        js = (
-            '{"series":[{"name":"Q1","data":[1,null,3]}],'
-            '"xAxis":{"categories":["a","b","c"]}}'
-        )
-        cats, series = cbd._parse_chart_series(js)
+        js = '{"series":[{"name":"Q1","data":[1,null,3]}],"xAxis":{"categories":["a","b","c"]}}'
+        _cats, series = cbd._parse_chart_series(js)
         assert series["Q1"] == [1.0, 0.0, 3.0]
 
     def test_non_numeric_to_zero(self) -> None:
         """series 里混非数字字符串 → fallback 0.0（不抛异常）。"""
-        js = (
-            '{"series":[{"name":"Q1","data":[1,"?",3]}],'
-            '"xAxis":{"categories":["a","b","c"]}}'
-        )
-        cats, series = cbd._parse_chart_series(js)
+        js = '{"series":[{"name":"Q1","data":[1,"?",3]}],"xAxis":{"categories":["a","b","c"]}}'
+        _cats, series = cbd._parse_chart_series(js)
         assert series["Q1"] == [1.0, 0.0, 3.0]
 
     def test_numeric_categories(self) -> None:
         """categories 是数字列表（年份）也能识别。"""
-        js = (
-            '{"series":[{"name":"Q1","data":[10,20]}],'
-            '"xAxis":{"categories":[2014,2015]}}'
-        )
+        js = '{"series":[{"name":"Q1","data":[10,20]}],"xAxis":{"categories":[2014,2015]}}'
         cats, series = cbd._parse_chart_series(js)
         # 数字 categories 走 split(",") 路径
         assert cats == ["2014", "2015"]
@@ -282,6 +280,7 @@ class TestFetchReportCharts:
 
     def test_http_failure_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """网络异常：返回 []（不抛异常 + 缓存空结果，避免反复失败）。"""
+
         def _boom(url: str, timeout: int = 30) -> str:
             raise ConnectionError("network down")
 
@@ -375,10 +374,13 @@ class TestFetchGlobalQuarterlyAggregate:
 
     def test_returns_wgc_aggr_rows(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """正常：返回 WGC_AGGR 行（country_iso='WGC_AGGR'）。"""
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_JS,
+            },
+        )
         rows = cbd.fetch_global_quarterly_aggregate()
         assert len(rows) > 0
         assert all(r.country_iso == "WGC_AGGR" for r in rows)
@@ -391,10 +393,13 @@ class TestFetchGlobalQuarterlyAggregate:
     def test_zero_value_skipped(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """val == 0.0 的项被跳过（保持稀疏性）。"""
         # 2018Q1 = null 已被 parse 转为 0.0 → 应被跳过
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_JS,
+            },
+        )
         rows = cbd.fetch_global_quarterly_aggregate()
         quarters = {r.quarter for r in rows}
         # 2018Q1/Q2 因为 null → 0.0 被跳过
@@ -404,9 +409,12 @@ class TestFetchGlobalQuarterlyAggregate:
     def test_chart8_missing_returns_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Chart 8 不在 HTML 中：返回 []（不抛异常）。"""
         empty_html = "<html><body><article><h3>Chart 99: other</h3></article></body></html>"
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): empty_html,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): empty_html,
+            },
+        )
         assert cbd.fetch_global_quarterly_aggregate() == []
 
 
@@ -445,11 +453,14 @@ class TestFetchH1ByCountry:
 
     def test_returns_country_split(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """正常：返回按国家 + 按 Q1/Q2 拆分的行。"""
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
+            },
+        )
         rows = cbd.fetch_h1_2026_by_country()
         assert len(rows) > 0
         # 至少出现 2 个国家
@@ -475,10 +486,13 @@ class TestFetchH1ByCountry:
           </article>
         </body></html>
         """
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): no_c8_html,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): no_c8_html,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
+            },
+        )
         rows = cbd.fetch_h1_2026_by_country()
         # 即使无 aggregate，0.5/0.5 等分也能产出 Q1+Q2 行
         quarters = {r.quarter for r in rows}
@@ -495,10 +509,13 @@ class TestFetchH1ByCountry:
           </article>
         </body></html>
         """
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): no_c9_html,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): no_c9_html,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
+            },
+        )
         assert cbd.fetch_h1_2026_by_country() == []
 
 
@@ -537,7 +554,9 @@ class TestLoadManualOverrides:
         assert rows[0].data_date == date(2026, 3, 31)
         assert rows[1].data_date == date(2026, 6, 30)
 
-    def test_invalid_json_returns_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_invalid_json_returns_empty(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """非法 JSON：返回 []（不抛异常）。"""
         p = tmp_path / "overrides.json"
         p.write_text("{not valid json", encoding="utf-8")
@@ -625,11 +644,14 @@ class TestBuildFullDataset:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """正常：合并 Chart 8 + Chart 9 + 手工补丁的输出。"""
-        _patch_http(monkeypatch, {
-            cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
-            cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
-        })
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._REPORT_HTML,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
+            },
+        )
         payload = {
             "MAN": {"name": "测试手工", "data": [["2026Q1", 1.0]]},
         }
@@ -648,6 +670,7 @@ class TestBuildFullDataset:
         self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
     ) -> None:
         """所有源都拿不到数据：返回 []（不抛异常）。"""
+
         def _boom(url: str, timeout: int = 30) -> str:
             raise ConnectionError("network down")
 

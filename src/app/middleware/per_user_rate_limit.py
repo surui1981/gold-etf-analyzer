@@ -19,6 +19,7 @@ import threading
 import time
 from collections import defaultdict, deque
 from datetime import date
+from typing import ClassVar
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -29,8 +30,8 @@ class PerUserRateLimitMiddleware(BaseHTTPMiddleware):
     """``/api/v1/ai/*`` 路径专用 per-user 限速。"""
 
     PATH_RE = __import__("re").compile(r"^/api/v1/ai/")
-    _BUCKETS: dict[int, deque[float]] = defaultdict(deque)
-    _TOKEN_USAGE: dict[tuple[int, date], int] = defaultdict(int)
+    _BUCKETS: ClassVar[dict[int, deque[float]]] = defaultdict(deque)
+    _TOKEN_USAGE: ClassVar[dict[tuple[int, date], int]] = defaultdict(int)
     _LOCK = threading.Lock()
 
     def __init__(self, app, *, per_min: int = 30, daily_quota: int = 100_000):

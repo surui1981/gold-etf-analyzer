@@ -24,12 +24,11 @@ from app.models.news_feed import NewsFeedItem
 from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
 from app.models.user_news_favorite import UserNewsFavorite
 
-
 # ──────────────── autouse fixture：seed LEGACY_USER ────────────────
 
 
 @pytest.fixture(autouse=True)
-async def _seed_legacy(db_session) -> None:  # noqa: ANN001
+async def _seed_legacy(db_session) -> None:
     """每个用例前确保 LEGACY_USER(id=1) 存在 —— 单用户模式 ``require_user`` 兜底依赖。"""
     await _ensure_legacy_user(db_session)
 
@@ -37,7 +36,7 @@ async def _seed_legacy(db_session) -> None:  # noqa: ANN001
 # ──────────────── 公共 seed helpers ────────────────
 
 
-async def _ensure_legacy_user(db) -> None:  # noqa: ANN001
+async def _ensure_legacy_user(db) -> None:
     """conftest 每个用例前 drop_all → LEGACY_USER 不存在 → 手动建 1 行。
 
     POST / PATCH / DELETE 走 ``Depends(require_user)`` → 单用户模式（auth_enabled=False）
@@ -65,7 +64,7 @@ async def _ensure_legacy_user(db) -> None:  # noqa: ANN001
         await db.commit()
 
 
-async def _seed_news_feed(db) -> NewsFeedItem:  # noqa: ANN001
+async def _seed_news_feed(db) -> NewsFeedItem:
     """在 news_feed_items 插 1 条；POST favorites 时可走 service 端 snapshot 回填。"""
     item = NewsFeedItem(
         external_id=50001,
@@ -84,7 +83,7 @@ async def _seed_news_feed(db) -> NewsFeedItem:  # noqa: ANN001
     return item
 
 
-async def _seed_fav(db, **overrides) -> UserNewsFavorite:  # noqa: ANN001
+async def _seed_fav(db, **overrides) -> UserNewsFavorite:
     """直接 ORM 插一条 user_news_favorite。"""
     base = {
         "news_external_id": 60001,
@@ -123,7 +122,7 @@ async def test_list_items_empty(client) -> None:
     assert data["offset"] == 0
 
 
-async def test_list_items_default(client, db_session) -> None:  # noqa: ANN001
+async def test_list_items_default(client, db_session) -> None:
     """3 条全部返回。"""
     await _seed_fav(db_session, news_external_id=70001, title="A")
     await _seed_fav(db_session, news_external_id=70002, title="B")
@@ -135,7 +134,7 @@ async def test_list_items_default(client, db_session) -> None:  # noqa: ANN001
     assert len(data["items"]) == 3
 
 
-async def test_list_items_filter_importance_min(client, db_session) -> None:  # noqa: ANN001
+async def test_list_items_filter_importance_min(client, db_session) -> None:
     await _seed_fav(db_session, news_external_id=71001, importance=1)
     await _seed_fav(db_session, news_external_id=71002, importance=2)
     await _seed_fav(db_session, news_external_id=71003, importance=3)
@@ -146,15 +145,13 @@ async def test_list_items_filter_importance_min(client, db_session) -> None:  # 
     assert {it["importance"] for it in data["items"]} == {2, 3}
 
 
-async def test_list_items_filter_tag(client, db_session) -> None:  # noqa: ANN001
+async def test_list_items_filter_tag(client, db_session) -> None:
     await _seed_fav(
         db_session,
         news_external_id=72001,
         user_tags='["美联储","美元"]',
     )
-    await _seed_fav(
-        db_session, news_external_id=72002, user_tags='["地缘"]'
-    )
+    await _seed_fav(db_session, news_external_id=72002, user_tags='["地缘"]')
     r = await client.get("/api/v1/favorites/items?tag=美联储")
     assert r.status_code == 200
     data = r.json()
@@ -162,13 +159,9 @@ async def test_list_items_filter_tag(client, db_session) -> None:  # noqa: ANN00
     assert "美联储" in data["items"][0]["user_tags"]
 
 
-async def test_list_items_filter_site(client, db_session) -> None:  # noqa: ANN001
-    await _seed_fav(
-        db_session, news_external_id=73001, site_name="华尔街见闻"
-    )
-    await _seed_fav(
-        db_session, news_external_id=73002, site_name="财联社"
-    )
+async def test_list_items_filter_site(client, db_session) -> None:
+    await _seed_fav(db_session, news_external_id=73001, site_name="华尔街见闻")
+    await _seed_fav(db_session, news_external_id=73002, site_name="财联社")
     r = await client.get("/api/v1/favorites/items?site_name=财联社")
     assert r.status_code == 200
     data = r.json()
@@ -176,7 +169,7 @@ async def test_list_items_filter_site(client, db_session) -> None:  # noqa: ANN0
     assert data["items"][0]["site_name"] == "财联社"
 
 
-async def test_list_items_sort_importance(client, db_session) -> None:  # noqa: ANN001
+async def test_list_items_sort_importance(client, db_session) -> None:
     await _seed_fav(db_session, news_external_id=74001, importance=1)
     await _seed_fav(db_session, news_external_id=74002, importance=3)
     r = await client.get("/api/v1/favorites/items?sort=importance")
@@ -186,7 +179,7 @@ async def test_list_items_sort_importance(client, db_session) -> None:  # noqa: 
     assert items[1]["importance"] == 1
 
 
-async def test_list_items_pagination(client, db_session) -> None:  # noqa: ANN001
+async def test_list_items_pagination(client, db_session) -> None:
     for i in range(5):
         await _seed_fav(
             db_session,
@@ -204,7 +197,7 @@ async def test_list_items_pagination(client, db_session) -> None:  # noqa: ANN00
 # ──────────────── GET /items/{id} 单条 ────────────────
 
 
-async def test_get_item_by_id(client, db_session) -> None:  # noqa: ANN001
+async def test_get_item_by_id(client, db_session) -> None:
     fav = await _seed_fav(
         db_session,
         news_external_id=76001,
@@ -227,13 +220,9 @@ async def test_get_item_not_found(client) -> None:
 # ──────────────── GET /sites / /tags / /stats / /exists ────────────────
 
 
-async def test_list_sites(client, db_session) -> None:  # noqa: ANN001
-    await _seed_fav(
-        db_session, news_external_id=77001, site_name="华尔街见闻"
-    )
-    await _seed_fav(
-        db_session, news_external_id=77002, site_name="财联社"
-    )
+async def test_list_sites(client, db_session) -> None:
+    await _seed_fav(db_session, news_external_id=77001, site_name="华尔街见闻")
+    await _seed_fav(db_session, news_external_id=77002, site_name="财联社")
     r = await client.get("/api/v1/favorites/sites")
     assert r.status_code == 200
     sites = r.json()
@@ -241,13 +230,9 @@ async def test_list_sites(client, db_session) -> None:  # noqa: ANN001
     assert "财联社" in sites
 
 
-async def test_list_tags(client, db_session) -> None:  # noqa: ANN001
-    await _seed_fav(
-        db_session, news_external_id=78001, user_tags='["美联储","美元"]'
-    )
-    await _seed_fav(
-        db_session, news_external_id=78002, user_tags='["地缘"]'
-    )
+async def test_list_tags(client, db_session) -> None:
+    await _seed_fav(db_session, news_external_id=78001, user_tags='["美联储","美元"]')
+    await _seed_fav(db_session, news_external_id=78002, user_tags='["地缘"]')
     r = await client.get("/api/v1/favorites/tags")
     assert r.status_code == 200
     tags = r.json()
@@ -258,7 +243,7 @@ async def test_list_tags(client, db_session) -> None:  # noqa: ANN001
     assert tags == sorted(tags)
 
 
-async def test_get_stats(client, db_session) -> None:  # noqa: ANN001
+async def test_get_stats(client, db_session) -> None:
     await _seed_fav(
         db_session,
         news_external_id=79001,
@@ -278,21 +263,17 @@ async def test_get_stats(client, db_session) -> None:  # noqa: ANN001
     assert data["by_importance"] == {"1": 1, "3": 1}
 
 
-async def test_exists_returns_fav_or_null(client, db_session) -> None:  # noqa: ANN001
+async def test_exists_returns_fav_or_null(client, db_session) -> None:
     """GET /exists/{ext} → 命中返回 fav JSON；未命中 → 200 + null（UI 据此切 ⭐/☆）。"""
     await _seed_fav(db_session, news_external_id=80001, news_source="readhub")
     # 命中
-    r1 = await client.get(
-        "/api/v1/favorites/exists/80001?source=readhub"
-    )
+    r1 = await client.get("/api/v1/favorites/exists/80001?source=readhub")
     assert r1.status_code == 200
     data = r1.json()
     assert data is not None
     assert data["news_external_id"] == 80001
     # 未命中：200 + null（不 404，UI 按钮态切换用，null = 未收藏）
-    r2 = await client.get(
-        "/api/v1/favorites/exists/99999?source=readhub"
-    )
+    r2 = await client.get("/api/v1/favorites/exists/99999?source=readhub")
     assert r2.status_code == 200
     assert r2.json() is None
 
@@ -300,9 +281,7 @@ async def test_exists_returns_fav_or_null(client, db_session) -> None:  # noqa: 
 # ──────────────── POST /items 收藏 ────────────────
 
 
-async def test_post_uses_news_feed_snapshot(
-    client, db_session
-) -> None:  # noqa: ANN001
+async def test_post_uses_news_feed_snapshot(client, db_session) -> None:
     """POST 时若 news_feed_items 命中 → service 自动用源表当前字段回填快照。"""
     await _seed_news_feed(db_session)
     r = await client.post(
@@ -319,9 +298,7 @@ async def test_post_uses_news_feed_snapshot(
     assert data["author_name"] == "张三"
 
 
-async def test_post_direct_snapshot_when_no_feed_row(
-    client, db_session
-) -> None:  # noqa: ANN001
+async def test_post_direct_snapshot_when_no_feed_row(client, db_session) -> None:
     """news_feed_items 没命中 → 客户端直接传 snapshot。"""
     r = await client.post(
         "/api/v1/favorites/items",
@@ -345,20 +322,14 @@ async def test_post_direct_snapshot_when_no_feed_row(
     assert data["importance"] == 2
 
 
-async def test_post_duplicate_returns_409(
-    client, db_session
-) -> None:  # noqa: ANN001
+async def test_post_duplicate_returns_409(client, db_session) -> None:
     """同一 (external_id, source) 第二次 POST → 409 Conflict。"""
     await _seed_news_feed(db_session)
-    r1 = await client.post(
-        "/api/v1/favorites/items", json={"news_external_id": 50001}
-    )
+    r1 = await client.post("/api/v1/favorites/items", json={"news_external_id": 50001})
     assert r1.status_code == 201
     # 第二次（先 delete news_feed_items row 强制走 direct snapshot 路径不行；
     # 重复 POST 直接对 UNIQUE 约束 → 409）
-    r2 = await client.post(
-        "/api/v1/favorites/items", json={"news_external_id": 50001}
-    )
+    r2 = await client.post("/api/v1/favorites/items", json={"news_external_id": 50001})
     assert r2.status_code == 409
 
 
@@ -381,13 +352,9 @@ async def test_post_invalid_importance_rejected(client) -> None:
 # ──────────────── PATCH /items/{id} 局部更新 ────────────────
 
 
-async def test_patch_importance(client, db_session) -> None:  # noqa: ANN001
-    fav = await _seed_fav(
-        db_session, news_external_id=92001, importance=1
-    )
-    r = await client.patch(
-        f"/api/v1/favorites/items/{fav.id}", json={"importance": 3}
-    )
+async def test_patch_importance(client, db_session) -> None:
+    fav = await _seed_fav(db_session, news_external_id=92001, importance=1)
+    r = await client.patch(f"/api/v1/favorites/items/{fav.id}", json={"importance": 3})
     assert r.status_code == 200
     data = r.json()
     assert data["importance"] == 3
@@ -395,13 +362,9 @@ async def test_patch_importance(client, db_session) -> None:  # noqa: ANN001
     assert data["title"] == "默认标题"
 
 
-async def test_patch_user_tags_normalized(
-    client, db_session
-) -> None:  # noqa: ANN001
+async def test_patch_user_tags_normalized(client, db_session) -> None:
     """tag 列表写入前会自动去重 + 字母序排序。"""
-    fav = await _seed_fav(
-        db_session, news_external_id=92002, user_tags="[]"
-    )
+    fav = await _seed_fav(db_session, news_external_id=92002, user_tags="[]")
     r = await client.patch(
         f"/api/v1/favorites/items/{fav.id}",
         json={"user_tags": ["美元", "美联储", "美元", "地缘"]},
@@ -412,16 +375,14 @@ async def test_patch_user_tags_normalized(
 
 
 async def test_patch_unknown_id_returns_404(client) -> None:
-    r = await client.patch(
-        "/api/v1/favorites/items/99999", json={"importance": 3}
-    )
+    r = await client.patch("/api/v1/favorites/items/99999", json={"importance": 3})
     assert r.status_code == 404
 
 
 # ──────────────── DELETE /items/{id} 取消收藏 ────────────────
 
 
-async def test_delete_item(client, db_session) -> None:  # noqa: ANN001
+async def test_delete_item(client, db_session) -> None:
     fav = await _seed_fav(db_session, news_external_id=93001)
     r = await client.delete(f"/api/v1/favorites/items/{fav.id}")
     assert r.status_code == 204

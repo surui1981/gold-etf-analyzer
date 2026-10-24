@@ -92,9 +92,7 @@ class UserNewsFavoriteRepository:
 
     async def delete(self, fav_id: int) -> bool:
         """删除一条收藏。Returns: 是否实际删除。"""
-        stmt = UserNewsFavorite.__table__.delete().where(
-            UserNewsFavorite.id == fav_id
-        )
+        stmt = UserNewsFavorite.__table__.delete().where(UserNewsFavorite.id == fav_id)
         result = await self._session.execute(stmt)
         await self._session.commit()
         return (result.rowcount or 0) > 0
@@ -224,10 +222,7 @@ class UserNewsFavoriteRepository:
         """取状态摘要：total + by_importance + by_site + by_tag (top 10) + by_month。"""
         # total
         total = int(
-            (
-                await self._session.execute(select(func.count(UserNewsFavorite.id)))
-            ).scalar_one()
-            or 0
+            (await self._session.execute(select(func.count(UserNewsFavorite.id)))).scalar_one() or 0
         )
         # by_importance
         by_imp_stmt = (
@@ -236,8 +231,7 @@ class UserNewsFavoriteRepository:
             .order_by(UserNewsFavorite.importance)
         )
         by_importance = {
-            int(r[0]): int(r[1])
-            for r in (await self._session.execute(by_imp_stmt)).all()
+            int(r[0]): int(r[1]) for r in (await self._session.execute(by_imp_stmt)).all()
         }
         # by_site (top 10)
         by_site_stmt = (
@@ -251,9 +245,7 @@ class UserNewsFavoriteRepository:
             for r in (await self._session.execute(by_site_stmt)).all()
         ]
         # by_tag (top 10)：与 list_tags 同样的解析 + 计数
-        by_tag_stmt = select(UserNewsFavorite.user_tags).where(
-            UserNewsFavorite.user_tags != "[]"
-        )
+        by_tag_stmt = select(UserNewsFavorite.user_tags).where(UserNewsFavorite.user_tags != "[]")
         rows = (await self._session.execute(by_tag_stmt)).all()
         tag_counter: dict[str, int] = {}
         for (raw,) in rows:

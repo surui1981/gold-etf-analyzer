@@ -23,10 +23,8 @@ from app.services.llm.claude import (
     ClaudeClient,
     ClaudeResponse,
     LLMError,
-    LLMRetryable,
 )
 from app.services.llm.tools import SCHEMAS, ToolCall, ToolDispatcher
-
 
 # ────────────── 1. 文本响应解析 ──────────────
 
@@ -178,9 +176,11 @@ async def test_claude_client_4xx_no_retry() -> None:
     fake_client.__aexit__ = AsyncMock(return_value=False)
     fake_client.post = AsyncMock(return_value=fake_resp)
 
-    with patch("app.services.llm.claude.httpx.AsyncClient", return_value=fake_client):
-        with pytest.raises(LLMError, match="client error 400"):
-            await client.ask(system="sys", messages=[{"role": "user", "content": "x"}])
+    with (
+        patch("app.services.llm.claude.httpx.AsyncClient", return_value=fake_client),
+        pytest.raises(LLMError, match="client error 400"),
+    ):
+        await client.ask(system="sys", messages=[{"role": "user", "content": "x"}])
 
 
 # ────────────── 4. tool dispatcher: 5 个 tool 都能调 ──────────────
@@ -189,6 +189,9 @@ async def test_claude_client_4xx_no_retry() -> None:
 @dataclass
 class _FakeTrend:
     async def analyze(self, days: int, target: str, interval: str) -> Any:
+        from datetime import date
+
+        from app.schemas.common import DirectionSignal
         from app.schemas.market import (
             GoldTrendMetrics,
             GoldTrendOut,
@@ -199,27 +202,46 @@ class _FakeTrend:
             TrendIndexLevel,
             TrendIndexOut,
         )
-        from app.schemas.common import DirectionSignal
-        from datetime import date
+
         return GoldTrendOut(
             symbol="GC",
             name="NY Gold",
             days=60,
-            points=[GoldTrendPoint(date=date(2026, 10, 14), close=2400.0, ma5=None, ma20=None, ma40=None)],
+            points=[
+                GoldTrendPoint(
+                    date=date(2026, 10, 14), close=2400.0, ma5=None, ma20=None, ma40=None
+                )
+            ],
             metrics=GoldTrendMetrics(
-                start_date=date(2026, 8, 14), end_date=date(2026, 10, 14),
-                trading_days=42, start_price=2350.0, end_price=2400.0,
-                change_pct=2.13, high=2420.0, low=2320.0, ma20=None, ma40=None,
-                change_pct_1d=0.5, change_pct_5d=1.2, direction=TrendDirection.UP,
-                unit="美元/盎司", summary="上行",
+                start_date=date(2026, 8, 14),
+                end_date=date(2026, 10, 14),
+                trading_days=42,
+                start_price=2350.0,
+                end_price=2400.0,
+                change_pct=2.13,
+                high=2420.0,
+                low=2320.0,
+                ma20=None,
+                ma40=None,
+                change_pct_1d=0.5,
+                change_pct_5d=1.2,
+                direction=TrendDirection.UP,
+                unit="美元/盎司",
+                summary="上行",
             ),
             indicators=[],
-            index=TrendIndexOut(score=65.0, level=TrendIndexLevel.UP,
-                                direction=DirectionSignal.BULLISH, summary="偏多"),
-            macro=MacroIndexOut(score=55.0, factors=[],
-                                direction=DirectionSignal.NEUTRAL, summary="稳"),
-            news=NewsIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL,
-                              note="中性", scored=True),
+            index=TrendIndexOut(
+                score=65.0,
+                level=TrendIndexLevel.UP,
+                direction=DirectionSignal.BULLISH,
+                summary="偏多",
+            ),
+            macro=MacroIndexOut(
+                score=55.0, factors=[], direction=DirectionSignal.NEUTRAL, summary="稳"
+            ),
+            news=NewsIndexOut(
+                score=50.0, direction=DirectionSignal.NEUTRAL, note="中性", scored=True
+            ),
             data_sources={"ny": "live"},
             degraded=False,
             freshness=None,
@@ -237,10 +259,18 @@ class _FakeScoring:
             ScoringHitStatsAllOut,
             ScoringSummaryBucket,
         )
-        bucket = ScoringSummaryBucket(period="2026-10", days=14, hit_rate_t0=0.4,
-                                      hit_rate_t1=0.407, hit_rate_t3=0.4, hit_rate_t5=0.391)
+
+        bucket = ScoringSummaryBucket(
+            period="2026-10",
+            days=14,
+            hit_rate_t0=0.4,
+            hit_rate_t1=0.407,
+            hit_rate_t3=0.4,
+            hit_rate_t5=0.391,
+        )
         return ScoringHitStatsAllOut(
-            from_date=start, to_date=end,
+            from_date=start,
+            to_date=end,
             by_horizon={
                 h: ScoringHitStatsAllHorizon(horizon=h, by_month=[bucket])
                 for h in ("t0", "t1", "t3", "t5")
@@ -257,6 +287,7 @@ class _FakeScoring:
 class _FakePosition:
     async def equity_curve(self, days: int, account_id: Any) -> Any:
         from app.schemas.portfolio import EquityCurveOut, EquityPoint, EquitySummary
+
         return EquityCurveOut(
             days=days,
             points=[EquityPoint(date="2026-10-14", value=120000.0)],
@@ -265,14 +296,29 @@ class _FakePosition:
 
     async def performance(self, account_id: Any) -> Any:
         from app.schemas.portfolio import PerformanceOut
+
         return PerformanceOut(
-            total_pnl=5000.0, realized_pnl=2000.0, unrealized_pnl=3000.0,
-            total_cost=100000.0, total_invested=100000.0, total_return_pct=5.0,
-            open_positions=2, closed_positions=1, closed_trades=1,
-            win_trades=1, loss_trades=0, win_rate=100.0,
-            buy_count=3, sell_count=1, best_trade_pnl=2000.0, worst_trade_pnl=0.0,
-            avg_trade_pnl=2000.0, gross_profit=2000.0, gross_loss=0.0,
-            profit_factor=None, avg_holding_days=15.0,
+            total_pnl=5000.0,
+            realized_pnl=2000.0,
+            unrealized_pnl=3000.0,
+            total_cost=100000.0,
+            total_invested=100000.0,
+            total_return_pct=5.0,
+            open_positions=2,
+            closed_positions=1,
+            closed_trades=1,
+            win_trades=1,
+            loss_trades=0,
+            win_rate=100.0,
+            buy_count=3,
+            sell_count=1,
+            best_trade_pnl=2000.0,
+            worst_trade_pnl=0.0,
+            avg_trade_pnl=2000.0,
+            gross_profit=2000.0,
+            gross_loss=0.0,
+            profit_factor=None,
+            avg_holding_days=15.0,
             summary="累计收益 5%",
         )
 
@@ -282,33 +328,54 @@ class _FakeFreshness:
     """V0.97.1 修复：原 fixture 提供 ``snapshot()``，与生产代码不匹配
     （生产 ``FreshnessService`` 只暴露 ``report()``）。改为暴露 ``report()``
     即可。"""
+
     async def report(self) -> Any:
         from app.schemas.market import (
-            DataFreshnessOut, FreshnessLevel, FreshnessOut, MarketSessionOut,
+            DataFreshnessOut,
+            FreshnessLevel,
+            FreshnessOut,
+            MarketSessionOut,
         )
+
         markets = {
             "ny": DataFreshnessOut(
-                market="ny", name="纽约金", status="live",
-                freshness=FreshnessLevel.REALTIME, freshness_label="实时",
-                data_date="2026-10-14", fetched_at="2026-10-14T10:00:00Z",
+                market="ny",
+                name="纽约金",
+                status="live",
+                freshness=FreshnessLevel.REALTIME,
+                freshness_label="实时",
+                data_date="2026-10-14",
+                fetched_at="2026-10-14T10:00:00Z",
                 age_minutes=5.0,
                 session=MarketSessionOut(
-                    market="ny", name="纽约金", state="open", state_label="交易中",
-                ), note="",
+                    market="ny",
+                    name="纽约金",
+                    state="open",
+                    state_label="交易中",
+                ),
+                note="",
             ),
         }
         return FreshnessOut(
             server_time="2026-10-14T10:00:00Z",
-            markets=markets, degraded=False, summary="全部实时",
+            markets=markets,
+            degraded=False,
+            summary="全部实时",
         )
 
 
 @dataclass
 class _FakeMarket:
     async def get_gold_history(self, days: int) -> Any:
-        from app.repositories.market_data import GoldKline
         from datetime import date
-        return [GoldKline(date=date(2026, 10, 14), open=6.5, high=6.6, low=6.4, close=6.55, volume=1000.0)]
+
+        from app.repositories.market_data import GoldKline
+
+        return [
+            GoldKline(
+                date=date(2026, 10, 14), open=6.5, high=6.6, low=6.4, close=6.55, volume=1000.0
+            )
+        ]
 
 
 @pytest.mark.asyncio
@@ -324,7 +391,8 @@ async def test_tool_dispatcher_executes_5_tools() -> None:
 
     # 1. get_market_overview
     r1 = await dispatcher.execute(
-        ToolCall(id="t1", name="get_market_overview", input={}), user_id=1,
+        ToolCall(id="t1", name="get_market_overview", input={}),
+        user_id=1,
     )
     assert r1.is_error is False
     assert "index_score" in r1.content
@@ -332,8 +400,9 @@ async def test_tool_dispatcher_executes_5_tools() -> None:
 
     # 2. get_scoring_summary
     r2 = await dispatcher.execute(
-        ToolCall(id="t2", name="get_scoring_summary",
-                 input={"from": "2026-10-01", "to": "2026-10-14"}),
+        ToolCall(
+            id="t2", name="get_scoring_summary", input={"from": "2026-10-01", "to": "2026-10-14"}
+        ),
         user_id=1,
     )
     assert r2.is_error is False
@@ -341,14 +410,16 @@ async def test_tool_dispatcher_executes_5_tools() -> None:
 
     # 3. get_user_portfolio
     r3 = await dispatcher.execute(
-        ToolCall(id="t3", name="get_user_portfolio", input={}), user_id=1,
+        ToolCall(id="t3", name="get_user_portfolio", input={}),
+        user_id=1,
     )
     assert r3.is_error is False
     assert "open_positions" in r3.content
 
     # 4. get_warning_summary（V0.97.1 回归锁：必须走 report() + 真实字段名）
     r4 = await dispatcher.execute(
-        ToolCall(id="t4", name="get_warning_summary", input={}), user_id=1,
+        ToolCall(id="t4", name="get_warning_summary", input={}),
+        user_id=1,
     )
     assert r4.is_error is False
     parsed = json.loads(r4.content)
@@ -380,7 +451,8 @@ async def test_tool_dispatcher_unknown_tool_returns_error() -> None:
         market_data_repository=_FakeMarket(),
     )
     r = await dispatcher.execute(
-        ToolCall(id="x", name="nonexistent", input={}), user_id=1,
+        ToolCall(id="x", name="nonexistent", input={}),
+        user_id=1,
     )
     assert r.is_error is True
     assert "unknown tool" in r.content
@@ -405,7 +477,9 @@ def test_claude_client_base_url_override_strips_trailing_slash() -> None:
 async def test_claude_client_uses_custom_base_url() -> None:
     """ask() 走自定义 base_url，不走默认。"""
     c = ClaudeClient(
-        api_key="sk-test", base_url="https://api.minimax.cn/anthropic", timeout=5.0,
+        api_key="sk-test",
+        base_url="https://api.minimax.cn/anthropic",
+        timeout=5.0,
     )
     captured = {}
 
@@ -415,23 +489,37 @@ async def test_claude_client_uses_custom_base_url() -> None:
 
         class R:
             status_code = 200
-            def raise_for_status(self_inner): pass
+
+            def raise_for_status(self_inner):
+                pass
+
             def json(self_inner):
                 return {
-                    "id": "msg_01", "type": "message", "role": "assistant",
+                    "id": "msg_01",
+                    "type": "message",
+                    "role": "assistant",
                     "content": [{"type": "text", "text": "ok"}],
                     "stop_reason": "end_turn",
                     "usage": {"input_tokens": 5, "output_tokens": 3},
                 }
+
         return R()
 
     class FakeAsyncClient:
-        def __init__(self, *a, **kw): pass
-        async def __aenter__(self): return self
-        async def __aexit__(self, *a): pass
-        async def post(self, url, *, json, headers): return await fake_post(url, json=json, headers=headers)
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            pass
+
+        async def post(self, url, *, json, headers):
+            return await fake_post(url, json=json, headers=headers)
 
     import app.services.llm.claude as claude_mod
+
     orig = claude_mod.httpx.AsyncClient
     claude_mod.httpx.AsyncClient = FakeAsyncClient
     try:

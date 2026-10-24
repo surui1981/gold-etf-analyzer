@@ -19,9 +19,8 @@ from __future__ import annotations
 
 import asyncio
 import json
-import time
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -99,8 +98,8 @@ class ClaudeClient:
         *,
         system: str,
         messages: list[dict[str, Any]],
-        tools: Optional[list[dict[str, Any]]] = None,
-        max_tokens: Optional[int] = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,
     ) -> ClaudeResponse:
         """单次 LLM 调用（含重试）。
 
@@ -131,13 +130,15 @@ class ClaudeClient:
             body["tools"] = tools
 
         last_exc: Exception | None = None
-        for attempt, backoff in enumerate((0.0,) + self._RETRY_BACKOFFS):
+        for _attempt, backoff in enumerate((0.0, *self._RETRY_BACKOFFS)):
             if backoff:
                 await asyncio.sleep(backoff)
             try:
                 async with httpx.AsyncClient(timeout=self._timeout) as client:
                     resp = await client.post(
-                        self._endpoint, json=body, headers=headers,
+                        self._endpoint,
+                        json=body,
+                        headers=headers,
                     )
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
@@ -191,8 +192,8 @@ class ClaudeClient:
         *,
         system: str,
         messages: list[dict[str, Any]],
-        tools: Optional[list[dict[str, Any]]] = None,
-        max_tokens: Optional[int] = None,
+        tools: list[dict[str, Any]] | None = None,
+        max_tokens: int | None = None,
     ):
         """V0.98 C5：流式调用，yield StreamEvent 事件。
 
@@ -242,28 +243,31 @@ class ClaudeClient:
 
         # 重试用非流式入口（流式 + 重试很复杂，先简单实现；失败抛 LLMError）
         last_exc: Exception | None = None
-        for attempt, backoff in enumerate((0.0,) + self._RETRY_BACKOFFS):
+        for _attempt, backoff in enumerate((0.0, *self._RETRY_BACKOFFS)):
             if backoff:
                 await asyncio.sleep(backoff)
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
-                    async with client.stream(
-                        "POST", self._endpoint, json=body, headers=headers,
-                    ) as resp:
-                        if resp.status_code in (429, 500, 502, 503, 504, 529):
-                            await resp.aread()
-                            last_exc = LLMRetryable(resp.status_code, resp.text)
-                            continue
-                        if 400 <= resp.status_code < 500:
-                            await resp.aread()
-                            raise LLMError(
-                                f"client error {resp.status_code}: {resp.text[:200]}"
-                            )
-                        resp.raise_for_status()
-                        # 进入流式 yield
-                        async for ev in self._iter_sse(resp):
-                            yield ev
-                        return
+                async with (
+                    httpx.AsyncClient(timeout=self._timeout) as client,
+                    client.stream(
+                        "POST",
+                        self._endpoint,
+                        json=body,
+                        headers=headers,
+                    ) as resp,
+                ):
+                    if resp.status_code in (429, 500, 502, 503, 504, 529):
+                        await resp.aread()
+                        last_exc = LLMRetryable(resp.status_code, resp.text)
+                        continue
+                    if 400 <= resp.status_code < 500:
+                        await resp.aread()
+                        raise LLMError(f"client error {resp.status_code}: {resp.text[:200]}")
+                    resp.raise_for_status()
+                    # 进入流式 yield
+                    async for ev in self._iter_sse(resp):
+                        yield ev
+                    return
             except (httpx.TimeoutException, httpx.NetworkError) as exc:
                 last_exc = exc
                 continue
@@ -312,7 +316,8 @@ class ClaudeClient:
 
 
 def _parse_sse_event(
-    ev_type: str, payload: dict[str, Any],
+    ev_type: str,
+    payload: dict[str, Any],
     tool_block_ids: dict[int, str],
 ):
     """把单个 SSE payload 解析成 StreamEvent。返回 None = 跳过。"""
@@ -333,7 +338,9 @@ def _parse_sse_event(
             tid = block.get("id", "")
             tool_block_ids[index] = tid
             return StreamToolUseStart(
-                index=index, id=tid, name=block.get("name", ""),
+                index=index,
+                id=tid,
+                name=block.get("name", ""),
             )
         # text block start 不显式 yield（text_delta 即可）
         return None

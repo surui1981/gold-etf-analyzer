@@ -9,12 +9,12 @@ from app.schemas.alert import AlertRuleIn, AlertRuleOut, AlertTestResult
 from app.schemas.settings import MacroFactorOverrideSet, WeightConfig
 from app.services.macro import clear_macro_cache
 from app.services.notify import NotifierFactory
-from app.services.trend import TrendService
 from app.services.settings import (
     WeightService,
     get_alert_rules,
     save_alert_rules,
 )
+from app.services.trend import TrendService
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 

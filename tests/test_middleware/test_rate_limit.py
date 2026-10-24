@@ -196,4 +196,3 @@ async def test_retry_after_minimum_10s(app_limited: FastAPI) -> None:
         assert retry >= MIN_RETRY_AFTER, f"期望 ≥ {MIN_RETRY_AFTER}s，实际 {retry}s"
         body = r.json()
         assert body["retry_after"] >= MIN_RETRY_AFTER
-

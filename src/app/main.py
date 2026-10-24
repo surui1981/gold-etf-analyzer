@@ -154,6 +154,7 @@ async def _backfill_news_feed_daily() -> None:
     """
     try:
         from datetime import datetime, timedelta, timezone
+
         from app.repositories.db import async_session_factory
         from app.repositories.news_feed import NewsFeedRepository
 
@@ -167,7 +168,9 @@ async def _backfill_news_feed_daily() -> None:
             )
         logger.info(
             "news feed daily backfill done: %d days (%s..%s BJT)",
-            n, start_date, bjt_today,
+            n,
+            start_date,
+            bjt_today,
         )
     except Exception as exc:
         logger.warning("news feed daily backfill failed (%s)", exc)
@@ -399,37 +402,36 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             timeout=settings.llm_timeout_seconds,
             max_tokens=settings.llm_max_tokens,
         )
-        # ToolDispatcher 复用 5 个 services（DI 之外的 service 实例，
-        # 走 lru_cache / 进程单例；这里直接用 dependencies 的 provider 拿
-        # —— 避免在 lifespan 里重建又一对 session）。
-        from app.dependencies import (
-            get_position_service, get_scoring_wide_service_for_etl,
-            get_trend_service, get_freshness_service, get_market_data_repository,
-        )
-        # get_trend_service / get_position_service / get_freshness_service 是
-        # 普通函数，调用会触发生命周期内的 session；为避免在 lifespan 内
-        # 起异步 session，改为用 ``_service_registry`` 兜底
-        # —— ToolDispatcher 接受 duck-typed 5 个 service。
-        from app.services.trend import TrendService
-        from app.repositories.market_data import MarketDataRepository
+        # ToolDispatcher 复用 5 个 services（DI 之外的 service 实例）。
+        # dependencies 里的 get_trend_service / get_position_service /
+        # get_freshness_service 是普通函数，调用会在 lifespan 内起异步 session，
+        # 所以这里用 lifespan 自己这个 session 手工构造 —— ToolDispatcher
+        # 接受 duck-typed 的 5 个 service，不需要走 DI。
         from app.repositories.db import async_session_factory as _asf
+        from app.repositories.market_data import MarketDataRepository
+        from app.services.trend import TrendService
 
         # 用一个独立 session 拼 tool 依赖（lifespan 阶段 session 直接 await 即可）
         async with _asf() as tool_sess:
-            trend_svc = TrendService(MarketDataRepository(tool_sess), MarketDataRepository(tool_sess))
+            trend_svc = TrendService(
+                MarketDataRepository(tool_sess), MarketDataRepository(tool_sess)
+            )
             # 其余 4 个 service 注入宽表 + market_data
-            from app.services.scoring_wide import ScoringWideService as _SWS
-            from app.services.position import PositionService
-            from app.services.freshness import FreshnessService
+            from app.repositories.news import NewsScoreRepository as _NSR
+            from app.repositories.position import PositionRepository as _PR
+            from app.repositories.review import GoldPriceRepository as _GPR
             from app.repositories.scoring_wide import ScoringWideRepository as _SWR
             from app.repositories.snapshot import SnapshotRepository as _SSR
-            from app.repositories.news import NewsScoreRepository as _NSR
-            from app.repositories.review import GoldPriceRepository as _GPR
-            from app.repositories.position import PositionRepository as _PR
+            from app.services.freshness import FreshnessService
+            from app.services.position import PositionService
+            from app.services.scoring_wide import ScoringWideService as _SWS
+
             market_repo = MarketDataRepository(tool_sess)
             scoring_svc = _SWS(
-                repo=_SWR(tool_sess), snapshot_repo=_SSR(tool_sess),
-                news_repo=_NSR(tool_sess), gold_repo=_GPR(tool_sess),
+                repo=_SWR(tool_sess),
+                snapshot_repo=_SSR(tool_sess),
+                news_repo=_NSR(tool_sess),
+                gold_repo=_GPR(tool_sess),
             )
             position_svc = PositionService(_PR(tool_sess), market_repo)
             freshness_svc = FreshnessService(market_repo)
@@ -444,7 +446,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.tool_dispatcher = tool_dispatcher
         logger.info(
             "AI 智能分析已启用（model=%s，base_url=%s）",
-            settings.llm_model, settings.llm_base_url,
+            settings.llm_model,
+            settings.llm_base_url,
         )
     else:
         app.state.llm_client = None

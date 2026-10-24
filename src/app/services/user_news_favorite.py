@@ -16,13 +16,11 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
 from typing import Any
 
 from app.models.user_news_favorite import UserNewsFavorite
 from app.repositories.news_feed import NewsFeedRepository
 from app.repositories.user_news_favorite import (
-    DuplicateFavoriteError,
     UserNewsFavoriteRepository,
 )
 from app.schemas.user_news_favorite import (
@@ -137,11 +135,7 @@ class UserNewsFavoriteService:
             snapshot["url"] = payload.url
 
         # 校验必填快照（外部 URL 收藏场景）
-        missing = [
-            k
-            for k in ("title", "site_name", "publish_date")
-            if not snapshot.get(k)
-        ]
+        missing = [k for k in ("title", "site_name", "publish_date") if not snapshot.get(k)]
         if missing:
             # 用 payload 兜底
             for k in missing:
@@ -149,11 +143,7 @@ class UserNewsFavoriteService:
                 if v is not None:
                     snapshot[k] = v
         # 再次校验（外部 URL 收藏必填字段未传 → 422）
-        missing = [
-            k
-            for k in ("title", "site_name", "publish_date")
-            if not snapshot.get(k)
-        ]
+        missing = [k for k in ("title", "site_name", "publish_date") if not snapshot.get(k)]
         if missing:
             from fastapi import HTTPException
 

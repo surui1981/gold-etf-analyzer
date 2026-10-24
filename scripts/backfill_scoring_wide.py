@@ -31,7 +31,6 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import select
 
-from app.config import get_settings
 from app.models.snapshot import DailySnapshot
 from app.repositories.db import async_session_factory
 from app.repositories.news import NewsScoreRepository
@@ -73,9 +72,7 @@ async def _run_backfill(start: date, end: date, dry_run: bool) -> int:
         return 0
 
     if dry_run:
-        print(
-            f"[backfill] DRY-RUN: would ETL {total} snapshots in [{start}, {end}]"
-        )
+        print(f"[backfill] DRY-RUN: would ETL {total} snapshots in [{start}, {end}]")
         return 0
 
     print(f"[backfill] ETL {total} snapshots in [{start}, {end}]")
@@ -99,7 +96,7 @@ async def _run_backfill(start: date, end: date, dry_run: bool) -> int:
                     ok += 1
                 # out is None = 当日 3 源都无数据（无 snapshot / 无 news / 无 gold），
                 # 跳过不算失败
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             fail += 1
             fail_dates.append((d, str(exc)[:80]))
             logger.warning("backfill failed: date=%s err=%s", d, exc)
@@ -111,9 +108,7 @@ async def _run_backfill(start: date, end: date, dry_run: bool) -> int:
             print(f"[backfill] [{pct:3d}%] {i}/{total} ok={ok} fail={fail} ({elapsed:.1f}s)")
 
     elapsed = (datetime.now() - start_ts).total_seconds()
-    print(
-        f"[backfill] done in {elapsed:.1f}s: ok={ok} fail={fail} total={total}"
-    )
+    print(f"[backfill] done in {elapsed:.1f}s: ok={ok} fail={fail} total={total}")
     if fail_dates:
         print("[backfill] failed dates (前 10):")
         for d, err in fail_dates[:10]:

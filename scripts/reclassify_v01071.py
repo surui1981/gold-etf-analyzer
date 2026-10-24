@@ -16,11 +16,11 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "src")
 
-from sqlalchemy import select, update  # noqa: E402
+from sqlalchemy import select, update
 
-from app.models.news_feed import NewsFeedItem  # noqa: E402
-from app.repositories.db import async_session_factory  # noqa: E402
-from app.repositories.news_classifier import classify  # noqa: E402
+from app.models.news_feed import NewsFeedItem
+from app.repositories.db import async_session_factory
+from app.repositories.news_classifier import classify
 
 
 async def main() -> None:
@@ -52,12 +52,9 @@ async def main() -> None:
                 new_dist[new_cat] += 1
                 to_update.append((row.id, new_cat))
 
-        print(f"  → 重判后归类:")
+        print("  → 重判后归类:")
         for cat in ("财经", "科技", "创投", "商业", "其他"):
-            if cat == "其他":
-                n = unchanged
-            else:
-                n = new_dist.get(cat, 0)
+            n = unchanged if cat == "其他" else new_dist.get(cat, 0)
             print(f"    {cat:6s} = {n:3d}")
         print(f"  → 仍判「其他」(无法归 4 类): {unchanged}")
 
@@ -69,14 +66,12 @@ async def main() -> None:
 
             for row_id, new_cat in to_update:
                 await session.execute(
-                    update(NewsFeedItem)
-                    .where(NewsFeedItem.id == row_id)
-                    .values(category=new_cat)
+                    update(NewsFeedItem).where(NewsFeedItem.id == row_id).values(category=new_cat)
                 )
             await session.commit()
             print(f"  ✅ 已提交 {len(to_update)} 行 UPDATE")
         else:
-            print(f"  (无 UPDATE，跳过)")
+            print("  (无 UPDATE，跳过)")
 
         # ── Step 4: 重建当日 + 昨日 daily ──
         print(f"\n[4] rebuild_daily({today_bjt.isoformat()}) + 昨日 ...")
@@ -90,12 +85,14 @@ async def main() -> None:
         for d in (yesterday_bjt, today_bjt):
             rebuilt = await svc.rebuild_daily(d)
             if rebuilt is not None:
-                print(f"  ✅ {d} → total={rebuilt.total_count} "
-                      f"财经={rebuilt.finance_count} 科技={rebuilt.tech_count} "
-                      f"创投={rebuilt.vc_count} 商业={rebuilt.biz_count} "
-                      f"其他={rebuilt.other_count}")
+                print(
+                    f"  ✅ {d} → total={rebuilt.total_count} "
+                    f"财经={rebuilt.finance_count} 科技={rebuilt.tech_count} "
+                    f"创投={rebuilt.vc_count} 商业={rebuilt.biz_count} "
+                    f"其他={rebuilt.other_count}"
+                )
             else:
-                print(f"  (该日无数据)")
+                print("  (该日无数据)")
 
     print("\n" + "=" * 70)
     print("✅ V0.107.1 重分类 sweep 完成")

@@ -31,9 +31,14 @@ def _sanitize_user_text(text: str, max_chars: int) -> str:
         text = text[:max_chars] + "…"
     # 移除常见 prompt injection 标记（不在裸文本里出现 system/assistant role）
     dangerous = [
-        "<system>", "</system>", "<assistant>", "</assistant>",
-        "<|im_start|>", "<|im_end|>",
-        "IGNORE_PREVIOUS_INSTRUCTIONS", "ignore previous instructions",
+        "<system>",
+        "</system>",
+        "<assistant>",
+        "</assistant>",
+        "<|im_start|>",
+        "<|im_end|>",
+        "IGNORE_PREVIOUS_INSTRUCTIONS",
+        "ignore previous instructions",
     ]
     out = text
     for d in dangerous:

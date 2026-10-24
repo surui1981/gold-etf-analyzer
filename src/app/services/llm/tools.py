@@ -26,8 +26,8 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import Any, Optional
+from datetime import date
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -56,10 +56,8 @@ SCHEMAS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "from": {"type": "string", "format": "date",
-                         "description": "起始日期 YYYY-MM-DD"},
-                "to": {"type": "string", "format": "date",
-                       "description": "结束日期 YYYY-MM-DD"},
+                "from": {"type": "string", "format": "date", "description": "起始日期 YYYY-MM-DD"},
+                "to": {"type": "string", "format": "date", "description": "结束日期 YYYY-MM-DD"},
             },
             "required": ["from", "to"],
         },
@@ -90,8 +88,7 @@ SCHEMAS: list[dict[str, Any]] = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "days": {"type": "integer", "minimum": 1, "maximum": 90,
-                         "description": "回看天数"},
+                "days": {"type": "integer", "minimum": 1, "maximum": 90, "description": "回看天数"},
             },
             "required": ["days"],
         },
@@ -129,7 +126,8 @@ def _truncate(payload: Any) -> str:
 def _err(tool_call_id: str, name: str, msg: str) -> ToolResult:
     """统一错误返回（不抛异常到 LLM，model 能继续对话）。"""
     return ToolResult(
-        tool_call_id=tool_call_id, name=name,
+        tool_call_id=tool_call_id,
+        name=name,
         content=json.dumps({"error": msg[:200]}, ensure_ascii=False),
         is_error=True,
     )
@@ -170,7 +168,7 @@ class ToolDispatcher:
             if call.name == "get_etf_recent_flows":
                 return await self._exec_etf_flows(call)
             return _err(call.id, call.name, f"unknown tool: {call.name}")
-        except Exception as exc:  # noqa: BLE001 —— tool 错误降级，不让整轮 abort
+        except Exception as exc:
             logger.warning("tool %s failed: %s", call.name, exc)
             return _err(call.id, call.name, f"{type(exc).__name__}: {str(exc)[:150]}")
 
@@ -257,8 +255,10 @@ class ToolDispatcher:
                 "avg_holding_days": perf.avg_holding_days,
             },
             "equity_curve": [
-                {"date": p.date if isinstance(p.date, str) else p.date.isoformat(),
-                 "value": getattr(p, "value", getattr(p, "market_value", 0))}
+                {
+                    "date": p.date if isinstance(p.date, str) else p.date.isoformat(),
+                    "value": getattr(p, "value", getattr(p, "market_value", 0)),
+                }
                 for p in equity.points[-30:]
             ],
             "summary_text": perf.summary,

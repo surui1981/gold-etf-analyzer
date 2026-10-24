@@ -26,7 +26,6 @@ import pytest
 
 from app.repositories.news_sources_fetcher import NewsFetchResult
 
-
 # ──────────────── 公共 fixture ────────────────
 
 
@@ -106,7 +105,9 @@ async def test_refresh_drops_all_other_records_v01071(monkeypatch: pytest.Monkey
 
     async def _fake_fetch_news_feed(**_kwargs):
         # V0.114.0：service 改调 fetch_news_feed，返回 NewsFetchResult(items, source)
-        return NewsFetchResult(items=(_make_record("其他", ext_id=1), _make_record("其他", ext_id=2)), source="readhub")
+        return NewsFetchResult(
+            items=(_make_record("其他", ext_id=1), _make_record("其他", ext_id=2)), source="readhub"
+        )
 
     monkeypatch.setattr(svc_module, "fetch_news_feed", _fake_fetch_news_feed)
 

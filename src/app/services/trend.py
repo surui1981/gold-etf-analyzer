@@ -555,9 +555,7 @@ class TrendService:
             if dropped:
                 # V0.100：仅消息面被剔 → 用 i18n 文案标识「pending」语义
                 if set(dropped) == {"news"}:
-                    notes.append(
-                        "消息面未打分，综合指数待定；已剔除并按剩余面权重归一化"
-                    )
+                    notes.append("消息面未打分，综合指数待定；已剔除并按剩余面权重归一化")
                 else:
                     notes.append(
                         f"{'、'.join(_FACE_LABELS[k] for k in dropped)} 不可用，"
@@ -585,9 +583,7 @@ class TrendService:
             direction=news_direction,
             note=news_note,
             scored=news_scored,
-            pending_reason=(
-                "今日尚未打分（消息面不参与综合指数）" if not news_scored else None
-            ),
+            pending_reason=("今日尚未打分（消息面不参与综合指数）" if not news_scored else None),
         )
         logger.info(
             "Trend analyzed: interval=%s %s bars, %s (%+.2f%%), index=%s"

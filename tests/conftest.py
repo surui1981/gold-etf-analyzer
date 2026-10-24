@@ -79,6 +79,39 @@ async def _reset_db() -> None:
     yield
 
 
+@pytest.fixture(autouse=True)
+def _reset_sse_app_status() -> None:
+    """每个用例前重置 sse_starlette 的模块级 ``AppStatus`` 全局。
+
+    **为什么需要（V0.116.1 修 CI 预存红）**
+    ``sse_starlette.sse.AppStatus`` 是**类级全局**：
+
+    - ``should_exit_event`` 在 ``_listen_for_exit_signal()`` 里**惰性**创建
+      （``if AppStatus.should_exit_event is None: AppStatus.should_exit_event = anyio.Event()``），
+      一旦创建就**永久留在类上**；
+    - ``anyio.Event`` 在 Python 3.10+ 底下的 ``asyncio.Event`` 会在**首次 await 时**
+      把 ``_loop`` 绑死（``asyncio.mixins._get_loop``）；
+    - pytest-asyncio 默认**每个测试函数新建 event_loop** ⇒ 第二个用到 SSE 的用例
+      await 了一个**绑在别的 loop 上**的 Event ⇒
+      ``RuntimeError: ... is bound to a different event loop``。
+
+    **症状**：``tests/test_api/test_ai_chat_endpoints.py`` 里
+    ``test_send_message_stream_error_event_yields_error`` **单跑必绿**、
+    **跑整个文件必挂** —— 典型的「同文件内测试顺序污染」，不是 flaky。
+
+    **修法**：每个用例前把这两个全局清回初始值，让 Event 在**本用例自己的 loop**
+    里重新惰性创建。
+
+    ⚠ 只重置 ``should_exit_event`` 不够 —— ``should_exit=True`` 同样会短路
+    ``_listen_for_exit_signal`` 的等待逻辑（它开头就 ``if AppStatus.should_exit: return``），
+    那个状态下 SSE 的关闭信号被吞掉。两个一起重置。
+    """
+    from sse_starlette.sse import AppStatus
+
+    AppStatus.should_exit_event = None
+    AppStatus.should_exit = False
+
+
 @pytest.fixture
 async def db_session():
     """服务层测试用的独立数据库会话。"""

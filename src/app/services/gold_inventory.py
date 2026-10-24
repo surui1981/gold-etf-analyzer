@@ -90,7 +90,9 @@ class GoldInventoryService:
         if base is None or base.tonnes == 0:
             return GoldInventoryChange(window=label, days=days, base_date=None, change_pct=None)
         pct = (latest.tonnes - base.tonnes) / base.tonnes * 100
-        return GoldInventoryChange(window=label, days=days, base_date=base.date, change_pct=round(pct, 2))
+        return GoldInventoryChange(
+            window=label, days=days, base_date=base.date, change_pct=round(pct, 2)
+        )
 
     async def snapshot(self, days: int = DEFAULT_DAYS) -> GoldInventoryOut:
         """读库组装输出。

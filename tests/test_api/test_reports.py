@@ -106,9 +106,7 @@ async def test_upload_ok(client) -> None:
 
 async def test_upload_defaults_from_filename(client) -> None:
     """标题缺省取文件名去扩展名；分类缺省「其他」；report_date 可空。"""
-    r = await client.post(
-        "/api/v1/reports/upload", files=_files("weekly-gold-2026W42.html")
-    )
+    r = await client.post("/api/v1/reports/upload", files=_files("weekly-gold-2026W42.html"))
     assert r.status_code == 201, r.text
     d = r.json()
     assert d["title"] == "weekly-gold-2026W42"
@@ -160,9 +158,7 @@ async def test_upload_rejects_non_html_suffix(client) -> None:
 
 async def test_upload_rejects_binary_content(client) -> None:
     """校验 3：改名成 .html 的二进制 ⇒ 422（首字节不是 '<'）。"""
-    r = await client.post(
-        "/api/v1/reports/upload", files=_files("fake.html", b"MZ\x90\x00\x03")
-    )
+    r = await client.post("/api/v1/reports/upload", files=_files("fake.html", b"MZ\x90\x00\x03"))
     assert r.status_code == 422
     assert "HTML" in r.json()["detail"]
 
@@ -240,9 +236,7 @@ async def test_list_pagination_total_matches_filter(client) -> None:
     """列表与 total 用同一套筛选条件 —— 谓词重复就是为这个。"""
     for i in range(5):
         await _upload(client, title=f"报告{i}", category="研报" if i % 2 == 0 else "持仓")
-    r = await client.get(
-        "/api/v1/reports", params={"category": "研报", "limit": 1, "offset": 0}
-    )
+    r = await client.get("/api/v1/reports", params={"category": "研报", "limit": 1, "offset": 0})
     d = r.json()
     assert d["total"] == 3  # 0/2/4
     assert len(d["items"]) == 1
@@ -369,9 +363,7 @@ async def test_content_404_when_disk_file_vanished(client, db_session) -> None:
     from app.services.reports import reports_dir
 
     up = (await _upload(client)).json()
-    row = (
-        await db_session.execute(select(Report).where(Report.id == up["id"]))
-    ).scalar_one()
+    row = (await db_session.execute(select(Report).where(Report.id == up["id"]))).scalar_one()
     (reports_dir() / row.stored_name).unlink()
 
     r = await client.get(f"/api/v1/reports/{up['id']}/content")
@@ -450,16 +442,16 @@ async def test_other_users_report_not_visible(client, db_session) -> None:
 
     up = (await _upload(client)).json()
     # 直接改 owner，模拟「这份报告属于别人」
-    await db_session.execute(
-        update(Report).where(Report.id == up["id"]).values(user_id=999)
-    )
+    await db_session.execute(update(Report).where(Report.id == up["id"]).values(user_id=999))
     await db_session.commit()
     db_session.expire_all()
 
     assert (await client.get(f"/api/v1/reports/{up['id']}")).status_code == 404
     assert (await client.get(f"/api/v1/reports/{up['id']}/content")).status_code == 404
     assert (await client.delete(f"/api/v1/reports/{up['id']}")).status_code == 404
-    assert (await client.patch(f"/api/v1/reports/{up['id']}", json={"title": "x"})).status_code == 404
+    assert (
+        await client.patch(f"/api/v1/reports/{up['id']}", json={"title": "x"})
+    ).status_code == 404
     # 列表里也不再出现
     d = (await client.get("/api/v1/reports")).json()
     assert d["total"] == 0

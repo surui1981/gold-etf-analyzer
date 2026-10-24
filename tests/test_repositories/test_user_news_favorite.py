@@ -26,11 +26,10 @@ from app.repositories.user_news_favorite import (
     UserNewsFavoriteRepository,
 )
 
-
 # ──────────────── 公共 seed helper ────────────────
 
 
-async def _seed_one(db, **overrides) -> UserNewsFavorite:  # noqa: ANN001
+async def _seed_one(db, **overrides) -> UserNewsFavorite:
     """插入一条收藏快照；覆盖字段直接传。"""
     base = {
         "news_external_id": 10001,
@@ -55,7 +54,7 @@ async def _seed_one(db, **overrides) -> UserNewsFavorite:  # noqa: ANN001
 # ──────────────── add / dedup ────────────────
 
 
-async def test_add_inserts_and_returns_orm(db_session) -> None:  # noqa: ANN001
+async def test_add_inserts_and_returns_orm(db_session) -> None:
     """add 后通过 get 可取回，且返回的 ORM 与入参字段一致。"""
     fav = await _seed_one(db_session, news_external_id=20001)
     assert isinstance(fav, UserNewsFavorite)
@@ -65,7 +64,7 @@ async def test_add_inserts_and_returns_orm(db_session) -> None:  # noqa: ANN001
     assert fav.site_name == "华尔街见闻"
 
 
-async def test_add_duplicate_raises(db_session) -> None:  # noqa: ANN001
+async def test_add_duplicate_raises(db_session) -> None:
     """同一 (external_id, source) 第二次 add → DuplicateFavoriteError。"""
     await _seed_one(db_session, news_external_id=30001)
     repo = UserNewsFavoriteRepository(db_session)
@@ -86,7 +85,7 @@ async def test_add_duplicate_raises(db_session) -> None:  # noqa: ANN001
         )
 
 
-async def test_add_duplicate_different_source_ok(db_session) -> None:  # noqa: ANN001
+async def test_add_duplicate_different_source_ok(db_session) -> None:
     """不同 source 即使 external_id 相同也允许（V0.103 预留多源扩展）。"""
     await _seed_one(db_session, news_external_id=40001, news_source="readhub")
     # 同一 external_id 但 source=cls → 不冲突
@@ -100,13 +99,11 @@ async def test_add_duplicate_different_source_ok(db_session) -> None:  # noqa: A
 # ──────────────── update ────────────────
 
 
-async def test_update_partial_tags_and_note(db_session) -> None:  # noqa: ANN001
+async def test_update_partial_tags_and_note(db_session) -> None:
     """update 只传 user_tags / user_note → 仅改这两字段，importance 不变。"""
     fav = await _seed_one(db_session, news_external_id=50001, importance=1)
     repo = UserNewsFavoriteRepository(db_session)
-    updated = await repo.update(
-        fav.id, user_tags='["地缘","避险"]', user_note="新笔记"
-    )
+    updated = await repo.update(fav.id, user_tags='["地缘","避险"]', user_note="新笔记")
     assert updated is not None
     assert updated.user_tags == '["地缘","避险"]'
     assert updated.user_note == "新笔记"
@@ -114,7 +111,7 @@ async def test_update_partial_tags_and_note(db_session) -> None:  # noqa: ANN001
     assert updated.importance == 1
 
 
-async def test_update_importance_only(db_session) -> None:  # noqa: ANN001
+async def test_update_importance_only(db_session) -> None:
     """只升 importance → 其它字段全部不变。"""
     fav = await _seed_one(db_session, news_external_id=50002, importance=1)
     repo = UserNewsFavoriteRepository(db_session)
@@ -124,7 +121,7 @@ async def test_update_importance_only(db_session) -> None:  # noqa: ANN001
     assert updated.user_note == "我的笔记"  # 原始笔记不变
 
 
-async def test_update_unknown_id_returns_none(db_session) -> None:  # noqa: ANN001
+async def test_update_unknown_id_returns_none(db_session) -> None:
     """id 不存在 → 返回 None，不抛错。"""
     repo = UserNewsFavoriteRepository(db_session)
     result = await repo.update(99999, importance=3)
@@ -134,7 +131,7 @@ async def test_update_unknown_id_returns_none(db_session) -> None:  # noqa: ANN0
 # ──────────────── delete ────────────────
 
 
-async def test_delete_existing_returns_true(db_session) -> None:  # noqa: ANN001
+async def test_delete_existing_returns_true(db_session) -> None:
     fav = await _seed_one(db_session, news_external_id=60001)
     repo = UserNewsFavoriteRepository(db_session)
     ok = await repo.delete(fav.id)
@@ -142,7 +139,7 @@ async def test_delete_existing_returns_true(db_session) -> None:  # noqa: ANN001
     assert await repo.get(fav.id) is None
 
 
-async def test_delete_unknown_returns_false(db_session) -> None:  # noqa: ANN001
+async def test_delete_unknown_returns_false(db_session) -> None:
     repo = UserNewsFavoriteRepository(db_session)
     assert await repo.delete(99999) is False
 
@@ -150,7 +147,7 @@ async def test_delete_unknown_returns_false(db_session) -> None:  # noqa: ANN001
 # ──────────────── find_by_external ────────────────
 
 
-async def test_find_by_external_returns_match(db_session) -> None:  # noqa: ANN001
+async def test_find_by_external_returns_match(db_session) -> None:
     await _seed_one(db_session, news_external_id=70001, news_source="readhub")
     repo = UserNewsFavoriteRepository(db_session)
     fav = await repo.find_by_external(70001, "readhub")
@@ -158,7 +155,7 @@ async def test_find_by_external_returns_match(db_session) -> None:  # noqa: ANN0
     assert fav.news_external_id == "70001"
 
 
-async def test_find_by_external_returns_none(db_session) -> None:  # noqa: ANN001
+async def test_find_by_external_returns_none(db_session) -> None:
     repo = UserNewsFavoriteRepository(db_session)
     assert await repo.find_by_external(99999, "readhub") is None
 
@@ -166,7 +163,7 @@ async def test_find_by_external_returns_none(db_session) -> None:  # noqa: ANN00
 # ──────────────── list_items 筛选 / 排序 ────────────────
 
 
-async def test_list_items_filter_by_importance_min(db_session) -> None:  # noqa: ANN001
+async def test_list_items_filter_by_importance_min(db_session) -> None:
     """importance_min=2 → 仅 importance >= 2 的行。"""
     await _seed_one(db_session, news_external_id=80001, importance=1)
     await _seed_one(db_session, news_external_id=80002, importance=2)
@@ -177,7 +174,7 @@ async def test_list_items_filter_by_importance_min(db_session) -> None:  # noqa:
     assert all(it.importance >= 2 for it in items)
 
 
-async def test_list_items_filter_by_tag(db_session) -> None:  # noqa: ANN001
+async def test_list_items_filter_by_tag(db_session) -> None:
     """tag='美联储' → JSON 数组中精确包含此 tag 的行。"""
     await _seed_one(
         db_session,
@@ -195,20 +192,16 @@ async def test_list_items_filter_by_tag(db_session) -> None:  # noqa: ANN001
     assert items[0].news_external_id == "81001"
 
 
-async def test_list_items_filter_by_site(db_session) -> None:  # noqa: ANN001
-    await _seed_one(
-        db_session, news_external_id=82001, site_name="华尔街见闻"
-    )
-    await _seed_one(
-        db_session, news_external_id=82002, site_name="财联社"
-    )
+async def test_list_items_filter_by_site(db_session) -> None:
+    await _seed_one(db_session, news_external_id=82001, site_name="华尔街见闻")
+    await _seed_one(db_session, news_external_id=82002, site_name="财联社")
     repo = UserNewsFavoriteRepository(db_session)
     items = await repo.list_items(site_name="财联社")
     assert len(items) == 1
     assert items[0].site_name == "财联社"
 
 
-async def test_list_items_sort_recent_default(db_session) -> None:  # noqa: ANN001
+async def test_list_items_sort_recent_default(db_session) -> None:
     """默认 sort='recent' → 按 archived_at 倒序（SQLite second 精度时退化为 id 倒序）。"""
     f1 = await _seed_one(db_session, news_external_id=83001)
     f2 = await _seed_one(db_session, news_external_id=83002)
@@ -222,13 +215,9 @@ async def test_list_items_sort_recent_default(db_session) -> None:  # noqa: ANN0
     assert set(ids) == {f1.id, f2.id, f3.id}
 
 
-async def test_list_items_sort_importance(db_session) -> None:  # noqa: ANN001
-    f_low = await _seed_one(
-        db_session, news_external_id=84001, importance=1
-    )
-    f_hi = await _seed_one(
-        db_session, news_external_id=84002, importance=3
-    )
+async def test_list_items_sort_importance(db_session) -> None:
+    f_low = await _seed_one(db_session, news_external_id=84001, importance=1)
+    f_hi = await _seed_one(db_session, news_external_id=84002, importance=3)
     repo = UserNewsFavoriteRepository(db_session)
     items = await repo.list_items(sort="importance")
     assert items[0].id == f_hi.id
@@ -238,31 +227,23 @@ async def test_list_items_sort_importance(db_session) -> None:  # noqa: ANN001
 # ──────────────── list_sites / list_tags ────────────────
 
 
-async def test_list_sites_returns_unique(db_session) -> None:  # noqa: ANN001
+async def test_list_sites_returns_unique(db_session) -> None:
+    await _seed_one(db_session, news_external_id=85001, site_name="华尔街见闻")
+    await _seed_one(db_session, news_external_id=85002, site_name="财联社")
     await _seed_one(
-        db_session, news_external_id=85001, site_name="华尔街见闻"
-    )
-    await _seed_one(
-        db_session, news_external_id=85002, site_name="财联社"
-    )
-    await _seed_one(
-        db_session, news_external_id=85003, site_name="财联社"  # 重复
+        db_session,
+        news_external_id=85003,
+        site_name="财联社",  # 重复
     )
     repo = UserNewsFavoriteRepository(db_session)
     sites = await repo.list_sites()
     assert set(sites) == {"华尔街见闻", "财联社"}
 
 
-async def test_list_tags_parses_and_dedups(db_session) -> None:  # noqa: ANN001
-    await _seed_one(
-        db_session, news_external_id=86001, user_tags='["美联储","美元"]'
-    )
-    await _seed_one(
-        db_session, news_external_id=86002, user_tags='["地缘","美联储"]'
-    )
-    await _seed_one(
-        db_session, news_external_id=86003, user_tags="[]"
-    )  # 空 tags 应被忽略
+async def test_list_tags_parses_and_dedups(db_session) -> None:
+    await _seed_one(db_session, news_external_id=86001, user_tags='["美联储","美元"]')
+    await _seed_one(db_session, news_external_id=86002, user_tags='["地缘","美联储"]')
+    await _seed_one(db_session, news_external_id=86003, user_tags="[]")  # 空 tags 应被忽略
     repo = UserNewsFavoriteRepository(db_session)
     tags = await repo.list_tags()
     # 字母序
@@ -272,7 +253,7 @@ async def test_list_tags_parses_and_dedups(db_session) -> None:  # noqa: ANN001
 # ──────────────── get_status ────────────────
 
 
-async def test_get_status_aggregates(db_session) -> None:  # noqa: ANN001
+async def test_get_status_aggregates(db_session) -> None:
     """get_status 返回 6 维聚合：total / by_importance / by_site / by_tag / by_month。"""
     await _seed_one(
         db_session,

@@ -55,7 +55,7 @@ def _make_response(status: int, body: Any) -> httpx.Response:
 
 
 def _patch_http(monkeypatch: pytest.MonkeyPatch, response):
-    async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+    async def _fake_get(self, url, **kwargs):
         return response
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -263,7 +263,7 @@ class TestJsSafeId:
     def test_within_safe_range_stays_int(self, value: int) -> None:
         assert isinstance(js_safe_id(value), int)
 
-    @pytest.mark.parametrize("value", [2**53, 20261022052906788800, -2**53 - 1])
+    @pytest.mark.parametrize("value", [2**53, 20261022052906788800, -(2**53) - 1])
     def test_beyond_safe_range_becomes_str(self, value: int) -> None:
         """金十 id ≈2.0e19，超出 JS MAX_SAFE_INTEGER 2249 倍，必须转字符串。
 
@@ -298,7 +298,7 @@ class TestFetchFunctions:
         """缺 x-app-id / x-version 会被服务端拒 —— 头必须带上。"""
         seen: dict = {}
 
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+        async def _fake_get(self, url, **kwargs):
             seen.update(kwargs.get("headers") or {})
             return _make_response(200, {"status": 200, "data": [_jin10_item()]})
 
@@ -318,9 +318,7 @@ class TestFetchFunctions:
         """实测 code 是**字符串** "1"。用 `!= 1` 判会把成功判成失败（踩过）。"""
         _patch_http(
             monkeypatch,
-            _make_response(
-                200, {"code": "1", "data": {"fastNewsList": [_eastmoney_item()]}}
-            ),
+            _make_response(200, {"code": "1", "data": {"fastNewsList": [_eastmoney_item()]}}),
         )
         out = await nsf.fetch_eastmoney_feed(use_cache=False)
         assert len(out) == 1
@@ -349,11 +347,9 @@ class TestFetchFunctions:
         """这两个参数缺任一都会静默拿到 data=null（2026-10 实测新增校验）。"""
         seen: dict = {}
 
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+        async def _fake_get(self, url, **kwargs):
             seen.update(kwargs.get("params") or {})
-            return _make_response(
-                200, {"code": "1", "data": {"fastNewsList": [_eastmoney_item()]}}
-            )
+            return _make_response(200, {"code": "1", "data": {"fastNewsList": [_eastmoney_item()]}})
 
         monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
         await nsf.fetch_eastmoney_feed(use_cache=False)
@@ -363,7 +359,7 @@ class TestFetchFunctions:
     async def test_cache_hit_avoids_http(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = {"n": 0}
 
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+        async def _fake_get(self, url, **kwargs):
             calls["n"] += 1
             return _make_response(200, {"code": 0, "data": {"items": [_wallstcn_item()]}})
 
@@ -375,7 +371,7 @@ class TestFetchFunctions:
     async def test_force_bypasses_cache(self, monkeypatch: pytest.MonkeyPatch) -> None:
         calls = {"n": 0}
 
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+        async def _fake_get(self, url, **kwargs):
             calls["n"] += 1
             return _make_response(200, {"code": 0, "data": {"items": [_wallstcn_item()]}})
 
@@ -416,41 +412,41 @@ def _boom_fetch(msg: str = "注入故障"):
 
 
 class TestFailover:
-    async def test_first_source_wins(self, _chain) -> None:  # noqa: ANN001
+    async def test_first_source_wins(self, _chain) -> None:
         _chain([nsf.NewsSource("a", _ok_fetch(20)), nsf.NewsSource("b", _boom_fetch())])
         result = await nsf.fetch_news_feed(use_cache=False)
         assert result.source == "a"
         assert len(result.items) == 20
 
-    async def test_falls_through_when_source_raises(self, _chain) -> None:  # noqa: ANN001
+    async def test_falls_through_when_source_raises(self, _chain) -> None:
         _chain([nsf.NewsSource("a", _boom_fetch()), nsf.NewsSource("b", _ok_fetch(15))])
         result = await nsf.fetch_news_feed(use_cache=False)
         assert result.source == "b"
 
-    async def test_falls_through_when_source_too_thin(self, _chain) -> None:  # noqa: ANN001
+    async def test_falls_through_when_source_too_thin(self, _chain) -> None:
         """量不足必须降级 —— 否则「HTTP 200 但返回空壳」会静默当成成功，
         failover 形同虚设（readhub 有 pageSize=50 只返 20 的前科）。"""
         _chain([nsf.NewsSource("a", _ok_fetch(1)), nsf.NewsSource("b", _ok_fetch(12))])
         result = await nsf.fetch_news_feed(use_cache=False)
         assert result.source == "b"
 
-    async def test_raises_when_all_fail(self, _chain) -> None:  # noqa: ANN001
-        _chain([nsf.NewsSource("a", _boom_fetch("挂了A")), nsf.NewsSource("b", _boom_fetch("挂了B"))])
+    async def test_raises_when_all_fail(self, _chain) -> None:
+        _chain(
+            [nsf.NewsSource("a", _boom_fetch("挂了A")), nsf.NewsSource("b", _boom_fetch("挂了B"))]
+        )
         with pytest.raises(nsf.NewsSourceError) as ei:
             await nsf.fetch_news_feed(use_cache=False)
         # 错误串必须含每源原因，否则日志里看不出是哪个源先挂的
         assert "挂了A" in str(ei.value)
         assert "挂了B" in str(ei.value)
 
-    async def test_raises_when_all_too_thin(self, _chain) -> None:  # noqa: ANN001
+    async def test_raises_when_all_too_thin(self, _chain) -> None:
         """全部量不足也必须抛错，不能返回半吊子数据。"""
         _chain([nsf.NewsSource("a", _ok_fetch(1)), nsf.NewsSource("b", _ok_fetch(0))])
         with pytest.raises(nsf.NewsSourceError, match="too thin"):
             await nsf.fetch_news_feed(use_cache=False)
 
-    async def test_unexpected_exception_does_not_break_chain(
-        self, _chain
-    ) -> None:  # noqa: ANN001
+    async def test_unexpected_exception_does_not_break_chain(self, _chain) -> None:
         async def _weird(**_kwargs):
             raise ValueError("完全意料之外的异常")
 

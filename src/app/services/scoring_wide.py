@@ -94,7 +94,7 @@ class ScoringWideService:
                 row.news_slot_count or 0,
             )
             return ScoringWideOut.model_validate(row)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning(
                 "scoring_daily_wide rebuild failed: date=%s err=%s",
                 target_date,
@@ -188,9 +188,7 @@ class ScoringWideService:
             gold_prev = await self._gold.latest_before(DEFAULT_REVIEW_TARGET, target_date)
             if gold_prev is not None and gold_prev.close > 0:
                 change_pct = (gold_base.close - gold_prev.close) / gold_prev.close * 100
-                news_dir = (
-                    direction_of(row.news_index) if row.news_index is not None else None
-                )
+                news_dir = direction_of(row.news_index) if row.news_index is not None else None
                 if news_dir is not None:
                     hit, _label = judge_hit(news_dir, change_pct)
                     row.actual_change_pct_t0 = round(change_pct, 2)
@@ -307,7 +305,9 @@ class ScoringWideService:
                     period=key,
                     days=len(grp),
                     trend_index_mean=round(statistics.fmean(trend_vals), 1) if trend_vals else None,
-                    trend_index_median=round(statistics.median(trend_vals), 1) if trend_vals else None,
+                    trend_index_median=round(statistics.median(trend_vals), 1)
+                    if trend_vals
+                    else None,
                     news_index_mean=round(statistics.fmean(news_vals), 1) if news_vals else None,
                     hit_rate_t0=round(sum(hit_t0) / len(hit_t0), 3) if hit_t0 else None,  # V0.93.0
                     hit_rate_t1=round(sum(hit_t1) / len(hit_t1), 3) if hit_t1 else None,
@@ -487,7 +487,8 @@ class ScoringWideService:
                     )
                 )
             by_horizon[horizon] = ScoringHitStatsAllHorizon(
-                horizon=horizon, by_month=by_month,
+                horizon=horizon,
+                by_month=by_month,
             )
 
         # mini card：最近 30 ready 日 vs 上 30 ready 日 + 最佳 horizon
@@ -573,7 +574,7 @@ class ScoringWideService:
                     continue
                 s = tag_stats[tag]
                 s["count"] += 1
-                for h, key in ((1, "t1"), (3, "t3"), (5, "t5")):
+                for _h, key in ((1, "t1"), (3, "t3"), (5, "t5")):
                     hit_attr = f"hit_{key}"
                     hit_val = getattr(r, hit_attr)
                     if hit_val is not None:

@@ -178,7 +178,7 @@ def is_file_reference(raw: str) -> bool:
         return True
     segments = tail.split("/")
     # /api/v1/<segment>/... → segment 是「后端包名」时判为模块路径
-    if len(segments) >= 4 and segments[3] in {
+    return len(segments) >= 4 and segments[3] in {
         "endpoints",
         "middleware",
         "models",
@@ -186,9 +186,7 @@ def is_file_reference(raw: str) -> bool:
         "schemas",
         "repositories",
         "utils",
-    }:
-        return True
-    return False
+    }
 
 
 # ---------------------------------------------------------------- 校验

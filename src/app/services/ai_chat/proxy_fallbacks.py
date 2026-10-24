@@ -32,9 +32,7 @@ def _has_tool_result_block(messages: list[dict[str, Any]]) -> bool:
     content = last.get("content")
     if not isinstance(content, list):
         return False
-    return any(
-        isinstance(b, dict) and b.get("type") == "tool_result" for b in content
-    )
+    return any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content)
 
 
 def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -90,10 +88,12 @@ def _inline_tool_results_as_text(messages: list[dict[str, Any]]) -> list[dict[st
                         name = block.get("name", "tool")
                         inp = block.get("input", {})
                         # tool_use 块带走的语义：调用了哪个 tool + 用了什么参数
-                        new_prev_content.append({
-                            "type": "text",
-                            "text": f"[Called {name} with {json.dumps(inp, ensure_ascii=False)}]",
-                        })
+                        new_prev_content.append(
+                            {
+                                "type": "text",
+                                "text": f"[Called {name} with {json.dumps(inp, ensure_ascii=False)}]",
+                            }
+                        )
                     elif isinstance(block, dict) and block.get("type") == "text":
                         new_prev_content.append(block)
                     elif isinstance(block, str):

@@ -23,7 +23,6 @@ from app.dependencies import get_current_user
 from app.main import app
 from app.models.user import ROLE_OWNER, User
 
-
 # ──────────────── 共享 fixture：注入 fake owner ────────────────
 
 
@@ -82,6 +81,7 @@ class TestHttpErrorMapping:
     def _exc(self, code: str, message: str):
         """构造 UserManagementError。"""
         from app.services.user_admin import UserManagementError
+
         return UserManagementError(code, message)
 
     @pytest.mark.parametrize(
@@ -120,9 +120,14 @@ class TestToOut:
     def test_to_out_is_self_true(self) -> None:
         """``actor.id == user.id`` → ``is_self=True``。"""
         user = User(
-            id=1, email="x@x", password_hash="h",
-            role=ROLE_OWNER, is_active=True, display_name="X",
-            created_at=datetime(2026, 1, 1), last_login_at=None,
+            id=1,
+            email="x@x",
+            password_hash="h",
+            role=ROLE_OWNER,
+            is_active=True,
+            display_name="X",
+            created_at=datetime(2026, 1, 1),
+            last_login_at=None,
         )
         out = admin_ep._to_out(user, actor_id=1)
         assert out.is_self is True
@@ -136,9 +141,14 @@ class TestToOut:
     def test_to_out_is_self_false(self) -> None:
         """``actor.id != user.id`` → ``is_self=False``。"""
         user = User(
-            id=2, email="y@x", password_hash="h",
-            role="member", is_active=True, display_name="Y",
-            created_at=datetime(2026, 1, 1), last_login_at=datetime(2026, 2, 1),
+            id=2,
+            email="y@x",
+            password_hash="h",
+            role="member",
+            is_active=True,
+            display_name="Y",
+            created_at=datetime(2026, 1, 1),
+            last_login_at=datetime(2026, 2, 1),
         )
         out = admin_ep._to_out(user, actor_id=1)
         assert out.is_self is False
@@ -147,9 +157,14 @@ class TestToOut:
     def test_to_out_missing_display_name_default(self) -> None:
         """``display_name`` 为 None 时显示空串（响应模型约束）。"""
         user = User(
-            id=1, email="x@x", password_hash="h",
-            role=ROLE_OWNER, is_active=True, display_name=None,
-            created_at=datetime(2026, 1, 1), last_login_at=None,
+            id=1,
+            email="x@x",
+            password_hash="h",
+            role=ROLE_OWNER,
+            is_active=True,
+            display_name=None,
+            created_at=datetime(2026, 1, 1),
+            last_login_at=None,
         )
         out = admin_ep._to_out(user, actor_id=1)
         assert out.display_name == ""
@@ -157,9 +172,14 @@ class TestToOut:
     def test_to_out_does_not_leak_password_hash(self) -> None:
         """``_to_out`` 必须不输出 ``password_hash``（安全护栏）。"""
         user = User(
-            id=1, email="x@x", password_hash="SECRET_HASH",
-            role=ROLE_OWNER, is_active=True, display_name="X",
-            created_at=datetime(2026, 1, 1), last_login_at=None,
+            id=1,
+            email="x@x",
+            password_hash="SECRET_HASH",
+            role=ROLE_OWNER,
+            is_active=True,
+            display_name="X",
+            created_at=datetime(2026, 1, 1),
+            last_login_at=None,
         )
         out = admin_ep._to_out(user, actor_id=1)
         dumped = out.model_dump()
@@ -173,9 +193,7 @@ class TestToOut:
 class TestListUsersEndpoint:
     """``GET /api/v1/admin/users`` 列出全部用户 + is_self 标记 + owner_count。"""
 
-    async def test_empty_db(
-        self, client: AsyncClient, as_owner: User
-    ) -> None:
+    async def test_empty_db(self, client: AsyncClient, as_owner: User) -> None:
         """空 DB：返回空列表 + total=0 + owner_count=0。"""
         # 但本测试场景有 fake_owner（fixture 自动插入）→ DB 里至少有 1 个 owner
         resp = await client.get("/api/v1/admin/users")
@@ -202,18 +220,50 @@ class TestListUsersEndpoint:
         assert member["is_self"] is False
         assert member["role"] == "member"
 
-    async def test_anonymous_returns_401_or_403(
+    async def test_anonymous_in_single_user_mode_falls_back_to_legacy_user(
         self, client: AsyncClient, fake_owner: User
     ) -> None:
-        """不注入 fake_owner（即匿名）：返回 401（require_user 抛）或 403（require_owner 抛）。
+        """单用户模式（``auth_enabled=false``，本仓库默认）→ 匿名访问**不 401**。
 
-        不依赖具体状态码 —— FastAPI 鉴权栈：``get_current_user`` 返 None → ``require_user`` 抛 401
-        → ``require_owner`` 不会执行；返非 owner → ``require_owner`` 抛 403。本测试用 fake_owner
-        但不调 ``as_owner`` fixture，所以 ``get_current_user`` 仍返 None。
+        V0.97.0 起 ``require_user`` 有**单用户回退**：中间件在单用户模式下不解析
+        会话（``request.state.user`` 恒为 None），此时 ``require_user`` 直接读
+        LEGACY_USER（id=1）并当作已登录用户返回 —— 供 LAN 单用户部署直接访问
+        需要登录的端点。本用例里 ``fake_owner`` 恰好是库里第一条用户 ⇒ id=1。
+
+        ⚠ 这条断言以前写成「匿名访问应被拒（401/403）」，**与实际行为相反** ——
+        它是 V0.116.1 修的 CI 预存红之一。
+        **多用户模式下的 401 由下一条用例单独覆盖**，两种模式不要混在一条断言里。
         """
         resp = await client.get("/api/v1/admin/users")
-        assert resp.status_code in (401, 403), (
-            f"匿名访问应被拒，实际 {resp.status_code}"
+        assert resp.status_code == 200, (
+            f"单用户模式匿名访问应回退到 LEGACY_USER，实际 {resp.status_code}: {resp.text}"
+        )
+        # 不只看 200：确认**回退身份**真的生效（回退到的就是 owner 本人）
+        body = resp.json()
+        me = next(u for u in body["users"] if u["email"] == "owner@example.com")
+        assert me["is_self"] is True, "回退身份应是 LEGACY_USER 本人"
+
+    async def test_anonymous_in_multi_user_mode_returns_401(
+        self, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """多用户模式（``auth_enabled=true``）→ 匿名访问必须 401。
+
+        单用户回退**只在** ``auth_enabled=false`` 时生效；一旦开启鉴权，
+        必须恢复「未登录 = 401」的语义。
+
+        ⚠ 这里只替换 ``app.dependencies.get_settings``（依赖层看到的开关），
+        **不动中间件**（中间件读的是 ``app.config.get_settings``）——
+        于是 401 来自 ``require_user`` 本身，正好验证「回退被 auth_enabled 门控」，
+        而不是被中间件提前挡掉。
+        """
+        from app.config import get_settings as real_get_settings
+
+        multi_user = real_get_settings().model_copy(update={"auth_enabled": True})
+        monkeypatch.setattr("app.dependencies.get_settings", lambda: multi_user)
+
+        resp = await client.get("/api/v1/admin/users")
+        assert resp.status_code == 401, (
+            f"多用户模式匿名访问应 401，实际 {resp.status_code}: {resp.text}"
         )
 
 
@@ -234,9 +284,7 @@ class TestAdminResetPasswordEndpoint:
         assert resp.status_code == 409
         assert resp.json()["detail"]["code"] == "cannot_reset_own_password"
 
-    async def test_user_not_found_returns_404(
-        self, client: AsyncClient, as_owner: User
-    ) -> None:
+    async def test_user_not_found_returns_404(self, client: AsyncClient, as_owner: User) -> None:
         """目标用户不存在 → 404 + code=user_not_found。"""
         resp = await client.post(
             "/api/v1/admin/users/99999/reset-password",
@@ -263,9 +311,7 @@ class TestAdminSetActiveEndpoint:
         assert resp.status_code == 409
         assert resp.json()["detail"]["code"] == "cannot_disable_self"
 
-    async def test_user_not_found_returns_404(
-        self, client: AsyncClient, as_owner: User
-    ) -> None:
+    async def test_user_not_found_returns_404(self, client: AsyncClient, as_owner: User) -> None:
         """目标用户不存在 → 404。"""
         resp = await client.post(
             "/api/v1/admin/users/99999/set-active",
@@ -289,9 +335,7 @@ class TestAdminDeleteUserEndpoint:
         assert resp.status_code == 409
         assert resp.json()["detail"]["code"] == "cannot_delete_self"
 
-    async def test_user_not_found_returns_404(
-        self, client: AsyncClient, as_owner: User
-    ) -> None:
+    async def test_user_not_found_returns_404(self, client: AsyncClient, as_owner: User) -> None:
         """目标用户不存在 → 404。"""
         resp = await client.delete("/api/v1/admin/users/99999")
         assert resp.status_code == 404

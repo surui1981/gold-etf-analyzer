@@ -2,20 +2,20 @@
 
 拉所有遗留「其他」行 → 跑 classify() → 看哪类关键词未命中。
 """
+
 from __future__ import annotations
 
 import sys
-from collections import Counter
 
 sys.path.insert(0, "src")
 
-import asyncio  # noqa: E402
+import asyncio
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select
 
-from app.models.news_feed import NewsFeedItem  # noqa: E402
-from app.repositories.db import async_session_factory  # noqa: E402
-from app.repositories.news_classifier import classify  # noqa: E402
+from app.models.news_feed import NewsFeedItem
+from app.repositories.db import async_session_factory
+from app.repositories.news_classifier import classify
 
 
 async def main() -> None:

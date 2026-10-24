@@ -50,32 +50,127 @@ SHARED_ID_RE = re.compile(r"\.id\s*=\s*[\"']([^\"']+)[\"']")
 
 # 宿主/浏览器全局与语言关键字——不属于「项目内应定义」的符号
 GLOBALS = {
-    "if", "else", "return", "typeof", "new", "delete", "void", "in", "of",
-    "instanceof", "await", "async", "catch", "try", "finally", "throw",
-    "switch", "case", "default", "break", "continue", "do", "while", "for",
+    "if",
+    "else",
+    "return",
+    "typeof",
+    "new",
+    "delete",
+    "void",
+    "in",
+    "of",
+    "instanceof",
+    "await",
+    "async",
+    "catch",
+    "try",
+    "finally",
+    "throw",
+    "switch",
+    "case",
+    "default",
+    "break",
+    "continue",
+    "do",
+    "while",
+    "for",
     # 匿名函数表达式 `function (c) {}` 会被 CALL_RE 误认为调用名为 function 的函数
-    "function", "get", "set",
-    "Number", "String", "Boolean", "Array", "Object", "JSON", "Math", "Date",
-    "RegExp", "Error", "Promise", "Map", "Set", "Symbol", "WeakMap", "Proxy",
-    "Reflect", "BigInt", "Function", "parseFloat", "parseInt", "isNaN",
-    "isFinite", "encodeURIComponent", "decodeURIComponent", "setTimeout",
-    "setInterval", "clearTimeout", "clearInterval", "alert", "confirm",
-    "prompt", "document", "window", "console", "localStorage",
-    "sessionStorage", "fetch", "require", "module", "exports", "Chart",
-    "Blob", "URL", "Intl", "Notification", "getComputedStyle",
-    "requestAnimationFrame", "addEventListener", "FileReader",
-    "CustomEvent", "Event", "AbortController", "queueMicrotask",
-    "matchMedia", "dispatchEvent",
+    "function",
+    "get",
+    "set",
+    "Number",
+    "String",
+    "Boolean",
+    "Array",
+    "Object",
+    "JSON",
+    "Math",
+    "Date",
+    "RegExp",
+    "Error",
+    "Promise",
+    "Map",
+    "Set",
+    "Symbol",
+    "WeakMap",
+    "Proxy",
+    "Reflect",
+    "BigInt",
+    "Function",
+    "parseFloat",
+    "parseInt",
+    "isNaN",
+    "isFinite",
+    "encodeURIComponent",
+    "decodeURIComponent",
+    "setTimeout",
+    "setInterval",
+    "clearTimeout",
+    "clearInterval",
+    "alert",
+    "confirm",
+    "prompt",
+    "document",
+    "window",
+    "console",
+    "localStorage",
+    "sessionStorage",
+    "fetch",
+    "require",
+    "module",
+    "exports",
+    "Chart",
+    "Blob",
+    "URL",
+    "Intl",
+    "Notification",
+    "getComputedStyle",
+    "requestAnimationFrame",
+    "addEventListener",
+    "FileReader",
+    "CustomEvent",
+    "Event",
+    "AbortController",
+    "queueMicrotask",
+    "matchMedia",
+    "dispatchEvent",
 }
 
 # 写在 JS 字符串里的 CSS 函数（如 Chart.js 配色 "rgba(...)"、"var(--up)"），
 # 不是 JS 调用，需排除，否则产生大量误报。
 CSS_FUNCS = {
-    "var", "rgba", "rgb", "hsl", "hsla", "calc", "min", "max", "clamp", "env",
-    "url", "translateX", "translateY", "translate", "scale", "rotate",
-    "linear-gradient", "radial-gradient", "cubic-bezier", "blur", "brightness",
-    "drop-shadow", "repeat", "circle", "polygon", "fit-content", "inset",
-    "conic-gradient", "perspective", "matrix", "saturate", "sepia",
+    "var",
+    "rgba",
+    "rgb",
+    "hsl",
+    "hsla",
+    "calc",
+    "min",
+    "max",
+    "clamp",
+    "env",
+    "url",
+    "translateX",
+    "translateY",
+    "translate",
+    "scale",
+    "rotate",
+    "linear-gradient",
+    "radial-gradient",
+    "cubic-bezier",
+    "blur",
+    "brightness",
+    "drop-shadow",
+    "repeat",
+    "circle",
+    "polygon",
+    "fit-content",
+    "inset",
+    "conic-gradient",
+    "perspective",
+    "matrix",
+    "saturate",
+    "sepia",
 }
 
 
@@ -84,9 +179,7 @@ def _find_node() -> str | None:
     found = shutil.which("node")
     if found:
         return found
-    candidates = glob.glob(
-        os.path.expanduser("~/.workbuddy/binaries/node/versions/*/node.exe")
-    )
+    candidates = glob.glob(os.path.expanduser("~/.workbuddy/binaries/node/versions/*/node.exe"))
     return sorted(candidates)[-1] if candidates else None
 
 
@@ -204,16 +297,12 @@ def _check_file(path: str, node: str | None) -> list[str]:
     declared = _declared_names(js)
     called = set(CALL_RE.findall(js))
     undefined = sorted(
-        c for c in called
-        if c not in declared
-        and c not in GLOBALS
-        and c not in CSS_FUNCS
-        and not c[0].isupper()
+        c
+        for c in called
+        if c not in declared and c not in GLOBALS and c not in CSS_FUNCS and not c[0].isupper()
     )
     if undefined:
-        problems.append(
-            f"{rel} 疑似调用了未定义的函数：{', '.join(undefined)}"
-        )
+        problems.append(f"{rel} 疑似调用了未定义的函数：{', '.join(undefined)}")
 
     # 3) DOM id 一致性
     # 动态拼接生成的 id（如 rowHtml("c_" + k, ...)）无法静态判定，
@@ -222,13 +311,10 @@ def _check_file(path: str, node: str | None) -> list[str]:
     ids_used = set(GET_ID_RE.findall(js))
     dyn_prefixes = tuple(set(DYN_PREFIX_RE.findall(js)))
     missing = sorted(
-        i for i in ids_used - ids_defined
-        if not (dyn_prefixes and i.startswith(dyn_prefixes))
+        i for i in ids_used - ids_defined if not (dyn_prefixes and i.startswith(dyn_prefixes))
     )
     if missing:
-        problems.append(
-            f"{rel} JS 引用了 HTML 中不存在的 id：{', '.join(missing)}"
-        )
+        problems.append(f"{rel} JS 引用了 HTML 中不存在的 id：{', '.join(missing)}")
 
     return problems
 
@@ -283,13 +369,17 @@ def run_nav_context_smoke() -> int:
     """
     import subprocess
     from pathlib import Path as _Path
+
     script = _Path(__file__).parent / "check_nav_context.mjs"
     if not script.exists():
         print(f"[WARN] {script.name} 不存在，跳过 nav-context 单测")
         return 0
     try:
         result = subprocess.run(
-            ["node", str(script)], capture_output=True, text=True, timeout=30,
+            ["node", str(script)],
+            capture_output=True,
+            text=True,
+            timeout=30,
         )
         if result.returncode != 0:
             print("[WARN] nav-context 单元测试失败：")

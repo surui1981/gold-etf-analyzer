@@ -84,7 +84,9 @@ def issue_admin_session_cookie_value() -> str:
             "ADMIN_TOKEN 未设置；无法签发 admin session（dev / 单用户模式无需 cookie）"
         )
     issued_at = int(time.time())
-    return f"{_b64url_encode(str(issued_at).encode('ascii'))}.{_sign_session(issued_at, admin_token)}"
+    return (
+        f"{_b64url_encode(str(issued_at).encode('ascii'))}.{_sign_session(issued_at, admin_token)}"
+    )
 
 
 def verify_admin_session_cookie(raw: str | None) -> bool:

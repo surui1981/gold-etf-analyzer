@@ -12,13 +12,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-
 import pytest
 
 from app.main import app as fastapi_app
 from scripts import check_routes
-
 
 # ──────────────── discover_routes ────────────────
 
@@ -27,9 +24,9 @@ class TestDiscoverRoutes:
     """``discover_routes(app)`` 反射 FastAPI app.routes 的过滤逻辑。"""
 
     def test_reflects_actual_routes(self) -> None:
-        """真实 app 反射：13 alias + /sw.js = 14 条（含 ``include_in_schema=False``）。"""
+        """真实 app 反射：18 alias + /sw.js + /favicon.ico = 20 条（含 ``include_in_schema=False``）。"""
         routes = check_routes.discover_routes(fastapi_app)
-        # 至少含 13 个 alias + 1 个 sw.js
+        # 至少含 18 个 alias + 1 个 sw.js
         assert "/" in routes
         assert "/portfolio" in routes
         assert "/data-health" in routes
@@ -46,17 +43,40 @@ class TestDiscoverRoutes:
             f"discover_routes 不应含 /static mount：{routes}"
         )
 
-    def test_count_matches_root_aliases_parametrize(self) -> None:
-        """反射数应等于 ``tests/test_main_app.py::ROOT_ALIASES`` 的 13 + /sw.js = 14。
+    def test_reflected_routes_match_expected_tables(self) -> None:
+        """反射到的路由集合必须与 ``EXPECTED_ALIAS_PATHS ∪ EXPECTED_REFLECTED_EXTRA`` **完全相等**。
 
-        任何 main.py alias 漏注册都会被这个数捕获（防 V0.85 漏注册 /data-health 复现）。
+        ⚠ 旧版这里是 ``assert len(routes) == 16`` —— 一个**写死的计数**。
+        它的失效方式很隐蔽：main.py 加了 alias、这张表没跟上时，
+        只要总数碰巧对得上（比如同时删了一条）就照样绿；
+        更常见的是**两边都忘了改**，计数立刻过期把门禁染红 ——
+        V0.116.1 修 CI 预存红时它已经烂在 16（实际 20）。
+
+        **集合相等**才是这条断言想要的东西：
+        - main.py 加了 alias 而表没加 → ``routes - expected`` 非空 ⇒ 红
+        - 表里写了 main.py 没有的 alias → ``expected - routes`` 非空 ⇒ 红
         """
-        routes = check_routes.discover_routes(fastapi_app)
-        # 15 alias + 1 sw.js = 16（V0.97.0 /ask + V0.98 /home 后 15 alias）
-        assert len(routes) == 16, (
-            f"反射 {len(routes)} 条；期望 14（13 alias + /sw.js）。"
-            "新增 alias 必须同步更新 EXPECTED_ALIAS_PATHS + test_main_app.ROOT_ALIASES"
+        routes = set(check_routes.discover_routes(fastapi_app))
+        expected = set(check_routes.EXPECTED_ALIAS_PATHS) | set(
+            check_routes.EXPECTED_REFLECTED_EXTRA
         )
+        assert routes == expected, (
+            f"反射路由与期望表不一致。\n"
+            f"  反射多出（main.py 有、表里没有）：{sorted(routes - expected)}\n"
+            f"  表里多出（表里有、main.py 没有）：{sorted(expected - routes)}\n"
+            "新增 alias 必须同步更新 check_routes.EXPECTED_ALIAS_PATHS "
+            "+ test_main_app.ROOT_ALIASES"
+        )
+
+    def test_expected_alias_paths_have_no_duplicates(self) -> None:
+        """``EXPECTED_ALIAS_PATHS`` 不得有重复项。
+
+        集合相等断言**看不见重复**：``["/a", "/a", "/b"]`` 的集合是 ``{"/a", "/b"}``，
+        与期望集合同样相等 —— 但列表里的重复会让「按位置取第 N 条」的逻辑错位。
+        """
+        paths = check_routes.EXPECTED_ALIAS_PATHS
+        dupes = sorted({p for p in paths if paths.count(p) > 1})
+        assert not dupes, f"EXPECTED_ALIAS_PATHS 含重复项：{dupes}"
 
 
 # ──────────────── check_routes ────────────────
@@ -72,7 +92,7 @@ class TestCheckRoutes:
 
         def _fetch(url: str) -> int:
             # 简单路由表返回期望 status
-            path = url[len("http://x"):]
+            path = url[len("http://x") :]
             return expected.get(path, 404)
 
         problems = check_routes.check_routes(
@@ -131,7 +151,7 @@ class TestCheckRoutes:
         expected = {"/portfolio": 307, "/static/trend.html": 200}
 
         def _fetch(url: str) -> int:
-            return expected.get(url[len("http://x"):], 404)
+            return expected.get(url[len("http://x") :], 404)
 
         problems = check_routes.check_routes(
             routes=routes, fetch=_fetch, base="http://x", expected=expected
@@ -144,7 +164,7 @@ class TestCheckRoutes:
         expected = {"/portfolio": 307, "/static/trend.html": 200}
 
         def _fetch(url: str) -> int:
-            path = url[len("http://x"):]
+            path = url[len("http://x") :]
             if path == "/static/trend.html":
                 return 404  # 模拟文件被删
             return 307
@@ -192,12 +212,25 @@ class TestExpectedStatusConsistency:
     """``EXPECTED_STATUS`` 与 ``tests/test_main_app.py::ROOT_ALIASES`` 同步断言。
 
     这两个事实真相**必须**同步：漏任何一处都会让 V0.85 漏注册 /data-health
-    类回归漏检。两个测试都断言相同数目（12 alias + /sw.js）。
+    类回归漏检。
+
+    ⚠ V0.116.1：这里原来断言的是**写死的个数**（15 / 18），
+    而 alias 数在 V0.97 /ask、V0.98 /home、V0.102 /headlines、
+    V0.103 /favorites、V0.111 /report-archive 之后已经涨到 18 ——
+    计数断言与它要保护的事实**脱钩**，只能靠人肉同步，
+    人肉同步失败时它不是变红而是**恒红**（CI 预存红之一）。
+    现在改成断言**推导关系**：EXPECTED_STATUS 由两张表拼出来 ⇒ 关系恒成立。
     """
 
-    def test_expected_alias_paths_count(self) -> None:
-        """EXPECTED_ALIAS_PATHS 必须正好 15 条（与 main.py alias 数同步；V0.97 /ask + V0.98 /home 后）。"""
-        assert len(check_routes.EXPECTED_ALIAS_PATHS) == 15
+    def test_expected_status_is_derived_from_two_tables(self) -> None:
+        """EXPECTED_STATUS 的 key 集合 == alias ∪ 额外端点（推导关系，不得有手工漏项）。"""
+        status_keys = set(check_routes.EXPECTED_STATUS.keys())
+        derived = set(check_routes.EXPECTED_ALIAS_PATHS) | set(check_routes.EXPECTED_EXTRA_STATUS)
+        assert status_keys == derived, (
+            f"EXPECTED_STATUS 与推导结果不一致。\n"
+            f"  表里多出：{sorted(status_keys - derived)}\n"
+            f"  推导多出：{sorted(derived - status_keys)}"
+        )
 
     def test_expected_status_alias_keys_match(self) -> None:
         """EXPECTED_STATUS 的 alias 部分 key 集合 ⊇ EXPECTED_ALIAS_PATHS。"""
@@ -209,7 +242,3 @@ class TestExpectedStatusConsistency:
             assert check_routes.EXPECTED_STATUS[p] == 307, (
                 f"{p} 应期望 307，实际 {check_routes.EXPECTED_STATUS[p]}"
             )
-
-    def test_expected_status_alias_keys_count(self) -> None:
-        """EXPECTED_STATUS 必须含 15 alias + /sw.js + /docs + /static/trend.html = 18。"""
-        assert len(check_routes.EXPECTED_STATUS) == 18

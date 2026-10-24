@@ -6,9 +6,10 @@
 任何路由遗漏都会立刻在 CI 失败。
 
 **关键覆盖**：
-- 13 个根路径别名（``/``、``/portfolio``、``/weights``、``/news``、``/review``、
+- 18 个根路径别名（``/``、``/home``、``/portfolio``、``/weights``、``/news``、``/review``、
   ``/central-bank``、``/data-health``、``/data-health.html``、``/trades``、
-  ``/login``、``/reset-password``、``/report``、``/scoring``、``/sw.js``）都返回 307 → /static/*.html
+  ``/login``、``/reset-password``、``/report``、``/scoring``、``/ask``、
+  ``/headlines``、``/favorites``、``/report-archive``）都返回 307 → /static/*.html
 - 静态 mount：``/static/index.html`` 或 ``/static/trend.html`` 可访问
 - TestClient（异步）触发 lifespan 走通：migrate → ensure_default → warm cache → scheduler
 - ``/docs`` 与 ``/openapi.json`` 在 dev 下可达（auth_enabled=false 时）
@@ -18,12 +19,15 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+import contextlib
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from app.main import app
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 # ──────────────── 别名重定向表 ────────────────
@@ -67,10 +71,12 @@ async def no_lifespan_client() -> AsyncClient:
 async def client_with_lifespan() -> AsyncClient:
     """带 lifespan 的测试客户端：验证启动/关闭流程不抛异常。"""
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as c:
-        # ASGITransport 默认不触发 lifespan；显式调用
-        async with app.router.lifespan_context(app):
-            yield c
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as c,
+        app.router.lifespan_context(app),
+    ):
+        # ASGITransport 默认不触发 lifespan；上面显式挂 lifespan_context
+        yield c
 
 
 # ──────────────── 路由别名（全部 307 → /static/*.html） ────────────────
@@ -95,26 +101,48 @@ class TestRootAliases:
         )
         assert resp.headers["location"] == expected_target
 
-    async def test_root_alias_count_matches(self) -> None:
-        """防止新别名静默加入：路由表里必须正好有 11 个 ``@app.get`` alias。
+    async def test_root_alias_paths_match_app(self) -> None:
+        """ROOT_ALIASES 的路径集合必须与 main.py **实际注册**的 alias 完全一致。
 
-        新增 alias 必须**同时**加测试断言（防 V0.85 漏注册 ``/data-health`` 复现）。
+        ⚠ V0.116.1：旧版这条断言是 ``assert len(ROOT_ALIASES) == 18`` ——
+        **常量比常量**，而且它辛苦算出来的 ``root_gets`` 列表**从头到尾没被用过**。
+        这条断言因此什么都保护不了：
+        - main.py 加了 alias 而忘了加进 ROOT_ALIASES ⇒ 照样绿
+        - ROOT_ALIASES 里写错了路径（指向不存在的页面）⇒ 照样绿
+
+        现在改成**与 app.routes 做集合比对**（双向）：
+        - main.py 加了 alias 而列表没加 ⇒ 红
+        - 列表里有 main.py 没有的 alias ⇒ 红
         """
-        root_gets = [
-            r for r in app.routes
-            if getattr(r, "path", "").startswith("/") and not r.path.startswith("/static")
-            and not r.path.startswith("/api")
-            and not r.path.startswith("/docs")
-            and not r.path.startswith("/openapi")
-            and not r.path.startswith("/redoc")
-            and r.path not in ("/",)
-            and not r.path.startswith("/login")
-            and not r.path.startswith("/sw")
-        ]
-        # 精确数：12 个 alias + / 本身 = 13 个 GET（不含 /sw.js）
-        assert len(ROOT_ALIASES) == 18, (
-            "ROOT_ALIASES 列表与 main.py 别名数不一致，请同步更新"
+        app_alias_paths = {
+            r.path
+            for r in app.routes
+            if type(r).__name__ == "APIRoute"
+            and getattr(r, "path", "").startswith("/")
+            and not r.path.startswith(("/api", "/static", "/docs", "/openapi", "/redoc"))
+            # /sw.js 与 /favicon.ico 不是页面 alias（各自有独立单测）
+            and r.path not in ("/sw.js", "/favicon.ico")
+        }
+        listed_paths = {p for p, _ in ROOT_ALIASES}
+        assert app_alias_paths == listed_paths, (
+            f"ROOT_ALIASES 与 main.py 实际注册的 alias 不一致。\n"
+            f"  main.py 多出：{sorted(app_alias_paths - listed_paths)}\n"
+            f"  ROOT_ALIASES 多出：{sorted(listed_paths - app_alias_paths)}\n"
+            "新增 alias 必须同时更新 main.py + 本列表 "
+            "+ scripts/check_routes.py 的 EXPECTED_ALIAS_PATHS"
         )
+
+    async def test_root_alias_targets_are_static_pages(self) -> None:
+        """每个 alias 的跳转目标必须是**真实存在**的 static 页面。
+
+        ⚠ 旧版这条断言只数个数 ⇒ 目标写错（比如 ``/static/trend.htm``）不会被发现，
+        而线上表现是「点导航 → 404」。这里逐条查文件是否存在。
+        """
+        static_dir = REPO_ROOT / "static"
+        for alias_path, target in ROOT_ALIASES:
+            assert target.startswith("/static/"), f"{alias_path} 的目标 {target} 不在 /static/ 下"
+            page = static_dir / target[len("/static/") :]
+            assert page.is_file(), f"{alias_path} → {target}：文件不存在（{page}）"
 
 
 # ──────────────── 静态 mount ────────────────
@@ -156,9 +184,7 @@ class TestServiceWorker:
             "SW 必须声明 root scope，否则无法代理全站请求"
         )
 
-    async def test_sw_js_cache_control_no_cache(
-        self, no_lifespan_client: AsyncClient
-    ) -> None:
+    async def test_sw_js_cache_control_no_cache(self, no_lifespan_client: AsyncClient) -> None:
         """``Cache-Control: no-cache`` 头：SW 文件本身不能被浏览器强缓存。"""
         resp = await no_lifespan_client.get("/sw.js")
         assert "no-cache" in resp.headers.get("cache-control", "").lower()
@@ -278,24 +304,31 @@ class TestRequireUserSingleUserFallback:
     async def test_fallback_returns_legacy_user(self) -> None:
         """``require_user`` 匿名 + auth_enabled=false → 返回 id=1 的 User。"""
         from datetime import datetime
+
         from sqlalchemy import select
+
         from app.dependencies import require_user
         from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
         from app.repositories.db import async_session_factory
 
         # conftest 每个用例前 drop_all → LEGACY_USER 不存在，显式建一行
         async with async_session_factory() as session:
-            existing = (await session.execute(
-                select(User).where(User.id == LEGACY_USER_ID)
-            )).scalar_one_or_none()
+            existing = (
+                await session.execute(select(User).where(User.id == LEGACY_USER_ID))
+            ).scalar_one_or_none()
             if existing is None:
-                session.add(User(
-                    id=LEGACY_USER_ID, email="legacy@test",
-                    display_name="Legacy", password_hash="x",
-                    role=ROLE_OWNER, is_active=True,
-                    created_at=datetime(2026, 1, 1),
-                    last_login_at=datetime(2026, 1, 1),
-                ))
+                session.add(
+                    User(
+                        id=LEGACY_USER_ID,
+                        email="legacy@test",
+                        display_name="Legacy",
+                        password_hash="x",
+                        role=ROLE_OWNER,
+                        is_active=True,
+                        created_at=datetime(2026, 1, 1),
+                        last_login_at=datetime(2026, 1, 1),
+                    )
+                )
                 await session.commit()
 
         class _FakeReq:
@@ -314,29 +347,28 @@ class TestRequireUserSingleUserFallback:
         验证 ``require_user`` 的 ``load_only + set_committed_value`` 兜底链路
         不会触发 ``no such column`` 或 ``DetachedInstanceError``。
         """
-        from datetime import datetime
-        from sqlalchemy import select, text
+        from sqlalchemy import text
+
         from app.dependencies import require_user
-        from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
+        from app.models.user import LEGACY_USER_ID, ROLE_OWNER
         from app.repositories.db import async_session_factory
 
         # 建 LEGACY_USER + 模拟「role 列漂移」（drop 掉 role 列）
-        async with async_session_factory() as session:
-            async with session.begin():
-                # 先尝试 drop role（容错：本来没有这列就 skip）
-                try:
-                    await session.execute(text("ALTER TABLE users DROP COLUMN role"))
-                except Exception:
-                    pass
-                # 删/建 LEGACY_USER
-                await session.execute(text("DELETE FROM users WHERE id = 1"))
-                # 注意：写时用 ORM User(role=...) 会触发 INSERT role → 缺列会炸
-                # 所以用 raw SQL 显式列出存在的列
-                await session.execute(text(
+        async with async_session_factory() as session, session.begin():
+            # 先尝试 drop role（容错：本来没有这列就 skip）
+            with contextlib.suppress(Exception):
+                await session.execute(text("ALTER TABLE users DROP COLUMN role"))
+            # 删/建 LEGACY_USER
+            await session.execute(text("DELETE FROM users WHERE id = 1"))
+            # 注意：写时用 ORM User(role=...) 会触发 INSERT role → 缺列会炸
+            # 所以用 raw SQL 显式列出存在的列
+            await session.execute(
+                text(
                     "INSERT INTO users (id, email, display_name, password_hash, "
                     "is_active, created_at) VALUES "
                     "(1, 'legacy@test', 'Legacy', 'x', 1, '2026-01-01 00:00:00')"
-                ))
+                )
+            )
 
         class _FakeReq:
             state: type("S", (), {"user": None})  # type: ignore[misc]
@@ -356,23 +388,30 @@ class TestRequireUserSingleUserFallback:
         直连 POST → 期望 201（或 422 因 snapshot 字段缺，**不能** 401）。
         """
         from datetime import datetime
+
         from sqlalchemy import select
+
         from app.models.user import LEGACY_USER_ID, ROLE_OWNER, User
         from app.repositories.db import async_session_factory
 
         # no_lifespan_client 跳过了 main._bootstrap_default_user，需手动建 LEGACY_USER
         async with async_session_factory() as session:
-            existing = (await session.execute(
-                select(User).where(User.id == LEGACY_USER_ID)
-            )).scalar_one_or_none()
+            existing = (
+                await session.execute(select(User).where(User.id == LEGACY_USER_ID))
+            ).scalar_one_or_none()
             if existing is None:
-                session.add(User(
-                    id=LEGACY_USER_ID, email="legacy@test",
-                    display_name="Legacy", password_hash="x",
-                    role=ROLE_OWNER, is_active=True,
-                    created_at=datetime(2026, 1, 1),
-                    last_login_at=datetime(2026, 1, 1),
-                ))
+                session.add(
+                    User(
+                        id=LEGACY_USER_ID,
+                        email="legacy@test",
+                        display_name="Legacy",
+                        password_hash="x",
+                        role=ROLE_OWNER,
+                        is_active=True,
+                        created_at=datetime(2026, 1, 1),
+                        last_login_at=datetime(2026, 1, 1),
+                    )
+                )
                 await session.commit()
 
         # 收藏时 news_feed_items 无对应行 → 直接传 snapshot
@@ -398,9 +437,7 @@ class TestRequireUserSingleUserFallback:
 class TestDataHealthRegression:
     """V0.86.1 数据健康 404 hotfix 防回归：``/data-health`` 必须可访问。"""
 
-    async def test_data_health_alias_returns_200(
-        self, no_lifespan_client: AsyncClient
-    ) -> None:
+    async def test_data_health_alias_returns_200(self, no_lifespan_client: AsyncClient) -> None:
         """``/data-health``（不带 .html）必须 307 → 200 落地页可读。"""
         resp = await no_lifespan_client.get("/data-health", follow_redirects=True)
         assert resp.status_code == 200

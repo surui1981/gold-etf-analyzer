@@ -47,7 +47,8 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from typing import TYPE_CHECKING, Callable
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:  # 仅供 _start_in_process_server 的返回注解用，运行时不导入
     import uvicorn
@@ -55,7 +56,7 @@ if TYPE_CHECKING:  # 仅供 _start_in_process_server 的返回注解用，运行
 # ──────────────── 期望状态表（事实真相；与 test_main_app.py ROOT_ALIASES 同步） ────────────────
 
 
-# 13 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应；
+# 18 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应；
 # V0.91.0 新增 /report —— 复盘报告 PDF 导出页；V0.92.0 新增 /scoring —— 打分汇总）
 EXPECTED_ALIAS_PATHS: list[str] = [
     "/",
@@ -82,20 +83,36 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     # V0.103：我的收藏新增 /favorites alias（页面 + /api/v1/favorites/* 9 端点）
 ]
 
-# 期望 status 表：alias → 307，特殊端点 → 各自 status
-EXPECTED_STATUS: dict[str, int] = {
-    **{p: 307 for p in EXPECTED_ALIAS_PATHS},
+# 期望 status 表里的**非 alias** 条目（V0.116.1 从 EXPECTED_STATUS 里拆出来）。
+#
+# 为什么要拆：EXPECTED_STATUS 原来是「alias + 4 个特殊端点」手写在一个 dict 里，
+# 于是「总数」是个魔数 —— 改 alias 数量时测试里的 `== 18` 立刻过期
+# （V0.116.1 修 CI 预存红时它已经烂在 18/15/16 三个数上了）。
+# 拆开后 EXPECTED_STATUS **由两张表推导**，测试只断言「推导关系成立」，
+# 再也没有需要人肉同步的计数。
+EXPECTED_EXTRA_STATUS: dict[str, int] = {
     "/sw.js": 200,
     "/favicon.ico": 200,
     "/docs": 200,  # dev/test 模式默认开启
     "/static/trend.html": 200,  # StaticFiles mount 健康度抽样
 }
 
+# 反射层（``discover_routes``）能看到、但**不属于 alias** 的根路由。
+# ``/docs`` 是 Starlette 自动路由、``/static/trend.html`` 是 mount ——
+# 两者都不是 APIRoute ⇒ 反射不到，只在 HTTP 层按表验证。
+EXPECTED_REFLECTED_EXTRA: tuple[str, ...] = ("/sw.js", "/favicon.ico")
+
+# 期望 status 表：alias → 307，特殊端点 → 各自 status
+EXPECTED_STATUS: dict[str, int] = {
+    **{p: 307 for p in EXPECTED_ALIAS_PATHS},
+    **EXPECTED_EXTRA_STATUS,
+}
+
 # 用于发现端点：扫描 src/app/main.py 的所有 @app.get 等路由
 PROJECT_ROOT = __import__("pathlib").Path(__file__).resolve().parents[1]
 
 
-__all__ = ["discover_routes", "check_routes", "EXPECTED_STATUS", "main"]
+__all__ = ["EXPECTED_STATUS", "check_routes", "discover_routes", "main"]
 
 
 # ──────────────── 路由发现（反射 FastAPI app） ────────────────
@@ -134,7 +151,7 @@ def _default_fetch(url: str, *, timeout: float = 5.0) -> int:
     try:
         # 不 follow redirect；urllib 默认会跟 → 这里用 opener 拿首个响应
         class NoRedirect(urllib.request.HTTPRedirectHandler):
-            def redirect_request(self, *args, **kwargs):  # noqa: ANN001,ANN002,ANN003
+            def redirect_request(self, *args, **kwargs):
                 return None
 
         opener = urllib.request.build_opener(NoRedirect)

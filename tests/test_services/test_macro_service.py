@@ -155,13 +155,13 @@ async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(monkeypatch, 
 
 def _override_service(**overrides):
     """构造一个只提供 macro_overrides() 的假 WeightService。"""
-    from app.schemas.settings import MacroFactorOverride, MacroFactorOverrideSet
+    from app.schemas.settings import MacroFactorOverrideSet
     from app.services.settings import WeightService
 
     cfg = MacroFactorOverrideSet(**overrides)
 
     class _Fake(WeightService):
-        def __init__(self) -> None:  # noqa: D107 —— 刻意不调 super().__init__
+        def __init__(self) -> None:
             pass
 
         async def macro_overrides(self):
@@ -249,7 +249,7 @@ async def test_v01100_override_read_failure_does_not_break_macro(monkeypatch) ->
     from app.services.settings import WeightService
 
     class _Boom(WeightService):
-        def __init__(self) -> None:  # noqa: D107
+        def __init__(self) -> None:
             pass
 
         async def macro_overrides(self):

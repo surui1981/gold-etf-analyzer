@@ -23,9 +23,7 @@ class TimelineSegment(BaseModel):
     end: date = Field(..., description="段结束日期（含）；decision 单日 = end == start")
 
     # decision 段独有字段
-    trade: TradeHistoryItem | None = Field(
-        None, description="决策段对应的交易流水（单条 trade）"
-    )
+    trade: TradeHistoryItem | None = Field(None, description="决策段对应的交易流水（单条 trade）")
     snapshot: SnapshotOut | None = Field(
         None,
         description=(
@@ -39,8 +37,7 @@ class TimelineSegment(BaseModel):
     compressed: bool | None = Field(
         None,
         description=(
-            "是否折叠：空闲天数 > compress_threshold_days 时为 True。"
-            "False/None = 正常展示未折叠"
+            "是否折叠：空闲天数 > compress_threshold_days 时为 True。False/None = 正常展示未折叠"
         ),
     )
 
@@ -53,10 +50,7 @@ class TimelineOut(BaseModel):
     span_days: int = Field(..., description="总跨度（含首尾）")
     active_days: int = Field(
         ...,
-        description=(
-            "活跃天数：有 trade 或 snapshot 的日期去重数。"
-            "用于前端展示「覆盖密度」"
-        ),
+        description=("活跃天数：有 trade 或 snapshot 的日期去重数。用于前端展示「覆盖密度」"),
     )
     decision_count: int = Field(..., description="决策点（trade）总数")
     segments: list[TimelineSegment]

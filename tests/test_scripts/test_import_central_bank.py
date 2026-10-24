@@ -59,6 +59,7 @@ class TestUpsertRows:
         assert n >= 1
         # 验证 DB 写入
         from sqlalchemy import select
+
         from app.models.central_bank import CentralBankPurchase
 
         result = await db_session.execute(
@@ -80,13 +81,14 @@ class TestUpsertRows:
         rows_second = [_make_row(iso="POL", quarter="2026Q1", tonnes=20.0, name="波兰新名")]
         await import_central_bank.upsert_rows(rows_second)
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from app.models.central_bank import CentralBankPurchase
 
         result = await db_session.execute(
-            select(func.count()).select_from(CentralBankPurchase).where(
-                CentralBankPurchase.country_iso == "POL"
-            )
+            select(func.count())
+            .select_from(CentralBankPurchase)
+            .where(CentralBankPurchase.country_iso == "POL")
         )
         count = result.scalar_one()
         assert count == 1, "冲突替换应保持 1 行"
@@ -108,11 +110,11 @@ class TestUpsertRows:
         ]
         n = await import_central_bank.upsert_rows(rows)
         assert n >= 3
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from app.models.central_bank import CentralBankPurchase
-        result = await db_session.execute(
-            select(func.count()).select_from(CentralBankPurchase)
-        )
+
+        result = await db_session.execute(select(func.count()).select_from(CentralBankPurchase))
         assert result.scalar_one() == 3
 
 
@@ -122,41 +124,37 @@ class TestUpsertRows:
 class TestRunImport:
     """``run_import`` 完整流程：build_full_dataset → 过滤 → 落库 → 日志。"""
 
-    async def test_run_import_no_data_returns_zero(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_run_import_no_data_returns_zero(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """build_full_dataset 返回 [] 时：run_import 返回 0 + 记 error 日志。"""
+
         async def _empty():
             return []
-        monkeypatch.setattr(
-            import_central_bank, "build_full_dataset", _empty
-        )
+
+        monkeypatch.setattr(import_central_bank, "build_full_dataset", _empty)
 
         result = await import_central_bank.run_import(include_manual=True)
         assert result == 0
 
-    async def test_run_import_full_path(
-        self, monkeypatch: pytest.MonkeyPatch, db_session
-    ) -> None:
+    async def test_run_import_full_path(self, monkeypatch: pytest.MonkeyPatch, db_session) -> None:
         """正常路径：build_full_dataset 返回 2 行 → upsert → DB 写入。"""
         rows = [
             _make_row(iso="CHN", quarter="2026Q1", tonnes=15.0),
             _make_row(iso="POL", quarter="2026Q1", tonnes=8.0, name="波兰"),
         ]
+
         async def _mock():
             return rows
-        monkeypatch.setattr(
-            import_central_bank, "build_full_dataset", _mock
-        )
+
+        monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
 
         n = await import_central_bank.run_import(include_manual=True)
         assert n >= 2
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from app.models.central_bank import CentralBankPurchase
-        result = await db_session.execute(
-            select(func.count()).select_from(CentralBankPurchase)
-        )
+
+        result = await db_session.execute(select(func.count()).select_from(CentralBankPurchase))
         assert result.scalar_one() == 2
 
     async def test_run_import_excludes_manual_when_disabled(
@@ -164,25 +162,25 @@ class TestRunImport:
     ) -> None:
         """``include_manual=False``：过滤掉 source='WGC 月报估读' 的行。"""
         rows = [
-            _make_row(iso="CHN", quarter="2026Q1", tonnes=15.0,
-                      source="WGC GDT Q2 2026 H1"),
-            _make_row(iso="UZB", quarter="2026Q1", tonnes=2.0,
-                      name="乌兹别克斯坦", source="WGC 月报估读"),
+            _make_row(iso="CHN", quarter="2026Q1", tonnes=15.0, source="WGC GDT Q2 2026 H1"),
+            _make_row(
+                iso="UZB", quarter="2026Q1", tonnes=2.0, name="乌兹别克斯坦", source="WGC 月报估读"
+            ),
         ]
+
         async def _mock():
             return rows
-        monkeypatch.setattr(
-            import_central_bank, "build_full_dataset", _mock
-        )
+
+        monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
 
         n = await import_central_bank.run_import(include_manual=False)
         assert n == 1, "应只 upsert 1 条 WGC GDT 行，过滤掉手工补丁"
 
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from app.models.central_bank import CentralBankPurchase
-        result = await db_session.execute(
-            select(func.count()).select_from(CentralBankPurchase)
-        )
+
+        result = await db_session.execute(select(func.count()).select_from(CentralBankPurchase))
         assert result.scalar_one() == 1
 
     async def test_run_import_logs_summary(
@@ -193,11 +191,11 @@ class TestRunImport:
             _make_row(iso="CHN", quarter="2026Q1", tonnes=10.0),
             _make_row(iso="POL", quarter="2026Q1", tonnes=5.0, name="波兰"),
         ]
+
         async def _mock():
             return rows
-        monkeypatch.setattr(
-            import_central_bank, "build_full_dataset", _mock
-        )
+
+        monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
 
         with caplog.at_level("INFO"):
             await import_central_bank.run_import(include_manual=True)
@@ -214,6 +212,7 @@ class TestRunImport:
 def test_build_full_dataset_is_callable() -> None:
     """``build_full_dataset`` 是异步函数（CLI + scheduler 都调用它）。"""
     import inspect
+
     assert inspect.iscoroutinefunction(central_bank_data.build_full_dataset)
 
 
@@ -235,8 +234,10 @@ class TestMainCli:
     ) -> None:
         """``--dry-run``：打印预览 + 不调用 ``run_import``（不入库）。"""
         rows = [_make_row(iso="CHN", quarter="2026Q1", tonnes=10.0)]
+
         async def _mock():
             return rows
+
         monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
         monkeypatch.setattr(import_central_bank, "run_import", AsyncMock(return_value=99))
 
@@ -257,13 +258,15 @@ class TestMainCli:
     ) -> None:
         """``--no-manual``：rows 被过滤后再统计；run_import 仍被调用。"""
         rows = [
-            _make_row(iso="CHN", quarter="2026Q1", tonnes=10.0,
-                      source="WGC GDT Q2 2026 H1"),
-            _make_row(iso="UZB", quarter="2026Q1", tonnes=2.0,
-                      name="乌兹别克斯坦", source="WGC 月报估读"),
+            _make_row(iso="CHN", quarter="2026Q1", tonnes=10.0, source="WGC GDT Q2 2026 H1"),
+            _make_row(
+                iso="UZB", quarter="2026Q1", tonnes=2.0, name="乌兹别克斯坦", source="WGC 月报估读"
+            ),
         ]
+
         async def _mock():
             return rows
+
         monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
         monkeypatch.setattr(import_central_bank, "run_import", AsyncMock(return_value=1))
 
@@ -278,19 +281,21 @@ class TestMainCli:
         # 过滤后只剩 1 行 → countries=1
         assert "rows=1" in captured.out
 
-    async def test_main_no_data_exits_with_code_2(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_main_no_data_exits_with_code_2(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """build_full_dataset 返回 [] 时：``main()`` 调用 ``sys.exit(2)``。"""
+
         async def _empty():
             return []
+
         monkeypatch.setattr(import_central_bank, "build_full_dataset", _empty)
 
         # 替换 sys.exit（避免真退出 + 捕获退出码）
         exit_codes: list[int] = []
+
         def _fake_exit(code: int = 0):
             exit_codes.append(code)
             raise SystemExit(code)
+
         monkeypatch.setattr("sys.exit", _fake_exit)
 
         monkeypatch.setattr("sys.argv", ["import_central_bank"])
@@ -301,7 +306,9 @@ class TestMainCli:
         assert exit_codes == [2]
 
     async def test_main_full_path_prints_summary_and_calls_run_import(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture,
         db_session,
     ) -> None:
         """正常路径：build_full_dataset → stats 打印 → run_import(include_manual=True) → 落库。"""
@@ -309,8 +316,10 @@ class TestMainCli:
             _make_row(iso="CHN", quarter="2026Q1", tonnes=15.0),
             _make_row(iso="POL", quarter="2026Q2", tonnes=8.0, name="波兰"),
         ]
+
         async def _mock():
             return rows
+
         monkeypatch.setattr(import_central_bank, "build_full_dataset", _mock)
 
         monkeypatch.setattr("sys.argv", ["import_central_bank"])
@@ -326,9 +335,9 @@ class TestMainCli:
         assert "upserted" in captured.out
 
         # 验证 DB 真的写入（main 全路径）
-        from sqlalchemy import select, func
+        from sqlalchemy import func, select
+
         from app.models.central_bank import CentralBankPurchase
-        result = await db_session.execute(
-            select(func.count()).select_from(CentralBankPurchase)
-        )
+
+        result = await db_session.execute(select(func.count()).select_from(CentralBankPurchase))
         assert result.scalar_one() == 2

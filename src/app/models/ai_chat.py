@@ -23,7 +23,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -138,34 +137,30 @@ class AIMessage(Base):
         ForeignKey("ai_conversations.id", ondelete="CASCADE"),
         nullable=False,
     )
-    user_id: Mapped[int] = mapped_column(
-        Integer, nullable=False, comment="V0.80.0 #159 冗余存"
-    )
-    role: Mapped[str] = mapped_column(
-        String(16), nullable=False, comment="user / assistant / tool"
-    )
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, comment="V0.80.0 #159 冗余存")
+    role: Mapped[str] = mapped_column(String(16), nullable=False, comment="user / assistant / tool")
     content: Mapped[str] = mapped_column(
         Text, nullable=False, server_default="", comment="消息正文"
     )
-    tool_name: Mapped[Optional[str]] = mapped_column(
+    tool_name: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="tool_use 时填 tool 名"
     )
-    tool_input: Mapped[Optional[str]] = mapped_column(
+    tool_input: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="tool_use 入参 JSON 字符串"
     )
-    tool_call_id: Mapped[Optional[str]] = mapped_column(
+    tool_call_id: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="tool 消息对应 assistant tool_use id"
     )
-    input_tokens: Mapped[Optional[int]] = mapped_column(
+    input_tokens: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="assistant 消息时填"
     )
-    output_tokens: Mapped[Optional[int]] = mapped_column(
+    output_tokens: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="assistant 消息时填"
     )
-    latency_ms: Mapped[Optional[int]] = mapped_column(
+    latency_ms: Mapped[int | None] = mapped_column(
         Integer, nullable=True, comment="assistant 消息时填（LLM 响应耗时）"
     )
-    error_code: Mapped[Optional[str]] = mapped_column(
+    error_code: Mapped[str | None] = mapped_column(
         String(32), nullable=True, comment="失败标记（V0.97 失败不入库，保留预留）"
     )
     created_at: Mapped[datetime] = mapped_column(

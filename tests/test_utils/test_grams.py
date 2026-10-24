@@ -21,7 +21,6 @@ import pytest
 
 from app.utils.grams import LOT_SIZE, grams_from_shares, shares_from_grams
 
-
 # ──────────────── shares_from_grams ────────────────
 
 

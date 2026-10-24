@@ -482,9 +482,7 @@ def next_news_feed_run_utc(now_utc: datetime | None = None) -> datetime:
         if cand > now:
             return cand
     # 今日最后一个触发点也过了 → 明日 00:00
-    return (now + timedelta(days=1)).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
+    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 async def _refresh_news_feed() -> int:

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -80,11 +80,7 @@ class AIConversationRepository:
         stmt = select(AIConversation).where(AIConversation.user_id == user_id)
         if not include_archived:
             stmt = stmt.where(AIConversation.is_archived.is_(False))
-        stmt = (
-            stmt.order_by(desc(AIConversation.last_message_at))
-            .limit(limit)
-            .offset(offset)
-        )
+        stmt = stmt.order_by(desc(AIConversation.last_message_at)).limit(limit).offset(offset)
         return list((await self._session.execute(stmt)).scalars().all())
 
     async def update(
@@ -92,8 +88,8 @@ class AIConversationRepository:
         conv_id: str,
         *,
         user_id: int | None = None,
-        title: Optional[str] = None,
-        is_archived: Optional[bool] = None,
+        title: str | None = None,
+        is_archived: bool | None = None,
     ) -> AIConversation | None:
         """更新 title / is_archived（patch 端点用）。"""
         conv = await self.get(conv_id, user_id=user_id)
@@ -129,15 +125,16 @@ class AIConversationRepository:
         await self._session.commit()
 
     async def count_for_user(
-        self, *, user_id: int | None = None, include_archived: bool = False,
+        self,
+        *,
+        user_id: int | None = None,
+        include_archived: bool = False,
     ) -> int:
         """统计某用户的对话数（前端分页 / quota UI 用）。"""
         from sqlalchemy import func
 
         user_id = resolve_user_id(user_id)
-        stmt = select(func.count(AIConversation.id)).where(
-            AIConversation.user_id == user_id
-        )
+        stmt = select(func.count(AIConversation.id)).where(AIConversation.user_id == user_id)
         if not include_archived:
             stmt = stmt.where(AIConversation.is_archived.is_(False))
         return int((await self._session.execute(stmt)).scalar() or 0)
@@ -157,12 +154,12 @@ class AIMessageRepository:
         user_id: int,
         role: str,
         content: str = "",
-        tool_name: Optional[str] = None,
-        tool_input: Optional[dict[str, Any]] = None,
-        tool_call_id: Optional[str] = None,
-        input_tokens: Optional[int] = None,
-        output_tokens: Optional[int] = None,
-        latency_ms: Optional[int] = None,
+        tool_name: str | None = None,
+        tool_input: dict[str, Any] | None = None,
+        tool_call_id: str | None = None,
+        input_tokens: int | None = None,
+        output_tokens: int | None = None,
+        latency_ms: int | None = None,
     ) -> AIMessage:
         """插 1 条消息。``tool_input`` 自动 JSON 序列化。"""
         msg = AIMessage(
@@ -226,9 +223,7 @@ class AIMessageRepository:
         """统计对话的消息数（V0.97 暂未使用，预留给 cost UI）。"""
         from sqlalchemy import func
 
-        stmt = select(func.count(AIMessage.id)).where(
-            AIMessage.conversation_id == conv_id
-        )
+        stmt = select(func.count(AIMessage.id)).where(AIMessage.conversation_id == conv_id)
         return int((await self._session.execute(stmt)).scalar() or 0)
 
     async def delete(self, msg_id: str) -> None:

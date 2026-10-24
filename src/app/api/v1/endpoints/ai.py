@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date as date_cls
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -39,7 +37,9 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 # ────────────── DI ──────────────
 
 
-def get_ai_chat_service(request: Request, session: AsyncSession = Depends(get_db_session)) -> AIChatService:
+def get_ai_chat_service(
+    request: Request, session: AsyncSession = Depends(get_db_session)
+) -> AIChatService:
     """从 app.state 拿 LLM client / tool dispatcher（main.py 启动时挂载）。"""
     llm: ClaudeClient | None = getattr(request.app.state, "llm_client", None)
     tool_dispatcher = getattr(request.app.state, "tool_dispatcher", None)
@@ -76,16 +76,20 @@ async def ai_health(request: Request) -> AIHealthOut:
         per_user_per_minute=settings.llm_per_user_per_minute,
         daily_token_quota=settings.llm_daily_token_quota,
         tools=[
-            "get_market_overview", "get_scoring_summary",
-            "get_user_portfolio", "get_warning_summary",
+            "get_market_overview",
+            "get_scoring_summary",
+            "get_user_portfolio",
+            "get_warning_summary",
             "get_etf_recent_flows",
         ],
     )
 
 
 @router.post(
-    "/conversations", response_model=AIConversationOut,
-    status_code=201, summary="建新对话",
+    "/conversations",
+    response_model=AIConversationOut,
+    status_code=201,
+    summary="建新对话",
 )
 async def create_conversation(
     body: AICreateConversationIn,
@@ -93,13 +97,16 @@ async def create_conversation(
     svc: AIChatService = Depends(get_ai_chat_service),
 ) -> AIConversationOut:
     conv = await svc.create_conversation(
-        user_id=user.id, title=body.title, model=body.model,
+        user_id=user.id,
+        title=body.title,
+        model=body.model,
     )
     return AIConversationOut.model_validate(conv)
 
 
 @router.get(
-    "/conversations", response_model=list[AIConversationOut],
+    "/conversations",
+    response_model=list[AIConversationOut],
     summary="列对话（按 last_message_at 倒序）",
 )
 async def list_conversations(
@@ -110,14 +117,17 @@ async def list_conversations(
     svc: AIChatService = Depends(get_ai_chat_service),
 ) -> list[AIConversationOut]:
     rows = await svc.list_conversations(
-        user_id=user.id, limit=limit, offset=offset,
+        user_id=user.id,
+        limit=limit,
+        offset=offset,
         include_archived=include_archived,
     )
     return [AIConversationOut.model_validate(r) for r in rows]
 
 
 @router.get(
-    "/conversations/{conv_id}", response_model=AIConversationDetailOut,
+    "/conversations/{conv_id}",
+    response_model=AIConversationDetailOut,
     summary="取单对话 + 全部消息",
 )
 async def get_conversation(
@@ -136,7 +146,8 @@ async def get_conversation(
 
 
 @router.patch(
-    "/conversations/{conv_id}", response_model=AIConversationOut,
+    "/conversations/{conv_id}",
+    response_model=AIConversationOut,
     summary="改对话（rename / archive / unarchive）",
 )
 async def update_conversation(
@@ -146,8 +157,10 @@ async def update_conversation(
     svc: AIChatService = Depends(get_ai_chat_service),
 ) -> AIConversationOut:
     conv = await svc.update_conversation(
-        conv_id=conv_id, user_id=user.id,
-        title=body.title, is_archived=body.is_archived,
+        conv_id=conv_id,
+        user_id=user.id,
+        title=body.title,
+        is_archived=body.is_archived,
     )
     if conv is None:
         raise HTTPException(status_code=404, detail="conversation not found")
@@ -155,7 +168,8 @@ async def update_conversation(
 
 
 @router.delete(
-    "/conversations/{conv_id}", status_code=204,
+    "/conversations/{conv_id}",
+    status_code=204,
     summary="归档对话（软删除，is_archived=True）",
 )
 async def archive_conversation(
@@ -164,14 +178,17 @@ async def archive_conversation(
     svc: AIChatService = Depends(get_ai_chat_service),
 ) -> None:
     conv = await svc.update_conversation(
-        conv_id=conv_id, user_id=user.id, is_archived=True,
+        conv_id=conv_id,
+        user_id=user.id,
+        is_archived=True,
     )
     if conv is None:
         raise HTTPException(status_code=404, detail="conversation not found")
 
 
 @router.post(
-    "/conversations/{conv_id}/messages", response_model=AIChatTurnOut,
+    "/conversations/{conv_id}/messages",
+    response_model=AIChatTurnOut,
     summary="发送 1 条用户消息（同步返回 1 assistant + 可能多 tool 轮）",
 )
 async def send_message(
@@ -183,7 +200,9 @@ async def send_message(
     """1 user message → 1-N assistant（含 tool 轮）+ 任意 tool 消息。"""
     try:
         user_msg, responses = await svc.send_message(
-            conversation_id=conv_id, user_id=user.id, user_text=body.content,
+            conversation_id=conv_id,
+            user_id=user.id,
+            user_text=body.content,
         )
     except ValueError as exc:
         # 对话不存在 / 内容空
@@ -194,7 +213,8 @@ async def send_message(
     except LLMError as exc:
         logger.warning("LLM error in send_message: %s", exc)
         raise HTTPException(
-            status_code=503, detail=f"模型服务异常：{str(exc)[:200]}",
+            status_code=503,
+            detail=f"模型服务异常：{str(exc)[:200]}",
         ) from exc
 
     return AIChatTurnOut(
@@ -228,7 +248,9 @@ async def send_message_stream(
     async def event_generator():
         try:
             async for ev in svc.send_message_stream(
-                conversation_id=conv_id, user_id=user.id, user_text=body.content,
+                conversation_id=conv_id,
+                user_id=user.id,
+                user_text=body.content,
             ):
                 # 检查客户端是否已断开（节省 LLM token）
                 if await request.is_disconnected():
@@ -238,8 +260,11 @@ async def send_message_stream(
                     )
                     break
                 # sse_starlette 需要 dict 或 str；用 dict 让它自动序列化为 JSON
-                yield {"event": ev.get("event", "message"), "data": json.dumps(ev, ensure_ascii=False)}
-        except Exception as exc:  # noqa: BLE001
+                yield {
+                    "event": ev.get("event", "message"),
+                    "data": json.dumps(ev, ensure_ascii=False),
+                }
+        except Exception as exc:
             logger.exception("SSE generator error: %s", exc)
             yield {
                 "event": "error",

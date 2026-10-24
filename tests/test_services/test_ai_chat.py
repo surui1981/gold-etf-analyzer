@@ -19,21 +19,21 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from app.services.ai_chat.prompts import (
-    _build_system_prompt,
-    _derive_title,
-    _sanitize_user_text,
-)
 from app.models.ai_chat import (
     DEFAULT_MODEL,
-    TITLE_MAX_CHARS,
     ROLE_ASSISTANT,
     ROLE_TOOL,
     ROLE_USER,
+    TITLE_MAX_CHARS,
 )
 from app.repositories.ai_chat import (
     AIConversationRepository,
     AIMessageRepository,
+)
+from app.services.ai_chat.prompts import (
+    _build_system_prompt,
+    _derive_title,
+    _sanitize_user_text,
 )
 
 
@@ -78,18 +78,29 @@ async def test_message_insert_with_user_scoping(db_session) -> None:
     # user 1 建对话 + 3 条消息
     conv = await conv_repo.create(conv_id=_new_id(), user_id=1, title="测试")
     await msg_repo.insert(
-        msg_id=_new_id(), conversation_id=conv.id, user_id=1,
-        role=ROLE_USER, content="今天金价",
+        msg_id=_new_id(),
+        conversation_id=conv.id,
+        user_id=1,
+        role=ROLE_USER,
+        content="今天金价",
     )
     await msg_repo.insert(
-        msg_id=_new_id(), conversation_id=conv.id, user_id=1,
-        role=ROLE_ASSISTANT, content="NY 金 2400 美元",
-        input_tokens=100, output_tokens=50,
+        msg_id=_new_id(),
+        conversation_id=conv.id,
+        user_id=1,
+        role=ROLE_ASSISTANT,
+        content="NY 金 2400 美元",
+        input_tokens=100,
+        output_tokens=50,
     )
     await msg_repo.insert(
-        msg_id=_new_id(), conversation_id=conv.id, user_id=1,
-        role=ROLE_TOOL, content='{"price": 2400}',
-        tool_name="get_market_overview", tool_call_id="toolu_abc",
+        msg_id=_new_id(),
+        conversation_id=conv.id,
+        user_id=1,
+        role=ROLE_TOOL,
+        content='{"price": 2400}',
+        tool_name="get_market_overview",
+        tool_call_id="toolu_abc",
     )
 
     # user 1 读自己的消息（3 条）
@@ -117,12 +128,14 @@ async def test_message_recent_limit_50(db_session) -> None:
     msg_repo = AIMessageRepository(db_session)
 
     conv = await conv_repo.create(conv_id=_new_id(), user_id=1, title="长对话")
-    # 插 60 条消息（按时间升序）
-    base = datetime.utcnow() - timedelta(hours=60)
+    # 插 60 条消息（created_at 走 server_default，实际相同 → 顺序不保证）
     for i in range(60):
         await msg_repo.insert(
-            msg_id=_new_id(), conversation_id=conv.id, user_id=1,
-            role=ROLE_USER, content=f"msg {i}",
+            msg_id=_new_id(),
+            conversation_id=conv.id,
+            user_id=1,
+            role=ROLE_USER,
+            content=f"msg {i}",
         )
         # 模拟每条时间递增 1h（数据库 server_default=now() 会相同，需要显式）
     # ⚠ 上面 created_at 都是 server_default 实际相同时间，所以顺序未保证
@@ -176,7 +189,9 @@ async def test_bump_stats_updates_token_and_message_count(db_session) -> None:
 
     # 模拟 1 次 assistant 轮
     t1 = datetime.utcnow()
-    await conv_repo.bump_stats(conv.id, last_message_at=t1, add_input=100, add_output=50, add_messages=2)
+    await conv_repo.bump_stats(
+        conv.id, last_message_at=t1, add_input=100, add_output=50, add_messages=2
+    )
 
     rows = await conv_repo.list_for_user(user_id=1, include_archived=True)
     assert rows[0].total_input_tokens == 100
@@ -185,7 +200,9 @@ async def test_bump_stats_updates_token_and_message_count(db_session) -> None:
 
     # 第 2 轮
     t2 = t1 + timedelta(seconds=10)
-    await conv_repo.bump_stats(conv.id, last_message_at=t2, add_input=200, add_output=100, add_messages=2)
+    await conv_repo.bump_stats(
+        conv.id, last_message_at=t2, add_input=200, add_output=100, add_messages=2
+    )
 
     rows2 = await conv_repo.list_for_user(user_id=1, include_archived=True)
     assert rows2[0].total_input_tokens == 300

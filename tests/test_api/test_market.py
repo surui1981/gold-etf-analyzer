@@ -173,15 +173,22 @@ def _override_market_repo():
     # V0.100：注入 FakeNews（未打分 → score=None）—— 既有 _override_market_repo 不
     # 注入 get_news_score_service 时 FastAPI 会用真实 NewsScoreService；这里覆盖
     # 保证行情趋势 API 在测试环境呈现「消息面未打分」状态（与 V0.100 默认一致）
-    from app.schemas.news import NewsScoreOut
-    from app.dependencies import get_news_score_service
     from datetime import date as _date
+
+    from app.dependencies import get_news_score_service
+    from app.schemas.news import NewsScoreOut
 
     class _FakeNewsSvc:
         async def get_today(self) -> NewsScoreOut:
             return NewsScoreOut(
-                score_date=_date.today(), score=None, direction=None,
-                notes="", scored=False, weighted=False, slots=[], used_slots=0,
+                score_date=_date.today(),
+                score=None,
+                direction=None,
+                notes="",
+                scored=False,
+                weighted=False,
+                slots=[],
+                used_slots=0,
             )
 
     app.dependency_overrides[get_news_score_service] = lambda: _FakeNewsSvc()

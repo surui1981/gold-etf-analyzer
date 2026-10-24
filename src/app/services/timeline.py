@@ -33,6 +33,7 @@ _MAX_ALIGN_BACKFILL_DAYS = 30
 @dataclass(slots=True)
 class _ResolvedTrade:
     """trade + 对齐快照（service 内部中间态，避免 schema 字段污染）。"""
+
     trade: TradeHistoryItem
     snapshot: SnapshotOut | None
     trade_date: date
@@ -52,7 +53,8 @@ class TimelineService:
         self._position_repo = position_repo or PositionRepository(session)
         self._snapshot_repo = snapshot_repo or SnapshotRepository(session)
         self._snapshot_service = snapshot_service or DailySnapshotService(
-            self._snapshot_repo, trend=None  # type: ignore[arg-type]
+            self._snapshot_repo,
+            trend=None,  # type: ignore[arg-type]
         )
 
     async def build(
@@ -102,11 +104,13 @@ class TimelineService:
                 snapshot_by_date=snapshot_by_date,
                 earliest=from_date,
             )
-            resolved.append(_ResolvedTrade(
-                trade=item,
-                snapshot=aligned,
-                trade_date=trade_date,
-            ))
+            resolved.append(
+                _ResolvedTrade(
+                    trade=item,
+                    snapshot=aligned,
+                    trade_date=trade_date,
+                )
+            )
 
         # 4. 构建 segments（决策点 + 空闲段交替）
         segments = self._build_segments(
@@ -193,11 +197,13 @@ class TimelineService:
 
         # 全程无 trade：返回 1 个 idle 段覆盖全范围（边界 case）
         if not resolved_sorted:
-            return [self._make_idle(
-                start=from_date,
-                end=to_date,
-                compress_threshold_days=compress_threshold_days,
-            )]
+            return [
+                self._make_idle(
+                    start=from_date,
+                    end=to_date,
+                    compress_threshold_days=compress_threshold_days,
+                )
+            ]
 
         segments: list[TimelineSegment] = []
         cursor = from_date
@@ -205,32 +211,38 @@ class TimelineService:
         for r in resolved_sorted:
             if cursor < r.trade_date:
                 # 段间空闲：cursor ~ (trade_date - 1)
-                segments.append(self._make_idle(
-                    start=cursor,
-                    end=r.trade_date - timedelta(days=1),
-                    compress_threshold_days=compress_threshold_days,
-                ))
+                segments.append(
+                    self._make_idle(
+                        start=cursor,
+                        end=r.trade_date - timedelta(days=1),
+                        compress_threshold_days=compress_threshold_days,
+                    )
+                )
             elif cursor > r.trade_date:
                 # 同一日期多笔 trade——cursor 不前进；保持上一段后追加
                 pass
-            segments.append(TimelineSegment(
-                type="decision",
-                start=r.trade_date,
-                end=r.trade_date,
-                trade=r.trade,
-                snapshot=r.snapshot,
-            ))
+            segments.append(
+                TimelineSegment(
+                    type="decision",
+                    start=r.trade_date,
+                    end=r.trade_date,
+                    trade=r.trade,
+                    snapshot=r.snapshot,
+                )
+            )
             # cursor 推到「当日」末尾（下一笔 trade 若是同日则不进位）
             if r.trade_date > cursor:
                 cursor = r.trade_date
 
         # 收尾空闲（最后一笔 trade 之后到 to_date）
         if cursor < to_date:
-            segments.append(self._make_idle(
-                start=cursor + timedelta(days=1),
-                end=to_date,
-                compress_threshold_days=compress_threshold_days,
-            ))
+            segments.append(
+                self._make_idle(
+                    start=cursor + timedelta(days=1),
+                    end=to_date,
+                    compress_threshold_days=compress_threshold_days,
+                )
+            )
 
         return segments
 
@@ -252,9 +264,7 @@ class TimelineService:
                 compressed=False,
             )
         idle_days = (end - start).days + 1
-        compressed = (
-            compress_threshold_days > 0 and idle_days > compress_threshold_days
-        )
+        compressed = compress_threshold_days > 0 and idle_days > compress_threshold_days
         return TimelineSegment(
             type="idle",
             start=start,

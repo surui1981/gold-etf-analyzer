@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -26,7 +27,6 @@ from app.main import app
 from app.repositories.db import async_session_factory
 from app.services.llm.claude import ClaudeResponse
 from app.services.llm.tools import ToolCall, ToolResult
-
 
 # ────────────── shared fixtures ──────────────
 
@@ -67,11 +67,15 @@ async def as_ai_user(fake_user):
 def mock_llm_text():
     """LLM 返纯文本（无 tool_use）。"""
     fake = MagicMock()
-    fake.ask = AsyncMock(return_value=ClaudeResponse(
-        text="现在 NY 金 2400 美元，综合指数 65（偏多）。",
-        tool_calls=[],
-        input_tokens=120, output_tokens=48, stop_reason="end_turn",
-    ))
+    fake.ask = AsyncMock(
+        return_value=ClaudeResponse(
+            text="现在 NY 金 2400 美元，综合指数 65（偏多）。",
+            tool_calls=[],
+            input_tokens=120,
+            output_tokens=48,
+            stop_reason="end_turn",
+        )
+    )
     return fake
 
 
@@ -82,17 +86,24 @@ def mock_llm_tool_use():
     # 第 1 轮：要求 tool_use
     tool_call = ToolCall(id="tc-001", name="get_market_overview", input={})
     # 第 2 轮：纯文本
-    fake.ask = AsyncMock(side_effect=[
-        ClaudeResponse(
-            text="", tool_calls=[tool_call],
-            input_tokens=100, output_tokens=30, stop_reason="tool_use",
-        ),
-        ClaudeResponse(
-            text="现在 NY 金 2400，综合偏多（65）。",
-            tool_calls=[],
-            input_tokens=200, output_tokens=60, stop_reason="end_turn",
-        ),
-    ])
+    fake.ask = AsyncMock(
+        side_effect=[
+            ClaudeResponse(
+                text="",
+                tool_calls=[tool_call],
+                input_tokens=100,
+                output_tokens=30,
+                stop_reason="tool_use",
+            ),
+            ClaudeResponse(
+                text="现在 NY 金 2400，综合偏多（65）。",
+                tool_calls=[],
+                input_tokens=200,
+                output_tokens=60,
+                stop_reason="end_turn",
+            ),
+        ]
+    )
     return fake
 
 
@@ -104,7 +115,8 @@ def mock_tool_dispatcher():
 
     async def fake_execute(call: ToolCall, *, user_id: int) -> ToolResult:
         return ToolResult(
-            tool_call_id=call.id, name=call.name,
+            tool_call_id=call.id,
+            name=call.name,
             content='{"name": "NY", "last_close": 2400.0, "index_score": 65}',
             is_error=False,
         )
@@ -134,13 +146,16 @@ async def test_health_returns_disabled_when_no_llm() -> None:
     app.state.llm_client = None
     app.state.tool_dispatcher = None
     settings = MagicMock(
-        llm_api_key="", llm_model="claude-sonnet-4-5",
-        llm_per_user_per_minute=30, llm_daily_token_quota=100000,
+        llm_api_key="",
+        llm_model="claude-sonnet-4-5",
+        llm_per_user_per_minute=30,
+        llm_daily_token_quota=100000,
     )
     app.state.settings = settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.get("/api/v1/ai/health")
         assert r.status_code == 200
@@ -159,12 +174,15 @@ async def test_health_returns_enabled_when_configured() -> None:
     app.state.llm_client = MagicMock()
     app.state.tool_dispatcher = MagicMock()
     app.state.settings = MagicMock(
-        llm_api_key="sk-test", llm_model="claude-sonnet-4-5",
-        llm_per_user_per_minute=30, llm_daily_token_quota=100000,
+        llm_api_key="sk-test",
+        llm_model="claude-sonnet-4-5",
+        llm_per_user_per_minute=30,
+        llm_daily_token_quota=100000,
     )
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.get("/api/v1/ai/health")
         assert r.status_code == 200
@@ -186,7 +204,8 @@ async def test_health_returns_enabled_when_configured() -> None:
 async def test_create_conversation_requires_auth() -> None:
     """匿名 → 401（require_user）。"""
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test",
+        transport=ASGITransport(app=app),
+        base_url="http://test",
     ) as ac:
         r = await ac.post("/api/v1/ai/conversations", json={})
     assert r.status_code == 401
@@ -196,7 +215,8 @@ async def test_create_conversation_requires_auth() -> None:
 async def test_list_conversations_requires_auth() -> None:
     """匿名 → 401。"""
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test",
+        transport=ASGITransport(app=app),
+        base_url="http://test",
     ) as ac:
         r = await ac.get("/api/v1/ai/conversations")
     assert r.status_code == 401
@@ -206,7 +226,8 @@ async def test_list_conversations_requires_auth() -> None:
 async def test_send_message_requires_auth() -> None:
     """匿名 → 401。"""
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test",
+        transport=ASGITransport(app=app),
+        base_url="http://test",
     ) as ac:
         r = await ac.post(
             "/api/v1/ai/conversations/conv-x/messages",
@@ -227,7 +248,8 @@ async def test_create_conversation_returns_503_when_llm_missing(
     app.state.tool_dispatcher = None
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
         assert r.status_code == 503
@@ -241,7 +263,10 @@ async def test_create_conversation_returns_503_when_llm_missing(
 
 @pytest.mark.asyncio
 async def test_create_and_list_conversations(
-    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+    as_ai_user,
+    mock_llm_text,
+    mock_tool_dispatcher,
+    mock_settings,
 ) -> None:
     """POST 建对话 → GET 列出来。"""
     app.state.llm_client = mock_llm_text
@@ -249,7 +274,8 @@ async def test_create_and_list_conversations(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={"title": "test"})
             assert r.status_code == 201
@@ -271,7 +297,10 @@ async def test_create_and_list_conversations(
 
 @pytest.mark.asyncio
 async def test_send_message_pure_text(
-    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+    as_ai_user,
+    mock_llm_text,
+    mock_tool_dispatcher,
+    mock_settings,
 ) -> None:
     """发 1 条 user → 1 条 assistant（mock 返纯文本）。"""
     app.state.llm_client = mock_llm_text
@@ -279,7 +308,8 @@ async def test_send_message_pure_text(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             assert r.status_code == 201
@@ -313,7 +343,10 @@ async def test_send_message_pure_text(
 
 @pytest.mark.asyncio
 async def test_send_message_with_tool_use(
-    as_ai_user, mock_llm_tool_use, mock_tool_dispatcher, mock_settings,
+    as_ai_user,
+    mock_llm_tool_use,
+    mock_tool_dispatcher,
+    mock_settings,
 ) -> None:
     """发 1 条 user → assistant tool_use → tool → assistant text。"""
     app.state.llm_client = mock_llm_tool_use
@@ -321,7 +354,8 @@ async def test_send_message_with_tool_use(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -348,7 +382,8 @@ async def test_send_message_with_tool_use(
 
 @pytest.mark.asyncio
 async def test_send_message_returns_503_on_llm_error(
-    as_ai_user, mock_settings,
+    as_ai_user,
+    mock_settings,
 ) -> None:
     """mock LLM 抛 LLMError → 503 + user_msg 回滚（不入库）。"""
     from app.services.llm.claude import LLMError
@@ -363,7 +398,8 @@ async def test_send_message_returns_503_on_llm_error(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -387,11 +423,12 @@ async def test_send_message_returns_503_on_llm_error(
 
 @pytest.mark.asyncio
 async def test_user_isolation_returns_404(
-    as_ai_user, mock_llm_text, mock_tool_dispatcher, mock_settings,
+    as_ai_user,
+    mock_llm_text,
+    mock_tool_dispatcher,
+    mock_settings,
 ) -> None:
     """V0.80.0 #159：其他用户的对话 → 404。"""
-    from app.services.ai_chat import AIChatService
-    from app.api.v1.endpoints.ai import get_ai_chat_service
 
     app.state.llm_client = mock_llm_text
     app.state.tool_dispatcher = mock_tool_dispatcher
@@ -399,7 +436,8 @@ async def test_user_isolation_returns_404(
     try:
         # 用 fake_user 创建对话
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             assert r.status_code == 201
@@ -413,24 +451,25 @@ async def test_user_isolation_returns_404(
         async with async_session_factory() as s:
             other_user = User(
                 email="other@example.com",
-                password_hash="x", role=ROLE_MEMBER, is_active=True,
+                password_hash="x",
+                role=ROLE_MEMBER,
+                is_active=True,
                 display_name="Other",
-                created_at=_dt(2026, 1, 1), last_login_at=_dt(2026, 1, 1),
+                created_at=_dt(2026, 1, 1),
+                last_login_at=_dt(2026, 1, 1),
             )
             s.add(other_user)
             await s.commit()
             await s.refresh(other_user)
-            other_id = other_user.id
 
         app.dependency_overrides[get_current_user] = lambda: other_user
         try:
             async with AsyncClient(
-                transport=ASGITransport(app=app), base_url="http://test",
+                transport=ASGITransport(app=app),
+                base_url="http://test",
             ) as ac:
                 r = await ac.get(f"/api/v1/ai/conversations/{other_cid}")
-                assert r.status_code == 404, (
-                    "V0.80.0 #159 失效：其他用户看到了本用户的对话"
-                )
+                assert r.status_code == 404, "V0.80.0 #159 失效：其他用户看到了本用户的对话"
 
                 r2 = await ac.post(
                     f"/api/v1/ai/conversations/{other_cid}/messages",
@@ -447,7 +486,8 @@ async def test_user_isolation_returns_404(
 
 @pytest.mark.asyncio
 async def test_tool_result_fallback_when_proxy_rejects_id(
-    as_ai_user, mock_settings,
+    as_ai_user,
+    mock_settings,
 ) -> None:
     """V0.97.0 hotfix：miniMax 代理在第 2 轮拒收 ``tool_result``（报
     "tool result's tool id not found" 2013）时，service 应自动降级为
@@ -470,12 +510,16 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
             # Round 1: 返 tool_use
             return ClaudeResponse(
                 text="",
-                tool_calls=[ToolUseBlock(
-                    id="call-9e6da495-6800-4cc4-8e08-26c4b0887035",
-                    name="get_market_overview",
-                    input={},
-                )],
-                input_tokens=100, output_tokens=20, stop_reason="tool_use",
+                tool_calls=[
+                    ToolUseBlock(
+                        id="call-9e6da495-6800-4cc4-8e08-26c4b0887035",
+                        name="get_market_overview",
+                        input={},
+                    )
+                ],
+                input_tokens=100,
+                output_tokens=20,
+                stop_reason="tool_use",
             )
         if call_count == 2:
             # Round 2: 代理拒收 tool_result（模拟 miniMax 2013 错）
@@ -487,7 +531,10 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
         # Round 3: fallback 文本重试成功
         return ClaudeResponse(
             text="当前 NY 金 2400 美元，综合指数 65（偏多）。",
-            tool_calls=[], input_tokens=200, output_tokens=50, stop_reason="end_turn",
+            tool_calls=[],
+            input_tokens=200,
+            output_tokens=50,
+            stop_reason="end_turn",
         )
 
     mock_llm = MagicMock()
@@ -496,9 +543,12 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
     # tool dispatcher：tool_use 时被调一次
     async def mock_execute(tool_call, user_id):
         return ToolResult(
-            tool_call_id=tool_call.id, name=tool_call.name,
-            content='{"index_score": 65}', is_error=False,
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            content='{"index_score": 65}',
+            is_error=False,
         )
+
     mock_tool = MagicMock()
     mock_tool.schemas = MagicMock(return_value=[])
     mock_tool.execute = mock_execute
@@ -508,7 +558,8 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -535,7 +586,8 @@ async def test_tool_result_fallback_when_proxy_rejects_id(
 
 
 async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
-    as_ai_user, mock_settings,
+    as_ai_user,
+    mock_settings,
 ) -> None:
     """V0.97.1 增强：L1（内联 tool_result 重试）也返回 2013 时，L3 用「只发 user 原问题」兜底。
 
@@ -556,17 +608,22 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
         if call_count == 1:
             return ClaudeResponse(
                 text="",
-                tool_calls=[ToolUseBlock(
-                    id="call-L1L3-test-id",
-                    name="get_market_overview", input={},
-                )],
-                input_tokens=100, output_tokens=20, stop_reason="tool_use",
+                tool_calls=[
+                    ToolUseBlock(
+                        id="call-L1L3-test-id",
+                        name="get_market_overview",
+                        input={},
+                    )
+                ],
+                input_tokens=100,
+                output_tokens=20,
+                stop_reason="tool_use",
             )
         # Round 2 / 3: 一直 2013（miniMax 代理深 bug）
         if call_count in (2, 3):
             raise LLMError(
-                "client error 400: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
-                "\"message\":\"invalid params, tool result's tool id(call-...) not found (2013)\"}}"
+                'client error 400: {"type":"error","error":{"type":"invalid_request_error",'
+                '"message":"invalid params, tool result\'s tool id(call-...) not found (2013)"}}'
             )
         # Round 4: L3 fresh-only user_q 成功
         assert tools is None, "L3 必须 tools=None"
@@ -574,7 +631,10 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
         assert messages[0]["role"] == "user"
         return ClaudeResponse(
             text="（无工具数据）基于系统知识，金价近月高位震荡。",
-            tool_calls=[], input_tokens=50, output_tokens=30, stop_reason="end_turn",
+            tool_calls=[],
+            input_tokens=50,
+            output_tokens=30,
+            stop_reason="end_turn",
         )
 
     mock_llm = MagicMock()
@@ -582,9 +642,12 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
 
     async def mock_execute(tool_call, user_id):
         return ToolResult(
-            tool_call_id=tool_call.id, name=tool_call.name,
-            content='{"index_score": 65}', is_error=False,
+            tool_call_id=tool_call.id,
+            name=tool_call.name,
+            content='{"index_score": 65}',
+            is_error=False,
         )
+
     mock_tool = MagicMock()
     mock_tool.schemas = MagicMock(return_value=[])
     mock_tool.execute = mock_execute
@@ -594,7 +657,8 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -624,7 +688,8 @@ async def test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only(
 
 
 async def test_send_message_stream_happy_path(
-    as_ai_user, mock_settings,
+    as_ai_user,
+    mock_settings,
 ) -> None:
     """V0.98 C5：SSE 流式端点 happy path —— text_delta 流式追加 + message_stop 终态。
 
@@ -635,7 +700,9 @@ async def test_send_message_stream_happy_path(
     4. user message 已入库
     """
     from app.services.llm.claude import (
-        StreamMessageStart, StreamMessageStop, StreamTextDelta,
+        StreamMessageStart,
+        StreamMessageStop,
+        StreamTextDelta,
     )
 
     async def mock_ask_stream(*, system, messages, tools=None, **kwargs):
@@ -656,7 +723,8 @@ async def test_send_message_stream_happy_path(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -677,6 +745,7 @@ async def test_send_message_stream_happy_path(
                 for line in chunk.split("\n"):
                     if line.startswith("data:"):
                         import json
+
                         try:
                             payload = json.loads(line[5:].strip())
                             events.append(payload)
@@ -700,7 +769,8 @@ async def test_send_message_stream_happy_path(
 
 
 async def test_send_message_stream_error_event_yields_error(
-    as_ai_user, mock_settings,
+    as_ai_user,
+    mock_settings,
 ) -> None:
     """V0.98 C5：SSE 流式端点遇 LLM StreamError → service 捕获 → yield error 事件。
 
@@ -724,7 +794,8 @@ async def test_send_message_stream_error_event_yields_error(
     app.state.settings = mock_settings
     try:
         async with AsyncClient(
-            transport=ASGITransport(app=app), base_url="http://test",
+            transport=ASGITransport(app=app),
+            base_url="http://test",
         ) as ac:
             r = await ac.post("/api/v1/ai/conversations", json={})
             cid = r.json()["id"]
@@ -736,21 +807,22 @@ async def test_send_message_stream_error_event_yields_error(
             assert r2.status_code == 200, r2.text
 
             import json
+
             events: list[dict] = []
             for chunk in r2.text.split("\n\n"):
                 for line in chunk.split("\n"):
                     if line.startswith("data:"):
-                        try:
+                        with contextlib.suppress(json.JSONDecodeError):
                             events.append(json.loads(line[5:].strip()))
-                        except json.JSONDecodeError:
-                            pass
 
             event_types = [e.get("event") for e in events]
             assert "user_saved" in event_types
             assert "error" in event_types, f"missing error event: {event_types}"
             # error 事件的 msg 应含 "upstream 502"
             err_ev = next(e for e in events if e.get("event") == "error")
-            assert "upstream 502" in err_ev.get("msg", "") or "upstream 502" in err_ev.get("data", "")
+            assert "upstream 502" in err_ev.get("msg", "") or "upstream 502" in err_ev.get(
+                "data", ""
+            )
     finally:
         app.state.llm_client = None
         app.state.tool_dispatcher = None

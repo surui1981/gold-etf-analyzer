@@ -621,7 +621,7 @@ function overrideRowHtml([key, label, unit]) {
     : "";
   const curTxt = cur
     ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${lagChip}`
-    : t(macroFactorState === "loading" ? "weights.mo_loading" : "weights.mo_no_reading");
+    : t(macroFactorState === "loading" ? "weights.mo_loading_short" : "weights.mo_no_reading");
   return `<div class="mo-row${isManual ? " is-manual" : ""}">
     <span class="nm">${label}</span>
     <span class="cur">${curTxt}</span>

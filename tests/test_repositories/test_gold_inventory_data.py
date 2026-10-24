@@ -1,6 +1,7 @@
 """COMEX 黄金库存 fetcher 单测：归一化容错 + 缓存 + 源不可用不 mock。"""
 
 import asyncio
+import dataclasses
 import json
 from datetime import date
 
@@ -193,7 +194,7 @@ def test_subprocess_template_emits_json() -> None:
 def test_inventory_point_is_frozen() -> None:
     """dataclass(frozen=True) —— 观测点不可变，缓存里的对象不会被调用方改脏。"""
     p = InventoryPoint(inv_date=date(2026, 10, 20), tonnes=1.0)
-    with pytest.raises(Exception):
+    with pytest.raises(dataclasses.FrozenInstanceError):
         p.tonnes = 2.0  # type: ignore[misc]
 
 

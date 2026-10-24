@@ -1,6 +1,6 @@
 """市场行情端点：报价 + 趋势追踪 + 对照。"""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies import (
     get_compare_service,
@@ -510,7 +510,9 @@ async def silver_sge_trend(
             for k in klines
         ],
         metrics=metrics,
-        data_sources={"sge_silver": "live" if not repo.source_status().get("sge_silver") == "mock" else "mock"},
+        data_sources={
+            "sge_silver": "live" if repo.source_status().get("sge_silver") != "mock" else "mock"
+        },
     )
 
 

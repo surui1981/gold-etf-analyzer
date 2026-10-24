@@ -11,19 +11,19 @@
 
 from __future__ import annotations
 
-import logging
 import json
+import logging
 import uuid
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 from app.models.ai_chat import (
-    AIConversation,
-    AIMessage,
     DEFAULT_MODEL,
     ROLE_ASSISTANT,
     ROLE_TOOL,
     ROLE_USER,
+    AIConversation,
+    AIMessage,
 )
 from app.repositories.ai_chat import AIConversationRepository, AIMessageRepository
 from app.services.ai_chat.prompts import (
@@ -69,15 +69,24 @@ class AIChatService:
         self, *, user_id: int, title: str = "", model: str = DEFAULT_MODEL
     ) -> AIConversation:
         return await self._conv.create(
-            conv_id=str(uuid.uuid4()), user_id=user_id, title=title, model=model,
+            conv_id=str(uuid.uuid4()),
+            user_id=user_id,
+            title=title,
+            model=model,
         )
 
     async def list_conversations(
-        self, *, user_id: int, limit: int = 20, offset: int = 0,
+        self,
+        *,
+        user_id: int,
+        limit: int = 20,
+        offset: int = 0,
         include_archived: bool = False,
     ) -> list[AIConversation]:
         return await self._conv.list_for_user(
-            user_id=user_id, limit=limit, offset=offset,
+            user_id=user_id,
+            limit=limit,
+            offset=offset,
             include_archived=include_archived,
         )
 
@@ -91,17 +100,28 @@ class AIChatService:
         return conv, msgs
 
     async def update_conversation(
-        self, *, conv_id: str, user_id: int,
-        title: Optional[str] = None, is_archived: Optional[bool] = None,
+        self,
+        *,
+        conv_id: str,
+        user_id: int,
+        title: str | None = None,
+        is_archived: bool | None = None,
     ) -> AIConversation | None:
         return await self._conv.update(
-            conv_id, user_id=user_id, title=title, is_archived=is_archived,
+            conv_id,
+            user_id=user_id,
+            title=title,
+            is_archived=is_archived,
         )
 
     # ────────────── 核心：发送消息 ──────────────
 
     async def send_message(
-        self, *, conversation_id: str, user_id: int, user_text: str,
+        self,
+        *,
+        conversation_id: str,
+        user_id: int,
+        user_text: str,
     ) -> tuple[AIMessage, list[AIMessage]]:
         """1 user message → 1-N assistant（含 tool 轮）+ 任意 tool 消息。
 
@@ -123,8 +143,11 @@ class AIChatService:
         #    V0.97 简化：失败场景统一抛 LLMError，user message 保留）
         sanitized = _sanitize_user_text(user_text, self._user_msg_max)
         user_msg = await self._msg.insert(
-            msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-            user_id=user_id, role=ROLE_USER, content=sanitized,
+            msg_id=str(uuid.uuid4()),
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=ROLE_USER,
+            content=sanitized,
         )
 
         # 2. 拼历史（最近 50 条）
@@ -143,7 +166,8 @@ class AIChatService:
         for round_idx in range(self._max_tool_rounds):
             try:
                 response = await self._llm.ask(
-                    system=system, messages=messages,
+                    system=system,
+                    messages=messages,
                     tools=self._tools.schemas(),
                 )
             except LLMError as exc:
@@ -158,13 +182,16 @@ class AIChatService:
                 if _is_tool_result_id_mismatch(exc) and _has_tool_result_block(messages):
                     logger.warning(
                         "tool_result id mismatch (proxy 2013); falling back for conv=%s round=%d",
-                        conversation_id, round_idx,
+                        conversation_id,
+                        round_idx,
                     )
                     # L1：内联 tool_result + 重试（不带 tools）
                     inlined = _inline_tool_results_as_text(messages)
                     try:
                         response = await self._llm.ask(
-                            system=system, messages=inlined, tools=None,
+                            system=system,
+                            messages=inlined,
+                            tools=None,
                         )
                     except LLMError as exc2:
                         if not _is_tool_result_id_mismatch(exc2):
@@ -199,14 +226,16 @@ class AIChatService:
             total_out_tok += response.output_tokens
 
             # 持久化 assistant 消息
-            tool_input_json: Optional[dict[str, Any]] = None
+            tool_input_json: dict[str, Any] | None = None
             if response.tool_calls:
                 # 单 assistant 消息只存「第一个 tool_use」（简化展示；多 tool 走
                 # 后续 tool 消息的 tool_call_id 关联）
                 tool_input_json = response.tool_calls[0].input
             asst_msg = await self._msg.insert(
-                msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-                user_id=user_id, role=ROLE_ASSISTANT,
+                msg_id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=ROLE_ASSISTANT,
                 content=response.text,
                 tool_name=response.tool_calls[0].name if response.tool_calls else None,
                 tool_input=tool_input_json,
@@ -225,27 +254,35 @@ class AIChatService:
                 result = await self._tools.execute(tc, user_id=user_id)
                 # 持久化 tool 消息
                 tool_msg = await self._msg.insert(
-                    msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-                    user_id=user_id, role=ROLE_TOOL,
-                    content=result.content, tool_name=result.name,
+                    msg_id=str(uuid.uuid4()),
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    role=ROLE_TOOL,
+                    content=result.content,
+                    tool_name=result.name,
                     tool_call_id=tc.id,
                 )
                 all_msgs.append(tool_msg)
                 # 拼回 Claude 格式 messages
-                messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": tc.id,
-                        "content": result.content,
-                    }],
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tc.id,
+                                "content": result.content,
+                            }
+                        ],
+                    }
+                )
             # 续下一轮
         else:
             # 走完 max_tool_rounds 仍没拿到 end_turn —— 强结（防失控）
             logger.warning(
                 "conversation %s hit max_tool_rounds=%d without end_turn",
-                conversation_id, self._max_tool_rounds,
+                conversation_id,
+                self._max_tool_rounds,
             )
 
         # 5. 更新会话统计
@@ -262,7 +299,9 @@ class AIChatService:
             derived = _derive_title(user_msg.content)
             if derived:
                 await self._conv.update(
-                    conversation_id, user_id=user_id, title=derived,
+                    conversation_id,
+                    user_id=user_id,
+                    title=derived,
                 )
 
         return user_msg, all_msgs[1:]  # 跳过 user_msg，只返 assistant+tool
@@ -270,7 +309,11 @@ class AIChatService:
     # ────────────── V0.98 C5 流式 send_message_stream ──────────────
 
     async def send_message_stream(
-        self, *, conversation_id: str, user_id: int, user_text: str,
+        self,
+        *,
+        conversation_id: str,
+        user_id: int,
+        user_text: str,
     ):
         """V0.98 C5：流式发送，yield 形如 ``{"event": ..., ...}`` 的 dict。
 
@@ -292,14 +335,21 @@ class AIChatService:
 
         conv = await self._conv.get(conversation_id, user_id=user_id)
         if conv is None:
-            yield {"event": "error", "code": "conv_not_found", "msg": "conversation not found or access denied"}
+            yield {
+                "event": "error",
+                "code": "conv_not_found",
+                "msg": "conversation not found or access denied",
+            }
             return
 
         # 1. 持久化 user message
         sanitized = _sanitize_user_text(user_text, self._user_msg_max)
         user_msg = await self._msg.insert(
-            msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-            user_id=user_id, role=ROLE_USER, content=sanitized,
+            msg_id=str(uuid.uuid4()),
+            conversation_id=conversation_id,
+            user_id=user_id,
+            role=ROLE_USER,
+            content=sanitized,
         )
         yield {"event": "user_saved", "msg_id": user_msg.id}
 
@@ -315,7 +365,6 @@ class AIChatService:
         start_ts = datetime.utcnow()
         final_text = ""
         final_tool_calls: list[dict[str, Any]] = []
-        had_error = False
 
         for round_idx in range(self._max_tool_rounds):
             tools = self._tools.schemas()
@@ -324,7 +373,9 @@ class AIChatService:
 
             try:
                 events = self._llm.ask_stream(
-                    system=system, messages=messages, tools=tools,
+                    system=system,
+                    messages=messages,
+                    tools=tools,
                 )
                 async for ev in events:
                     if hasattr(ev, "text"):  # StreamTextDelta
@@ -349,22 +400,28 @@ class AIChatService:
                     elif ev.__class__.__name__ == "StreamMessageDelta":
                         total_out_tok = ev.output_tokens
                     elif ev.__class__.__name__ == "StreamError":
-                        raise LLMError(
-                            f"sse error: type={ev.err_type} msg={ev.message[:200]}"
-                        )
+                        raise LLMError(f"sse error: type={ev.err_type} msg={ev.message[:200]}")
                 # 流正常结束
             except LLMError as exc:
                 # V0.97.2 hotfix：3 级降级
-                if _is_tool_result_id_mismatch(exc) and _has_tool_result_block(messages) and not inlined and not fresh_only:
+                if (
+                    _is_tool_result_id_mismatch(exc)
+                    and _has_tool_result_block(messages)
+                    and not inlined
+                    and not fresh_only
+                ):
                     logger.warning(
                         "stream: tool_result id mismatch (proxy 2013); L1 inlined retry for conv=%s round=%d",
-                        conversation_id, round_idx,
+                        conversation_id,
+                        round_idx,
                     )
                     inlined = True
                     inlined_messages = _inline_tool_results_as_text(messages)
                     try:
                         events = self._llm.ask_stream(
-                            system=system, messages=inlined_messages, tools=None,
+                            system=system,
+                            messages=inlined_messages,
+                            tools=None,
                         )
                         async for ev in events:
                             if hasattr(ev, "text"):
@@ -380,7 +437,6 @@ class AIChatService:
                                 )
                     except LLMError as exc2:
                         if not _is_tool_result_id_mismatch(exc2):
-                            had_error = True
                             yield {"event": "error", "code": "llm_failed", "msg": str(exc2)[:200]}
                             break
                         # L3：只发 user 原问题
@@ -408,11 +464,9 @@ class AIChatService:
                                         f"sse L3 error: type={ev.err_type} msg={ev.message[:200]}"
                                     )
                         except LLMError as exc3:
-                            had_error = True
                             yield {"event": "error", "code": "llm_failed", "msg": str(exc3)[:200]}
                             break
                 else:
-                    had_error = True
                     yield {"event": "error", "code": "llm_failed", "msg": str(exc)[:200]}
                     break
 
@@ -427,8 +481,10 @@ class AIChatService:
 
             # 持久化 assistant 消息
             asst_msg = await self._msg.insert(
-                msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-                user_id=user_id, role=ROLE_ASSISTANT,
+                msg_id=str(uuid.uuid4()),
+                conversation_id=conversation_id,
+                user_id=user_id,
+                role=ROLE_ASSISTANT,
                 content=final_text,
                 tool_name=final_tool_calls[0]["name"] if final_tool_calls else None,
                 tool_input=final_tool_calls[0].get("input") if final_tool_calls else None,
@@ -447,14 +503,18 @@ class AIChatService:
             for tc in final_tool_calls:
                 # 构造 ToolCall 给 tool dispatcher
                 from app.services.llm.tools import ToolCall
+
                 tool_call = ToolCall(id=tc["id"], name=tc["name"], input=tc.get("input", {}))
                 result = await self._tools.execute(tool_call, user_id=user_id)
                 tool_results.append((tool_call, result))
                 # 持久化 tool 消息
                 tool_msg = await self._msg.insert(
-                    msg_id=str(uuid.uuid4()), conversation_id=conversation_id,
-                    user_id=user_id, role=ROLE_TOOL,
-                    content=result.content, tool_name=result.name,
+                    msg_id=str(uuid.uuid4()),
+                    conversation_id=conversation_id,
+                    user_id=user_id,
+                    role=ROLE_TOOL,
+                    content=result.content,
+                    tool_name=result.name,
                     tool_call_id=tc["id"],
                 )
                 all_msgs.append(tool_msg)
@@ -465,14 +525,18 @@ class AIChatService:
                     "content": result.content[:200],  # 流式预览截断
                 }
                 # 拼回 Claude 格式 messages
-                messages.append({
-                    "role": "user",
-                    "content": [{
-                        "type": "tool_result",
-                        "tool_use_id": tc["id"],
-                        "content": result.content,
-                    }],
-                })
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": tc["id"],
+                                "content": result.content,
+                            }
+                        ],
+                    }
+                )
 
             # 重置 per-round 累加器，进入下一轮
             final_text = ""
@@ -480,7 +544,8 @@ class AIChatService:
         else:
             logger.warning(
                 "stream: conversation %s hit max_tool_rounds=%d without end_turn",
-                conversation_id, self._max_tool_rounds,
+                conversation_id,
+                self._max_tool_rounds,
             )
 
         # 终态 message_stop
@@ -503,5 +568,7 @@ class AIChatService:
             derived = _derive_title(user_msg.content)
             if derived:
                 await self._conv.update(
-                    conversation_id, user_id=user_id, title=derived,
+                    conversation_id,
+                    user_id=user_id,
+                    title=derived,
                 )

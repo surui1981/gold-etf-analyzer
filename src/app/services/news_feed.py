@@ -27,7 +27,8 @@
 
 from __future__ import annotations
 
-from datetime import date as date_t, datetime, time, timedelta, timezone
+from datetime import date as date_t
+from datetime import datetime, time, timedelta, timezone
 from typing import Any
 
 from app.models.news_feed import NewsFeedDaily
@@ -121,8 +122,7 @@ class NewsFeedService:
         records = tuple(
             r
             for r in records
-            if r.get("category") in _ALLOWED_CATEGORIES
-            and r.get("site_name") not in SITE_BLOCKLIST
+            if r.get("category") in _ALLOWED_CATEGORIES and r.get("site_name") not in SITE_BLOCKLIST
         )
         dropped = before - len(records)
         if dropped:
@@ -152,9 +152,7 @@ class NewsFeedService:
                 "source": result.source,
             }
 
-        logger.info(
-            "news feed refresh OK: upserted=%d from source=%s", n, result.source
-        )
+        logger.info("news feed refresh OK: upserted=%d from source=%s", n, result.source)
         return {"ok": True, "upserted": int(n), "error": None, "source": result.source}
 
     # ────────────── 读：list 入口 ──────────────
@@ -253,24 +251,16 @@ class NewsFeedService:
         row = await self._repo.get_daily(target_date)
         return _to_daily_out(row) if row is not None else None
 
-    async def list_daily(
-        self, *, start: date_t, end: date_t
-    ) -> NewsFeedDailyListOut:
+    async def list_daily(self, *, start: date_t, end: date_t) -> NewsFeedDailyListOut:
         """V0.107：取 [start, end] BJT 闭区间的聚合行（倒序）。"""
         rows = await self._repo.list_daily(start=start, end=end)
         items = [_to_daily_out(r) for r in rows]
-        return NewsFeedDailyListOut(
-            items=items, start=start, end=end, total=len(items)
-        )
+        return NewsFeedDailyListOut(items=items, start=start, end=end, total=len(items))
 
-    async def backfill_daily(
-        self, *, start_date: date_t, end_date: date_t | None = None
-    ) -> int:
+    async def backfill_daily(self, *, start_date: date_t, end_date: date_t | None = None) -> int:
         """V0.107：启动 lifespan 阶段一次性回填历史 N 天。"""
         try:
-            return await self._repo.backfill_daily(
-                start_date=start_date, end_date=end_date
-            )
+            return await self._repo.backfill_daily(start_date=start_date, end_date=end_date)
         except Exception as exc:
             logger.error("backfill_daily failed: %s", exc)
             return 0

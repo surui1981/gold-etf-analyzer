@@ -347,10 +347,10 @@
     <summary>
       <span id="healthSummary" data-i18n="health.loading">加载中…</span>
       <span class="status-sep"></span>
-      <span class="status-warn-pill"><span class="warn-pill-label" data-i18n="status.warnings">警示</span> <span data-warn-count>0</span></span>
+      <span class="status-warn-pill"><span class="warn-pill-label" data-i18n="status.warn_pill_label">投资警示</span> <span data-warn-count>0</span></span>
     </summary>
     <div class="status-body"><ul class="warn-list" id="warnList"></ul>
-      <label class="warn-dismiss"><input type="checkbox" id="warnDismiss"> <span data-i18n="status.dismiss">不再提示</span></label>
+      <label class="warn-dismiss"><input type="checkbox" id="warnDismiss"> <span data-i18n="warn.dismiss_session">本次会话不再展开</span></label>
     </div>
   </details>
   <div class="hero">
@@ -390,7 +390,7 @@
         </div>
       </div>
       <div class="input-bar">
-        <textarea id="msgInput" rows="1" data-i18n-attr="placeholder|ai.input_placeholder"
+        <textarea id="msgInput" rows="1" data-i18n-placeholder="ai.input_placeholder"
           placeholder="提问关于黄金市场 / 持仓 / 评分…"
           title="Enter 发送 · Shift+Enter 换行"></textarea>
         <span class="char-count" id="charCount" hidden></span>

@@ -40,19 +40,19 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import date, timedelta, timezone
 
 sys.path.insert(0, "src")
 
-from sqlalchemy import delete, select, update  # noqa: E402
+from sqlalchemy import delete, select, update
 
-from app.models.news_feed import NewsFeedItem  # noqa: E402
-from app.repositories.db import async_session_factory  # noqa: E402
-from app.repositories.news_classifier import classify  # noqa: E402
-from app.repositories.news_feed import NewsFeedRepository  # noqa: E402
-from app.repositories.readhub_fetcher import SITE_BLOCKLIST  # noqa: E402
-from app.services.news_feed import NewsFeedService  # noqa: E402
+from app.models.news_feed import NewsFeedItem
+from app.repositories.db import async_session_factory
+from app.repositories.news_classifier import classify
+from app.repositories.news_feed import NewsFeedRepository
+from app.repositories.readhub_fetcher import SITE_BLOCKLIST
+from app.services.news_feed import NewsFeedService
 
 BJT = timezone(timedelta(hours=8))
 _MAX_SAMPLE = 15
@@ -82,9 +82,7 @@ async def main() -> int:
     async with async_session_factory() as session:
         # ── Step 1: 拉全量行 ──
         print("\n[1] 拉全量 news_feed_items ...")
-        rows = (
-            await session.execute(select(NewsFeedItem))
-        ).scalars().all()
+        rows = (await session.execute(select(NewsFeedItem))).scalars().all()
         print(f"  共 {len(rows)} 行")
 
         # ── Step 2: 重算分类 ──
@@ -93,9 +91,7 @@ async def main() -> int:
         transitions: dict[tuple[str, str], int] = Counter()
         to_other = 0
         for row in rows:
-            new_cat = classify(
-                row.title or "", row.summary or "", row.site_name or ""
-            )
+            new_cat = classify(row.title or "", row.summary or "", row.site_name or "")
             old_cat = row.category or "其他"
             if new_cat == old_cat:
                 continue
@@ -104,8 +100,7 @@ async def main() -> int:
                 to_other += 1
             to_update.append((row.id, old_cat, new_cat, row.title or ""))
 
-        print(f"  分类会变的: {len(to_update)} 行"
-              f"（其中 {to_other} 行将落入「其他」）")
+        print(f"  分类会变的: {len(to_update)} 行（其中 {to_other} 行将落入「其他」）")
         if transitions:
             print("\n  流转明细（修复前 → 修复后）:")
             for (o, n), c in transitions.most_common():
@@ -121,15 +116,16 @@ async def main() -> int:
                 print(f"    {site}: {c}")
         else:
             by_site = Counter(r.site_name for r in blocked_rows)
-            print(f"\n[3] 黑名单站点存量行: {len(blocked_rows)} 行"
-                  f"（未加 --drop-blocklisted，保留）")
+            print(
+                f"\n[3] 黑名单站点存量行: {len(blocked_rows)} 行（未加 --drop-blocklisted，保留）"
+            )
             for site, c in by_site.most_common():
                 print(f"    {site}: {c}")
 
         # ── Step 4: 预览样例 ──
         if to_update:
             print(f"\n[4] 变更样例（前 {_MAX_SAMPLE} 条）:")
-            for row_id, o, n, title in to_update[:_MAX_SAMPLE]:
+            for _row_id, o, n, title in to_update[:_MAX_SAMPLE]:
                 print(f"    [{o:4s} → {n:4s}] {title[:44]}")
             if len(to_update) > _MAX_SAMPLE:
                 print(f"    ... 另有 {len(to_update) - _MAX_SAMPLE} 条")
@@ -145,9 +141,7 @@ async def main() -> int:
         if to_update:
             for row_id, _o, new_cat, _t in to_update:
                 await session.execute(
-                    update(NewsFeedItem)
-                    .where(NewsFeedItem.id == row_id)
-                    .values(category=new_cat)
+                    update(NewsFeedItem).where(NewsFeedItem.id == row_id).values(category=new_cat)
                 )
             await session.commit()
             print(f"  ✅ 已提交 {len(to_update)} 行 UPDATE")
@@ -155,9 +149,7 @@ async def main() -> int:
         if args.drop_blocklisted and blocked_rows:
             print(f"\n[6] 删除黑名单站点 {len(blocked_rows)} 行 ...")
             await session.execute(
-                delete(NewsFeedItem).where(
-                    NewsFeedItem.site_name.in_(tuple(SITE_BLOCKLIST))
-                )
+                delete(NewsFeedItem).where(NewsFeedItem.site_name.in_(tuple(SITE_BLOCKLIST)))
             )
             await session.commit()
             print(f"  ✅ 已删除 {len(blocked_rows)} 行")
@@ -193,8 +185,10 @@ async def main() -> int:
         await session.commit()
 
     print("\n" + "=" * 72)
-    print(f"✅ V0.109.0 sweep 完成：更新 {len(to_update)} 行，"
-          f"重建 {ok} 天 daily" + (f"（{fail} 天失败）" if fail else ""))
+    print(
+        f"✅ V0.109.0 sweep 完成：更新 {len(to_update)} 行，"
+        f"重建 {ok} 天 daily" + (f"（{fail} 天失败）" if fail else "")
+    )
     print("=" * 72)
     return 0
 

@@ -48,9 +48,7 @@ async def list_items(
         le=3650,
         description="限定最近 N 天收藏的（按 archived_at）；None=不限",
     ),
-    site_name: str | None = Query(
-        None, max_length=64, description="按来源站精确筛选"
-    ),
+    site_name: str | None = Query(None, max_length=64, description="按来源站精确筛选"),
     tag: str | None = Query(
         None,
         max_length=64,
@@ -183,9 +181,7 @@ async def update(
     """任一字段为 None → 不更新。``updated_at`` 自动刷新。"""
     item = await service.update(fav_id, payload)
     if item is None:
-        raise HTTPException(
-            status_code=404, detail=f"favorite id={fav_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"favorite id={fav_id} not found")
     return item
 
 
@@ -201,6 +197,4 @@ async def delete(
 ) -> None:
     ok = await service.delete(fav_id)
     if not ok:
-        raise HTTPException(
-            status_code=404, detail=f"favorite id={fav_id} not found"
-        )
+        raise HTTPException(status_code=404, detail=f"favorite id={fav_id} not found")

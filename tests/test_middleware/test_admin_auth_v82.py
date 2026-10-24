@@ -129,7 +129,9 @@ async def test_wrong_cookie_signature_fails(app_with_admin_v82: FastAPI) -> None
     assert r.status_code == 401
 
 
-async def test_expired_cookie_fails(app_with_admin_v82: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_expired_cookie_fails(
+    app_with_admin_v82: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """过期 cookie（issued_at 早于 30 天前）→ 验签失败。"""
 
     from app.middleware.admin_auth import _b64url_encode, _sign_session

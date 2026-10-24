@@ -130,7 +130,7 @@ def _parse_shell_assets(text: str) -> tuple[dict[str, str], list[str]]:
             if line not in consts:
                 raise SystemExit(
                     f"[FAIL] SHELL_ASSETS 引用了未知常量 {line} —— "
-                    f"本脚本只支持 `const {line} = \"...\";` 的简单形式，请同步扩展解析逻辑"
+                    f'本脚本只支持 `const {line} = "...";` 的简单形式，请同步扩展解析逻辑'
                 )
             urls.append(consts[line])
         else:
@@ -236,7 +236,7 @@ def check_all(
     sw_version = consts.get("VERSION")
     expected = f"v{app_version}"
     if sw_version is None:
-        problems.append("static/sw.js 未找到 `const VERSION = \"...\";`（SW 缓存名的组成部分）")
+        problems.append('static/sw.js 未找到 `const VERSION = "...";`（SW 缓存名的组成部分）')
     elif sw_version != expected:
         problems.append(
             f"static/sw.js 的 VERSION={sw_version!r} ≠ 应用版本 {expected!r}"
@@ -266,15 +266,15 @@ def check_all(
         text = page.read_text(encoding="utf-8")
         m = re.search(r'<link\s+rel="icon"\s+href="([^"]+)"([^>]*)>', text)
         if not m:
-            problems.append(f"{_rel(page)}：缺少 <link rel=\"icon\"> —— 浏览器会退回根路径找 favicon")
+            problems.append(f'{_rel(page)}：缺少 <link rel="icon"> —— 浏览器会退回根路径找 favicon')
             continue
         href = m.group(1)
         if href.startswith("/"):
-            if (static_dir / href[len("/static/"):]).exists() is False:
+            if (static_dir / href[len("/static/") :]).exists() is False:
                 problems.append(f"{_rel(page)}：rel=icon 指向 {href}，但该文件不存在")
             elif 'type="image/png"' not in m.group(2) and href.endswith(".png"):
                 problems.append(
-                    f"{_rel(page)}：rel=icon 指向 .png 却没写 type=\"image/png\" —— "
+                    f'{_rel(page)}：rel=icon 指向 .png 却没写 type="image/png" —— '
                     "媒体类型应与实际字节一致"
                 )
 

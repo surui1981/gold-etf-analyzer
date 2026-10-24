@@ -46,10 +46,7 @@ async def main() -> None:
     for cat in ("财经", "科技", "创投", "商业", "其他"):
         n = cat_counter.get(cat, 0)
         pct = n / total * 100
-        if cat == "其他":
-            marker = "✅" if n == 0 else "❌ 漏弃入"
-        else:
-            marker = "✅"
+        marker = ("✅" if n == 0 else "❌ 漏弃入") if cat == "其他" else "✅"
         print(f"    {marker} {cat:6s} = {n:3d}  ({pct:5.1f}%)")
 
     # Step 3: 5 各类目样本

@@ -20,7 +20,6 @@ import pytest
 
 from app.repositories import readhub_fetcher as rh
 
-
 # ──────────────── 共用 fixture ────────────────
 
 
@@ -42,10 +41,12 @@ def _patch_http(monkeypatch: pytest.MonkeyPatch, response_or_callable):
     - callable(client) → await response：每个调用走 callback
     """
     if isinstance(response_or_callable, httpx.Response):
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+
+        async def _fake_get(self, url, **kwargs):
             return response_or_callable
     else:
-        async def _fake_get(self, url, **kwargs):  # noqa: ANN001
+
+        async def _fake_get(self, url, **kwargs):
             return await response_or_callable(self, url, **kwargs)
 
     monkeypatch.setattr(httpx.AsyncClient, "get", _fake_get)
@@ -54,23 +55,26 @@ def _patch_http(monkeypatch: pytest.MonkeyPatch, response_or_callable):
 def _make_response(status: int, body: Any) -> httpx.Response:
     """构造 httpx.Response（绕过真实网络）。"""
     import json
+
     text = json.dumps(body, ensure_ascii=False) if not isinstance(body, str) else body
     return httpx.Response(status_code=status, text=text)
 
 
 def _sample_raw() -> list[dict]:
     """1 条 readhub raw 数据（schema 真实样本）。"""
-    return [{
-        "id": 263197,
-        "title": "美联储官员暗示 11 月暂停加息",
-        "summary": "美联储内部讨论 11 月暂停加息的可能，理由是通胀回落速度超预期。",
-        "url": "https://wallstreetcn.com/articles/9999999",
-        "mobileUrl": "https://m.wallstreetcn.com/articles/9999999",
-        "siteName": "华尔街见闻",
-        "language": "zh-cn",
-        "authorName": "张三",
-        "publishDate": "2026-10-19T08:30:00+08:00",
-    }]
+    return [
+        {
+            "id": 263197,
+            "title": "美联储官员暗示 11 月暂停加息",
+            "summary": "美联储内部讨论 11 月暂停加息的可能，理由是通胀回落速度超预期。",
+            "url": "https://wallstreetcn.com/articles/9999999",
+            "mobileUrl": "https://m.wallstreetcn.com/articles/9999999",
+            "siteName": "华尔街见闻",
+            "language": "zh-cn",
+            "authorName": "张三",
+            "publishDate": "2026-10-19T08:30:00+08:00",
+        }
+    ]
 
 
 # ──────────────── normalize ────────────────
@@ -221,7 +225,7 @@ class TestFetchReadhubFeed:
         """5xx → 重试 1 次（2 次调用）后仍失败 → 抛错。"""
         call_count = {"n": 0}
 
-        async def _make_get(self, url, **kwargs):  # noqa: ANN001
+        async def _make_get(self, url, **kwargs):
             call_count["n"] += 1
             return _make_response(503, "Service Unavailable")
 
@@ -235,7 +239,7 @@ class TestFetchReadhubFeed:
         """httpx.TimeoutException → 重试 1 次后抛 ReadhubFetchError。"""
         call_count = {"n": 0}
 
-        async def _make_get(self, url, **kwargs):  # noqa: ANN001
+        async def _make_get(self, url, **kwargs):
             call_count["n"] += 1
             raise httpx.ConnectTimeout("connect timeout")
 
@@ -263,7 +267,7 @@ class TestFetchReadhubFeed:
         raw = _sample_raw()
         bad = _sample_raw()[0].copy()
         bad["id"] = None  # 触发 drop
-        resp = _make_response(200, {"data": raw + [bad]})
+        resp = _make_response(200, {"data": [*raw, bad]})
         _patch_http(monkeypatch, resp)
         out = await rh.fetch_readhub_feed(use_cache=False)
         assert len(out) == 1
@@ -272,7 +276,7 @@ class TestFetchReadhubFeed:
         """第一次抓完写缓存，第二次（use_cache=True）直接命中（不调 httpx）。"""
         call_count = {"n": 0}
 
-        async def _make_get(self, url, **kwargs):  # noqa: ANN001
+        async def _make_get(self, url, **kwargs):
             call_count["n"] += 1
             return _make_response(200, {"data": _sample_raw()})
 
@@ -290,7 +294,7 @@ class TestFetchReadhubFeed:
         """``force=True``（use_cache=False 第二次）→ 强制重抓。"""
         call_count = {"n": 0}
 
-        async def _make_get(self, url, **kwargs):  # noqa: ANN001
+        async def _make_get(self, url, **kwargs):
             call_count["n"] += 1
             return _make_response(200, {"data": _sample_raw()})
 
@@ -314,7 +318,7 @@ class TestSiteBlocklist:
         ETF 类有效内容仅 1 条——26:1 的信噪比不值得为它开白名单豁免。
         「澎湃新闻」实测 3 条全为优质内容，**刻意不**拉黑。
         """
-        assert rh.SITE_BLOCKLIST == frozenset({"新浪科技", "maomu.com"})
+        assert set(rh.SITE_BLOCKLIST) == {"新浪科技", "maomu.com"}
         assert "澎湃新闻" not in rh.SITE_BLOCKLIST
         assert "techradar.com" not in rh.SITE_BLOCKLIST
         assert "9to5Mac" not in rh.SITE_BLOCKLIST
@@ -352,9 +356,7 @@ class TestSiteBlocklist:
         assert out is not None
         assert out["site_name"] == "澎湃新闻"
 
-    async def test_fetch_drops_blacklisted_batch(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_fetch_drops_blacklisted_batch(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """V0.108.0：整批里混黑名单站点 → 只留非黑名单条目。"""
         good = _sample_raw()[0]
         bad = _sample_raw()[0].copy()

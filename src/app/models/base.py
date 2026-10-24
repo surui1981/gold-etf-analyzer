@@ -33,7 +33,7 @@ class SourceId(TypeDecorator):
     impl = String(32)
     cache_ok = True
 
-    def process_bind_param(self, value, dialect):  # noqa: ANN001, ARG002
+    def process_bind_param(self, value, dialect):
         if value is None:
             return None
         return str(value)

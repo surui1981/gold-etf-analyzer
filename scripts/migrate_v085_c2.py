@@ -9,6 +9,7 @@ CSS: #freshnessInline → #healthSummary
 Script: 删 freshness.js，加 health-summary.js
 注释: V0.84.0 注释更新为 V0.85.0
 """
+
 import re
 import sys
 from pathlib import Path
@@ -40,9 +41,7 @@ def migrate_non_health(html: str) -> str:
     new_mount = '<a id="healthSummary" class="hs-chip-link" href="/data-health.html" aria-label="数据健康"></a>'
     if old_mount not in html:
         # 容错：可能 aria 属性顺序不同
-        m = re.search(
-            r'<span id="freshnessInline"[^>]*></span>', html
-        )
+        m = re.search(r'<span id="freshnessInline"[^>]*></span>', html)
         if m:
             html = html.replace(m.group(0), new_mount, 1)
     else:
@@ -84,7 +83,9 @@ def migrate_data_health(html: str) -> str:
     )
     # 2. 挂载点 → 4-chip panel
     old_mount = '<span id="freshnessInline" aria-live="polite" aria-atomic="false"></span>'
-    new_mount = '<span id="healthSummary" class="hs-panel" aria-live="polite" aria-atomic="false"></span>'
+    new_mount = (
+        '<span id="healthSummary" class="hs-panel" aria-live="polite" aria-atomic="false"></span>'
+    )
     html = html.replace(old_mount, new_mount, 1)
 
     # 3. 注释

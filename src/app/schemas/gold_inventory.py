@@ -39,5 +39,7 @@ class GoldInventoryOut(BaseModel):
     as_of: date | None = None
     latest_tonnes: float | None = Field(None, description="最新库存（吨）")
     points: list[GoldInventoryPoint] = Field(default_factory=list, description="序列，按日期升序")
-    changes: list[GoldInventoryChange] = Field(default_factory=list, description="1w/1m/3m/1y 变化率")
+    changes: list[GoldInventoryChange] = Field(
+        default_factory=list, description="1w/1m/3m/1y 变化率"
+    )
     degraded: bool = Field(False, description="是否走了缓存降级（源不可用但有旧缓存）")
