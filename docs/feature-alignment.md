@@ -12,8 +12,8 @@
 | README 声明 | 代码位置 | 状态 |
 |---|---|---|
 | 三市场行情（NY/上海金/ETF） | `market.py` `/gold/trend` + `target=ny/etf/gram` | ✅ |
-| 综合趋势指数（5 维技术 + 5 因子宏观 + 消息 30%） | `services/trend.py` + `macro.py` | ✅ |
-| 宏观参考因子（5 因子含 cb_gold） | `services/macro.py` + 中央银行注入 | ✅ |
+| 综合趋势指数（5 维技术 + 8 因子宏观 + 消息 30%） | `services/trend.py` + `macro.py` | ✅ |
+| 宏观参考因子（8 因子含 cb_gold） | `services/macro.py` + 中央银行注入 | ✅ |
 | 权重配置 `/weights` | `static/weights.html` + `settings.py` | ✅ |
 | **央行购金统计 `/central-bank`** | `static/central_bank.html` + 3 endpoints | ✅（V0.57.0） |
 | 个人交易跟踪（含软删除/撤销/CSV 导出） | `position.py` 9 个 endpoint | ✅ |

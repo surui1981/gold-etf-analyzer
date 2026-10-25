@@ -718,7 +718,7 @@ wheels = [
 
 [[package]]
 name = "gold-etf-analyzer"
-version = "0.116.4"
+version = "0.118.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiosmtplib" },

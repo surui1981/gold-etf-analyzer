@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.116.4";  // V0.116.4 · 命令面板「场景落地页排组首」：输入「决策」回车不再落到趋势追踪，而是与顶栏/首页场景卡一致的落地页；改 command-palette.js 必 bump
+const VERSION = "v0.118.0";  // V0.118.0 · 宏观面 5 因子 → 8 因子（+美债2Y / +10Y-2Y利差 / +10Y实际利率）+ dxy/vix 接实时源 + 阈值滚动分位回填；改了 weights.html / backtest.html / help.js / i18n/*.js 必 bump
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

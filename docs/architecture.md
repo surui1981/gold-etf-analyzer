@@ -30,7 +30,7 @@ src/app/
 ├── services/
 │   ├── scoring.py       # 宏观机会评分引擎（FACTOR_RULES）
 │   ├── trend.py         # 趋势分析 + 追踪指数（TREND_WEIGHTS）
-│   ├── macro.py         # 宏观参考因子评分（5 因子；cb_gold 注入中央银行服务）
+│   ├── macro.py         # 宏观参考因子评分（8 因子；cb_gold 注入中央银行服务）
 │   ├── decision.py      # 购买决策引擎（趋势×持仓规则矩阵 + reason_items）
 │   ├── position.py      # 交易面：开仓/加减仓/清仓/盈亏/软删除/CSV 导出（按账本过滤）
 │   ├── account.py       # 账本：默认账本保障 / 增改 / 归档恢复 / 统计（P1 #6）
@@ -86,7 +86,7 @@ tests/                   # pytest（**866+ 用例** / 16+ 测试目录，含 fet
 | 纽约金（COMEX GC，指引基准） | 主源 AKShare `futures_foreign_hist`（英为财情）｜ 备选 `futures_global_hist_em`（东方财富 GC00Y）｜ 美元/盎司 |
 | 上海金（SGE Au99.99） | AKShare `spot_hist_sge`（上海黄金交易所）｜ 元/克，作国内对照 |
 | 黄金 ETF（518880） | 主源 AKShare `fund_etf_hist_sina`（新浪）｜ 备选 `fund_etf_hist_em`（东方财富）｜ 元 |
-| 宏观 5 因子 | 美元指数 / 美债 10Y·30Y（实时采集 `bond_zh_us_rate`）/ VIX |
+| 宏观 8 因子（V0.118.0） | 美债 2Y·10Y·30Y：美联储 H.15 CSV ｜ 美元指数：Yahoo `DX-Y.NYB` ｜ VIX：FRED `VIXCLS` ｜ 10Y 实际利率：FRED `DFII10` ｜ 10Y-2Y 利差：派生（10Y − 2Y）｜ 央行购金：WGC 季度 |
 | **央行购金（V0.57.0 升级）** | **WGC Gold Demand Trends HTML chart JS（`fsapi.gold.org/api/v12/charts/js/...`）**——绕开 XLSX 403 反爬；季度合计 2014Q1–2026Q2 + H1 2026 按国家 + UZB/IRN 手工补丁；月度 1/15/末日 07:30 BJT 自动从 WGC 拉取并 upsert 到 `central_bank_purchases` 表；cb_gold 宏观因子从表汇总 T12M，无数据时回退 STATIC_REF（1019 吨/年） |
 | **金价日历（V0.66.0 新增）** | `gold_price_daily` 表：按 `target`(ny/etf/gram) + `price_date` 唯一，存 `close` / `change_pct` / `source`。**只存客观价格、与 `daily_snapshots` 解耦**，故可回填、可长期积累；由 `POST /api/v1/review/backfill` 从 `/gold/ny-trend` 批量写入（upsert 时在合并后的时间序列上重算涨跌幅，重复回填不抹平已有值）。当前行情源提供约 60 个交易日历史（实测回填 2026-06-25 ~ 09-16） |
 | 兜底 | 数据源三态：实时 `live` / 磁盘缓存 `stale` / 演示 `mock`（页面顶部状态条 + 健康度可见） |

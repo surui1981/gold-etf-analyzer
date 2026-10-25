@@ -4,6 +4,71 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.118.0] · 2026-10-25
+
+`宏观面 5 因子 → 8 因子（+2Y / +10Y-2Y 利差 / +10Y 实际利率）+ dxy/vix 接实时源 + 滚动分位回填` — feature · 详见 [v0.118.0.md](docs/releases/v0.118.0.md)
+
+> 用户：「宏观面的选定参数需要进行调整，添加 2Y 的美国国债收益率，再考虑添加一下其他的决定因子或者调整」
+
+- 🌐 **宏观面 5 → 8 因子**（权重页 / 趋势页 / 白银页 / 回测页同步）
+  - 新增 `us2y`（6%，H.15）/ `curve_10y2y`（10%，派生 10Y−2Y）/ `real10y`（20%，FRED `DFII10`）
+  - 存量 5 因子权重重排：`dxy` 25→15 / `us10y` 20→8 / `us30y` 10→6 / `vix` 20→10 / `cb_gold` 25→25
+  - ⚠️ `curve_10y2y` 符号约定是本组**最弱的一档**（倒挂 = 衰退定价 = 利多黄金），
+    权重刻意压到 10%；2024-25「牛陡」的反例主因是实际利率下行，已由 `real10y` 单独承担
+- 💵 **dxy / vix 从静态常量接实时源**（同尺度是硬约束）
+  - `dxy` → Yahoo `DX-Y.NYB`（实测 101.75）；`vix` → FRED `VIXCLS`（实测 19.03）
+  - ⚠️ **不换 FRED `DTWEXBGS`**（≈121，与 DXY 不同尺度）—— 换了会让存量手动校准值与
+    硬编码 best/worst 同时失效
+- 📈 **回填历史，让 V0.79.0 的滚动 90/10 分位真正生效**（此前 18 天样本 < 60 门槛 ⇒ 机制一直是死代码）
+  - 新增 `src/app/services/macro_backfill.py` + `scripts/backfill_macro_factors.py`
+  - H.15 CSV 实测全量 **12417 行**；FRED `DFII10` / `VIXCLS`、Yahoo `DX-Y.NYB` 各自多年历史
+  - **静态回退值不落表**（`is_persistable_source`）—— 一次上游故障就能污染 252 日窗口，
+    让动态阈值**比硬编码更差**
+  - `is_dynamic_active` 口径收紧：硬编码 `>= 4` 改成「7 个可滚动因子**全部**动态」
+    （照抄 `>= 4` 会把语义从「全动态」松成「过半即算」）
+- 🐛 **滚动分位的方向整个反了**（V0.79.0 起休眠，回填让机制真正生效时必现）
+  - `MacroThresholdCalculator` 此前对**所有**因子一律 `best = P90`，
+    而 8 个因子里有 **6 个是负相关**（美元 / 三档美债 / 实际利率 / 10Y-2Y 利差，
+    占宏观权重 65%）⇒ 美元指数创 8 个月新高会被判成「最利多黄金」给 100 分
+  - 实测：修复前宏观指数 71.2（bullish）→ 修复后 **39.7（bearish）**
+  - 修法：按每个因子的 `positive` 标志取分位方向（负相关取 `best = P10`）
+  - 回归锁：`tests/test_services/test_macro_thresholds.py::TestRollingSignConvention` 3 个用例
+- 🐛 **权重页显示「合计 101%」，用户连保存都做不了**
+  - 存量权重迁移后是 `0.128` / `0.096` 这类小数，而滑块是**整数百分比**，
+    逐个 `Math.round` 后合计 101% ⇒ 页面标红 + 后端 `_sum_to_one` 拒收
+  - 修法：`toIntPercents()` 用**最大余额法**归一化（先取整、再按小数部分补齐），
+    对任意 API 返回值都成立
+- 🐛 **回测「启用宏观内部权重」永远跑出 0 行**（V0.118.0 之前就存在的缺陷）
+  - `MACRO_DIM_FIELDS` 写的是 5 个**中文维度名**，而快照 `macro_detail` 的键一直是**因子 key**
+    ⇒ `_aggregate_from_detail` 找不到任一维度即返回 `None` ⇒ 快照被整根跳过
+  - 修法：改用因子 key；前端 `backtest.html` 宏观网格同步改用 `data-key="dxy"`
+  - ⚠️ 仍是 5 个不是 8 个 —— 新增 3 因子从 V0.118.0 起才落快照，历史快照里没有
+- 🔐 **三源三套 User-Agent 规则**（实测，各测 2 次稳定）
+  - FRED **不发 UA**（发 Mozilla 会被 WAF **挂起** → 读超时而非 403，极易误判成网络抖动）
+  - Yahoo / H.15 **必须发 `Mozilla/5.0`**（不发直接 403）
+- 🔁 **存量 5 键权重配置无损迁移**（`MacroWeightConfig._migrate_missing_factors`）
+  - 新增因子的默认份额从旧因子里按比例扣除，保留用户对各因子的相对偏好
+  - ⚠️ 不做迁移 → 合计变 1.36 → `_sum_to_one` 抛错 → 兜底路径**静默把用户自定义权重重置为默认**
+- 🧪 新增 `tests/test_services/test_macro_backfill.py`（9）+ `tests/test_repositories/test_macro_sources.py`（13）
+  - 含 H.15 UA 回归锁（本轮实测踩到：回填静默为空，日志两行都是 INFO，「回填完成」照打）
+- 🐛 **单测会真的联网**：调度器 step 3 调回填 ⇒ 测试跑一次往测试库灌几百行真实历史
+  ⇒ 加 autouse 打桩 fixture
+- 🔧 **顺带修掉四道坏门禁**（本来在骗人）
+  - `scripts/_verify_macro_override.mjs`：谓词里引用 Node 侧常量 `EXPECTED_ROWS`
+    ⇒ 页面里 `ReferenceError` ⇒ **puppeteer 吞掉异常只报超时**（看着像「功能没生效」）；
+    `page.evaluate` 里引用 `KEYS` / `nullOverrides()` 是同一个坑 ⇒ 一并改成传参
+  - `scripts/check_cluster_render.mjs`：A7 断言查的是 `trend.html` **注释里**的字面量
+    ⇒ 假绿；`silver.html` 那边是真红 ⇒ 改成查代码里才有的标记，并做了反向验证
+  - **Service Worker 会让 puppeteer 的请求拦截静默失效**：`static/sw.js` 有
+    `skipWaiting()` + `clients.claim()` ⇒ 第 1 次导航后就接管页面，而 **SW 自己的 `fetch()`
+    不经过页面级拦截** ⇒ 第 2 次导航的 mock 完全不生效（门禁拿真实数据当 mock 结果）
+    ⇒ 所有用 `setRequestInterception` 的门禁加 `page.setBypassServiceWorker(true)`（改了 4 个脚本）
+    - `setCacheEnabled(false)` **修不了这个**（已实测）；`performance` 里 `transferSize=0` 是 SW 服务的标志
+  - `scripts/_verify_category_filter.mjs` **启动即崩**：`TypeError: Illegal invocation` ——
+    `HTMLInputElement.prototype` 永远有 `value` 描述符，`A.prototype || B.prototype` 的兜底
+    永远走不到 ⇒ 用 input 的 setter 写 `<select>` ⇒ V0.105.0 改 select 之后就一直崩，
+    门禁压根跑不到任何断言
+
 ## [V0.116.4] · 2026-10-25
 
 `命令面板「输入决策」落到趋势追踪 —— 场景落地页被第一个子页顶掉了` — 详见 [v0.116.4.md](docs/releases/v0.116.4.md)
