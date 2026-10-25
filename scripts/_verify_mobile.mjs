@@ -250,11 +250,20 @@ await goto(`${BASE}/static/home.html`, 900);
 await page.waitForSelector(".nav-btn-cmd");
 const opened = await page.evaluate(async () => {
   window.PM_CmdPalette.open();
-  await new Promise((r) => setTimeout(r, 350));
   const pal = document.querySelector(".pm-cmd");
   const input = document.querySelector(".pm-cmd-input");
+  // ⚠ V0.116.3：这里原本是**固定 350ms 等待** —— 正是它让这条断言 flaky：
+  // 聚焦时机与 .pm-cmd 的 visibility 过渡赛跑，350ms 是个**运气**阈值，
+  // 赶上过渡慢一点就假红（实现没坏）。
+  // 改成**轮询到有明确截止时间**：实现坏了就实打实红到截止（不会假绿），
+  // 实现好了就在落地的第一时间绿（不会假红）。
+  const deadline = performance.now() + 2000;
+  let focusable = false;
+  while (performance.now() < deadline) {
+    if (document.activeElement === input) { focusable = true; break; }
+    await new Promise((r) => setTimeout(r, 25));
+  }
   const vis = getComputedStyle(pal).visibility;
-  const focusable = document.activeElement === input;
   window.PM_CmdPalette.close();
   await new Promise((r) => setTimeout(r, 350));
   return { vis, focusable, closedVis: getComputedStyle(pal).visibility };
@@ -262,6 +271,56 @@ const opened = await page.evaluate(async () => {
 ok("打开时面板可见", opened.vis === "visible", opened.vis);
 ok("打开时搜索框自动聚焦", opened.focusable === true);
 ok("关闭后重新变 hidden", opened.closedVis === "hidden", opened.closedVis);
+
+// ⚠ V0.116.3：把「固定延迟聚焦 vs visibility 过渡」的赛跑变成**确定性**判据。
+//
+// 背景：旧实现写死 setTimeout(30ms) 聚焦，而 .pm-cmd 的 visibility 带过渡
+// ⇒ 30ms 正好卡在「首帧把 visibility 翻成 visible」附近，**有时中有时不中**
+// ⇒ 上面那条「正常速度」断言天生 flaky（实测 12 次 open 有 4 次丢焦点）。
+//
+// ⚠⚠ 这里**不能**用 transition-duration 拉长过渡来造判据 —— 我先试过，是错的：
+//   visibility 是**离散插值**，过渡开始后**第一帧**（progress>0）就翻成 visible，
+//   加长 duration 只影响 opacity 淡入，**不影响可见时刻**（实测 t=29ms 就翻）。
+//   ⇒ 拉长 duration 对「30ms 聚焦会不会被丢」毫无影响，门禁还是绿的（假绿）。
+//
+// 正确的杠杆是 **transition-delay**：延迟期间属性保持**起始值**（hidden），
+// 于是「可见时刻」被推到确定的 400ms 之后：
+//   旧实现（固定 30ms 聚焦）⇒ focus() 落在 visibility 还是 hidden 时
+//     ⇒ 被浏览器**静默丢弃**（不抛异常、不打日志）⇒ 焦点永远落不上去 ⇒ 必红；
+//   修复版（等到真的可见了再聚焦）⇒ 可见后第一帧就聚焦 ⇒ 必绿。
+// 判据确定、可复现，不靠运气。
+await goto(`${BASE}/static/home.html`, 900);
+await page.waitForSelector(".nav-btn-cmd");
+await page.addStyleTag({
+  content: ".pm-cmd { transition: opacity .14s ease, transform .14s ease, visibility 0s ease 400ms !important; }",
+});
+const slow = await page.evaluate(async () => {
+  const pal = document.querySelector(".pm-cmd");
+  const input = document.querySelector(".pm-cmd-input");
+  const t0 = performance.now();
+  const deadline = t0 + 3000;
+  let focusedAt = null;
+  let visibleAt = null;
+  window.PM_CmdPalette.open();
+  while (performance.now() < deadline) {
+    if (visibleAt === null && getComputedStyle(pal).visibility === "visible")
+      visibleAt = Math.round(performance.now() - t0);
+    if (document.activeElement === input) { focusedAt = Math.round(performance.now() - t0); break; }
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  window.PM_CmdPalette.close();
+  return { focusedAt, visibleAt };
+});
+ok(
+  "延迟可见时搜索框仍然自动聚焦（V0.113.0 引入的回归）",
+  slow.focusedAt !== null,
+  JSON.stringify(slow)
+);
+ok(
+  "判据自检：面板确实是延迟可见的（否则这条断言等于没测）",
+  slow.visibleAt !== null && slow.visibleAt > 300,
+  JSON.stringify(slow)
+);
 
 // ─── 8. scroll-padding-top 跟随顶栏 ───
 console.log("\n【8】scroll-padding-top = 顶栏实测高度");

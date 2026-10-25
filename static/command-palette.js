@@ -389,6 +389,42 @@
 
   // ────────────── 开关 ──────────────
 
+  // ⚠ V0.116.3：这里**不能**再用「固定 30ms 后 focus()」。
+  //
+  // .pm-cmd 的 visibility 带 .14s 过渡 —— 那是 V0.113.0 为了让**关闭态**的面板
+  // 真正退出 tab 序列（WCAG 2.4.3 焦点顺序）加的。副作用是：过渡期间计算样式
+  // 仍是 visibility:hidden，而 **visibility:hidden 的元素不能接收焦点**
+  // ⇒ input.focus() 被浏览器**静默丢弃**：不抛异常、不打日志，面板却已经弹开了。
+  // 现象：命令面板打开了，但光标不在搜索框里，直接打字没反应。
+  //
+  // 实测（scripts/_diag_cmd_focus.mjs，12 次 open/close）：
+  //   旧实现（固定 30ms）只有 8/12 次真的落上焦点，剩下 4 次**被静默丢弃**。
+  // 注意 buildDom() 在 init() 里就调过（页面加载时已建好面板，open() 里那次
+  // 会直接 return）⇒ **每一次 open 都走「已有元素 + visibility 过渡」**，
+  // 不存在「首次 open 因为 DOM 是新的所以没有过渡」这种特例 ——
+  // 丢不丢焦点纯粹看那 30ms 和「首帧把 visibility 翻成 visible」谁先到。
+  // 也就是说 V0.113.0 的无障碍修复**顺手打坏了 V0.68.0 的自动聚焦**，
+  // 而唯一察觉的 _verify_mobile.mjs 那条断言还是个 flaky 的固定等待。
+  //
+  // 正确做法：**等到面板真的可见了再聚焦**，并重试到 activeElement 真的落上去。
+  //
+  // 重试用**时间**截止而不是帧数：帧率低的机器上 60 帧可能只有 300ms，
+  // 遇上被人为拉长的 visibility 过渡就会假红（实现没坏）。
+  function focusWhenVisible(panel) {
+    if (!panel || !panel._input) return;
+    var deadline = performance.now() + 2500;
+    function attempt() {
+      // 已关闭就别再抢焦点（用户开完立刻 Esc 掉的情况）
+      if (!document.body.classList.contains('pm-cmd-open')) return;
+      if (getComputedStyle(panel).visibility === 'visible') {
+        try { panel._input.focus(); } catch (e) { /* 静默 */ }
+        if (document.activeElement === panel._input) return; // 聚焦成功
+      }
+      if (performance.now() < deadline) requestAnimationFrame(attempt);
+    }
+    requestAnimationFrame(attempt);
+  }
+
   function open() {
     if (window.TL) window.TL.track('palette_open', {});
     document.body.classList.add('pm-cmd-open');
@@ -399,9 +435,7 @@
     renderFoot(panel);
     panel._input.value = '';
     filter(panel, '');
-    setTimeout(function () {
-      try { panel._input.focus(); } catch (e) { /* 静默 */ }
-    }, 30);
+    focusWhenVisible(panel);
   }
 
   function close() {
