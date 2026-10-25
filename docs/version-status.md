@@ -64,7 +64,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 >
 > **105 个 tag 本地与远端一致**（2026-10-25 已全部推送，含 V0.118.0）：远端 105 = 本地 105，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated 98 / lightweight 6，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated 99 / lightweight 6，两侧分布相同。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），

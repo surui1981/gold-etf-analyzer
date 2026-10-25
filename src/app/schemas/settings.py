@@ -13,6 +13,20 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
+#: V0.117.x 及更早的宏观面 5 因子**默认**权重（当时 ``MacroWeightConfig`` 的字段默认值）。
+#:
+#: 存量配置**恰好等于**这组值 ⇒ 用户从没自定义过（存的就是当时的默认值）
+#: ⇒ 升级后应直接落到 V0.118.0 的新默认，而不是对旧默认做按比例缩放
+#: （那会得到 dxy 16% / us10y 12.8% / cb_gold 16% 这类「谁都没设计过」的权重）。
+#: 真正的用户自定义值不等于这组值 ⇒ 仍走按比例迁移，保留相对偏好。
+LEGACY_MACRO_DEFAULTS: dict[str, float] = {
+    "dxy": 0.25,
+    "us10y": 0.20,
+    "us30y": 0.15,
+    "vix": 0.15,
+    "cb_gold": 0.25,
+}
+
 
 class TrendWeightConfig(BaseModel):
     """技术面趋势 5 维度权重。"""
@@ -60,6 +74,13 @@ class MacroWeightConfig(BaseModel):
         **迁移规则**：新增因子的默认份额（合计 ``add``）从旧因子里按各自占比扣除
         （等比例缩放，保留用户对各因子的相对偏好），再补上新因子的默认值。
         全部 8 个 key 都给全时**原样返回**，不做任何干预。
+
+        **例外（V0.118.0 补）**：存量配置**恰好等于旧版默认权重**
+        （``LEGACY_MACRO_DEFAULTS``）⇒ 用户从没自定义过 ⇒ 直接落到**新默认**，
+        不做按比例缩放。否则「没动过权重」的用户会拿到
+        dxy 16% / us10y 12.8% / us30y 9.6% / vix 9.6% / cb_gold 16%
+        这组谁都没设计过的权重 —— 与本版设计（15 / 8 / 6 / 10 / 25 + 新增 36%）
+        不符。真正的自定义值不等于旧默认 ⇒ 仍走按比例迁移。
         """
         if not isinstance(data, dict):
             return data
@@ -73,6 +94,11 @@ class MacroWeightConfig(BaseModel):
                 present[k] = float(v)
         if not present:
             return data
+        # 「用户从没自定义过」⇒ 直接换成新默认（而不是对旧默认做按比例缩放）
+        if set(present) == set(LEGACY_MACRO_DEFAULTS) and all(
+            abs(present[k] - v) < 1e-9 for k, v in LEGACY_MACRO_DEFAULTS.items()
+        ):
+            return {k: float(fields[k].default) for k in fields}
         add = sum(float(fields[k].default) for k in missing)
         base = sum(present.values())
         if base <= 0:

@@ -155,7 +155,11 @@ async def test_group_combine_legacy_stored_json_without_field_defaults_true(
 # ───────────────────── V0.118.0 · 宏观 5 因子 → 8 因子迁移 ─────────────────────
 
 #: V0.118.0 之前落库的宏观权重 JSON（5 因子，合计 = 1.0）
+#: ⚠ 这组值**恰好等于**旧版默认权重 ⇒ 语义是「用户从没自定义过」
 LEGACY_MACRO_5 = {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.15, "cb_gold": 0.25}
+
+#: 真正的「用户自定义」5 键权重（合计 = 1.0，且不等于旧默认）⇒ 走按比例迁移
+CUSTOM_MACRO_5 = {"dxy": 0.30, "us10y": 0.15, "us30y": 0.10, "vix": 0.20, "cb_gold": 0.25}
 
 #: V0.118.0 的 8 因子 key
 MACRO_8_KEYS = (
@@ -169,14 +173,42 @@ MACRO_8_KEYS = (
     "cb_gold",
 )
 
+#: V0.118.0 的 8 因子默认权重（= 权重页「恢复默认」写进去的那一组）
+MACRO_8_DEFAULTS = {
+    "dxy": 0.15,
+    "us2y": 0.06,
+    "us10y": 0.08,
+    "us30y": 0.06,
+    "curve_10y2y": 0.10,
+    "real10y": 0.20,
+    "vix": 0.10,
+    "cb_gold": 0.25,
+}
+
+
+def test_macro_weight_config_legacy_defaults_become_new_defaults() -> None:
+    """存量配置**恰好等于旧默认**（= 用户从没自定义过）→ 直接落到 V0.118.0 新默认。
+
+    否则「没动过权重」的用户会拿到按比例缩放出来的
+    dxy 16% / us10y 12.8% / us30y 9.6% / vix 9.6% / cb_gold 16%
+    —— 这组权重谁都没设计过，也和本版的设计（15/8/6/10/25 + 新增 36%）不符。
+    """
+    cfg = MacroWeightConfig.model_validate(LEGACY_MACRO_5)
+    dumped = cfg.model_dump()
+
+    assert set(dumped) == set(MACRO_8_KEYS)
+    assert abs(sum(dumped.values()) - 1.0) < 1e-6
+    for key, want in MACRO_8_DEFAULTS.items():
+        assert dumped[key] == pytest.approx(want, abs=1e-9), key
+
 
 def test_macro_weight_config_migrates_5_to_8_keys() -> None:
-    """5 键旧配置 → 8 键：新增因子取默认值，旧因子按比例缩放，合计仍为 1。
+    """5 键**自定义**配置 → 8 键：新增因子取默认值，旧因子按比例缩放，合计仍为 1。
 
     **不做迁移会怎样**：3 个新字段拿到默认值后合计 = 1.36 → ``_sum_to_one`` 抛错
     → ``_load_weights`` 的异常兜底路径**静默把用户的自定义权重重置为默认**。
     """
-    cfg = MacroWeightConfig.model_validate(LEGACY_MACRO_5)
+    cfg = MacroWeightConfig.model_validate(CUSTOM_MACRO_5)
     dumped = cfg.model_dump()
 
     assert set(dumped) == set(MACRO_8_KEYS)
@@ -187,9 +219,9 @@ def test_macro_weight_config_migrates_5_to_8_keys() -> None:
     assert dumped["curve_10y2y"] == pytest.approx(0.10)
     assert dumped["real10y"] == pytest.approx(0.20)
 
-    # 旧因子的**相对比例**保持不变（旧合计 1.0 → 扣掉新增份额 0.36 → 缩放系数 0.64）
+    # 旧因子的**相对比例**保持不变（合计 1.0 → 扣掉新增份额 0.36 → 缩放系数 0.64）
     scale = 0.64
-    for key, old in LEGACY_MACRO_5.items():
+    for key, old in CUSTOM_MACRO_5.items():
         assert dumped[key] == pytest.approx(old * scale, abs=1e-6), key
 
 
@@ -212,12 +244,13 @@ def test_macro_weight_config_with_8_keys_is_not_touched() -> None:
     assert abs(sum(dumped.values()) - 1.0) < 1e-6
 
 
-async def test_stored_legacy_5_key_weights_are_migrated_not_reset(
+async def test_stored_legacy_5_key_weights_become_new_defaults(
     db_session: AsyncSession,
 ) -> None:
-    """**端到端**：库里存着 5 键旧权重 → 读出来是 8 键迁移结果，不是默认值。
+    """**端到端**：库里存着 5 键**旧默认**权重 → 读出来是 V0.118.0 的新默认。
 
-    这是本条迁移最关键的行为：读出来是「默认值」意味着用户的自定义权重被吞了。
+    「用户从没自定义过」⇒ 升级后应该直接吃新推荐权重，
+    而不是吃「旧默认按比例缩放」出来的 dxy 16% / cb_gold 16%。
     """
     repo = SettingRepository(db_session)
     legacy_json = (
@@ -233,8 +266,35 @@ async def test_stored_legacy_5_key_weights_are_migrated_not_reset(
 
     assert set(macro) == set(MACRO_8_KEYS)
     assert abs(sum(macro.values()) - 1.0) < 1e-6
-    # dxy 迁移后 = 0.25 * 0.64 = 0.16；默认值是 0.15 —— 两者不同才能证明没被重置
-    assert macro["dxy"] == pytest.approx(0.16, abs=1e-6)
+    for key, want in MACRO_8_DEFAULTS.items():
+        assert macro[key] == pytest.approx(want, abs=1e-6), key
+    # 关键：不是按比例缩放出来的 0.16
+    assert macro["dxy"] != pytest.approx(0.16, abs=1e-6)
+
+
+async def test_stored_custom_5_key_weights_are_migrated_not_reset(
+    db_session: AsyncSession,
+) -> None:
+    """**端到端**：库里存着 5 键**用户自定义**权重 → 读出来是 8 键迁移结果。
+
+    这是本条迁移最关键的行为：读出来是「默认值」意味着用户的自定义权重被吞了。
+    """
+    repo = SettingRepository(db_session)
+    custom_json = (
+        '{"trend":{"structure":0.3,"momentum":0.2,"support":0.2,'
+        '"momentum_rsi":0.15,"drawdown":0.15},'
+        '"macro":{"dxy":0.30,"us10y":0.15,"us30y":0.10,"vix":0.20,"cb_gold":0.25},'
+        '"combine":{"tech":0.3,"macro":0.4,"news":0.3}}'
+    )
+    await repo.set(WEIGHTS_KEY, custom_json)
+
+    svc = _service(db_session)
+    macro = await svc.macro_weights()
+
+    assert set(macro) == set(MACRO_8_KEYS)
+    assert abs(sum(macro.values()) - 1.0) < 1e-6
+    # dxy 迁移后 = 0.30 * 0.64 = 0.192；默认值是 0.15 —— 两者不同才能证明没被重置
+    assert macro["dxy"] == pytest.approx(0.192, abs=1e-6)
     assert macro["dxy"] != pytest.approx(0.15, abs=1e-6)
 
 
