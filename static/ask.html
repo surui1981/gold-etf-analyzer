@@ -343,14 +343,14 @@
 <div class="wrap">
   <div id="topnav-mount"></div>
   <script src="/static/topnav.js"></script>
-  <details id="statusPanel" class="status-panel" hidden>
+  <details id="statusPanel" class="status-panel">
     <summary>
       <span id="healthSummary" data-i18n="health.loading">加载中…</span>
       <span class="status-sep"></span>
       <span class="status-warn-pill"><span class="warn-pill-label" data-i18n="status.warn_pill_label">投资警示</span> <span data-warn-count>0</span></span>
     </summary>
     <div class="status-body"><ul class="warn-list" id="warnList"></ul>
-      <label class="warn-dismiss"><input type="checkbox" id="warnDismiss"> <span data-i18n="warn.dismiss_session">本次会话不再展开</span></label>
+      <label class="warn-dismiss"><input type="checkbox" id="warnDismiss" data-warn-dismiss> <span data-i18n="warn.dismiss_session">本次会话不再展开</span></label>
     </div>
   </details>
   <div class="hero">

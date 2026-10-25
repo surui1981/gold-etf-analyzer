@@ -185,17 +185,21 @@ def check_dict_loaded() -> int:
     print("字典文件加载检查（有 data-i18n 的页必须引 /static/i18n/zh-CN.js）")
     fail = 0
     scanned = 0
-    for name in sorted(os.listdir(STATIC_DIR)):
-        if not name.endswith(".html"):
-            continue
-        path = os.path.join(STATIC_DIR, name)
+    # ⚠ V0.116.2：必须**递归**扫。
+    # 原来这里用 ``os.listdir(STATIC_DIR)`` + ``endswith(".html")`` —— 只看**顶层**，
+    # 于是 ``static/admin/users.html``（在子目录里）永远扫不到 ⇒ 门禁一路绿灯，
+    # 而那一页整页渲染成 i18n 键字面量（用户管理页显示 "admin.denied" 而不是中文）。
+    # 同一个脚本里的 ``extract_html_keys`` 用的就是递归 glob —— 两处口径不一致，
+    # 是这类漏扫的温床（同类：check_docs_claims 漏扫 docs/releases/）。
+    for path in sorted(glob.glob(os.path.join(STATIC_DIR, "**", "*.html"), recursive=True)):
+        rel = os.path.relpath(path, STATIC_DIR)
         with open(path, encoding="utf-8") as f:
             src = f.read()
         if "data-i18n" not in src:
             continue
         scanned += 1
         if "/static/i18n/zh-CN.js" not in src:
-            print(f"  [FAIL] {name} 用了 data-i18n 但没引字典文件 → 整页会渲染成 key 字面量")
+            print(f"  [FAIL] {rel} 用了 data-i18n 但没引字典文件 → 整页会渲染成 key 字面量")
             fail += 1
     if not fail:
         print(f"  [OK]   {scanned} 个带 data-i18n 的页全部引了字典文件")

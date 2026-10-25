@@ -167,7 +167,104 @@ try {
     else bad("weights 宏观区文案", `实际 "${moText}"`);
   }
 
-  // ───────────────── 6 · 零 console / pageerror ─────────────────
+  // ───────────────── 6 · /ask 状态条可见 + dismiss 接线 ─────────────────
+  // V0.116.2：ask.html 的 <details id="statusPanel"> 带着 hidden 属性，
+  // 而全站另外 11 页都没有 ⇒ 数据时效 chip + 警示 pill 在 /ask 上**永久不可见**。
+  // 同时 dismiss 勾选框写成 id="warnDismiss"，而 warning.js 查的是
+  // [data-warn-dismiss] ⇒ 勾了也没反应。两处都是「静默失效」：
+  // 没有报错、没有 console 输出，页面只是少了一块东西。
+  const panelState = await page.evaluate(() => {
+    const p = document.querySelector("#statusPanel");
+    if (!p) return { exists: false };
+    const summary = p.querySelector("summary");
+    const cs = getComputedStyle(p);
+    return {
+      exists: true,
+      hasHiddenAttr: p.hasAttribute("hidden"),
+      display: cs.display,
+      visibility: cs.visibility,
+      summaryVisible: !!summary && summary.getClientRects().length > 0,
+      summaryText: summary ? summary.textContent.replace(/\s+/g, " ").trim() : null,
+      dismissFound: !!p.querySelector("[data-warn-dismiss]"),
+      dismissId: (p.querySelector("input") || {}).id || null,
+    };
+  });
+  if (panelState.exists) ok("/ask 存在 #statusPanel");
+  else bad("/ask 存在 #statusPanel", "DOM 里找不到");
+
+  assertEq("/ask #statusPanel 无 hidden 属性", panelState.hasHiddenAttr, false);
+  assertEq("/ask #statusPanel 计算样式不是 display:none", panelState.display, "block");
+  assertEq("/ask #statusPanel summary 可见", panelState.summaryVisible, true);
+  assertEq("/ask #statusPanel 内有 [data-warn-dismiss]", panelState.dismissFound, true);
+
+  // ───────────────── 7 · /static/admin/users.html 三语译文 ─────────────────
+  // V0.116.2：admin/users.html 漏引字典文件 ⇒ 整页渲染成 i18n 键字面量
+  //（"admin.h_title" / "admin.denied" / "reset.btn_back_login"）。
+  // 这一页在子目录里，而 check_i18n_keys.py 的 check_dict_loaded() 原来用
+  // os.listdir(STATIC_DIR) 只扫顶层 ⇒ 门禁一路绿灯。两处都已修，门禁 + 浏览器双保险。
+  const apage = await browser.newPage();
+  await apage.setViewport({ width: 1352, height: 900 });
+  const adminConsoleErrors = [];
+  const adminPageErrors = [];
+  apage.on("console", (m) => {
+    if (m.type() === "error") adminConsoleErrors.push(m.text());
+  });
+  apage.on("pageerror", (e) => adminPageErrors.push(String(e)));
+
+  await apage.goto(BASE + "/static/admin/users.html", { waitUntil: "networkidle2", timeout: 30000 });
+  await apage.waitForFunction("window.I18n && typeof window.I18n.setLang === 'function'", {
+    timeout: 15000,
+  });
+
+  const ADMIN_EXPECT = {
+    "zh-CN": { title: "用户管理", denied: "仅所有者可访问此页面。", back: "返回登录页" },
+    "en-US": { title: "User Management", denied: "Only owners can access this page.", back: "Back to Sign In" },
+    "zh-TW": { title: "使用者管理", denied: "僅擁有者可存取此頁面。", back: "返回登入頁" },
+  };
+
+  for (const lang of ["zh-CN", "en-US", "zh-TW"]) {
+    await apage.evaluate(async (l) => {
+      await window.I18n.setLang(l);
+    }, lang);
+    await new Promise((r) => setTimeout(r, 250));
+
+    const adminText = await apage.evaluate(() => {
+      const pick = (sel) => {
+        const el = document.querySelector(sel);
+        return el ? el.textContent.replace(/\s+/g, " ").trim() : null;
+      };
+      // 泛化断言：任何 data-i18n 元素的正文若**恰好等于自己的键**，就是没翻译
+      const rawKeyHits = [];
+      for (const el of document.querySelectorAll("[data-i18n]")) {
+        const key = el.getAttribute("data-i18n");
+        if (!key || key.includes("|")) continue; // 回落链单独看
+        if (el.textContent.replace(/\s+/g, " ").trim() === key) {
+          rawKeyHits.push(key);
+        }
+      }
+      return {
+        title: pick('h1[data-i18n="admin.h_title"]'),
+        denied: pick('#paneDenied p[data-i18n="admin.denied"]'),
+        back: pick('#paneDenied [data-i18n="reset.btn_back_login"]'),
+        docTitle: document.title,
+        rawKeyHits,
+      };
+    });
+
+    const exp = ADMIN_EXPECT[lang];
+    assertEq(`admin/users 标题 @${lang}`, adminText.title, exp.title);
+    assertEq(`admin/users 无权提示 @${lang}`, adminText.denied, exp.denied);
+    assertEq(`admin/users 返回登录按钮 @${lang}`, adminText.back, exp.back);
+    assertEq(`admin/users 无残留 key 字面量 @${lang}`, adminText.rawKeyHits.length, 0);
+  }
+
+  const adminRealConsoleErrors = adminConsoleErrors.filter(
+    (t) => !/favicon|Failed to load resource|500/i.test(t)
+  );
+  assertEq("admin/users 零 console error", adminRealConsoleErrors.length, 0);
+  assertEq("admin/users 零 pageerror", adminPageErrors.length, 0);
+
+  // ───────────────── 8 · 零 console / pageerror ─────────────────
   const realConsoleErrors = consoleErrors.filter(
     (t) => !/favicon|Failed to load resource/i.test(t)
   );
