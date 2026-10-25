@@ -12,12 +12,16 @@
 #      check_links.py（markdown 死链与锚点）
 #      check_deps.py（代码三方 import vs pyproject 声明）
 #   6. V0.116.1 新增 check_version_sync.py（4 处版本号同步 / CHANGELOG 版本段降序 / version-status 基线）
+#   7. V0.116.2 新增 check_i18n_keys.py（i18n key 3 语覆盖 + 字典文件是否真被页面加载）
+#      —— 之前这道门禁**存在但从没在 CI 跑过**，于是它自己的扫描口径洞
+#      （只看 static/ 顶层，漏掉 static/admin/users.html）长期无人发现：
+#      那一页整页渲染成 i18n 键字面量，而门禁一路绿灯。
 #
-# 注：第 7 道门禁 scripts/check_cluster_render.mjs 需 Node，不在本 job 直接执行；
+# 注：第 8 道门禁 scripts/check_cluster_render.mjs 需 Node，不在本 job 直接执行；
 #     它由 tests/test_ui_cluster_render.py 包进 pytest（机器无 node 时该用例 skip）。
 #
 # 门禁执行策略（V0.78.2 起）
-#   - 全部九道门禁带 `if: always() && steps.install.outcome == 'success'`：
+#   - 全部十道门禁带 `if: always() && steps.install.outcome == 'success'`：
 #     ① `always()` 保证前序失败时本门禁仍执行 —— 每道门禁必须自己给出结论，
 #        不被别人的失败掩盖（GitHub 默认 `if: success()` 会让其后 step 全 skip，
 #        而 skip 在界面上与「通过」仅一线之隔）；
@@ -134,6 +138,15 @@ jobs:
       - name: Dependency declaration gate (src+tests imports vs pyproject)
         if: always() && steps.install.outcome == 'success'
         run: uv run python scripts/check_deps.py
+
+      # V0.116.2 新增：i18n key 3 语覆盖 + **字典文件是否真被页面加载**。
+      # 后者尤其关键：i18n.js 的默认语言路径只读 `window.PM_I18N_ZH_CN`，
+      # 页面漏引 `/static/i18n/zh-CN.js` 时**只有默认语言**会整页回落成键字面量
+      # （其它语言会动态插 script 取字典，照样正常）——
+      # 这种缺陷没有任何异常、没有 console 报错、没有测试失败，页面只是少了一块。
+      - name: i18n key coverage gate (3-language coverage / dictionary script loaded)
+        if: always() && steps.install.outcome == 'success'
+        run: uv run python scripts/check_i18n_keys.py
 
       - name: Upload pytest junit (失败时方便定位)
         if: always()
