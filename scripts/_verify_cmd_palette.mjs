@@ -117,6 +117,50 @@ ok("17 个导航 URL 且无重复", hints.length === 17 && new Set(hints).size =
 const EXPECT_SECS = ["首页", "今日要闻", "决策", "持仓", "情报", "报告存档", "配置", "智能分析", "动作"];
 ok("分组顺序与 SCENES 一致", JSON.stringify(secs) === JSON.stringify(EXPECT_SECS), secs.join(" → "));
 
+// ─── 2c. 输入场景名 → 第一条必须是该场景的**落地页**（V0.116.4）──
+//
+// 面板里「输入场景名 → 回车」落到哪一条，取决于组内第一条**命中**的行。
+// 此前子页按 subnav 顺序铺，而场景自身的 path（决策 = /scoring）恰好等于
+// **第二个**子页的 path，被去重逻辑吃掉了 ⇒ 输入「决策」时第一条命中的是
+// 「趋势追踪」⇒ 回车把用户送到趋势页，**与点顶栏「决策」/首页场景卡不一致**。
+//
+// 这条断言是**通用**的：8 个场景逐个查「输入场景名 → 第一条的 href」
+// 必须等于该场景在顶栏/首页用的落地页。这样新增场景时自动受约束，
+// 不用为每个场景各写一条。
+console.log("\n【2b】输入场景名 → 落到该场景的落地页（V0.116.4）");
+const SCENES = await page.evaluate(() => (window.PM_Topnav && window.PM_Topnav.SCENES) || []);
+ok("topnav 导出了 SCENES", SCENES.length === 8, `${SCENES.length} 个场景`);
+for (let i = 0; i < SCENES.length; i++) {
+  const sc = SCENES[i];
+  // ⚠ 检索词用**面板里实际渲染出来的组名**（secs[i]），不用 SCENES[i].fb ——
+  //   fb 只是 i18n 缺失时的兜底文案，与真实标签可能不同：
+  //   AI 场景 fb = "AI 智能分析"，而 zh-CN 的 nav.ask = "智能分析" ⇒ 用 fb 检索
+  //   一条都匹配不到（实测 0 条），断言会以「null」的形式假红。
+  //   secs 是按 SCENES 顺序渲染的组头（动作组在最后，已被上面那条顺序断言钉住）。
+  const kw = secs[i];
+  const res = await page.evaluate(async (kw2) => {
+    const input = document.querySelector(".pm-cmd-input");
+    window.PM_CmdPalette.open();
+    await new Promise((r) => setTimeout(r, 120));
+    input.value = kw2;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 150));
+    const first = document.querySelector(".pm-cmd-item");
+    const out = {
+      hint: first ? first.querySelector(".pm-cmd-hint").textContent.trim() : null,
+      label: first ? first.querySelector(".pm-cmd-label").textContent.trim() : null,
+    };
+    window.PM_CmdPalette.close();
+    await new Promise((r) => setTimeout(r, 60));
+    return out;
+  }, kw);
+  ok(
+    `输入「${kw}」第一条 = 落地页 ${sc.path}`,
+    res.hint === sc.path,
+    `实际「${res.label}」→ ${res.hint}`
+  );
+}
+
 // ─── 4. 死链检查 ───
 console.log("\n【3】导航命令 href 实测可达");
 const dead = [];
@@ -232,8 +276,25 @@ console.log("\n【JS 运行时错误】");
 //   auth.js 用 defer，加载顺序还不同，修起来不能想当然，故本轮不动，单列出来。
 //   这里显式过滤而不是静默忽略 —— 免得哪天它消失了没人发现。
 const KNOWN = /apiJson is not defined/;
+// ⚠ 429 = **服务端限流**（src/app/middleware/rate_limit.py，默认 600 req/min per IP），
+//   **不是页面的 JS 缺陷**。浏览器把被拒的请求记成 console error
+//   （"fetch failed: … Error: HTTP 429: Too Many Requests"），
+//   而本门禁每次要加载 18+ 个页面、每页若干 API —— 连续跑几次就撞上限流，
+//   于是门禁开始**flap**（同一份代码、同一台服务，39/0 与 38/1 交替）。
+//
+//   豁免条件写死在这里（不是永久放行）：只有**确实出现 429** 才豁免，
+//   且下面会显式打印条数 —— 限流被关掉（RATE_LIMIT_PER_MIN=0）或行为变了，
+//   这行豁免自然失效；真出现别的 fetch 失败仍然红。
+const RATE_LIMITED = /HTTP 429: Too Many Requests/;
 const knownErrors = pageErrors.filter((e) => KNOWN.test(e));
-const realErrors = pageErrors.filter((e) => !KNOWN.test(e));
+const limitedErrors = pageErrors.filter((e) => RATE_LIMITED.test(e) && !KNOWN.test(e));
+const realErrors = pageErrors.filter((e) => !KNOWN.test(e) && !RATE_LIMITED.test(e));
+if (limitedErrors.length) {
+  console.log(
+    `  ⚠ 服务端限流（429）导致 ${limitedErrors.length} 次请求被拒 —— 不是页面缺陷` +
+    `（连续跑本门禁会撞 600 req/min；等 60s 窗口滑过再跑）`
+  );
+}
 if (knownErrors.length) {
   console.log(`  ⚠ 已知既存缺陷（settings.js 裸调 apiJson，V0.82 起）：${knownErrors.length} 次`);
 }

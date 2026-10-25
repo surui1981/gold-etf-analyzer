@@ -336,8 +336,22 @@ ok("顶栏高度确实 > 0", sp.nav > 0);
 // ─── 汇总 ───
 console.log("\n【JS 运行时错误】");
 const KNOWN = /apiJson is not defined/;
+// ⚠ 429 = **服务端限流**（src/app/middleware/rate_limit.py，默认 600 req/min per IP），
+//   **不是页面的 JS 缺陷**。浏览器把被拒的请求记成 console error，
+//   本门禁逐页加载 21 个页面、每页若干 API —— 连续跑几次就会撞上限流，
+//   于是门禁开始 flap（与 _verify_cmd_palette.mjs 同一个病根）。
+//   豁免条件写死：只有**确实出现 429** 才豁免，下面显式打印条数；
+//   限流被关掉或行为变了，这行豁免自然失效；别的 fetch 失败仍然红。
+const RATE_LIMITED = /HTTP 429: Too Many Requests/;
 const known = pageErrors.filter((e) => KNOWN.test(e));
-const real = pageErrors.filter((e) => !KNOWN.test(e));
+const limited = pageErrors.filter((e) => RATE_LIMITED.test(e) && !KNOWN.test(e));
+const real = pageErrors.filter((e) => !KNOWN.test(e) && !RATE_LIMITED.test(e));
+if (limited.length) {
+  console.log(
+    `  ⚠ 服务端限流（429）导致 ${limited.length} 次请求被拒 —— 不是页面缺陷` +
+    `（连续跑本门禁会撞 600 req/min；等 60s 窗口滑过再跑）`
+  );
+}
 if (known.length) console.log(`  ⚠ 已知既存缺陷（settings.js 裸调 apiJson，V0.82 起）：${known.length} 次`);
 ok("无其它 pageerror / console.error", real.length === 0, JSON.stringify(real.slice(0, 5)));
 

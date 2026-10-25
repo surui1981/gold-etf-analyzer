@@ -87,13 +87,26 @@
           });
         }
 
-        // 场景自身入口：仅当没有被任何子页覆盖时才单独成条
-        var covered = false;
+        // ⚠ V0.116.4：**场景落地页必须排在组首**。
+        //
+        // 面板里「输入场景名 → 回车」落到哪一条，取决于组内第一条**命中**的行。
+        // 此前子页按 subnav 顺序铺（趋势追踪 / 打分汇总 / 参数回测 / 研判复盘），
+        // 而场景自身的 path（决策 = /scoring）恰好等于**第二个**子页的 path，
+        // 被去重逻辑吃掉了 ⇒ 输入「决策」时第一条命中的是「趋势追踪」
+        // ⇒ 回车把用户送到趋势页 —— 与**点顶栏「决策」**（→ /scoring 打分汇总）
+        // 和**点首页「决策」场景卡**（→ /scoring）**不一致**。
+        //
+        // 现在：场景 path 等于哪个子页的 path，那一条就是落地页，提到组首；
+        // 没有同 path 的子页时，场景自身单独成条、同样放组首。
+        // ⇒ 「输入场景名 → 回车」与「点顶栏场景入口 / 首页场景卡」落到同一个页面。
+        var landingIdx = -1;
         for (var k = 0; k < subs.length; k++) {
-          if (subs[k].path === sc.path) { covered = true; break; }
+          if (subs[k].path === sc.path) { landingIdx = k; break; }
         }
-        if (!covered) {
-          rows.push({
+        if (landingIdx >= 0) {
+          rows.unshift(rows.splice(landingIdx, 1)[0]);
+        } else {
+          rows.unshift({
             label: (sc.ico ? sc.ico + ' ' : '') + label(sc),
             hint: sc.path,
             search: label(sc) + ' ' + sc.path,

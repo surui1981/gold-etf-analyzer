@@ -407,7 +407,17 @@
   function renderHitStats(data, horizon) {
     const descEl = document.getElementById('hitDesc');
     const el = document.getElementById('hitStats');
-    if (!data || data.sample_size === 0) {
+    // ⚠ V0.116.4：守卫条件从 `data.sample_size === 0` 改成
+    //   「缺 sample_size」或「by_direction 不是数组」——
+    //   fetchJson 的**错误兜底**返回的是通用空壳 { rows, buckets, tags }，
+    //   **没有 sample_size / by_direction** ⇒ 旧守卫 `sample_size === 0`
+    //   在兜底场景下是 false（undefined !== 0）⇒ 落进
+    //   `for (const d of data.by_direction)` ⇒ `undefined is not iterable`
+    //   TypeError ⇒ 整个「命中分析」Tab 渲染不出来（实测撞上服务端 429 时复现）。
+    //   触发条件很日常：服务端限流（429）、网络抖动、接口 500。
+    //   同文件的 renderSummaryTable / renderTagTable / renderCalendar
+    //   都是用「字段缺失或数组为空」做守卫的，只有这里漏了。
+    if (!data || !data.sample_size || !Array.isArray(data.by_direction)) {
       descEl.textContent = T('scoring.empty', '暂无打分数据');
       el.innerHTML = '';
       return;
