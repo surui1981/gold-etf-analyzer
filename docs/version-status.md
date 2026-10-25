@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.116.1** ｜ **最近更新：2026-10-24** ｜ **状态：一致，无漂移**
+> **基线：V0.116.2** ｜ **最近更新：2026-10-25** ｜ **状态：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.116.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.116.2**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写。**
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.116.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.116.1` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.116.1` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.116.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.116.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.116.2` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.116.2` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.116.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.116.1
+GET /openapi.json  →  info.version = 0.116.2
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -52,19 +52,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **65** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **40** 段 / 39 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **49** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **101** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **66** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **41** 段 / 40 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **50** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
+| git tag | **102** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
 
-> **40 段 ≠ 39 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **41 段 ≠ 40 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **101 个 tag 本地与远端一致**（2026-10-24 已全部推送，含 V0.116.1）：远端 101 = 本地 101，
+> **102 个 tag 本地与远端一致**（2026-10-25 已全部推送，含 V0.116.2）：远端 102 = 本地 102，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated 95 / lightweight 6，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated 96 / lightweight 6，两侧分布相同。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -94,7 +94,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 完整推理 | ✅ [app-improvement-path.md](app-improvement-path.md) |
 | 缺陷清单 | ✅ [next-steps.md](next-steps.md) |
 | **代码** | ❌ 一行都没有 |
-| `__version__` | ❌ 仍是 `0.116.1` |
+| `__version__` | ❌ 仍是 `0.116.2` |
 | CHANGELOG 段 | ❌ 无（未发版） |
 | git tag | ❌ 无（未发版） |
 
@@ -114,6 +114,25 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 后来的 CI 修绿这轮**改了 `static/*.html` 与 `static/i18n/*.js`** ⇒ 按 V0.100.1 必须 bump sw.js
 > ⇒ 应用代码变了 ⇒ 整段转正为 `## [V0.116.1]`。
 > （仓库里有同样的先例：`V0.97.2 hotfix` 段明确写了「不 bump 版本号」。）
+
+### 再下一轮：V0.116.2（2026-10-25）
+
+同样的规则、同样的判据，又触发了一次**真实发版**：
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 3 处静默失效的前端缺陷（`admin/users.html` 整页渲染成 i18n 键字面量 / `/ask` 状态条带 `hidden` 永不可见 / dismiss 勾选框没接上 `warning.js`）+ 2 处门禁缺陷（i18n 门禁只扫顶层目录 / 浏览器门禁缺端到端断言） |
+| `__version__` | ✅ 已 bump 到 `0.116.2`（4 处同步） |
+| git tag | ✅ `v0.116.2` |
+
+> 触发条件同样是**改了 `static/*.html`**（`ask.html` / `admin/users.html`）
+> ⇒ 按 V0.100.1 必须 bump `sw.js` ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
+> 详见 [releases/v0.116.2.md](releases/v0.116.2.md)。
+>
+> 📌 **这轮还留了一件没做的事**：生产库 `users` 表缺 `role` 列
+> ⇒ `GET /api/v1/admin/users` / `POST .../reset-password` / `GET /api/v1/auth/me` 三个端点返 500。
+> 修它要**改生产 SQLite 库** ⇒ 留给用户决定，本轮只报告不改。
+> 详见 [releases/v0.116.2.md §5](releases/v0.116.2.md)。
 
 ---
 
@@ -162,7 +181,7 @@ V0.101 / V0.102 两段加了显式说明 —— **它们从未 bump 过版本号
 所属的 commit **就是**发版点。这比在 commit message 里 grep 版本号可靠 ——
 后者会撞上「功能批次标签」（V0.101 / V0.102 从未 bump 过版本号，grep 会把它们错认成发版点）。
 
-现在：`git describe --tags` → `v0.116.1-<N>-g<sha>`，tag 总数 101（本地 = 远端）。
+现在：`git describe --tags` → `v0.116.2-<N>-g<sha>`，tag 总数 102（本地 = 远端）。
 （`-5-gd1aff31` 是**在 `d1aff31` 这个 commit 处实测**的快照值 ——
 `git describe` 的计数每加一个 commit 就 +1，所以别把它当常量，直接跑命令看当前值。）
 
@@ -256,8 +275,8 @@ python3 scripts/check_links.py
 python3 scripts/_reverse_check_links_scope.py   # 7 个用例，含 2 个防误报
 
 # 按版本 checkout
-git checkout v0.116.1        # tag 锚点（checkout 后记得 git checkout main 回来）
-git describe --tags           # → v0.116.1-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
+git checkout v0.116.2        # tag 锚点（checkout 后记得 git checkout main 回来）
+git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
 ```
 
 ---

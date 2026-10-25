@@ -4,6 +4,70 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.116.2] · 2026-10-25
+
+`3 处静默失效的前端缺陷` + `2 处「绿着但什么都没保护」的门禁缺陷` — 详见 [v0.116.2.md](docs/releases/v0.116.2.md)
+
+> 起因：V0.116.1 把 CI 修绿之后，继续深挖前端，发现 **3 处「不报错、不红屏、就是少一块东西」** 的缺陷。
+> 它们的共同点是**没有任何机制会告诉你坏了** ——
+> 没有异常、没有 console 报错、没有测试失败，页面只是少了一块、或者显示成别的东西。
+> 门禁也是绿的：因为门禁自己的扫描口径有洞（只扫顶层目录）。
+>
+> ⚠ **本轮改了 `static/ask.html` 与 `static/admin/users.html`**
+> ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION** ⇒ 版本号 **V0.116.1 → V0.116.2**（4 处已同步）。
+
+### Fixed
+
+- 🐛 **「用户管理」页整页渲染成 i18n 键字面量**（`static/admin/users.html`）
+  - 症状：页面显示 `admin.h_title` / `admin.denied` / `reset.btn_back_login` 而不是「用户管理」/「仅所有者可访问此页面。」
+  - 根因：该页只引了 `i18n.js` + `auth.js`，**漏引 `/static/i18n/zh-CN.js`**
+  - 为什么只有默认语言中招：`i18n.js` 里**非默认语言**会动态插 `<script>` 去取字典，
+    **唯独默认语言 zh-CN 走 `syncLoadDefault()`**，只读 `window.PM_I18N_ZH_CN` ——
+    字典文件没引 ⇒ `window.PM_I18N_ZH_CN` 是 `undefined` ⇒ zh-CN 全页回落成键字面量
+    （切到 en-US / zh-TW 反而正常，因为那两条路径会自己去取字典）
+  - 修法：补 1 行 `<script src="/static/i18n/zh-CN.js"></script>`
+- 🐛 **`/ask` 的数据时效条 + 投资警示 pill 永久不可见**（12 个页面里唯一的一个）
+  - 症状：`/ask` 页顶部没有「数据时效 / 警示计数」那一行
+  - 根因：`<details id="statusPanel" class="status-panel" hidden>` —— **带 `hidden` 属性**
+  - 为什么没人发现：另外 11 页（`trend` / `portfolio` / `silver` / …）的同名元素**都没有** `hidden`；
+    而 `warning.js` 只操作 `open` 属性、**从不碰 `hidden`** ⇒ 没有任何脚本会把它救回来
+  - 修法：去掉 `hidden`（`hidden` 优先级高于 UA 的 `details { display: block }` ⇒ 实测 `display: none`）
+- 🐛 **`/ask` 的「本次会话不再展开」勾选框点了没反应**
+  - 症状：勾上「本次会话不再展开」，下次还是自动展开
+  - 根因：HTML 写的是 `id="warnDismiss"`，而 `warning.js` 查的是 **`[data-warn-dismiss]`**
+    ⇒ `panel.querySelector("[data-warn-dismiss]")` 返回 `null` ⇒ 整段 dismiss 逻辑被**静默跳过**
+  - 修法：补上 `data-warn-dismiss` 属性（保留 `id`，不破坏既有选择器）
+
+### Changed
+
+- 🔧 **门禁 `scripts/check_i18n_keys.py` 的字典加载检查改为递归扫描**（这是上面第 1 条能潜伏这么久的直接原因）
+  - 原来用 `os.listdir(STATIC_DIR)` + `endswith(".html")` —— **只看顶层**，
+    于是 `static/admin/users.html`（在子目录里）**永远扫不到** ⇒ 门禁一路绿灯
+  - 同一个脚本里的 `extract_html_keys()` 用的就是递归 glob —— **两处口径不一致**，
+    是这类漏扫的温床（同类：`check_docs_claims.py` 漏扫 `docs/releases/`）
+  - 改后扫描面 **20 → 21 页**；反向验证：把字典行去掉 ⇒ `[FAIL] admin/users.html 用了 data-i18n 但没引字典文件`
+- 🧪 **浏览器门禁 `scripts/_verify_i18n_keys.mjs` 23 → 42 条断言**（新增 19 条）
+  - 新增 5 条：`/ask` 的 `#statusPanel` 存在 / 无 `hidden` 属性 / 计算样式不是 `display:none` /
+    summary 可见 / 面板内有 `[data-warn-dismiss]`
+  - 新增 9 条：`/static/admin/users.html` 在 zh-CN / en-US / zh-TW **三语**下
+    标题 / 无权提示 / 返回按钮都是**译文**而不是键字面量
+  - 新增 3 条（**泛化断言**）：任何 `data-i18n` 元素的正文若恰好等于自己的键就算失败
+  - 新增 2 条：admin 页零 console error / 零 pageerror
+  - **每条新断言都做了反向验证**（回退实现必须真的变红）：
+    ① 加回 `hidden` ⇒ 红 3 条；② 去掉 `data-warn-dismiss` ⇒ 红 1 条；
+    ③ 去掉字典行 ⇒ 红 4 条（且「残留 key 字面量」计数实测 10 个）
+
+### 已知问题（本轮**未**修，需要动生产数据库）
+
+- ⚠️ **生产库 `users` 表缺 `role` 列** ⇒ `GET /api/v1/admin/users` 与
+  `POST /api/v1/admin/users/{id}/reset-password` 返回 500
+  ⇒ 连带 `GET /api/v1/auth/me` 500（`DetachedInstanceError`），被 `static/auth.js` 吞掉后
+  降级成「认证未启用」，顶栏状态显示不正确
+  - 修法：新增 alembic 迁移补列 + 回填 `'owner'`，之后 V0.97.0 那个
+    `require_user` 里的 `load_only` + `set_committed_value`  workaround 也可以撤掉
+  - **本轮没做**：它要改生产 SQLite 库，属于「动生产数据」的动作 ⇒ 留给用户决定
+- ⚠️ **单用户模式下 `require_owner` 接受匿名调用者** —— 认证边界不对（虽然当前请求会先 500）
+
 ## [V0.116.1] · 2026-10-24
 
 `CI 修绿（ruff lint / ruff format / pytest 三步预存红）` + `版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 详见 [v0.116.1.md](docs/releases/v0.116.1.md)
