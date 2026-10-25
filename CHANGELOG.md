@@ -4,6 +4,75 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.116.4] · 2026-10-25
+
+`命令面板「输入决策」落到趋势追踪 —— 场景落地页被第一个子页顶掉了` — 详见 [v0.116.4.md](docs/releases/v0.116.4.md)
+
+> 起因：用户反馈「点击决策的时候看到的页面是趋势追踪」。
+> 但**顶栏、首页场景卡、手机抽屉三处「决策」一直都指向 `/scoring`（打分汇总）**，
+> 全站 60+ 个「决策」链接实测**没有一个**指向 trend ——
+> 唯一的例外是**命令面板**：输入「决策」回车 → 趋势追踪。
+
+### Fixed
+
+- 🐛 **命令面板输入场景名，落到的是该场景的第一个子页而不是落地页**（`static/command-palette.js`）
+  - 实测：面板输入「决策」列出 5 条，第 1 条 = 「📈 趋势追踪 /static/trend.html」**且默认选中** ⇒ 回车落到趋势页
+  - 根因：面板清单从 `topnav.js` 的 `SCENES` 惰性派生，组内先铺子页；
+    而「决策」场景的 `path`（`/scoring`）恰好等于**第 2 个**子页（打分汇总）的 path
+    ⇒ 被去重逻辑吃掉 ⇒ 落地页留在第 2 位、第 1 位变成趋势追踪
+  - 而面板的过滤是 `label + hint + section` 匹配，组内 4 条**全都命中「决策」**（section 就是场景名）
+    ⇒ 第一条命中 = 趋势追踪
+  - 修法：场景落地页**提到组首** ⇒ 「输入场景名 → 回车」与「点顶栏 / 首页场景卡 / 手机抽屉」落点一致
+
+### 门禁加固
+
+- 🔧 **新增一条通用断言：8 个场景逐个查「输入场景名 → 第一条命中的 href」必须等于该场景落地页**
+  （`_verify_cmd_palette.mjs`）—— 写成循环而不是给「决策」单写一条，
+  新增场景时自动受约束
+  - ⚠ 检索词用**面板里实际渲染出来的组名**而不是 `SCENES[i].fb`：
+    AI 场景 `fb = "AI 智能分析"` 而 zh-CN 的 `nav.ask = "智能分析"`
+    ⇒ 用 `fb` 检索一条都匹配不到，断言会以「null」假红
+  - 反向验证：回退「落地页提组首」⇒ **38 passed, 1 failed**（只有「决策」那条红）
+
+- 🐛 **新建 `scripts/_verify_scoring_robust.mjs`（8 条断言）**：命中分析 Tab 的异常路径
+  - 顺带修掉一处真 bug：`scoring.js` 的 `renderHitStats` 守卫写的是 `data.sample_size === 0`，
+    而 `fetchJson` 的错误兜底返回通用空壳 `{rows,buckets,tags}`（**没有** sample_size/by_direction）
+    ⇒ `undefined !== 0` 守卫失效 ⇒ `undefined is not iterable`
+    ⇒ 整个 Tab 崩掉、描述行还漏 `sample=undefined` 字面量
+  - 修法与同文件其它 renderer 一致：`!data.sample_size || !Array.isArray(data.by_direction)`
+  - 反向验证：回退守卫 ⇒ **6 passed, 2 failed**；恢复 ⇒ **8 passed, 0 failed**
+
+- 🔧 **两道浏览器门禁不再把「服务端 429 限流」误判成「页面 JS 错误」**
+  （`_verify_cmd_palette.mjs` / `_verify_mobile.mjs`）
+  - 现象：连续跑几次门禁就 flap（同一份代码，39/0 与 38/1 交替）——
+    服务端有 600 req/min per IP 限流，浏览器把被拒的请求记成 console error
+  - 修法：窄口径豁免（只匹配 `HTTP 429: Too Many Requests`）+ **显式打印条数与原因**，
+    限流真被关掉时这行豁免自然失效
+
+### 验证
+
+- `_verify_cmd_palette.mjs` **39 passed, 0 failed**（回退实现 38/1）
+- `_verify_scoring_robust.mjs` **8 passed, 0 failed**（回退实现 6/2）
+- `_verify_mobile.mjs` **35 passed, 0 failed**
+- 新增 3 个诊断脚本留证：`_diag_decision_nav.mjs`（17 页 × 60+ 个「决策」链接落点普查）/
+  `_diag_palette_decision.mjs`（面板输入「决策」的条目与回车落点）/
+  `_verify_scoring_robust.mjs`（门禁）
+
+### 范围检查
+
+- 顶栏 / 首页场景卡 / 手机抽屉三处「决策」**实测一直是对的**（都指向 `/scoring`），
+  手机抽屉是直接拷贝顶栏 `.links` 的锚点 ⇒ 与顶栏同源，不会漂移
+- 唯一漂移发生在**面板的派生层**（另有一套排序规则）
+
+### 已知问题（本轮**未**修）
+
+- 承 V0.116.2 §5：生产 `users` 表缺 `role` 列（admin 2 端点 500）、
+  `GET /api/v1/auth/me` 500、单用户模式 `require_owner` 认证边界错
+  —— 都要动生产数据库
+- **待观察**：`scoring.js` 的 `fetchJson` 错误兜底返回的是**通用空壳**，
+  对 hit-stats 端点是错的形状。本轮在渲染层加守卫（最小改动），
+  但「每个端点各自的空形状」这件事本身还没收口
+
 ## [V0.116.3] · 2026-10-25
 
 `命令面板自动聚焦被 V0.113.0 的无障碍修复顺手打没了` — 详见 [v0.116.3.md](docs/releases/v0.116.3.md)
