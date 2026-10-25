@@ -1,6 +1,6 @@
 // scripts/_verify_macro_override.mjs
-// V0.110.0 验证：/weights 页「宏观因子手动校准」卡片渲染
-// - 期望：5 行（dxy/us10y/us30y/vix/cb_gold）全部渲染出当前生效值
+// V0.110.0 验证（V0.118.0 更新为 8 因子）：/weights 页「宏观因子手动校准」卡片渲染
+// - 期望：8 行（dxy/us2y/us10y/us30y/curve_10y2y/real10y/vix/cb_gold）全部渲染出当前生效值
 // - 期望：每行 3 个输入框（number / date / text）+ 1 个清除按钮
 // - 期望：i18n key 无 undefined 泄漏到 textContent
 // - 期望：填值 → 保存 → 卡片行刷新且 source 变「手动输入」+ 滞后 chip
@@ -10,7 +10,11 @@
 import puppeteer from "puppeteer-core";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
-const KEYS = ["dxy", "us10y", "us30y", "vix", "cb_gold"];
+// V0.118.0：宏观面 5 因子 → 8 因子（新增 us2y / curve_10y2y / real10y）
+// 行数断言是硬编码的 —— 因子数变了不改这里，脚本会静默通过（少渲染的行不会报）。
+const KEYS = ["dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"];
+const EXPECTED_ROWS = KEYS.length;
+const nullOverrides = () => Object.fromEntries(KEYS.map((k) => [k, null]));
 
 const browser = await puppeteer.launch({
   executablePath:
@@ -24,7 +28,7 @@ const browser = await puppeteer.launch({
 const resetStatus = await fetch(`${BASE}/api/v1/settings/macro-overrides`, {
   method: "PUT",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ dxy: null, us10y: null, us30y: null, vix: null, cb_gold: null }),
+  body: JSON.stringify(nullOverrides()),
 }).then((r) => r.status);
 if (resetStatus !== 200) {
   console.log(`[FATAL] 基线归零失败 HTTP ${resetStatus} —— 跳过验证`);
@@ -62,20 +66,34 @@ check(
   loading0.every((x) => x === "加载中…" || x.includes("·")),
   `首屏显示「加载中…」而非「暂无读数」：${JSON.stringify(loading0)}`,
 );
-await page.waitForFunction(
-  () => {
-    const cells = document.querySelectorAll("#moRows .cur");
-    return cells.length === 5 && [...cells].every((e) => !e.textContent.includes("加载中"));
-  },
-  { timeout: 60000 },
-);
-check(true, "「当前生效」列在 60s 内完成加载");
+// ⚠ waitForFunction 的签名是 (fn, options, ...args) —— 谓词在**页面里**执行，
+// 页面里没有 EXPECTED_ROWS 这个变量。直接写 `cells.length === EXPECTED_ROWS`
+// 会在页面里抛 ReferenceError，而 puppeteer **把异常吞掉、只报超时**（
+// 看起来像「条件始终没满足」，实际是谓词本身写错了）。
+// ⇒ 必须作为第 3+ 个参数传进去。
+try {
+  await page.waitForFunction(
+    (n) => {
+      const cells = document.querySelectorAll("#moRows .cur");
+      return cells.length === n && [...cells].every((e) => !e.textContent.includes("加载中"));
+    },
+    { timeout: 60000 },
+    EXPECTED_ROWS,
+  );
+  check(true, "「当前生效」列在 60s 内完成加载");
+} catch (e) {
+  const dump = await page.evaluate(() => ({
+    n: document.querySelectorAll("#moRows .cur").length,
+    t: [...document.querySelectorAll("#moRows .cur")].map((x) => x.textContent.trim()),
+  })).catch(() => null);
+  check(false, `「当前生效」列加载失败：${e.message}；页面当时状态 ${JSON.stringify(dump)}`);
+}
 
 // 1. 卡片存在
 const cardExists = await page.$("#macroOverrideCard");
 check(!!cardExists, "宏观因子手动校准卡片存在");
 
-// 2. 5 行全部渲染
+// 2. 8 行全部渲染
 const rows = await page.$$eval("#moRows .mo-row", (els) =>
   els.map((el) => ({
     inputs: el.querySelectorAll("input").length,
@@ -83,7 +101,7 @@ const rows = await page.$$eval("#moRows .mo-row", (els) =>
     cur: el.querySelector(".cur")?.textContent?.trim() || "",
   })),
 );
-check(rows.length === 5, `渲染 5 行（实际 ${rows.length}）`);
+check(rows.length === EXPECTED_ROWS, `渲染 ${EXPECTED_ROWS} 行（实际 ${rows.length}）`);
 check(
   rows.every((r) => r.inputs === 3),
   `每行 3 个输入框（实际 ${rows.map((r) => r.inputs).join("/")}）`,
@@ -170,23 +188,23 @@ check(afterSave.isManual, "该行标记 is-manual 高亮");
 check(afterSave.chip.includes("手动输入"), `显示「手动输入」来源 chip：${afterSave.chip}`);
 
 // 6. 清理：清除全部覆盖（走二次确认弹窗）
-await page.evaluate(() => {
-  for (const k of ["dxy", "us10y", "us30y", "vix", "cb_gold"]) {
+// ⚠ page.evaluate 的回调同样在**页面里**执行 —— KEYS / nullOverrides 都是
+// Node 侧作用域，页面里没有 ⇒ ReferenceError。必须作为参数传进去。
+await page.evaluate((keys) => {
+  for (const k of keys) {
     document.getElementById("mo_" + k).value = "";
     document.getElementById("mo_" + k + "_d").value = "";
     document.getElementById("mo_" + k + "_n").value = "";
   }
-});
-const cleared = await page.evaluate(async () => {
+}, KEYS);
+const cleared = await page.evaluate(async (payload) => {
   const r = await fetch("/api/v1/settings/macro-overrides", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      dxy: null, us10y: null, us30y: null, vix: null, cb_gold: null,
-    }),
+    body: JSON.stringify(payload),
   });
   return r.status;
-});
+}, nullOverrides());
 check(cleared === 200, `清除覆盖 API 返回 ${cleared}`);
 
 await page.screenshot({ path: "/tmp/v01100_weights.png", fullPage: true });
@@ -195,7 +213,7 @@ check(consoleErrors.length === 0, `无 JS 报错：${JSON.stringify(consoleError
 
 await browser.close();
 
-console.log("\n=== V0.110.0 宏观因子手动校准 · /weights 验证 ===");
+console.log("\n=== V0.118.0 宏观因子手动校准（8 因子）· /weights 验证 ===");
 ok.forEach((l) => console.log("  [OK  ] " + l));
 bad.forEach((l) => console.log("  [FAIL] " + l));
 console.log(`\n结果：${ok.length} passed, ${bad.length} failed`);

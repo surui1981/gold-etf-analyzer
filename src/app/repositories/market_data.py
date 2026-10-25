@@ -143,17 +143,23 @@ class USTYield:
     """美债收益率快照（数据源无关）。
 
     数据源：美联储 H.15（Selected Interest Rates），T+1~T+3 滞后。
+
+    V0.118.0 新增 ``us2y``（2 年期）。该字段**可选**：H.15 的 2Y 列理论上恒在，
+    但个别日期可能为空（未公布 / 节假日残留行），此时留 ``None`` 由调用方回退，
+    不像 10Y/30Y 那样把整行作废 —— 少一个期限不该让另外两个一起丢。
     """
 
     us10y: float  # 10 年期收益率（%）
     us30y: float  # 30 年期收益率（%）
     data_date: date  # 数据截止日（H.15 最近一个交易日）
+    us2y: float | None = None  # 2 年期收益率（%）；None = 该行 2Y 缺失
 
 
 # H.15 CSV 前 5 行为元数据（Series Description / Unit / Multiplier / Currency / Unique Identifier），
-# 第 6 行为列名（含 RIFLGFCY10_N.B / RIFLGFCY30_N.B）。解析时跳过前 5 行。
+# 第 6 行为列名（含 RIFLGFCY02_N.B / RIFLGFCY10_N.B / RIFLGFCY30_N.B）。解析时跳过前 5 行。
 _H15_HEADER_SKIP = 5
 _H15_COL_DATE = "Time Period"
+_H15_COL_2Y = "RIFLGFCY02_N.B"
 _H15_COL_10Y = "RIFLGFCY10_N.B"
 _H15_COL_30Y = "RIFLGFCY30_N.B"
 
@@ -163,6 +169,9 @@ def _parse_h15_csv(text: str) -> USTYield | None:
 
     CSV 头部有 5 行元数据描述 + 1 行列名，跳过前 5 行后用 csv.DictReader 解析。
     末尾可能若干行 10Y/30Y 列为空（节假日/未公布），从末尾反向找首个双非空行。
+
+    V0.118.0：2Y 列**可选** —— 列不存在或该行为空都不影响 10Y/30Y 的解析结果，
+    只是 ``us2y`` 留 ``None``。与 10Y/30Y 的「缺列即整体失败」口径刻意不同。
     """
     try:
         rows = list(csv.reader(io.StringIO(text)))
@@ -175,6 +184,8 @@ def _parse_h15_csv(text: str) -> USTYield | None:
         idx_date = header.index(_H15_COL_DATE)
         idx_10y = header.index(_H15_COL_10Y)
         idx_30y = header.index(_H15_COL_30Y)
+        # 2Y 列可选：不在表头里则为 None
+        idx_2y = header.index(_H15_COL_2Y) if _H15_COL_2Y in header else None
 
         # 从末尾反向找首个双非空行
         for row in reversed(rows[_H15_HEADER_SKIP + 1 :]):
@@ -183,14 +194,69 @@ def _parse_h15_csv(text: str) -> USTYield | None:
             v10, v30, d = row[idx_10y].strip(), row[idx_30y].strip(), row[idx_date].strip()
             if not v10 or not v30 or not d:
                 continue
+            v2y: float | None = None
+            if idx_2y is not None and len(row) > idx_2y:
+                raw2y = row[idx_2y].strip()
+                if raw2y:
+                    try:
+                        v2y = float(raw2y)
+                    except ValueError:
+                        v2y = None
             return USTYield(
                 us10y=float(v10),
                 us30y=float(v30),
                 data_date=datetime.strptime(d, "%Y-%m-%d").date(),
+                us2y=v2y,
             )
     except (ValueError, IndexError, csv.Error) as exc:
         logger.warning("H.15 CSV 解析失败: %s", exc)
     return None
+
+
+def parse_h15_history(text: str) -> list[tuple[date, float | None, float, float]]:
+    """解析 H.15 **全量历史** → ``[(日期, us2y, us10y, us30y), ...]``（按日期升序）。
+
+    V0.118.0：``scripts/backfill_macro_factors.py`` 用它把过去 N 个交易日的
+    2Y/10Y/30Y 灌进 ``daily_macro_factors`` 表 —— 有了 ≥60 个样本，V0.79.0 Step E
+    的「近 252 日滚动 90/10 分位」才会真正激活（此前只有 18 天样本，
+    ``is_dynamic_active`` 恒为 False，所有因子被钉死在 2020-2023 的硬编码阈值上）。
+
+    与 ``_parse_h15_csv`` 的区别：这里**不做「最近一行」语义**，而是把每一行都吐出来，
+    且 10Y/30Y 缺失的行直接跳过（回填宁可少一天也不要造脏数据）。
+    """
+    out: list[tuple[date, float | None, float, float]] = []
+    try:
+        rows = list(csv.reader(io.StringIO(text)))
+        if len(rows) <= _H15_HEADER_SKIP:
+            return out
+        header = rows[_H15_HEADER_SKIP]
+        if _H15_COL_10Y not in header or _H15_COL_30Y not in header:
+            return out
+        idx_date = header.index(_H15_COL_DATE)
+        idx_10y = header.index(_H15_COL_10Y)
+        idx_30y = header.index(_H15_COL_30Y)
+        idx_2y = header.index(_H15_COL_2Y) if _H15_COL_2Y in header else None
+
+        for row in rows[_H15_HEADER_SKIP + 1 :]:
+            if len(row) <= max(idx_date, idx_10y, idx_30y):
+                continue
+            raw10, raw30, rawd = row[idx_10y].strip(), row[idx_30y].strip(), row[idx_date].strip()
+            if not raw10 or not raw30 or not rawd:
+                continue
+            raw2y = ""
+            if idx_2y is not None and len(row) > idx_2y:
+                raw2y = row[idx_2y].strip()
+            try:
+                d = datetime.strptime(rawd, "%Y-%m-%d").date()
+                v10, v30 = float(raw10), float(raw30)
+                v2y = float(raw2y) if raw2y else None
+            except ValueError:
+                continue
+            out.append((d, v2y, v10, v30))
+    except (csv.Error, IndexError) as exc:
+        logger.warning("H.15 全量历史解析失败: %s", exc)
+    out.sort(key=lambda t: t[0])
+    return out
 
 
 class GoldHistoryProvider(Protocol):

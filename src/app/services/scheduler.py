@@ -262,27 +262,46 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
             logger.warning("alert dispatch failed: %s", exc)
 
     # ── step 3（V0.79.0 Step E）：macro factor 落表 + warm threshold cache ──
-    # 复用 trend_svc._macro._collect() 产出当日 5 因子原始值，按唯一键
+    # 复用 trend_svc._macro._collect() 产出当日因子原始值，按唯一键
     # (target, snapshot_date, factor_key) upsert 到 daily_macro_factors 表。
     # 失败仅日志告警，不抛异常：避免影响调度循环下一次触发。
+    #
+    # V0.118.0 两处改动：
+    # 1. **静态回退值不落表** —— STATIC_REF 是内置常量（dxy/vix 的 2026-08-28 旧值、
+    #    外部源故障时的兜底），写进历史表会污染滚动分位窗口（假数据把 P10/P90 带偏，
+    #    动态阈值反而比硬编码更糟）。判定见 macro.is_persistable_source。
+    # 2. **顺带回填历史** —— backfill_macro_history 只补样本不足的因子，
+    #    补满后每天调用近乎零成本（只是多一次 count_samples 查询）。
     try:
         from app.repositories.db import async_session_factory
         from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+        from app.services.macro import is_persistable_source
+        from app.services.macro_backfill import backfill_macro_history
         from app.services.macro_thresholds import MacroThresholdCalculator
 
         values = await trend_svc._macro._collect()
+        persistable = {
+            key: (val, dt, src)
+            for key, (val, dt, src) in values.items()
+            if is_persistable_source(src)
+        }
+        dropped = sorted(set(values) - set(persistable))
+        if dropped:
+            logger.info("宏观因子静态回退值不落历史表: %s", dropped)
+
         async with async_session_factory() as session:
             repo = MacroFactorHistoryRepository(session)
             await repo.upsert_batch(
                 target="default",
                 snapshot_date=date.today(),
-                factors=[(key, val, dt, src) for key, (val, dt, src) in values.items()],
+                factors=[(key, val, dt, src) for key, (val, dt, src) in persistable.items()],
             )
+            await backfill_macro_history(repo, target="default")
             calculator = MacroThresholdCalculator(repo=repo)
             thresholds = await calculator.get_or_compute("default", today=date.today())
             logger.info(
                 "Macro factor persisted + threshold warmed: %d factors, date=%s, dynamic=%s",
-                len(values),
+                len(persistable),
                 date.today().isoformat(),
                 calculator.is_dynamic_active(thresholds),
             )

@@ -244,16 +244,16 @@
 
   <!-- 宏观面权重 -->
   <div class="card">
-    <h2 data-i18n="weights.macro_title">🌐 宏观面权重（5 大参考因子）</h2>
-    <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重</div>
+    <h2 data-i18n="weights.macro_title">🌐 宏观面权重（8 大参考因子）</h2>
+    <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金，对黄金友好度评分的权重</div>
     <div id="macroRows"></div>
     <div class="sum-line" data-i18n="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
 
-  <!-- V0.110.0 · 宏观因子手动校准：dxy / vix 无自动源，内置常量停在 2026-08-28 -->
+  <!-- V0.110.0 · 宏观因子手动校准；V0.118.0 起全部因子均有自动源（美元=Yahoo / VIX=FRED / 美债=H.15 / 实际利率=FRED），本卡改为「人工顶替」用途 -->
   <div class="card" id="macroOverrideCard">
     <h2 data-i18n="weights.mo_title">🌍 宏观因子手动校准</h2>
-    <div class="desc" data-i18n="weights.mo_desc">美元指数 / VIX 没有自动实时源，系统默认使用内置静态参考值（2026-08-28）。在行情终端看到最新读数后，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。</div>
+    <div class="desc" data-i18n="weights.mo_desc">全部因子现均有自动实时源（美元指数 Yahoo / VIX 与 10Y 实际利率 FRED / 美债收益率 美联储 H.15）。若在行情终端看到更新读数，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。</div>
     <div class="mo-head" aria-hidden="true">
       <span data-i18n="weights.mo_factor">因子</span>
       <span class="cur" style="width:176px" data-i18n="weights.mo_current">当前生效</span>
@@ -332,10 +332,15 @@ const TREND_FIELDS = [
   ["momentum_rsi", "动能（RSI14）"],
   ["drawdown", "回撤（距高点回撤）"],
 ];
+// V0.118.0：宏观面 5 因子 → 8 因子
+// 新增 us2y（2Y 收益率）、curve_10y2y（10Y-2Y 利差）、real10y（10Y 实际利率）
 const MACRO_FIELDS = [
   ["dxy", "美元指数"],
+  ["us2y", "美债2Y收益率"],
   ["us10y", "美债10Y收益率"],
   ["us30y", "美债30Y收益率"],
+  ["curve_10y2y", "美债10Y-2Y利差"],
+  ["real10y", "美债10Y实际利率"],
   ["vix", "VIX恐慌指数"],
   ["cb_gold", "国际央行购金量"],
 ];
@@ -343,21 +348,46 @@ const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"], ["news", 
 
 let state = null;
 
-function rowHtml(id, label, value) {
+function rowHtml(id, label, pctValue) {
   return `<div class="w-row">
     <span class="nm">${label}</span>
-    <input type="range" id="${id}" min="0" max="100" step="1" value="${Math.round((value ?? 0) * 100)}" aria-label="${label}（权重 0-100%）" oninput="update()">
-    <span class="pct" id="${id}-pct">${Math.round((value ?? 0) * 100)}%</span>
+    <input type="range" id="${id}" min="0" max="100" step="1" value="${pctValue}" aria-label="${label}（权重 0-100%）" oninput="update()">
+    <span class="pct" id="${id}-pct">${pctValue}%</span>
   </div>`;
+}
+
+/* 整数百分比化（最大余额法）—— 保证一组的滑块整数之和**恰好** 100。
+ *
+ * 为什么不能各自分别四舍五入：存量权重从 5 键迁到 8 键后是 0.128 / 0.096 这类
+ * 小数（见后端 MacroWeightConfig._migrate_missing_factors），逐个 Math.round
+ * 会得到 13% + 10% + … = 101% —— 页面立刻标红「合计 101%」，而后端要求合计为 1，
+ * 于是用户**连保存都做不了**，只能手动一个一个凑。
+ * 最大余额法：先取整，再把剩下的名额按小数部分从大到小逐个补齐 ⇒ 和恒为 100，
+ * 且每个值都是离原值最近的整数。 */
+function toIntPercents(values) {
+  const nums = values.map((v) => (typeof v === "number" && isFinite(v) && v > 0) ? v : 0);
+  const total = nums.reduce((s, v) => s + v, 0);
+  if (total <= 0) return nums.map(() => 0);
+  const exact = nums.map((v) => (v / total) * 100);
+  const out = exact.map((v) => Math.floor(v));
+  let rest = 100 - out.reduce((s, v) => s + v, 0);
+  const order = exact
+    .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+    .sort((a, b) => b.frac - a.frac);
+  for (let k = 0; k < order.length && rest > 0; k++) { out[order[k].i] += 1; rest--; }
+  return out;
 }
 
 function render() {
   const trend = state.trend || {};
   const macro = state.macro || {};
   const combine = state.combine || {};
-  document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l]) => rowHtml("t_" + k, l, trend[k])).join("");
-  document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l]) => rowHtml("m_" + k, l, macro[k])).join("");
-  document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l]) => rowHtml("c_" + k, l, combine[k])).join("");
+  const trendPcts = toIntPercents(TREND_FIELDS.map(([k]) => trend[k]));
+  const macroPcts = toIntPercents(MACRO_FIELDS.map(([k]) => macro[k]));
+  const combinePcts = toIntPercents(COMBINE_FIELDS.map(([k]) => combine[k]));
+  document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l], i) => rowHtml("t_" + k, l, trendPcts[i])).join("");
+  document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l], i) => rowHtml("m_" + k, l, macroPcts[i])).join("");
+  document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l], i) => rowHtml("c_" + k, l, combinePcts[i])).join("");
   // V0.79.0 Step F：技术面合成方式 radio 状态（缺字段向后兼容 → 默认勾选「组内平均」）
   const gc = state.group_combine !== false;
   document.getElementById("gcOn").checked = gc;
@@ -545,7 +575,8 @@ async function resetAll() {
   );
   if (!ok) return;
   const msg = document.getElementById("msg");
-  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .25, us10y: .20, us30y: .15, vix: .15, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
+  // V0.118.0：宏观面默认权重改为 8 因子（与后端 MacroWeightConfig 默认值逐字一致）
+  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .15, us2y: .06, us10y: .08, us30y: .06, curve_10y2y: .10, real10y: .20, vix: .10, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
   msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -566,17 +597,24 @@ async function resetAll() {
 }
 
 /* ══════════════ V0.110.0 · 宏观因子手动校准 ══════════════
- * 背景：dxy / vix 无自动实时源，MACRO_FACTOR_RULES 用的是 STATIC_REF 里
+ * 背景：dxy / vix 原本无自动实时源，MACRO_FACTOR_RULES 用的是 STATIC_REF 里
  * 2026-08-28 的内置常量（96.5 / 18.5）。两者在宏观面内部合计权重 0.40，
  * 宏观面又占综合指数 0.40 —— 综合指数的 16% 建立在两个半月前的常量上。
  * 这里让用户从行情终端录入当日真实读数顶替，保存后立即重算。
+ *
+ * V0.118.0：8 个因子**全部**接上自动源了（美元=Yahoo DX-Y.NYB / VIX=FRED VIXCLS /
+ * 美债 2Y·10Y·30Y=美联储 H.15 / 10Y 实际利率=FRED DFII10 / 10Y-2Y 利差=派生），
+ * 本卡从「补空缺」变成「人工顶替」——上游源偶发滞后时仍可手填。
  */
 const OVERRIDE_API = API_BASE + "/api/v1/settings/macro-overrides";
 // 与后端 schemas/settings.py::MACRO_FACTOR_KEYS 一一对应
 const OVERRIDE_FIELDS = [
   ["dxy", "美元指数", "点位"],
+  ["us2y", "美债2Y收益率", "%"],
   ["us10y", "美债10Y收益率", "%"],
   ["us30y", "美债30Y收益率", "%"],
+  ["curve_10y2y", "美债10Y-2Y利差", "%"],
+  ["real10y", "美债10Y实际利率", "%"],
   ["vix", "VIX恐慌指数", "点位"],
   ["cb_gold", "国际央行购金量", "吨/年"],
 ];

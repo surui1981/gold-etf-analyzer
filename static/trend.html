@@ -671,9 +671,17 @@ function render(d) {
   const macroBadgeText = (window.I18n && typeof window.I18n.t === "function")
     ? window.I18n.t(macroDynamic ? "trend.macro_dynamic_badge" : "trend.macro_static_badge")
     : (macroDynamic ? "[动态]" : "[静态]");
+  // V0.118.0：宏观面 5 因子 → 8 因子（7 个可滚动，cb_gold 走季度 hardcode）。
+  // 角标文案从后端 dynamic_factors 逐因子明细派生，不再硬编码因子个数
+  // （旧文案「5 因子中 ≥4」在 8 因子下既会撒谎，口径也和 is_dynamic_active 变了）。
+  const macroFactorsArr = d.macro?.factors || [];
+  const macroRollingTotal = macroFactorsArr.filter(f => f.key !== "cb_gold").length;
+  const macroDynamicCount = (d.macro?.dynamic_factors || []).length;
   const macroBadgeHint = macroDynamic
-    ? "5 因子中 ≥4 使用近 252 日滚动 90/10 分位"
-    : "数据不足，阈值回退 hardcode 默认";
+    ? `${macroRollingTotal} 个可滚动因子全部使用近 252 日滚动 90/10 分位`
+    : (macroDynamicCount > 0
+        ? `${macroDynamicCount}/${macroRollingTotal} 个因子使用近 252 日滚动 90/10 分位，其余样本不足回退 hardcode`
+        : "数据不足，阈值回退 hardcode 默认");
   const macroBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${macroBadgeBg};color:${macroBadgeColor};font-size:10px;font-weight:500" title="${macroBadgeHint}">${macroBadgeText}</span>`;
   document.getElementById("macroInfo").innerHTML =
     `宏观参考指数 ${d.macro?.score?.toFixed(1) ?? "—"}/100 · ${d.macro?.direction === "bullish" ? "利多黄金" : d.macro?.direction === "bearish" ? "利空黄金" : "中性"}${macroBadge}`;

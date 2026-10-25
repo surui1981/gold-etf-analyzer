@@ -5,7 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.settings import SettingRepository
-from app.schemas.settings import WeightConfig
+from app.schemas.settings import MacroWeightConfig, WeightConfig
 from app.services.settings import WEIGHTS_KEY, WeightService, clear_weights_cache
 
 
@@ -20,7 +20,15 @@ async def test_default_weights(db_session: AsyncSession) -> None:
 
     assert w.trend.structure == 0.30
     assert w.trend.momentum == 0.20
-    assert w.macro.dxy == 0.25
+    # V0.118.0：宏观面 5 因子 → 8 因子，默认值同步改成新方案
+    assert w.macro.dxy == 0.15
+    assert w.macro.us2y == 0.06
+    assert w.macro.us10y == 0.08
+    assert w.macro.us30y == 0.06
+    assert w.macro.curve_10y2y == 0.10
+    assert w.macro.real10y == 0.20
+    assert w.macro.vix == 0.10
+    assert w.macro.cb_gold == 0.25
     assert w.combine.tech == 0.30
     assert w.combine.macro == 0.40
     assert w.combine.news == 0.30
@@ -37,7 +45,16 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
             "momentum_rsi": 0.10,
             "drawdown": 0.10,
         },
-        macro={"dxy": 0.30, "us10y": 0.20, "us30y": 0.10, "vix": 0.20, "cb_gold": 0.20},
+        macro={
+            "dxy": 0.30,
+            "us2y": 0.05,
+            "us10y": 0.08,
+            "us30y": 0.07,
+            "curve_10y2y": 0.10,
+            "real10y": 0.15,
+            "vix": 0.10,
+            "cb_gold": 0.15,
+        },
         combine={"tech": 0.50, "macro": 0.30, "news": 0.20},
     )
     await svc.save_weights(custom)
@@ -93,7 +110,16 @@ async def test_group_combine_save_and_load_roundtrip(db_session: AsyncSession) -
             "momentum_rsi": 0.15,
             "drawdown": 0.15,
         },
-        macro={"dxy": 0.25, "us10y": 0.20, "us30y": 0.15, "vix": 0.15, "cb_gold": 0.25},
+        macro={
+            "dxy": 0.25,
+            "us2y": 0.05,
+            "us10y": 0.07,
+            "us30y": 0.08,
+            "curve_10y2y": 0.10,
+            "real10y": 0.20,
+            "vix": 0.10,
+            "cb_gold": 0.15,
+        },
         combine={"tech": 0.30, "macro": 0.40, "news": 0.30},
         group_combine=False,  # V0.79.0 Step F：切回历史单维度加权
     )
@@ -124,6 +150,92 @@ async def test_group_combine_legacy_stored_json_without_field_defaults_true(
     svc = _service(db_session)
     # 历史配置加载后，group_combine 默认为 True（推荐）
     assert await svc.group_combine() is True
+
+
+# ───────────────────── V0.118.0 · 宏观 5 因子 → 8 因子迁移 ─────────────────────
+
+#: V0.118.0 之前落库的宏观权重 JSON（5 因子，合计 = 1.0）
+LEGACY_MACRO_5 = {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.15, "cb_gold": 0.25}
+
+#: V0.118.0 的 8 因子 key
+MACRO_8_KEYS = (
+    "dxy",
+    "us2y",
+    "us10y",
+    "us30y",
+    "curve_10y2y",
+    "real10y",
+    "vix",
+    "cb_gold",
+)
+
+
+def test_macro_weight_config_migrates_5_to_8_keys() -> None:
+    """5 键旧配置 → 8 键：新增因子取默认值，旧因子按比例缩放，合计仍为 1。
+
+    **不做迁移会怎样**：3 个新字段拿到默认值后合计 = 1.36 → ``_sum_to_one`` 抛错
+    → ``_load_weights`` 的异常兜底路径**静默把用户的自定义权重重置为默认**。
+    """
+    cfg = MacroWeightConfig.model_validate(LEGACY_MACRO_5)
+    dumped = cfg.model_dump()
+
+    assert set(dumped) == set(MACRO_8_KEYS)
+    assert abs(sum(dumped.values()) - 1.0) < 1e-6
+
+    # 新增因子取默认值
+    assert dumped["us2y"] == pytest.approx(0.06)
+    assert dumped["curve_10y2y"] == pytest.approx(0.10)
+    assert dumped["real10y"] == pytest.approx(0.20)
+
+    # 旧因子的**相对比例**保持不变（旧合计 1.0 → 扣掉新增份额 0.36 → 缩放系数 0.64）
+    scale = 0.64
+    for key, old in LEGACY_MACRO_5.items():
+        assert dumped[key] == pytest.approx(old * scale, abs=1e-6), key
+
+
+def test_macro_weight_config_with_8_keys_is_not_touched() -> None:
+    """已经给全 8 个 key → 原样返回，不做任何缩放。"""
+    full = {
+        "dxy": 0.30,
+        "us2y": 0.05,
+        "us10y": 0.08,
+        "us30y": 0.07,
+        "curve_10y2y": 0.10,
+        "real10y": 0.15,
+        "vix": 0.10,
+        "cb_gold": 0.15,
+    }
+    cfg = MacroWeightConfig.model_validate(full)
+    dumped = cfg.model_dump()
+    for key, val in full.items():
+        assert dumped[key] == pytest.approx(val), key
+    assert abs(sum(dumped.values()) - 1.0) < 1e-6
+
+
+async def test_stored_legacy_5_key_weights_are_migrated_not_reset(
+    db_session: AsyncSession,
+) -> None:
+    """**端到端**：库里存着 5 键旧权重 → 读出来是 8 键迁移结果，不是默认值。
+
+    这是本条迁移最关键的行为：读出来是「默认值」意味着用户的自定义权重被吞了。
+    """
+    repo = SettingRepository(db_session)
+    legacy_json = (
+        '{"trend":{"structure":0.3,"momentum":0.2,"support":0.2,'
+        '"momentum_rsi":0.15,"drawdown":0.15},'
+        '"macro":{"dxy":0.25,"us10y":0.2,"us30y":0.15,"vix":0.15,"cb_gold":0.25},'
+        '"combine":{"tech":0.3,"macro":0.4,"news":0.3}}'
+    )
+    await repo.set(WEIGHTS_KEY, legacy_json)
+
+    svc = _service(db_session)
+    macro = await svc.macro_weights()
+
+    assert set(macro) == set(MACRO_8_KEYS)
+    assert abs(sum(macro.values()) - 1.0) < 1e-6
+    # dxy 迁移后 = 0.25 * 0.64 = 0.16；默认值是 0.15 —— 两者不同才能证明没被重置
+    assert macro["dxy"] == pytest.approx(0.16, abs=1e-6)
+    assert macro["dxy"] != pytest.approx(0.15, abs=1e-6)
 
 
 # ───────────────────── V0.110.0 · 宏观因子手动校准 ─────────────────────

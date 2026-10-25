@@ -10,7 +10,19 @@
 - ``cb_gold`` 显式跳过滚动（季度合计 → 252 日 252 个相同值 → percentile 全 50
   → 失去动态意义），始终走 ``MACRO_FACTOR_RULES["cb_gold"].best/worst``；
 - 单因子样本 < ``min_samples``（默认 60）→ 该因子回退 hardcode；
-- ``is_dynamic_active``：至少 4 个因子阈值 ≠ hardcode 默认 → True。
+- ``is_dynamic_active``：**全部**可滚动因子的阈值 ≠ hardcode 默认 → True
+  （V0.118.0 口径：因子从 4 扩到 7，沿用旧的 ``>= 4`` 会把「全动态」松成「过半即算」）。
+
+V0.118.0：因子从 5 个扩到 8 个（7 个可滚动）。此前该机制**从未真正生效** ——
+``daily_macro_factors`` 只有 18 天样本（< ``min_samples`` 60），所有因子都被
+钉在 2020-2023 的硬编码阈值上，``us10y`` / ``us30y`` 长期输出 0 分（死权重）。
+``scripts/backfill_macro_factors.py`` 用 H.15 / FRED / Yahoo 的自带历史回填
+252 个交易日后，滚动分位才会接管。
+
+⚠️ 随之暴露的既有缺陷（V0.118.0 一并修掉）：滚动分位的 best/worst 方向此前
+**不跟因子的符号约定走**（一律 best=P90）。负相关因子（美元 / 三档美债 /
+实际利率 / 利差，共 6 个、占宏观权重 65%）因此整个反向 —— 美元指数创 8 个月
+新高会被判成「最利多黄金」给 100 分。该缺陷此前因样本不足而休眠，回填后必现。
 """
 
 import asyncio
@@ -130,11 +142,22 @@ class MacroThresholdCalculator:
                 continue
 
             values = sorted(float(s.value) for s in samples)
-            # best = P90（最利好值），worst = P10（最利空值）
-            thresholds[key] = (
-                _percentile(values, 90.0),
-                _percentile(values, 10.0),
-            )
+            # best/worst 的方向必须与因子的**符号约定**一致。
+            #
+            #   positive=True  （VIX / 央行购金）→ 值越高越利多黄金：best=P90、worst=P10
+            #   positive=False （美元 / 三档美债 / 实际利率 / 10Y-2Y 利差）
+            #                 → 值越低越利多黄金：best=P10、worst=P90
+            #
+            # ⚠️ V0.118.0 修复：此前**所有**因子一律 best=P90，对 6 个负相关因子
+            # 方向整个反了（美元指数创 8 个月新高 → 反而给 100 分「最利多黄金」）。
+            # 该缺陷在 V0.79.0 之后一直休眠 —— 滚动窗口样本不足，从未真正激活；
+            # 一旦按计划回填历史让滚动分位接管，6 个因子（占宏观权重 65%）会集体反向。
+            p10 = _percentile(values, 10.0)
+            p90 = _percentile(values, 90.0)
+            if bool(rule.get("positive", True)):
+                thresholds[key] = (p90, p10)
+            else:
+                thresholds[key] = (p10, p90)
 
         return thresholds
 
@@ -143,12 +166,20 @@ class MacroThresholdCalculator:
         await self.get_or_compute(target, today)
 
     def is_dynamic_active(self, thresholds: dict[str, tuple[float, float]]) -> bool:
-        """5 因子中至少 4 个因子阈值 ≠ hardcode 默认 → True。
+        """**全部**可滚动因子的阈值都 ≠ hardcode 默认 → True。
 
-        loose 判定：单一因子回退不污染整体语义（4/5 仍算 dynamic）。
+        口径说明（V0.118.0）：V0.79.0 当时只有 4 个可滚动因子，阈值写成硬编码
+        ``>= 4``，语义其实是「4 个全都动态才算动态」。因子扩到 8 个（7 个可滚动）
+        后若照抄 ``>= 4``，语义会从「全动态」松成「过半即算」—— badge 会说
+        「使用滚动分位」，但仍有 3 个因子其实还在用 2020-2023 的硬编码阈值。
+        因此这里改成**按可滚动因子总数**判定，语义与旧版一致。
+
+        任一因子样本不足（< ``min_samples``）→ 该因子回退 hardcode → 整体判 False，
+        与旧版「3/4 → False」的行为对齐。
         """
         hardcode = self._rules_hardcode()
-        dynamic_count = sum(
-            1 for k, (b, w) in thresholds.items() if k in hardcode and (b, w) != hardcode[k]
-        )
-        return dynamic_count >= 4
+        rolling = [k for k in hardcode if k not in _SKIP_ROLLING_FACTORS]
+        if not rolling:
+            return False
+        dynamic_count = sum(1 for k in rolling if thresholds.get(k) != hardcode[k])
+        return dynamic_count >= len(rolling)

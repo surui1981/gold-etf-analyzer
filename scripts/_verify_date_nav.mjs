@@ -12,6 +12,11 @@ const browser = await puppeteer.launch({
 const page = await browser.newPage();
 await page.setViewport({ width: 1400, height: 800 });
 await page.setCacheEnabled(false);
+// ⚠ 绕过 Service Worker（V0.118.0 修）：static/sw.js 会在第 1 次导航后
+//   skipWaiting + clients.claim() 接管页面，而 **SW 自己的 fetch() 不走
+//   puppeteer 的页面级请求拦截** ⇒ 拦截会在页面加载中途静默失效
+//   （mock 不再生效 ⇒ 门禁要么假红、要么假绿）。绕过 SW 后拦截全程有效。
+await page.setBypassServiceWorker(true);
 
 // 拦截 /favorites/exists/*（避免 100 卡片并发打满 rate limit）
 await page.setRequestInterception(true);

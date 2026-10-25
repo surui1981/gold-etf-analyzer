@@ -327,8 +327,8 @@ window.PM_I18N_en_US = {
   "weights.tech_title": "📈 Technical Weights (5 Trend Dimensions)",
   "weights.tech_desc": "Composite = Technical × composition + Macro × composition; technical weight is split internally as below",
   "weights.sum_trend": "Technical total: {sum} (must be 100%)",
-  "weights.macro_title": "🌐 Macro Weights (5 Reference Factors)",
-  "weights.macro_desc": "USD Index / US 10Y·30Y Yields / VIX / Central Bank Purchases — weights for gold friendliness scoring",
+  "weights.macro_title": "🌐 Macro Weights (8 Reference Factors)",
+  "weights.macro_desc": "USD Index / US 2Y·10Y·30Y Yields / 10Y-2Y Spread / 10Y Real Rate / VIX / Central Bank Purchases — weights for gold friendliness scoring",
   "weights.sum_macro": "Macro total: {sum} (must be 100%)",
   "weights.combine_title": "⚖️ Composition Weights (Tech / Macro / News)",
   "weights.combine_desc": "Composite Trend Index = Tech×w + Macro×w + News×w (default 30/40/30, for mid/short-term ETF swing trading)",
@@ -356,7 +356,7 @@ window.PM_I18N_en_US = {
 
   /* ── V0.110.0 Macro factor manual calibration (macro_factor_overrides) ── */
   "weights.mo_title": "🌍 Macro Factor Manual Calibration",
-  "weights.mo_desc": "DXY / VIX have no automatic live feed, so the system falls back to built-in static references (2026-08-28). Enter the latest readings from your market terminal here to replace them — the macro index and composite trend index are recomputed immediately on save. Leave blank to use the automatic source.",
+  "weights.mo_desc": "All factors now have automatic live feeds (USD Index Yahoo / VIX and 10Y real rate FRED / Treasury yields Fed H.15). Enter the latest readings from your market terminal here to override them — the macro index and composite trend index are recomputed immediately on save. Leave blank to use the automatic source.",
   "weights.mo_factor": "Factor",
   "weights.mo_current": "Currently In Effect",
   "weights.mo_input": "Manual Value",
@@ -631,7 +631,7 @@ window.PM_I18N_en_US = {
   // V0.79.0 Step G Commit 3: Advanced mode + async progress
   "backtest.advanced_title": "Advanced (nested weights + async)",
   "backtest.trend_5": "Enable 5-dim tech sub-weights",
-  "backtest.macro_5": "Enable 5-factor macro sub-weights",
+  "backtest.macro_5": "Enable 5-factor macro sub-weights (DXY/10Y/30Y/VIX/CB gold)",
   "backtest.async_run": "⚡ Force async (auto when > 200 combos)",
   "backtest.sum_hint_ok": "✓ Sum = 1.0, ready to submit",
   "backtest.sum_hint_bad": "⚠ Sum ≠ 1.0, please adjust",

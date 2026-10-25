@@ -17,7 +17,19 @@ BacktestTarget = Literal["ny", "etf", "gram", "silver_ny", "silver_etf", "silver
 # ``MACRO_FIELDS`` 同步取值，前后端任何一处改名必须同步；测试 ``test_weight_grid_
 # field_names_match_*`` 锁死此口径）。
 TREND_DIM_FIELDS: tuple[str, ...] = ("结构", "动量", "支撑", "动能", "回撤")
-MACRO_DIM_FIELDS: tuple[str, ...] = ("美元", "利率", "通胀", "地缘", "避险")
+# V0.118.0 修复：这里曾写成 ("美元", "利率", "通胀", "地缘", "避险") —— 5 个**中文
+# 维度名**，而快照 ``macro_detail`` 的键一直是**因子 key**（dxy / us10y / ...）。
+# 键对不上 → ``_aggregate_from_detail`` 找不到任一维度即返回 None → 该快照被
+# 整根跳过 → 「启用宏观内部权重」跑出来**永远是 0 行**（功能形同虚设，且不报错）。
+# docs/parameter-evaluation.md §G 写的本来就是"DXY / US10Y / US30Y / VIX / cb_gold"
+# 这 5 个因子 key，实现与设计意图不一致。
+#
+# 为什么仍是 5 个而不是 V0.118.0 的 8 个：回测是**历史**分析，而新增的
+# us2y / curve_10y2y / real10y 从 V0.118.0 起才落快照，历史快照的 macro_detail
+# 里没有它们 —— 请求 8 个键会让全部历史快照被跳过（"数据不足≠中性"纪律），
+# 功能等于废掉。故此处锁定**有历史覆盖的 5 个因子**；新因子的历史积累到一定量
+# 后再扩。
+MACRO_DIM_FIELDS: tuple[str, ...] = ("dxy", "us10y", "us30y", "vix", "cb_gold")
 
 
 class NestedWeights(BaseModel):
@@ -64,7 +76,10 @@ class TrendWeights(NestedWeights):
 
 
 class MacroWeights(NestedWeights):
-    """宏观面 5 因子内部权重候选（美元 / 利率 / 通胀 / 地缘 / 避险）。"""
+    """宏观面 5 因子内部权重候选（dxy / us10y / us30y / vix / cb_gold）。
+
+    键必须是**因子 key**（与快照 ``macro_detail`` 的键一致），不是中文维度名。
+    """
 
     _expected_fields: ClassVar[tuple[str, ...]] = MACRO_DIM_FIELDS
 

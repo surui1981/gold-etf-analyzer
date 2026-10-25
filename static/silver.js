@@ -478,8 +478,14 @@
         : macroDynamic
         ? "[动态]"
         : "[静态]";
+    // V0.118.0：角标文案从后端 dynamic_factors 逐因子明细派生，不再硬编码因子个数
+    const macroFactorsArr = macro.factors || [];
+    const macroRollingTotal = macroFactorsArr.filter((f) => f.key !== "cb_gold").length;
+    const macroDynamicCount = (macro.dynamic_factors || []).length;
     const macroBadgeHint = macroDynamic
-      ? "5 因子中 ≥4 使用近 252 日滚动 90/10 分位"
+      ? `${macroRollingTotal} 个可滚动因子全部使用近 252 日滚动 90/10 分位`
+      : macroDynamicCount > 0
+      ? `${macroDynamicCount}/${macroRollingTotal} 个因子使用近 252 日滚动 90/10 分位，其余样本不足回退 hardcode`
       : "数据不足，阈值回退 hardcode 默认";
     const macroBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${macroBadgeBg};color:${macroBadgeColor};font-size:10px;font-weight:500" title="${macroBadgeHint}">${macroBadgeText}</span>`;
 

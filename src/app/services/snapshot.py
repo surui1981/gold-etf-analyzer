@@ -13,6 +13,19 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def macro_detail_keys() -> tuple[str, ...]:
+    """快照 ``macro_detail`` 里会写入的键（= 宏观因子 key 列表）。
+
+    **单一真源**：回测的 ``MACRO_DIM_FIELDS`` 必须落在这个集合里。
+    键对不上 → ``backtest._aggregate_from_detail`` 找不到任一维度即返回 None →
+    整根快照被跳过 → 「启用宏观内部权重」跑出来永远是 0 行（V0.118.0 修的就是
+    这个：常量写的是中文维度名，快照写的却是因子 key）。
+    """
+    from app.services.macro import MACRO_FACTOR_RULES
+
+    return tuple(r["key"] for r in MACRO_FACTOR_RULES)
+
+
 class DailySnapshotService:
     """每日快照：价格参数 + 技术/宏观/综合评估值，按日 upsert。"""
 

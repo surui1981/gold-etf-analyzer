@@ -188,6 +188,13 @@ class MacroIndexOut(BaseModel):
         description="V0.79.0 Step E：阈值是否来自近 252 日滚动 90/10 分位；"
         "False=回退 hardcode（数据不足场景）",
     )
+    dynamic_factors: list[str] = Field(
+        default_factory=list,
+        description="V0.118.0：实际使用滚动分位阈值的因子 key 列表。"
+        "``macro_dynamic`` 是「全部可滚动因子都动态」的布尔摘要；"
+        "本字段给出逐因子明细 —— 部分因子样本不足时它会短于可滚动因子总数，"
+        "前端据此显示「N/M 个因子使用滚动分位」而不是笼统的「数据不足」。",
+    )
 
 
 class NewsIndexOut(BaseModel):

@@ -431,21 +431,27 @@ const TREND_FIELDS = [
   ["动能", "trend-momentum-rsi"],
   ["回撤", "trend-drawdown"],
 ];
+// V0.118.0 修复：宏观网格原用中文维度名（美元/利率/通胀/地缘/避险）作为 data-key，
+// 而快照 macro_detail 的键是**因子 key**（dxy/us10y/...）—— 键对不上导致该功能
+// 跑出来永远是 0 行。现在 data-key 用因子 key，展示仍用中文标签。
+// 只列 5 个有历史覆盖的因子：新增的 us2y/curve_10y2y/real10y 从 V0.118.0 起才落
+// 快照，历史快照没有它们 → 请求 8 个键会把全部历史快照跳过。
 const MACRO_FIELDS = [
-  ["美元", "macro-dxy"],
-  ["利率", "macro-us10y"],
-  ["通胀", "macro-cpi"],
-  ["地缘", "macro-geo"],
-  ["避险", "macro-vix"],
+  ["美元指数", "macro-dxy", "dxy"],
+  ["美债10Y", "macro-us10y", "us10y"],
+  ["美债30Y", "macro-us30y", "us30y"],
+  ["VIX", "macro-vix", "vix"],
+  ["央行购金", "macro-cb-gold", "cb_gold"],
 ];
 const DEFAULT_TREND = { "结构": 0.2, "动量": 0.2, "支撑": 0.2, "动能": 0.2, "回撤": 0.2 };
-const DEFAULT_MACRO = { "美元": 0.2, "利率": 0.2, "通胀": 0.2, "地缘": 0.2, "避险": 0.2 };
+const DEFAULT_MACRO = { dxy: 0.2, us10y: 0.2, us30y: 0.2, vix: 0.2, cb_gold: 0.2 };
 
 function renderGrid(gridId, fields, defaults) {
-  const html = fields.map(([zh, slug]) => {
-    const v = defaults[zh];
+  const html = fields.map(([zh, slug, key]) => {
+    const k = key || zh;          // 有第 3 段则用它作 data-key，否则退回显示名
+    const v = defaults[k];
     return `<label class="grp-cell"><span class="grp-label">${zh}</span>` +
-      `<input type="number" min="0" max="1" step="0.05" data-key="${zh}" ` +
+      `<input type="number" min="0" max="1" step="0.05" data-key="${k}" ` +
       `id="${gridId === "trendGrid" ? "t_" : "m_"}${slug}" value="${v}"></label>`;
   }).join("");
   const el = document.getElementById(gridId);

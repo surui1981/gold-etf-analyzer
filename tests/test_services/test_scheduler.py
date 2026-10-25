@@ -20,6 +20,23 @@ from app.services.scheduler import (
     next_central_bank_run_utc,
 )
 
+
+@pytest.fixture(autouse=True)
+def _no_macro_backfill_network(monkeypatch):
+    """把 step 3 的历史回填打桩 —— **单测绝不能真的联网**。
+
+    V0.118.0 起 ``_capture_and_warm`` 的 step 3 会调 ``backfill_macro_history``，
+    它要打 H.15 / FRED / Yahoo 三个外网源。不打桩的话：
+    ① 单测依赖外网（CI 抖动 = 假红）；② 回填会往**测试库**灌几百行真实历史。
+    回填本身由 ``tests/test_services/test_macro_backfill.py`` 单独覆盖（带桩）。
+    """
+
+    async def _fake_backfill(repo, **kwargs):
+        return {}
+
+    monkeypatch.setattr("app.services.macro_backfill.backfill_macro_history", _fake_backfill)
+
+
 # ── next_central_bank_run_utc 时间计算 ────────────────────────────
 
 
@@ -378,14 +395,21 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
         async def capture_today(self):
             return None  # 跳过 snap 路径，step 3 仍应执行
 
-    # FakeTrend：analyze 走 fake 路径；_macro._collect 返回 5 因子
+    # FakeTrend：analyze 走 fake 路径；_macro._collect 返回 8 因子
+    #
+    # ⚠️ V0.118.0：source 必须是**真实行情源**标签 —— step 3 用
+    # ``is_persistable_source`` 把「静态参考值」挡在历史表外（静态常量不是市场读数，
+    # 写进滚动分位窗口会把 P10/P90 带偏）。所以这里不能再用静态标签。
     class FakeMacro:
         async def _collect(self):
             return {
-                "dxy": (96.5, "2026-08-28", "静态参考值"),
-                "us10y": (4.4, "2026-08-28", "静态参考值"),
-                "us30y": (4.7, "2026-08-28", "静态参考值"),
-                "vix": (18.5, "2026-08-28", "静态参考值"),
+                "dxy": (101.75, "2026-10-22", "Yahoo DX-Y.NYB"),
+                "us2y": (4.65, "2026-10-22", "美联储 H.15"),
+                "us10y": (4.96, "2026-10-22", "美联储 H.15"),
+                "us30y": (5.29, "2026-10-22", "美联储 H.15"),
+                "curve_10y2y": (0.31, "2026-10-22", "派生 10Y-2Y"),
+                "real10y": (2.64, "2026-10-22", "FRED DFII10"),
+                "vix": (19.03, "2026-10-22", "FRED VIXCLS"),
                 "cb_gold": (1019.0, "2025Q3–2026Q2 滚动12月", "央行购金表自动汇总"),
             }
 
@@ -452,12 +476,119 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
 
     await sch._capture_and_warm(FakeSnapshot(), FakeTrend())
 
-    # 验证：daily_macro_factors 表里应有 5 行
+    # 验证：daily_macro_factors 表里应有 8 行（V0.118.0 起宏观面 8 因子）
     async with async_session_factory() as session:
         repo = MacroFactorHistoryRepository(session)
-        for factor_key in ("dxy", "us10y", "us30y", "vix", "cb_gold"):
+        for factor_key in (
+            "dxy",
+            "us2y",
+            "us10y",
+            "us30y",
+            "curve_10y2y",
+            "real10y",
+            "vix",
+            "cb_gold",
+        ):
             count = await repo.count_samples("default", factor_key)
             assert count == 1, f"{factor_key} 期望 1 条历史，实际 {count}"
+
+
+async def test_v01180_static_sourced_macro_factors_are_not_persisted() -> None:
+    """V0.118.0：source 为「静态参考值」的因子**不写**历史表。
+
+    静态常量不是市场读数 —— 写进 ``daily_macro_factors`` 会污染滚动 90/10 分位窗口，
+    把动态阈值带偏（比硬编码阈值更糟）。
+    """
+    from app.services import scheduler as sch
+
+    class FakeSnapshot:
+        async def capture_today(self):
+            return None
+
+    class FakeMacro:
+        async def _collect(self):
+            return {
+                # 静态回退值：上游故障时的兜底
+                "dxy": (96.5, "2026-08-28", "静态参考值"),
+                "us2y": (4.65, "2026-08-28", "静态参考值"),
+                "us10y": (4.40, "2026-08-28", "静态参考值"),
+                "us30y": (4.90, "2026-08-28", "静态参考值"),
+                # 真实源：应落表
+                "vix": (19.03, "2026-10-22", "FRED VIXCLS"),
+            }
+
+    class FakeTrend:
+        _macro = FakeMacro()
+
+        async def analyze(self, days=60, target=None):
+            from datetime import date as date_cls
+
+            from app.schemas.market import (
+                DirectionSignal,
+                GoldTrendMetrics,
+                GoldTrendOut,
+                MacroIndexOut,
+                NewsIndexOut,
+                TrendDirection,
+                TrendIndexLevel,
+                TrendIndexOut,
+            )
+
+            return GoldTrendOut(
+                symbol="GC",
+                name="纽约金COMEX",
+                days=60,
+                points=[],
+                metrics=GoldTrendMetrics(
+                    start_date=date_cls(2026, 7, 1),
+                    end_date=date_cls(2026, 9, 1),
+                    trading_days=60,
+                    start_price=2300.0,
+                    end_price=2350.0,
+                    change_pct=2.17,
+                    high=2400.0,
+                    low=2250.0,
+                    ma20=2330.0,
+                    ma40=2310.0,
+                    change_pct_1d=0.0,
+                    change_pct_5d=0.0,
+                    direction=TrendDirection.SIDEWAYS,
+                    unit="USD/oz",
+                    summary="test",
+                ),
+                indicators={},
+                index=TrendIndexOut(score=50.0, level=TrendIndexLevel.NEUTRAL),
+                macro=MacroIndexOut(
+                    score=50.0,
+                    direction=DirectionSignal.NEUTRAL,
+                    factors=[],
+                    summary="test",
+                ),
+                news=NewsIndexOut(score=50.0, direction=DirectionSignal.NEUTRAL, note=""),
+                data_sources={},
+                degraded=False,
+                freshness=None,
+                interval="1d",
+                served_at=None,
+            )
+
+    from app.repositories.db import async_session_factory
+    from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+
+    await sch._capture_and_warm(FakeSnapshot(), FakeTrend())
+
+    async with async_session_factory() as session:
+        repo = MacroFactorHistoryRepository(session)
+        # 真实源的因子应落表
+        vix_rows = await repo.get_window("default", "vix")
+        assert vix_rows, "vix 来自 FRED 实时源，应落历史表"
+        assert vix_rows[0].source == "FRED VIXCLS"
+        # 静态回退的因子：表里**不能**出现 source 为「静态…」的行
+        # （断言 source 而不是行数 —— 行数依赖同文件其他测试是否先写过同一 key）
+        for static_key in ("dxy", "us2y", "us10y", "us30y"):
+            rows = await repo.get_window("default", static_key)
+            bad = [r.source for r in rows if r.source.startswith("静态")]
+            assert not bad, f"{static_key} 是静态回退值，不应落历史表，实际 source={bad}"
 
 
 async def test_v079_step_e_capture_and_warm_step3_failure_does_not_propagate(

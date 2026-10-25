@@ -242,7 +242,7 @@ window.PM_I18N_zh_TW = {
   // V0.79.0 Step G Commit 3：進階模式 + 非同步進度
   "backtest.advanced_title": "進階模式（巢狀權重 + 非同步）",
   "backtest.trend_5": "啟用技術面 5 維度內部權重",
-  "backtest.macro_5": "啟用宏觀 5 因子內部權重",
+  "backtest.macro_5": "啟用宏觀 5 因子內部權重（美元/10Y/30Y/VIX/央行購金）",
   "backtest.async_run": "⚡ 強制非同步執行（> 200 組合時自動啟用）",
   "backtest.sum_hint_ok": "✓ 權重和 = 1.0，可提交",
   "backtest.sum_hint_bad": "⚠ 權重和 ≠ 1.0，請調整",
@@ -439,8 +439,8 @@ window.PM_I18N_zh_TW = {
   "weights.h1": "權重配置 · 黃金價格投資輔助工具",
   "weights.tech_title": "📈 技術面權重",
   "weights.tech_desc": "依金價 / MA 偏離 / RSI 等技術指標綜合。",
-  "weights.macro_title": "🌐 宏觀面權重",
-  "weights.macro_desc": "依美元指數 / 美債殖利率 / 避險情緒等綜合。",
+  "weights.macro_title": "🌐 宏觀面權重（8 大參考因子）",
+  "weights.macro_desc": "美元指數 / 美債 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 實質利率 / VIX / 央行購金，對黃金友善度評分的權重",
   "weights.sum_macro": "當前宏觀面權重",
   "weights.combine_title": "⚖️ 綜合權重",
   "weights.combine_desc": "技術 + 宏觀 + 消息 = 100%；調整即時生效。",
@@ -1001,7 +1001,7 @@ window.PM_I18N_zh_TW = {
 
   /* ── V0.110.0 宏觀因子手動校準（macro_factor_overrides）── */
   "weights.mo_title": "🌍 宏觀因子手動校準",
-  "weights.mo_desc": "美元指數 / VIX 沒有自動即時來源，系統預設使用內建靜態參考值（2026-08-28）。在行情終端看到最新讀數後，可在此手動輸入取代 —— 儲存後宏觀參考指數與綜合趨勢指數立即依新讀數重算。留空表示沿用自動資料源。",
+  "weights.mo_desc": "全部因子現均有自動即時來源（美元指數 Yahoo / VIX 與 10Y 實質利率 FRED / 美債殖利率 美國聯準會 H.15）。若在行情終端看到更新讀數，可在此手動輸入取代 —— 儲存後宏觀參考指數與綜合趨勢指數立即依新讀數重算。留空表示沿用自動資料源。",
   "weights.mo_factor": "因子",
   "weights.mo_current": "目前生效",
   "weights.mo_input": "手動值",

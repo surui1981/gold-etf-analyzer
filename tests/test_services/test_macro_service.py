@@ -7,22 +7,60 @@ from app.services.macro import MACRO_FACTOR_RULES, MacroFactorService, _friendly
 
 _RULES = {r["key"]: r for r in MACRO_FACTOR_RULES}
 
+#: V0.118.0 的 8 个因子 key
+ALL_KEYS = {"dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"}
+#: 可滚动（参与 252 日滚动分位）的因子 —— cb_gold 是季度合计，显式跳过
+ROLLING_KEYS = ALL_KEYS - {"cb_gold"}
+
+
+@pytest.fixture(autouse=True)
+def _stub_macro_sources(monkeypatch):
+    """把 4 个外部源全部打桩 —— **任何漏打桩都会让单测真的联网**。
+
+    V0.118.0 起 8 个因子里 7 个来自外部源（H.15 / FRED / Yahoo）。漏打桩的后果：
+    CI 无外网 ⇒ 用例挂；本地有外网 ⇒ 用例变慢，且断言随当天行情漂移。
+    个别测试要改 H.15 的返回值时，在自己用例里再 monkeypatch 一次即可
+    （后写的 monkeypatch 覆盖先写的）。
+    """
+    from datetime import date
+
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        return USTYield(us2y=4.05, us10y=4.05, us30y=4.88, data_date=date(2026, 10, 21))
+
+    async def fake_fred(series_id, **kwargs):
+        return None  # 取不到 → 回退静态参考值
+
+    async def fake_yahoo(symbol, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+
 
 def test_weights_sum_to_one() -> None:
     """宏观因子权重必须归一。"""
     assert sum(r["weight"] for r in MACRO_FACTOR_RULES) == pytest.approx(1.0)
 
 
+def test_factor_set_is_eight_keys() -> None:
+    """V0.118.0：因子集恰好 8 个，key 集合被锁死（加因子要同步前端 + 权重 schema）。"""
+    assert {r["key"] for r in MACRO_FACTOR_RULES} == ALL_KEYS
+    assert len(MACRO_FACTOR_RULES) == 8
+
+
 def test_negative_correlation_mapping() -> None:
     """负相关因子（美元指数/美债）：值越低越利好黄金。"""
     dxy = _RULES["dxy"]
-    assert _friendly_score(95.0, dxy) == 100.0  # best 分位
-    assert _friendly_score(105.0, dxy) == 0.0  # worst 分位
-    assert _friendly_score(100.0, dxy) == 50.0  # 中枢
+    assert _friendly_score(94.0, dxy) == 100.0  # best 分位
+    assert _friendly_score(107.0, dxy) == 0.0  # worst 分位
+    assert _friendly_score(100.5, dxy) == 50.0  # 中枢
 
     us10y = _RULES["us10y"]
-    assert _friendly_score(3.5, us10y) == 100.0
-    assert _friendly_score(4.5, us10y) == 0.0
+    assert _friendly_score(3.8, us10y) == 100.0
+    assert _friendly_score(5.4, us10y) == 0.0
 
 
 def test_positive_correlation_mapping() -> None:
@@ -33,18 +71,38 @@ def test_positive_correlation_mapping() -> None:
     assert _friendly_score(850.0, cb) == 50.0
 
     vix = _RULES["vix"]
-    assert _friendly_score(25.0, vix) == 100.0
-    assert _friendly_score(12.0, vix) == 0.0
+    assert _friendly_score(30.0, vix) == 100.0
+    assert _friendly_score(13.0, vix) == 0.0
+
+
+def test_new_factors_friendly_score() -> None:
+    """V0.118.0 新增 3 因子：2Y 负相关、实际利率负相关、利差负相关（倒挂利多）。"""
+    us2y = _RULES["us2y"]
+    assert _friendly_score(3.0, us2y) == 100.0
+    assert _friendly_score(5.0, us2y) == 0.0
+
+    real10y = _RULES["real10y"]
+    assert _friendly_score(0.8, real10y) == 100.0
+    assert _friendly_score(3.2, real10y) == 0.0
+
+    # 利差：倒挂（-0.5）= 100 分，陡峭（1.5）= 0 分
+    curve = _RULES["curve_10y2y"]
+    assert _friendly_score(-0.5, curve) == 100.0
+    assert _friendly_score(1.5, curve) == 0.0
+    assert _friendly_score(0.5, curve) == 50.0
 
 
 async def test_macro_evaluate(monkeypatch) -> None:
-    """指数合成：5 因子、分数与方向、贡献求和（绕过 TTL 缓存直接测合成逻辑）。"""
+    """指数合成：8 因子、分数与方向、贡献求和（绕过 TTL 缓存直接测合成逻辑）。"""
 
     async def fake_collect(self):
         return {
             "dxy": (96.5, "2026-08-28", "静态参考值"),
+            "us2y": (4.05, "2026-08-28", "静态参考值"),
             "us10y": (4.4, "2026-08-28", "静态参考值"),
             "us30y": (4.9, "2026-08-28", "静态参考值"),
+            "curve_10y2y": (0.35, "2026-08-28", "派生 10Y-2Y"),
+            "real10y": (2.4, "2026-08-28", "静态参考值"),
             "vix": (18.5, "2026-08-28", "静态参考值"),
             "cb_gold": (1019.0, "2025Q3–2026Q2 滚动12月", "WGC GDT Q2 2026"),
         }
@@ -52,7 +110,8 @@ async def test_macro_evaluate(monkeypatch) -> None:
     monkeypatch.setattr(MacroFactorService, "_collect", fake_collect)
     out = await MacroFactorService()._evaluate_uncached()
 
-    assert len(out.factors) == 5
+    assert len(out.factors) == 8
+    assert {f.key for f in out.factors} == ALL_KEYS
     assert 0 <= out.score <= 100
     assert out.direction in (
         DirectionSignal.BULLISH,
@@ -61,10 +120,10 @@ async def test_macro_evaluate(monkeypatch) -> None:
     )
     assert sum(f.contribution for f in out.factors) == pytest.approx(out.score, abs=0.5)
     assert all(0 <= f.score <= 100 for f in out.factors)
-    # 美债 4.4% → 友好度 10（偏利空）
+    # 美债 4.4% → 友好度 (4.4-5.4)/(3.8-5.4)*100 = 62.5
     us10y = next(f for f in out.factors if f.key == "us10y")
-    assert us10y.direction == DirectionSignal.BEARISH
-    assert us10y.score == pytest.approx(10.0, abs=0.1)
+    assert us10y.direction == DirectionSignal.BULLISH
+    assert us10y.score == pytest.approx(62.5, abs=0.1)
     # 数据源标识被透传到输出
     assert us10y.source == "静态参考值"
     # 央行购金 T12M=1019 → 友好度 ~74（BULLISH ≥60）
@@ -72,6 +131,8 @@ async def test_macro_evaluate(monkeypatch) -> None:
     assert cb.direction == DirectionSignal.BULLISH
     assert cb.score == pytest.approx(74.1, abs=0.2)
     assert "Q2 2026" in cb.source  # 数据源含 WGC 季度报告标识
+    # 贡献之和 = 指数分（权重已归一化到 1.0）
+    assert sum(f.weight for f in out.factors) == pytest.approx(1.0, abs=1e-6)
 
 
 async def test_macro_evaluate_cb_gold_uses_central_bank_service(monkeypatch, db_session) -> None:
@@ -277,7 +338,9 @@ async def test_v01100_override_propagates_into_index(monkeypatch) -> None:
     assert dxy.value == "105"
     assert dxy.source == "手动输入"
     assert dxy.data_date == "2026-10-21"
-    assert dxy.score == 0.0  # worst 分位 105 → 对黄金最不利
+    assert dxy.score == pytest.approx(
+        15.4, abs=0.1
+    )  # V0.118.0：worst 分位 107 → (105-107)/(94-107)*100
     from app.services.macro import clear_macro_cache
 
     clear_macro_cache()
@@ -289,3 +352,98 @@ async def _noop_ust():
     from app.repositories.market_data import USTYield
 
     return USTYield(us10y=4.05, us30y=4.88, data_date=date(2026, 10, 21))
+
+
+# ───────────────────── V0.118.0 · 8 因子 + 实时源 + 派生利差 ─────────────────────
+
+
+async def test_curve_derived_from_10y_minus_2y(monkeypatch) -> None:
+    """利差是**派生**因子：10Y − 2Y，来源标「派生 10Y-2Y」，数据日期取两个输入的较早者。"""
+    from datetime import date
+
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        return USTYield(us2y=4.05, us10y=4.35, us30y=4.88, data_date=date(2026, 10, 21))
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    values = await MacroFactorService()._collect()
+
+    val, data_date, source = values["curve_10y2y"]
+    assert val == pytest.approx(0.30)
+    assert source == "派生 10Y-2Y"
+    assert data_date == "2026-10-21"
+
+
+async def test_curve_falls_back_to_static_when_input_is_static(monkeypatch) -> None:
+    """输入是静态兜底时，派生利差也必须标成静态 —— 否则假值会写进历史表。"""
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        from datetime import date
+
+        return USTYield(us10y=4.35, us30y=4.88, data_date=date(2026, 10, 21))  # 无 us2y
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    values = await MacroFactorService()._collect()
+
+    assert values["curve_10y2y"][2].startswith("静态")
+    from app.services.macro import is_persistable_source
+
+    assert is_persistable_source(values["curve_10y2y"][2]) is False
+
+
+async def test_manual_override_of_2y_propagates_to_curve(monkeypatch) -> None:
+    """手动覆盖 2Y（不覆盖利差）⇒ 利差跟着一起变（口径自洽）。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(us2y=MacroFactorOverride(value=3.50, as_of="2026-10-21"))
+    values = await _collect_with(monkeypatch, fake)
+
+    # H.15 给 us10y=4.05（见 _collect_with），手动 us2y=3.50 ⇒ 利差 0.55
+    assert values["curve_10y2y"][0] == pytest.approx(0.55)
+    assert values["curve_10y2y"][2] == "派生 10Y-2Y"
+
+
+async def test_manual_override_of_curve_wins_over_derivation(monkeypatch) -> None:
+    """手动覆盖利差时，派生逻辑必须让位（覆盖 > 一切）。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    fake = _override_service(curve_10y2y=MacroFactorOverride(value=-0.20, as_of="2026-10-21"))
+    values = await _collect_with(monkeypatch, fake)
+
+    assert values["curve_10y2y"] == (-0.20, "2026-10-21", "手动输入")
+
+
+async def test_live_fred_and_yahoo_sources_are_used(monkeypatch) -> None:
+    """V0.118.0：dxy 走 Yahoo、vix/real10y 走 FRED（不再停在 2026-08-28 常量）。"""
+    from datetime import date
+
+    async def fake_fred(series_id, **kwargs):
+        return {"VIXCLS": (19.03, date(2026, 10, 22)), "DFII10": (2.64, date(2026, 10, 22))}[
+            series_id
+        ]
+
+    async def fake_yahoo(symbol, **kwargs):
+        return (101.81, date(2026, 10, 23))
+
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+    values = await MacroFactorService()._collect()
+
+    assert values["dxy"] == (101.81, "2026-10-23", "Yahoo DX-Y.NYB")
+    assert values["vix"] == (19.03, "2026-10-22", "FRED VIXCLS")
+    assert values["real10y"] == (2.64, "2026-10-22", "FRED DFII10")
+
+
+def test_static_sources_are_not_persistable() -> None:
+    """静态兜底值**不得**写进历史表 —— 一次上游故障就能把滚动分位带偏。"""
+    from app.services.macro import STATIC_SOURCE_PREFIX, is_persistable_source
+
+    assert is_persistable_source("静态参考值") is False
+    assert is_persistable_source(STATIC_SOURCE_PREFIX + "参考值") is False
+    assert is_persistable_source("美联储 H.15") is True
+    assert is_persistable_source("FRED VIXCLS") is True
+    assert is_persistable_source("Yahoo DX-Y.NYB") is True
+    assert is_persistable_source("派生 10Y-2Y") is True
+    assert is_persistable_source("手动输入") is True

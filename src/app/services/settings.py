@@ -99,12 +99,15 @@ class WeightService:
         }
 
     async def macro_weights(self) -> dict[str, float]:
-        """宏观面因子权重（英文 key，供 MacroFactorService）。"""
+        """宏观面因子权重（英文 key，供 MacroFactorService）。V0.118.0：5 → 8 个因子。"""
         w = (await self.get_weights()).macro
         return {
             "dxy": w.dxy,
+            "us2y": w.us2y,
             "us10y": w.us10y,
             "us30y": w.us30y,
+            "curve_10y2y": w.curve_10y2y,
+            "real10y": w.real10y,
             "vix": w.vix,
             "cb_gold": w.cb_gold,
         }

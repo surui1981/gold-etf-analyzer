@@ -60,6 +60,45 @@ class MacroFactorHistoryRepository:
         await self._session.commit()
         return result.rowcount or 0
 
+    async def upsert_many(
+        self,
+        target: str,
+        rows: list[tuple[date, str, float, str, str]],
+    ) -> int:
+        """批量 upsert **跨多个日期** 的记录；返回受影响行数。
+
+        V0.118.0 新增（历史回填用）。``upsert_batch`` 一次只写一个 ``snapshot_date``，
+        回填 252 个交易日要调 252 次 —— 那是 252 次 commit，慢到不可接受。
+
+        ``rows`` 每条为 ``(snapshot_date, factor_key, value, data_date, source)``。
+        同样按 ``(target, snapshot_date, factor_key)`` 幂等覆盖。
+        """
+        if not rows:
+            return 0
+        payload = [
+            {
+                "target": target,
+                "snapshot_date": snapshot_date,
+                "factor_key": factor_key,
+                "value": value,
+                "data_date": data_date,
+                "source": source,
+            }
+            for (snapshot_date, factor_key, value, data_date, source) in rows
+        ]
+        stmt = sqlite_insert(DailyMacroFactor).values(payload)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["target", "snapshot_date", "factor_key"],
+            set_={
+                "value": stmt.excluded.value,
+                "data_date": stmt.excluded.data_date,
+                "source": stmt.excluded.source,
+            },
+        )
+        result = await self._session.execute(stmt)
+        await self._session.commit()
+        return result.rowcount or 0
+
     async def get_window(
         self,
         target: str,

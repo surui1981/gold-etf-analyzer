@@ -5,7 +5,7 @@
 
 from datetime import date
 
-from app.repositories.market_data import USTYield, _parse_h15_csv
+from app.repositories.market_data import USTYield, _parse_h15_csv, parse_h15_history
 
 # 真实 H.15 CSV 头部 5 行元数据（截取自联邦储备 H.15 公开 CSV）
 _H15_HEADER = (
@@ -25,6 +25,22 @@ def _build_h15_csv(rows: list[tuple[str, str, str, str]]) -> str:
     lines = [_H15_HEADER.rstrip("\n"), _H15_COL_HEADER.rstrip("\n")]
     for date_, m01, m03, y10, y30 in rows:
         lines.append(f"{date_},{m01},{m03},{y10},{y30}")
+    return "\n".join(lines) + "\n"
+
+
+def _build_h15_csv_with_2y(rows: list[tuple[str, str, str, str, str]]) -> str:
+    """构造**带 2Y 列**的 H.15 CSV（V0.118.0 新增因子的数据来源）。
+
+    真实 H.15 CSV 的列顺序：1M / 3M / 2Y / 10Y / 30Y。2Y 列名固定为
+    ``RIFLGFCY02_N.B``（常量 ``_H15_COL_2Y``）。
+    """
+    lines = [
+        _H15_HEADER.rstrip("\n"),
+        '"Time Period","RIFLGFCM01_N.B","RIFLGFCM03_N.B",'
+        '"RIFLGFCY02_N.B","RIFLGFCY10_N.B","RIFLGFCY30_N.B"',
+    ]
+    for date_, m01, m03, y2, y10, y30 in rows:
+        lines.append(f"{date_},{m01},{m03},{y2},{y10},{y30}")
     return "\n".join(lines) + "\n"
 
 
@@ -188,6 +204,73 @@ async def test_fetch_h15_timeout(monkeypatch) -> None:
     provider = AkshareTreasuryYieldProvider()
     result = await provider.get_treasury_yields()
     assert result is None
+
+
+# ───────────────────── V0.118.0 · 2Y 列 + 全量历史解析 ─────────────────────
+
+
+def test_parse_h15_csv_reads_2y_column() -> None:
+    """带 2Y 列的 CSV → us2y 被解析出来（V0.118.0 新增因子）。"""
+    csv_text = _build_h15_csv_with_2y(
+        [
+            ("2026-09-02", "3.83", "3.92", "4.21", "4.79", "5.27"),
+            ("2026-09-03", "3.83", "3.89", "4.20", "4.77", "5.25"),
+        ]
+    )
+    result = _parse_h15_csv(csv_text)
+    assert result is not None
+    assert result.us2y == 4.20
+    assert result.us10y == 4.77
+    assert result.us30y == 5.25
+    assert result.data_date == date(2026, 9, 3)
+
+
+def test_parse_h15_csv_without_2y_column_keeps_us2y_none() -> None:
+    """没有 2Y 列 → us2y 为 None（不牵连 10Y/30Y）。"""
+    csv_text = _build_h15_csv([("2026-09-03", "3.83", "3.89", "4.77", "5.25")])
+    result = _parse_h15_csv(csv_text)
+    assert result is not None
+    assert result.us2y is None
+
+
+def test_parse_h15_history_returns_every_row() -> None:
+    """全量历史解析：每行都吐出来（不是「最近一行」语义），按日期升序。"""
+    csv_text = _build_h15_csv_with_2y(
+        [
+            ("2026-09-03", "3.83", "3.89", "4.20", "4.77", "5.25"),
+            ("2026-09-01", "3.85", "3.92", "4.23", "4.79", "5.27"),
+            ("2026-09-02", "3.83", "3.92", "4.21", "4.79", "5.27"),
+        ]
+    )
+    rows = parse_h15_history(csv_text)
+    assert len(rows) == 3
+    assert [r[0] for r in rows] == [date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3)]
+    assert rows[0] == (date(2026, 9, 1), 4.23, 4.79, 5.27)
+
+
+def test_parse_h15_history_skips_rows_missing_10y_or_30y() -> None:
+    """10Y/30Y 缺失的行直接跳过（回填宁可少一天也不要造脏数据）。"""
+    csv_text = _build_h15_csv_with_2y(
+        [
+            ("2026-09-01", "3.85", "3.92", "4.23", "4.79", "5.27"),
+            ("2026-09-02", "3.83", "3.92", "4.21", "", ""),  # 10Y/30Y 缺失
+            ("2026-09-03", "3.83", "3.89", "4.20", "4.77", "5.25"),
+        ]
+    )
+    rows = parse_h15_history(csv_text)
+    assert [r[0] for r in rows] == [date(2026, 9, 1), date(2026, 9, 3)]
+
+
+def test_parse_h15_history_without_2y_column_yields_none_2y() -> None:
+    """无 2Y 列 → us2y 为 None（其余照常）。"""
+    csv_text = _build_h15_csv([("2026-09-03", "3.83", "3.89", "4.77", "5.25")])
+    rows = parse_h15_history(csv_text)
+    assert rows == [(date(2026, 9, 3), None, 4.77, 5.25)]
+
+
+def test_parse_h15_history_garbage_returns_empty() -> None:
+    """非 CSV 输入 → 空列表（不抛异常）。"""
+    assert parse_h15_history("this is not CSV") == []
 
 
 async def test_repo_marks_ust_source() -> None:

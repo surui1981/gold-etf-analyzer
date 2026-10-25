@@ -52,7 +52,7 @@
     "评估指数类": {
       "综合指数": "0-100 量化多空：技术面 30% + 宏观面 40% + 消息面 30% 加权",
       "技术面": "5 维度（结构/动量/支撑/动能/回撤）加权合成 0-100",
-      "宏观面": "5 因子（美元/美债10Y·30Y/VIX/央行购金）合成 0-100",
+      "宏观面": "8 因子（美元/美债2Y·10Y·30Y/10Y-2Y利差/10Y实际利率/VIX/央行购金）合成 0-100",
       "消息面": "客户基于投行展望打分 0-100（占 30% 权重）",
       "RSI(14)": "14 日相对强弱指数，>70 超买 / <30 超卖",
     },
@@ -68,7 +68,10 @@
     },
     "宏观因子类": {
       "DXY (美元指数)": "美元对一篮子货币的综合强弱，与黄金负相关",
+      "美债 2Y": "美国 2 年期国债收益率，定价美联储政策预期，偏高 = 偏鹰 = 黄金弱",
       "美债 10Y / 30Y": "美国 10 年/30 年期国债收益率，与黄金负相关",
+      "10Y-2Y 利差": "期限利差 = 10Y − 2Y；倒挂（负值）= 衰退定价 = 利多黄金，陡峭 = 最不利",
+      "10Y 实际利率": "10 年期 TIPS 收益率（扣通胀），黄金零息属性的定价锚，越高越压制金价",
       "VIX": "标普 500 波动率指数（恐慌指数），与黄金正相关（避险）",
       "cb_gold": "国际央行季度净购金（吨），结构性正相关",
     },
@@ -180,7 +183,7 @@
     "/static/trend.html": [
       { selector: ".topnav", text: "顶栏 5 个页面：趋势追踪 / 持仓决策 / 权重 / 消息面 / 央行购金。点击切换。", pos: "bottom" },
       { selector: ".headline .index-panel, .index-panel", text: "综合趋势评估指数（0-100），技术 30% × 宏观 40% × 消息 30% 加权", pos: "top" },
-      { selector: "#macroFactors", text: "5 大宏观因子：美元 / 美债 10Y·30Y / VIX / 央行购金；颜色标识 live / stale / mock", pos: "top" },
+      { selector: "#macroFactors", text: "8 大宏观因子：美元 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金；颜色标识 live / stale / mock", pos: "top" },
       { selector: "#chartArea", text: "60 天趋势曲线 + MA5/20/40 均线，鼠标悬停看日数据", pos: "top" },
     ],
     "/portfolio": [
@@ -312,6 +315,9 @@
 
         <dt>美债 10Y / 30Y</dt>
         <dd>AKShare <code>bond_zh_us_rate</code>（中债收益率）｜ 实时</dd>
+
+        <dt>宏观因子（V0.118.0+）</dt>
+        <dd>美债 2Y·10Y·30Y：美联储 H.15 CSV ｜ 美元指数：Yahoo <code>DX-Y.NYB</code> ｜ VIX 与 10Y 实际利率：FRED <code>VIXCLS</code> / <code>DFII10</code> ｜ 10Y-2Y 利差由 10Y−2Y 派生</dd>
 
         <dt>央行购金（V0.57.0+）</dt>
         <dd>WGC Gold Demand Trends HTML chart JS（<code>fsapi.gold.org/api/v12/charts/js/...</code>）｜ 月度自动拉取 ｜ <a href="/central-bank">查看</a></dd>

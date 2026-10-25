@@ -478,9 +478,11 @@ console.log("=".repeat(70));
     ok("A6 定义 renderTrendGrid/renderMacroGrid",
        bth.includes("renderTrendGrid") && bth.includes("renderMacroGrid"));
 
-    // 6.3 中文键字面（必填，后端 schema 期望）
+    // 6.3 键字面（必填，后端 schema 期望）
+    // V0.118.0：trend_weights 仍是中文维度键；macro_weights 改成**因子 key**
+    // （原中文维度名与快照 macro_detail 的键对不上 → 聚合恒 None → 0 行）。
     ok("A6 trend_weights 中文键「结构」字面出现", bth.includes('"结构"'));
-    ok("A6 macro_weights 中文键「美元」字面出现", bth.includes('"美元"'));
+    ok("A6 macro_weights 用因子 key「dxy」字面出现", bth.includes('"dxy"'));
     ok("A6 trend_weights / macro_weights 字段名都在 inline JS",
        bth.includes("trend_weights") && bth.includes("macro_weights"));
 
@@ -538,7 +540,7 @@ console.log("=".repeat(70));
     ok("A7 trend.html fallback [动态]/[静态] 字面",
        bth.includes('"[动态]"') && bth.includes('"[静态]"'));
     ok("A7 trend.html 含动态阈值 hint 文案",
-       bth.includes("5 因子中 ≥4"));
+       bth.includes("macroRollingTotal") && bth.includes("滚动 90/10 分位") && bth.includes("${macroRollingTotal}"));
     ok("A7 trend.html macroInfo 改用 innerHTML（容下 badge）",
        bth.includes("getElementById(\"macroInfo\").innerHTML"));
 
@@ -547,7 +549,7 @@ console.log("=".repeat(70));
     ok("A7 silver.html 通过 window.I18n.t 取翻译",
        sh.includes("window.I18n.t"));
     ok("A7 silver.html 含动态阈值 hint 文案",
-       sh.includes("5 因子中 ≥4"));
+       sh.includes("macroRollingTotal") && sh.includes("滚动 90/10 分位") && sh.includes("${macroRollingTotal}"));
     ok("A7 silver.html 与 trend.html 角标逻辑一致（macroBadgeText 同步）",
        sh.includes("macroBadgeText"));
 

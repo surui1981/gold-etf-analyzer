@@ -161,14 +161,31 @@ def test_backtest_request_accepts_default_grid() -> None:
 
 def test_weight_grid_field_names_match_constants() -> None:
     """TREND_DIM_FIELDS / MACRO_DIM_FIELDS 与 weights.html ``TREND_FIELDS`` /
-    ``MACRO_FIELDS`` 必须同步 —— 前后端任何一处改名都必须同步两处。
+    ``MACRO_FIELDS`` 必须同步 —— 前后端任何一处改名必须同步两处。
+
+    V0.118.0：宏观侧改为**因子 key**（dxy/us10y/us30y/vix/cb_gold）。
+    原先是中文维度名（美元/利率/通胀/地缘/避险），与快照 ``macro_detail``
+    的键（因子 key）从不对上 → 聚合恒为 None → 该功能永远跑出 0 行。
     """
     # 5 个维度（结构 / 动量 / 支撑 / 动能 / 回撤）；顺序无要求
     assert set(TREND_DIM_FIELDS) == {"结构", "动量", "支撑", "动能", "回撤"}
     assert len(TREND_DIM_FIELDS) == 5
-    # 5 个宏观因子（美元 / 利率 / 通胀 / 地缘 / 避险）
-    assert set(MACRO_DIM_FIELDS) == {"美元", "利率", "通胀", "地缘", "避险"}
+    # 5 个**有历史覆盖**的宏观因子（键 = 因子 key，与 macro_detail 对齐）
+    assert set(MACRO_DIM_FIELDS) == {"dxy", "us10y", "us30y", "vix", "cb_gold"}
     assert len(MACRO_DIM_FIELDS) == 5
+
+
+def test_macro_dim_fields_are_keys_present_in_snapshot_detail() -> None:
+    """回测宏观维度的每个键都必须能在真实快照的 ``macro_detail`` 里找到。
+
+    这是「键对不上 → 整根快照被跳过 → 跑出 0 行」的护栏：常量改成什么，
+    都必须仍是快照 ``macro_detail`` 实际写过的键。
+    """
+    from app.services.snapshot import macro_detail_keys
+
+    detail_keys = set(macro_detail_keys())
+    missing = set(MACRO_DIM_FIELDS) - detail_keys
+    assert not missing, f"回测宏观维度键在快照 macro_detail 中不存在: {sorted(missing)}"
 
 
 def test_trend_weights_happy_path() -> None:
@@ -221,10 +238,21 @@ def test_trend_weights_extra_field_rejected() -> None:
 
 
 def test_macro_weights_happy_path() -> None:
-    """MacroWeights：和=1.0 + 覆盖 5 因子 → 通过。"""
+    """MacroWeights：和=1.0 + 覆盖 5 因子 → 通过。
+
+    ⚠️ V0.118.0：键必须是**因子 key**（与快照 ``macro_detail`` 一致），
+    不是中文维度名 —— 中文名会让 ``_aggregate_from_detail`` 找不到任一维度
+    ⇒ 该快照被整根跳过 ⇒ 回测跑出 0 行。
+    """
     MacroWeights(
         weights=[
-            {"美元": 0.30, "利率": 0.20, "通胀": 0.20, "地缘": 0.15, "避险": 0.15},
+            {
+                "dxy": 0.30,
+                "us10y": 0.20,
+                "us30y": 0.20,
+                "vix": 0.15,
+                "cb_gold": 0.15,
+            },
         ]
     )
 
@@ -257,8 +285,8 @@ def test_backtest_request_grid_cap_1000_rejects_overflow() -> None:
         ),
         macro_weights=MacroWeights(
             weights=[
-                {"美元": 0.20, "利率": 0.20, "通胀": 0.20, "地缘": 0.20, "避险": 0.20},
-                {"美元": 0.40, "利率": 0.20, "通胀": 0.10, "地缘": 0.10, "避险": 0.20},
+                {"dxy": 0.20, "us10y": 0.20, "us30y": 0.20, "vix": 0.20, "cb_gold": 0.20},
+                {"dxy": 0.40, "us10y": 0.20, "us30y": 0.10, "vix": 0.10, "cb_gold": 0.20},
             ]
         ),
     )

@@ -323,8 +323,8 @@ window.PM_I18N_ZH_CN = {
   "weights.tech_title": "📈 技术面权重（趋势 5 维度）",
   "weights.tech_desc": "综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配",
   "weights.sum_trend": "技术面合计：{sum}（须为 100%）",
-  "weights.macro_title": "🌐 宏观面权重（5 大参考因子）",
-  "weights.macro_desc": "美元指数 / 美债 10Y·30Y / VIX / 央行购金，对黄金友好度评分的权重",
+  "weights.macro_title": "🌐 宏观面权重（8 大参考因子）",
+  "weights.macro_desc": "美元指数 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金，对黄金友好度评分的权重",
   "weights.sum_macro": "宏观面合计：{sum}（须为 100%）",
   "weights.combine_title": "⚖️ 合成权重（技术面 / 宏观面 / 消息面）",
   "weights.combine_desc": "综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）",
@@ -356,7 +356,7 @@ window.PM_I18N_ZH_CN = {
 
   /* ── V0.110.0 宏观因子手动校准（macro_factor_overrides）── */
   "weights.mo_title": "🌍 宏观因子手动校准",
-  "weights.mo_desc": "美元指数 / VIX 没有自动实时源，系统默认使用内置静态参考值（2026-08-28）。在行情终端看到最新读数后，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。",
+  "weights.mo_desc": "全部因子现均有自动实时源（美元指数 Yahoo / VIX 与 10Y 实际利率 FRED / 美债收益率 美联储 H.15）。若在行情终端看到更新读数，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。",
   "weights.mo_factor": "因子",
   "weights.mo_current": "当前生效",
   "weights.mo_input": "手动值",
@@ -633,7 +633,7 @@ window.PM_I18N_ZH_CN = {
   // V0.79.0 Step G Commit 3：高级模式 + 异步进度
   "backtest.advanced_title": "高级模式（嵌套权重 + 异步）",
   "backtest.trend_5": "启用技术面 5 维度内部权重",
-  "backtest.macro_5": "启用宏观 5 因子内部权重",
+  "backtest.macro_5": "启用宏观 5 因子内部权重（美元/10Y/30Y/VIX/央行购金）",
   "backtest.async_run": "⚡ 强制异步执行（> 200 组合时自动启用）",
   "backtest.sum_hint_ok": "✓ 权重和 = 1.0，可提交",
   "backtest.sum_hint_bad": "⚠️ 权重和 ≠ 1.0，请调整",

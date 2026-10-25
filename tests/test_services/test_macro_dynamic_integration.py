@@ -19,11 +19,39 @@ from app.repositories.macro_factor_history import MacroFactorHistoryRepository
 from app.services.macro import MacroFactorService
 from app.services.macro_thresholds import MacroThresholdCalculator
 
-HARDCODE_DXY = (95.0, 105.0)
-HARDCODE_US10Y = (3.5, 4.5)
-HARDCODE_US30Y = (4.0, 5.0)
-HARDCODE_VIX = (25.0, 12.0)
+# V0.118.0：8 因子后 hardcode 兜底值全部改了
+HARDCODE_DXY = (94.0, 107.0)
+HARDCODE_US2Y = (3.0, 5.0)
+HARDCODE_US10Y = (3.8, 5.4)
+HARDCODE_US30Y = (4.3, 5.7)
+HARDCODE_CURVE = (-0.5, 1.5)
+HARDCODE_REAL10Y = (0.8, 3.2)
+HARDCODE_VIX = (30.0, 13.0)
 HARDCODE_CB_GOLD = (1200.0, 500.0)
+
+#: 7 个可滚动因子（cb_gold 是季度合计，显式跳过滚动）
+ROLLING_KEYS = ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix")
+
+
+@pytest.fixture(autouse=True)
+def _stub_macro_sources(monkeypatch):
+    """打桩 4 个外部源 —— V0.118.0 起 7 个因子来自外部源，漏打桩=单测真联网。"""
+    from datetime import date as _date
+
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        return USTYield(us2y=4.05, us10y=4.05, us30y=4.88, data_date=_date(2026, 10, 21))
+
+    async def fake_fred(series_id, **kwargs):
+        return None
+
+    async def fake_yahoo(symbol, **kwargs):
+        return None
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
 
 
 @pytest.fixture
@@ -105,26 +133,27 @@ class TestMacroFactorServiceDynamic:
         baseline = MacroFactorService(settings=None, central_bank=None)
         result_baseline = await baseline.evaluate()
 
-        # 这里只种了 dxy，us10y/us30y/vix 都回退 hardcode → 不足 4 因子 → macro_dynamic=False
+        # 这里只种了 dxy，其余 6 个滚动因子都回退 hardcode → 严格口径 → macro_dynamic=False
         assert result_dynamic.macro_dynamic is False
+        assert result_dynamic.dynamic_factors == ["dxy"]
         # dxy 单因子 score 切到 percentile（hardcode→(95,105) vs percentile→P90/P10）
         dxy_dynamic = next(f for f in result_dynamic.factors if f.key == "dxy")
         dxy_baseline = next(f for f in result_baseline.factors if f.key == "dxy")
         assert dxy_dynamic.score != dxy_baseline.score
 
-    async def test_all_4_rolling_factors_dynamic_marks_active(
+    async def test_all_rolling_factors_dynamic_marks_active(
         self, repo: MacroFactorHistoryRepository
     ) -> None:
-        """4 个滚动因子全 dynamic → macro_dynamic=True。"""
-        await _seed_one_factor(repo, "dxy", [96.0 + i * 0.1 for i in range(252)])
-        await _seed_one_factor(repo, "us10y", [3.5 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "us30y", [4.0 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
+        """7 个滚动因子全 dynamic → macro_dynamic=True。"""
+        for k in ROLLING_KEYS:
+            await _seed_one_factor(repo, k, [96.0 + i * 0.1 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
         assert result.macro_dynamic is True
+        # V0.118.0：逐因子明细也要全 —— 前端角标文案按它派生
+        assert set(result.dynamic_factors) == set(ROLLING_KEYS)
 
     async def test_cb_gold_even_with_252_samples_hardcode(
         self, repo: MacroFactorHistoryRepository
@@ -137,16 +166,15 @@ class TestMacroFactorServiceDynamic:
             source="央行购金表自动汇总",
             data_date="2025Q3–2026Q2",
         )
-        await _seed_one_factor(repo, "dxy", [96.0 + i * 0.1 for i in range(252)])
-        await _seed_one_factor(repo, "us10y", [3.5 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "us30y", [4.0 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
+        for k in ROLLING_KEYS:
+            await _seed_one_factor(repo, k, [96.0 + i * 0.1 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
-        # cb_gold 显式跳过 → 4 个滚动因子 dynamic → macro_dynamic=True
+        # cb_gold 显式跳过 → 7 个滚动因子 dynamic → macro_dynamic=True
         assert result.macro_dynamic is True
+        assert "cb_gold" not in result.dynamic_factors
         # cb_gold 在 factors 列表里，data_date 仍是 STATIC_REF 描述
         cb_gold_factor = next(f for f in result.factors if f.key == "cb_gold")
         assert "滚动12月" in cb_gold_factor.data_date  # STATIC_REF 的描述
@@ -155,13 +183,14 @@ class TestMacroFactorServiceDynamic:
         self, repo: MacroFactorHistoryRepository
     ) -> None:
         """59 样本 < min_samples=60 → 该因子回退 hardcode。"""
-        await _seed_one_factor(repo, "dxy", [96.0 + i * 0.1 for i in range(59)])
-        await _seed_one_factor(repo, "us10y", [3.5 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "us30y", [4.0 + i * 0.01 for i in range(252)])
-        await _seed_one_factor(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
+        for k in ROLLING_KEYS:
+            n = 59 if k == "dxy" else 252
+            await _seed_one_factor(repo, k, [96.0 + i * 0.1 for i in range(n)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
         result = await svc.evaluate()
-        # dxy 回退 hardcode，3 个 us10y/us30y/vix 切到 dynamic → 不足 4 → False
+        # dxy 回退 hardcode，其余 6 个切到 dynamic → 严格口径（全部动态才算）→ False
         assert result.macro_dynamic is False
+        assert "dxy" not in result.dynamic_factors
+        assert set(result.dynamic_factors) == set(ROLLING_KEYS) - {"dxy"}

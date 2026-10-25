@@ -46,6 +46,17 @@ class Settings(BaseSettings):
         "&filetype=csv&label=include&layout=seriescolumn"
     )
 
+    # ===== V0.118.0 · 宏观因子新数据源 =====
+    # FRED 无 KEY CSV 端点（fredgraph.csv）：``{series_id}`` 占位符 + 可选 ``cosd/coed``。
+    # 用于 DFII10（10Y 实际利率）/ VIXCLS（VIX）。
+    fred_csv_url: str = "https://fred.stlouisfed.org/graph/fredgraph.csv?id={series_id}"
+    # Yahoo chart 端点（DXY 用 DX-Y.NYB）：``{symbol}`` / ``{range}`` / ``{interval}`` 占位符。
+    # 非官方但免费无 KEY；失败时宏观面回退静态参考值（前端按 data_date 显示滞后天数）。
+    yahoo_chart_url: str = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        "?range={range}&interval={interval}"
+    )
+
     # XAU 实时报价 fallback chain：逗号分隔，按顺序尝试
     # 可选 token：goldapi | sina | etf_history
     xau_fallback_chain: str = "goldapi,sina,etf_history"

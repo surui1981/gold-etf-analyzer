@@ -40,6 +40,16 @@ const browser = await puppeteer.launch({
 });
 const page = await browser.newPage();
 await page.setViewport({ width: 1352, height: 900 });
+// ⚠ 必须绕过 Service Worker（V0.118.0 修）：static/sw.js 的 API 分支是
+//   network-first，但 **SW 自己的 fetch() 不走 puppeteer 的页面级请求拦截**
+//   （Fetch 域只挂在 page target 上）。而 sw.js 有 skipWaiting + clients.claim()，
+//   所以**第 1 次导航后 SW 就会接管页面** —— 于是：
+//     场景 A（第 1 次导航）→ 拦截生效 → 拿到兜底空壳 ✓（但这也取决于 SW 尚未激活，是竞态）
+//     场景 B（第 2 次导航）→ 请求由 SW 转发，拦截**静默失效** ⇒ 页面拿到真实接口数据
+//        ⇒ desc 变成 "sample=27"（真实值）而不是 mock 的 "sample=12"
+//        ⇒ 门禁稳定报红，看起来像「scoring 渲染坏了」，实际是门禁自己的 mock 失效了。
+//   绕过 SW 后两次导航都直接走网络 ⇒ 拦截稳定生效 ⇒ 门禁可重入。
+await page.setBypassServiceWorker(true);
 
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e && e.message ? e.message : e)));

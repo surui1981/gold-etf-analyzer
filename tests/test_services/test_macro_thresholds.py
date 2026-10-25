@@ -1,7 +1,7 @@
 """V0.79.0 Step E：MacroThresholdCalculator + MacroFactorHistoryRepository 测试。
 
 覆盖：
-- 空表 → 5 因子全回退 hardcode（cb_gold 显式跳过）
+- 空表 → 8 因子全回退 hardcode（cb_gold 显式跳过）
 - 60/252 样本下的 percentile 正确性
 - 41-59 样本边界 → 单因子回退 hardcode
 - 24h TTL 缓存命中
@@ -112,27 +112,49 @@ class TestCalculatorWithEmptyTable:
 
 
 class TestCalculatorWithData:
-    """有数据场景：4 滚动因子切到 percentile，cb_gold 永远 hardcode。"""
+    """有数据场景：7 个滚动因子切到 percentile，cb_gold 永远 hardcode。
 
-    async def test_252_samples_dxy_us10y_us30y_vix_dynamic(
+    V0.118.0：可滚动因子从 4 个变成 7 个（+us2y / +curve_10y2y / +real10y）。
+    ``is_dynamic_active`` 的口径同步改成「**全部**可滚动因子都动态」——
+    旧版的 ``>= 4`` 在 7 个因子里会松成「过半即算」，badge 会撒谎。
+    """
+
+    #: 7 个可滚动因子（cb_gold 是季度合计，显式跳过）
+    ROLLING = ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix")
+
+    async def test_252_samples_all_rolling_factors_dynamic(
         self, repo: MacroFactorHistoryRepository
     ) -> None:
-        await _seed(repo, "dxy", [96.5 + i * 0.1 for i in range(252)])
-        await _seed(repo, "us10y", [4.0 + i * 0.01 for i in range(252)])
-        await _seed(repo, "us30y", [4.5 + i * 0.01 for i in range(252)])
-        await _seed(repo, "vix", [15.0 + i * 0.05 for i in range(252)])
+        for k in self.ROLLING:
+            await _seed(repo, k, [100.0 + i * 0.1 for i in range(252)])
 
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         thresholds = await calc.get_or_compute("default")
         hardcode = _hardcode_dict()
 
-        # 4 个滚动因子阈值 ≠ hardcode
-        for k in ("dxy", "us10y", "us30y", "vix"):
+        # 7 个滚动因子阈值 ≠ hardcode
+        for k in self.ROLLING:
             assert thresholds[k] != hardcode[k], f"{k} should be dynamic"
         # cb_gold 显式跳过 → 走 hardcode
         assert thresholds["cb_gold"] == hardcode["cb_gold"]
 
         assert calc.is_dynamic_active(thresholds) is True
+
+    async def test_one_rolling_factor_missing_keeps_whole_set_inactive(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """少 1 个因子的样本 → 该因子回退 hardcode → 整体判 False（严格口径）。"""
+        for k in self.ROLLING:
+            if k == "real10y":
+                continue
+            await _seed(repo, k, [100.0 + i * 0.1 for i in range(252)])
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+        hardcode = _hardcode_dict()
+
+        assert thresholds["real10y"] == hardcode["real10y"]
+        assert calc.is_dynamic_active(thresholds) is False
 
     async def test_cb_gold_even_with_252_samples_still_hardcode(
         self, repo: MacroFactorHistoryRepository
@@ -149,7 +171,7 @@ class TestCalculatorWithData:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         thresholds = await calc.get_or_compute("default")
-        assert thresholds["dxy"] != (95.0, 105.0)  # 切到 percentile
+        assert thresholds["dxy"] != (94.0, 107.0)  # 切到 percentile
 
     async def test_59_samples_falls_back_to_hardcode(
         self, repo: MacroFactorHistoryRepository
@@ -157,7 +179,70 @@ class TestCalculatorWithData:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(59)])
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         thresholds = await calc.get_or_compute("default")
-        assert thresholds["dxy"] == (95.0, 105.0)  # 回退
+        assert thresholds["dxy"] == (94.0, 107.0)  # 回退
+
+
+class TestRollingSignConvention:
+    """V0.118.0：滚动分位的 best/worst 方向必须与因子的**符号约定**一致。
+
+    回归背景：此前**所有**因子一律 ``best=P90``。对 6 个负相关因子
+    （美元 / 三档美债 / 实际利率 / 10Y-2Y 利差，占宏观权重 65%）方向整个反了 ——
+    美元指数创窗口新高会被判成「最利多黄金」给 100 分。
+    该缺陷自 V0.79.0 起一直休眠（滚动窗口样本不足，从未真正激活），
+    一旦按计划回填历史让滚动分位接管，6 个因子会集体反向。
+    """
+
+    async def test_negative_factor_best_is_low_percentile(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """负相关因子（dxy）：best = P10（低分位），worst = P90。"""
+        values = [90.0 + i * 0.2 for i in range(100)]  # 90.0 .. 109.8
+        await _seed(repo, "dxy", values)
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+        best, worst = thresholds["dxy"]
+
+        assert best == pytest.approx(_percentile(values, 10.0))
+        assert worst == pytest.approx(_percentile(values, 90.0))
+        assert best < worst, "负相关因子 best 必须小于 worst（值越低越利多黄金）"
+
+    async def test_positive_factor_best_is_high_percentile(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """正相关因子（vix）：best = P90（高分位），worst = P10。"""
+        values = [10.0 + i * 0.2 for i in range(100)]
+        await _seed(repo, "vix", values)
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+        best, worst = thresholds["vix"]
+
+        assert best == pytest.approx(_percentile(values, 90.0))
+        assert worst == pytest.approx(_percentile(values, 10.0))
+        assert best > worst, "正相关因子 best 必须大于 worst"
+
+    async def test_every_rolling_factor_follows_its_own_sign(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """逐因子核对方向：8 条规则里每个可滚动因子都对得上自己的 ``positive`` 标志。"""
+        for rule in MACRO_FACTOR_RULES:
+            if rule["key"] == "cb_gold":
+                continue
+            await _seed(repo, rule["key"], [10.0 + i * 0.2 for i in range(100)])
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+
+        for rule in MACRO_FACTOR_RULES:
+            key = rule["key"]
+            if key == "cb_gold":
+                continue
+            best, worst = thresholds[key]
+            if rule["positive"]:
+                assert best > worst, f"{key} 是正相关因子，best 必须是高分位"
+            else:
+                assert best < worst, f"{key} 是负相关因子，best 必须是低分位"
 
 
 class TestIsDynamicActive:
@@ -169,23 +254,46 @@ class TestIsDynamicActive:
         assert calc.is_dynamic_active(hardcode) is False
 
     async def test_three_dynamic_returns_false(self, repo: MacroFactorHistoryRepository) -> None:
-        """3 因子切到 dynamic → 不足 4 阈值 → False。"""
+        """3 个可滚动因子切到 dynamic → 其余 4 个仍 hardcode → False。"""
         calc = MacroThresholdCalculator(repo=repo)
         thresholds = _hardcode_dict()
-        # 改 dxy / us10y / us30y → 3 因子动态
         thresholds["dxy"] = (100.0, 90.0)
         thresholds["us10y"] = (4.0, 3.0)
         thresholds["us30y"] = (4.5, 3.5)
         assert calc.is_dynamic_active(thresholds) is False
 
-    async def test_four_dynamic_returns_true(self, repo: MacroFactorHistoryRepository) -> None:
-        """4 因子切到 dynamic → True。"""
+    async def test_six_of_seven_dynamic_returns_false(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """V0.118.0 口径护栏：6/7 个因子动态**不算**动态。
+
+        旧版判据是硬编码 ``>= 4``，在 4 个可滚动因子的世界里恰好等价于「全动态」；
+        因子扩到 7 个后照抄会松成「过半即算」—— badge 说「用滚动分位」，
+        但仍有 1 个因子在用 2020-2023 的硬编码阈值。
+        """
         calc = MacroThresholdCalculator(repo=repo)
         thresholds = _hardcode_dict()
-        thresholds["dxy"] = (100.0, 90.0)
-        thresholds["us10y"] = (4.0, 3.0)
-        thresholds["us30y"] = (4.5, 3.5)
-        thresholds["vix"] = (20.0, 18.0)
+        for k in ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "vix"):
+            thresholds[k] = (100.0, 90.0)
+        assert calc.is_dynamic_active(thresholds) is False
+
+    async def test_all_seven_dynamic_returns_true(self, repo: MacroFactorHistoryRepository) -> None:
+        """7 个可滚动因子全部 dynamic → True。"""
+        calc = MacroThresholdCalculator(repo=repo)
+        thresholds = _hardcode_dict()
+        for k in ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix"):
+            thresholds[k] = (100.0, 90.0)
+        assert calc.is_dynamic_active(thresholds) is True
+
+    async def test_cb_gold_never_counts_as_rolling(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """cb_gold 即使改了阈值也不算数（它显式跳过滚动）。"""
+        calc = MacroThresholdCalculator(repo=repo)
+        thresholds = _hardcode_dict()
+        for k in ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix"):
+            thresholds[k] = (100.0, 90.0)
+        thresholds["cb_gold"] = (999.0, 111.0)  # 改了也不该影响判定
         assert calc.is_dynamic_active(thresholds) is True
 
 

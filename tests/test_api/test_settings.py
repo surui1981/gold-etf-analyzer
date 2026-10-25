@@ -12,7 +12,15 @@ async def test_get_weights_default(client: AsyncClient) -> None:
     body = resp.json()
 
     assert body["trend"]["structure"] == 0.30
-    assert body["macro"]["dxy"] == 0.25
+    # V0.118.0：宏观面默认权重 5 → 8 因子
+    assert body["macro"]["dxy"] == 0.15
+    assert body["macro"]["us2y"] == 0.06
+    assert body["macro"]["us10y"] == 0.08
+    assert body["macro"]["us30y"] == 0.06
+    assert body["macro"]["curve_10y2y"] == 0.10
+    assert body["macro"]["real10y"] == 0.20
+    assert body["macro"]["vix"] == 0.10
+    assert body["macro"]["cb_gold"] == 0.25
     assert body["combine"]["tech"] == 0.30
     assert body["combine"]["news"] == 0.30
 
@@ -27,7 +35,16 @@ async def test_put_and_get_weights(client: AsyncClient) -> None:
             "momentum_rsi": 0.1,
             "drawdown": 0.1,
         },
-        "macro": {"dxy": 0.3, "us10y": 0.2, "us30y": 0.1, "vix": 0.2, "cb_gold": 0.2},
+        "macro": {
+            "dxy": 0.15,
+            "us2y": 0.06,
+            "us10y": 0.08,
+            "us30y": 0.06,
+            "curve_10y2y": 0.10,
+            "real10y": 0.20,
+            "vix": 0.10,
+            "cb_gold": 0.25,
+        },
         "combine": {"tech": 0.5, "macro": 0.3, "news": 0.2},
     }
     resp = await client.put("/api/v1/settings/weights", json=payload)
@@ -48,7 +65,16 @@ async def test_put_invalid_sum_422(client: AsyncClient) -> None:
             "momentum_rsi": 0.1,
             "drawdown": 0.1,
         },
-        "macro": {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.15, "cb_gold": 0.25},
+        "macro": {
+            "dxy": 0.15,
+            "us2y": 0.06,
+            "us10y": 0.08,
+            "us30y": 0.06,
+            "curve_10y2y": 0.10,
+            "real10y": 0.20,
+            "vix": 0.10,
+            "cb_gold": 0.25,
+        },
         "combine": {"tech": 0.6, "macro": 0.4, "news": 0.2},
     }
     resp = await client.put("/api/v1/settings/weights", json=payload)
@@ -170,11 +196,20 @@ async def test_n18_put_webpush_channel_accepted(client: AsyncClient) -> None:
 
 
 async def test_v01100_get_macro_overrides_default_empty(client: AsyncClient) -> None:
-    """未设置过 → 5 个因子全为 null（页面据此显示「留空 = 自动源」）。"""
+    """未设置过 → 8 个因子全为 null（页面据此显示「留空 = 自动源」）。"""
     resp = await client.get("/api/v1/settings/macro-overrides")
     assert resp.status_code == 200
     body = resp.json()
-    for key in ("dxy", "us10y", "us30y", "vix", "cb_gold"):
+    for key in (
+        "dxy",
+        "us2y",
+        "us10y",
+        "us30y",
+        "curve_10y2y",
+        "real10y",
+        "vix",
+        "cb_gold",
+    ):
         assert body[key] is None
 
 
@@ -290,7 +325,16 @@ async def test_v01100_put_weights_invalidates_served_cache(client: AsyncClient) 
                 "momentum_rsi": 0.15,
                 "drawdown": 0.15,
             },
-            "macro": {"dxy": 0.25, "us10y": 0.2, "us30y": 0.15, "vix": 0.2, "cb_gold": 0.2},
+            "macro": {
+                "dxy": 0.15,
+                "us2y": 0.06,
+                "us10y": 0.08,
+                "us30y": 0.06,
+                "curve_10y2y": 0.10,
+                "real10y": 0.20,
+                "vix": 0.10,
+                "cb_gold": 0.25,
+            },
             "combine": {"tech": 0.4, "macro": 0.4, "news": 0.2},
         },
     )

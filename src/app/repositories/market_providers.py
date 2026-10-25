@@ -690,6 +690,8 @@ class MockTreasuryYieldProvider:
             us10y=4.20,
             us30y=4.45,
             data_date=date.today() - timedelta(days=2),
+            # V0.118.0：2Y 纳入 mock；刻意满足 us30y > us10y > us2y 的真实曲线形态
+            us2y=3.95,
         )
 
 
