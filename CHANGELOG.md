@@ -4,6 +4,63 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.116.3] · 2026-10-25
+
+`命令面板自动聚焦被 V0.113.0 的无障碍修复顺手打没了` — 详见 [v0.116.3.md](docs/releases/v0.116.3.md)
+
+> 起因：移动端门禁里那条「打开时搜索框自动聚焦」时绿时红（33/0、32/1、33/0）。
+> 红不红和实现对不对无关 —— 它红是因为**等待时间是个运气阈值**。
+> 把时间轴摊开后牵出一条**跨版本的因果链**。
+>
+> ⚠ **本轮改了 `static/command-palette.js`**
+> ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION** ⇒ 版本号 **V0.116.2 → V0.116.3**（4 处已同步）。
+
+### Fixed
+
+- 🐛 **命令面板打开后搜索框没有焦点，直接打字没反应**（`static/command-palette.js`）
+  - 症状：按 `⌘K` / `Ctrl+K` 面板弹出来了，但光标不在搜索框里 ⇒ 打字无反应，必须先用鼠标点一下
+  - 根因（跨版本因果链）：
+    - V0.68.0（`5d0d81c`）加的自动聚焦：`setTimeout(() => input.focus(), 30)`
+    - V0.113.0（`8f75b16`）为修「关闭态面板仍在 tab 序列里」这个**真实无障碍缺陷**，
+      给 `.pm-cmd` 加了 `visibility: hidden` + **过渡**
+    - 而 **`visibility: hidden` 的元素不能接收焦点** ⇒ 浏览器**静默丢弃** `focus()`
+      （不抛异常、不打日志）；固定 30ms 与「visibility 翻成 visible 的那一帧」赛跑 ⇒ **看运气**
+  - 实测：旧实现 12 次 open 只有 8 次落焦；修复后 **12/12**
+  - 修法：`focusWhenVisible()` —— 等计算样式 `visibility` **真的**翻成 `visible` 再聚焦，
+    并重试到 `activeElement` **真的**落上（时间截止 2.5s，不用帧数：低帧率机器会假红）
+
+### 门禁加固
+
+- 🔧 **「打开时搜索框自动聚焦」不再 flaky**：固定 350ms 等待 → 轮询到明确截止（2000ms）
+- 🔧 **新增「延迟可见时搜索框仍然自动聚焦」判据**：把 `visibility` 过渡
+  `transition-delay` 钉到 400ms ⇒ 旧实现必红、修复版必绿，**确定性**
+  - ⚠⚠ 判据的杠杆**试错过一轮**：`transition-duration` 拉长过渡**根本不管用** ——
+    `visibility` 是离散插值，过渡**第一帧**就翻成 visible（实测 t=29ms），
+    加长 duration 只影响 opacity 淡入 ⇒ 门禁**假绿**
+  - 正确的杠杆是 `transition-delay`（延迟期间保持起始值 hidden）
+  - 另加一条**自检断言**「判据自检：面板确实是延迟可见的」，
+    保证前提真的生效（`visibleAt > 300ms`），免得判据退化成「什么都没测」还照样绿
+
+### 验证
+
+- **反向验证**：回退实现 ⇒ 门禁 **34 passed, 1 failed**，连跑 2 次结果一致（确定性红）；
+  恢复修复 ⇒ **35 passed, 0 failed**
+- `scripts/_verify_cmd_palette.mjs` 30 passed, 0 failed
+- `scripts/_diag_cmd_focus.mjs` 12/12 落焦，0 个 JS 错误
+- 新增 3 个诊断脚本留证：`_diag_cmd_focus.mjs` / `_diag_cmd_focus2.mjs` / `_diag_cmd_focus3.mjs`
+
+### 范围检查
+
+- 全站同款「延迟聚焦」写法只有 `static/settings.js:341` 一处，**确认不受影响**：
+  它的隐藏机制是 `hidden` 属性（`display:none`）且 `.modal` **没有任何 transition**
+  ⇒ 可见时刻同步确定，不存在赛跑
+
+### 已知问题（本轮**未**修，需要动生产数据库）
+
+承 V0.116.2 §5，3 条仍未修：生产 `users` 表缺 `role` 列（admin 2 端点 500）、
+`GET /api/v1/auth/me` 500、单用户模式 `require_owner` 认证边界错。
+详见 [v0.116.2.md §5](docs/releases/v0.116.2.md)。
+
 ## [V0.116.2] · 2026-10-25
 
 `3 处静默失效的前端缺陷` + `2 处「绿着但什么都没保护」的门禁缺陷` — 详见 [v0.116.2.md](docs/releases/v0.116.2.md)
