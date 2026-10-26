@@ -244,8 +244,8 @@
 
   <!-- 宏观面权重 -->
   <div class="card">
-    <h2 data-i18n="weights.macro_title">🌐 宏观面权重（8 大参考因子）</h2>
-    <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金，对黄金友好度评分的权重</div>
+    <h2 data-i18n="weights.macro_title">🌐 宏观面权重（11 大参考因子）</h2>
+    <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金 / 美·中·欧政府债务，对黄金友好度评分的权重</div>
     <div id="macroRows"></div>
     <div class="sum-line" data-i18n="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
@@ -334,6 +334,8 @@ const TREND_FIELDS = [
 ];
 // V0.118.0：宏观面 5 因子 → 8 因子
 // 新增 us2y（2Y 收益率）、curve_10y2y（10Y-2Y 利差）、real10y（10Y 实际利率）
+// V0.119.0：8 因子 → 11 因子
+// 新增政府债务组：us_gov_debt（美国）/ cn_gov_debt（中国）/ eu_gov_debt（欧洲）
 const MACRO_FIELDS = [
   ["dxy", "美元指数"],
   ["us2y", "美债2Y收益率"],
@@ -343,6 +345,9 @@ const MACRO_FIELDS = [
   ["real10y", "美债10Y实际利率"],
   ["vix", "VIX恐慌指数"],
   ["cb_gold", "国际央行购金量"],
+  ["us_gov_debt", "美国政府债务/GDP"],
+  ["cn_gov_debt", "中国政府债务/GDP"],
+  ["eu_gov_debt", "欧洲政府债务/GDP"],
 ];
 const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"], ["news", "消息面（客户评估）"]];
 
@@ -575,8 +580,9 @@ async function resetAll() {
   );
   if (!ok) return;
   const msg = document.getElementById("msg");
-  // V0.118.0：宏观面默认权重改为 8 因子（与后端 MacroWeightConfig 默认值逐字一致）
-  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .15, us2y: .06, us10y: .08, us30y: .06, curve_10y2y: .10, real10y: .20, vix: .10, cb_gold: .25 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
+  // V0.119.0：宏观面默认权重改为 11 因子（与后端 MacroWeightConfig 默认值逐字一致）
+  // ⚠ 漏掉任何新 key 都会被后端 _sum_to_one 判为「合计 ≠ 1」⇒ 422 ⇒ 恢复默认失败。
+  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .13, us2y: .05, us10y: .07, us30y: .05, curve_10y2y: .09, real10y: .18, vix: .09, cb_gold: .22, us_gov_debt: .05, cn_gov_debt: .04, eu_gov_debt: .03 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
   msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -605,6 +611,9 @@ async function resetAll() {
  * V0.118.0：8 个因子**全部**接上自动源了（美元=Yahoo DX-Y.NYB / VIX=FRED VIXCLS /
  * 美债 2Y·10Y·30Y=美联储 H.15 / 10Y 实际利率=FRED DFII10 / 10Y-2Y 利差=派生），
  * 本卡从「补空缺」变成「人工顶替」——上游源偶发滞后时仍可手填。
+ *
+ * V0.119.0：新增政府债务组 3 个因子（美国=FRED GFDEGDQ188S 季度 /
+ * 中国=FRED GGGDTACNA188N 年度 / 欧洲=Eurostat GOV_10Q_GGDEBT 季度）。
  */
 const OVERRIDE_API = API_BASE + "/api/v1/settings/macro-overrides";
 // 与后端 schemas/settings.py::MACRO_FACTOR_KEYS 一一对应
@@ -617,6 +626,9 @@ const OVERRIDE_FIELDS = [
   ["real10y", "美债10Y实际利率", "%"],
   ["vix", "VIX恐慌指数", "点位"],
   ["cb_gold", "国际央行购金量", "吨/年"],
+  ["us_gov_debt", "美国政府债务/GDP", "%"],
+  ["cn_gov_debt", "中国政府债务/GDP", "%"],
+  ["eu_gov_debt", "欧洲政府债务/GDP", "%"],
 ];
 let overrideState = null;   // 服务端返回的 MacroFactorOverrideSet
 let macroFactors = {};      // key → {value, data_date, source}（来自 gold/trend 响应）
@@ -648,7 +660,9 @@ function lagDays(dateStr) {
 
 /* V0.118.1：自动源读数的滞后告警阈值（日历日）。
    4 天 = 跨一个长周末仍不提示；超过就说明上游源已经跟不上市场了。
-   手动输入另有更严的口径（> 1 天就提示），因为那是用户自己抄的数。 */
+   手动输入另有更严的口径（> 1 天就提示），因为那是用户自己抄的数。
+   V0.119.0：这是**日频因子的兜底值** —— 低频因子用后端给的 max_lag_days
+   （季度 300 天 / 年度 1100 天），见下。 */
 const AUTO_LAG_WARN_DAYS = 4;
 
 function overrideRowHtml([key, label, unit]) {
@@ -660,9 +674,19 @@ function overrideRowHtml([key, label, unit]) {
      常量（滞后 59 天）时，页面上一个警告都没有 —— 用户看到的「当前生效」
      看起来像个正常读数。 */
   const lag = cur ? lagDays(cur.data_date) : null;
-  const lagLimit = isManual ? 1 : AUTO_LAG_WARN_DAYS;
+  /* V0.119.0：低频因子（季度/年度）的 data_date 天然滞后几百天 —— 用日频的
+     4 天阈值会**永久亮红灯**，常亮的告警等于没有告警。阈值由后端按因子节奏给。 */
+  const lagLimit = isManual ? 1 : (cur && cur.max_lag_days) || AUTO_LAG_WARN_DAYS;
   const lagChip = lag !== null && lag > lagLimit
     ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_lag_warn", { n: lag })}</span>`
+    : "";
+  /* V0.119.0：非日频因子挂一个中性的节奏 chip —— 让用户知道「这个日期是
+     季度/年度的期末，不是今天」，而不是把它读成「数据过期了」。 */
+  const cadence = cur ? (cur.cadence || "daily") : "daily";
+  const cadenceChip = cadence === "annual"
+    ? `<span class="mo-chip">${t("weights.mo_cadence_annual")}</span>`
+    : cadence === "quarterly"
+    ? `<span class="mo-chip">${t("weights.mo_cadence_quarterly")}</span>`
     : "";
   const srcChip = isManual
     ? `<span class="mo-chip">${t("weights.mo_source_manual")}</span>`
@@ -678,7 +702,7 @@ function overrideRowHtml([key, label, unit]) {
     ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_tier_static")}</span>`
     : "";
   const curTxt = cur
-    ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${tierChip}${lagChip}`
+    ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${tierChip}${cadenceChip}${lagChip}`
     : t(macroFactorState === "loading" ? "weights.mo_loading_short" : "weights.mo_no_reading");
   return `<div class="mo-row${isManual ? " is-manual" : ""}">
     <span class="nm">${label}</span>
@@ -766,6 +790,9 @@ function absorbMacroFactors(trendJson) {
   macroFactors = Object.fromEntries(factors.map(f => [f.key, {
     value: f.value, data_date: f.data_date, source: f.source || "",
     tier: f.tier || "live",   // V0.118.1：live / lkg / static
+    // V0.119.0：低频因子的节奏与滞后阈值（后端给，避免前端再维护一份清单）
+    cadence: f.cadence || "daily",
+    max_lag_days: typeof f.max_lag_days === "number" ? f.max_lag_days : AUTO_LAG_WARN_DAYS,
   }]));
   renderOverrides();
 }

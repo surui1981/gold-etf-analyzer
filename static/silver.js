@@ -479,8 +479,15 @@
         ? "[动态]"
         : "[静态]";
     // V0.118.0：角标文案从后端 dynamic_factors 逐因子明细派生，不再硬编码因子个数
+    // V0.119.0：可滚动因子清单由后端 rolling_factors 给出（低频因子走 hardcode），
+    // 前端不再维护「排除 cb_gold」这种硬编码清单（会腐化）。
     const macroFactorsArr = macro.factors || [];
-    const macroRollingTotal = macroFactorsArr.filter((f) => f.key !== "cb_gold").length;
+    const macroRollingTotal = Array.isArray(macro.rolling_factors)
+      ? macro.rolling_factors.length
+      // 兜底：只有老后端（V0.118.x，没这个字段）才会走到这里 —— 那时后端本来只有
+      // cb_gold 一个不滚动因子，所以排除 cb_gold 恰好是对的。新后端一定给
+      // rolling_factors，这条分支不会被执行。
+      : macroFactorsArr.filter((f) => f.key !== "cb_gold").length;
     const macroDynamicCount = (macro.dynamic_factors || []).length;
     const macroBadgeHint = macroDynamic
       ? `${macroRollingTotal} 个可滚动因子全部使用近 252 日滚动 90/10 分位`

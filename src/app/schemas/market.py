@@ -163,7 +163,7 @@ class TrendIndexOut(BaseModel):
 class MacroFactorOut(BaseModel):
     """单宏观因子：当前值 + 黄金友好度评分 + 方向。"""
 
-    key: str = Field(..., description="因子标识 dxy/us10y/us30y/vix/cb_gold")
+    key: str = Field(..., description="因子标识 dxy/us10y/us30y/vix/cb_gold/us_gov_debt/…")
     name: str
     value: str = Field(..., description="当前值（文本）")
     unit: str
@@ -175,6 +175,19 @@ class MacroFactorOut(BaseModel):
         "上游源当时不可用）/ static（内置常量兜底，非市场读数）。前端据此显示降级提示，"
         "不必去匹配 source 的中文前缀。",
     )
+    cadence: str = Field(
+        "daily",
+        description="V0.119.0：更新节奏 daily / quarterly / annual。"
+        "非日频因子的 data_date 天然滞后几百天，前端据此改挂「季度/年度」说明，"
+        "不再用日频的 4 天阈值判滞后。",
+    )
+    max_lag_days: int = Field(
+        4,
+        description="V0.119.0：自动源滞后告警阈值（日历日）。"
+        "日频 4 天 / 季度 300 天 / 年度 1100 天 —— 超过才说明源真的断了。"
+        "（年度取 3 年：IMF WEO 年度序列的观测本身就落后日历 1~2 年，"
+        "最新观测 2024-12-31 已 664 天前。）",
+    )
     score: float = Field(..., ge=0, le=100, description="黄金友好度 0-100")
     direction: DirectionSignal
     weight: float = Field(..., ge=0, le=1)
@@ -183,7 +196,7 @@ class MacroFactorOut(BaseModel):
 
 
 class MacroIndexOut(BaseModel):
-    """宏观参考指数（5 因子加权合成）。"""
+    """宏观参考指数（11 因子加权合成）。"""
 
     score: float = Field(..., ge=0, le=100, description="宏观参考指数 0-100")
     direction: DirectionSignal
@@ -200,6 +213,12 @@ class MacroIndexOut(BaseModel):
         "``macro_dynamic`` 是「全部可滚动因子都动态」的布尔摘要；"
         "本字段给出逐因子明细 —— 部分因子样本不足时它会短于可滚动因子总数，"
         "前端据此显示「N/M 个因子使用滚动分位」而不是笼统的「数据不足」。",
+    )
+    rolling_factors: list[str] = Field(
+        default_factory=list,
+        description="V0.119.0：**有资格**参与滚动分位的因子 key 列表（= 全部因子"
+        "减去低频因子）。前端用它做「N/M」的分母 —— 不要再在前端硬编码"
+        "「排除 cb_gold」之类的清单，两份清单必然腐化。",
     )
 
 

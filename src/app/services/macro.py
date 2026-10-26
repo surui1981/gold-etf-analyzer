@@ -4,26 +4,41 @@
 0-100 黄金友好度，按典型经验权重加权合成「宏观参考指数」。
 权重集中在 ``MACRO_FACTOR_RULES``，可按经验调整。
 
-V0.118.0 因子集（8 个）与权重
----------------------------
+V0.119.0 因子集（11 个）与权重
+----------------------------
 =========================  ======  ==========================================
 因子                       权重     数据源
 =========================  ======  ==========================================
-``dxy`` 美元指数            15%    Yahoo ``DX-Y.NYB``（V0.118.0 前是静态常量）
-``us2y`` 美债 2Y            6%    美联储 H.15 ``RIFLGFCY02_N.B``
-``us10y`` 美债 10Y          8%    美联储 H.15 ``RIFLGFCY10_N.B``
-``us30y`` 美债 30Y          6%    美联储 H.15 ``RIFLGFCY30_N.B``
-``curve_10y2y`` 10Y-2Y 利差 10%   由上面两个**派生**
-``real10y`` 10Y 实际利率     20%    FRED ``DFII10``（10Y TIPS 实际收益率）
-``vix`` VIX                 10%    FRED ``VIXCLS``
-``cb_gold`` 央行购金        25%    世界黄金协会 GDT 季度数据 / 本地表汇总
+``dxy`` 美元指数            13%    Yahoo ``DX-Y.NYB``（V0.118.0 前是静态常量）
+``us2y`` 美债 2Y            5%    美联储 H.15 ``RIFLGFCY02_N.B``
+``us10y`` 美债 10Y          7%    美联储 H.15 ``RIFLGFCY10_N.B``
+``us30y`` 美债 30Y          5%    美联储 H.15 ``RIFLGFCY30_N.B``
+``curve_10y2y`` 10Y-2Y 利差 9%    由上面两个**派生**
+``real10y`` 10Y 实际利率     18%    FRED ``DFII10``（10Y TIPS 实际收益率）
+``vix`` VIX                 9%    FRED ``VIXCLS``
+``cb_gold`` 央行购金        22%    世界黄金协会 GDT 季度数据 / 本地表汇总
+``us_gov_debt`` 美国政府债务  5%    FRED ``GFDEGDQ188S``（CBO，季度）
+``cn_gov_debt`` 中国政府债务  4%    FRED ``GGGDTACNA188N``（IMF WEO，年度）
+``eu_gov_debt`` 欧洲政府债务  3%    Eurostat ``GOV_10Q_GGDEBT``（季度）
 =========================  ======  ==========================================
 
-分组看：美元 15% / 名义利率水平 20% / 曲线形态 10% / 实际利率 20% /
-风险偏好 10% / 结构性需求 25%。**名义利率水平压到 20%、实际利率给到 20%** 是
-本次调整的核心：黄金是零息实物资产，实际利率才是理论上的定价锚，名义利率只
-反映「利率水平」这一个维度；三档名义利率（2Y/10Y/30Y）高度共线，堆权重等于
-把同一句话说三遍。
+分组看：美元 13% / 名义利率水平 17% / 曲线形态 9% / 实际利率 18% /
+风险偏好 9% / 结构性需求 22% / **政府债务 12%**。
+
+V0.119.0 的两个调整
+------------------
+1. **政府债务组 12%（美 5 / 中 4 / 欧 3）**：旧 8 个因子按 ×0.88 **等比缩放**
+   （相对比例完全不动），腾出 12% 给新增的财政轴。组内分配依据是「对黄金的
+   相关性 + 传导链长度」：美国是储备货币发行国、债务上限/期限溢价是当前主线；
+   中国债务率五年从 59% 冲到 88%（变动最快），且与模型里全是美国口径的
+   ``real10y``/``dxy`` 相关性最低，对中国黄金 ETF 的国内需求传导最直接；
+   欧洲最稳、黄金 beta 最小（欧央行几乎不购金）。
+2. **符号取「债务↑ = 利多黄金」（debasement / 财政货币化口径）**：反向通道
+   （债务↑→实际利率↑→金价跌）已由 ``real10y``（18%）承担，再加一遍是重复计权。
+   代价是诚实的：三大经济体债务都在历史高位，这一组会给宏观面一个**近乎恒定
+   的偏多偏移**（2026-10-26 实测：宏观面 33.6 → 38.9，**+5.3 分**）—— 它是慢锚
+   与分散化，不是择时信号。⚠️ 这个偏移量**不是常数**：其余 7 个因子的分值会随
+   滚动分位漂移，方向断点（组权重多大时宏观面从 BEARISH 跳到 NEUTRAL）也跟着动。
 
 数据来源
 --------
@@ -35,6 +50,10 @@ V0.118.0 因子集（8 个）与权重
 - VIX：FRED ``VIXCLS``（与 VIX 同尺度）
 - 央行购金：世界黄金协会 Gold Demand Trends 季度数据（结构性因子，低频更新）；
   采用滚动 12 月（最近 4 个季度合计）作为当前读数
+- 政府债务：FRED ``GFDEGDQ188S``（美国，季度）/ ``GGGDTACNA188N``（中国，年度）/
+  Eurostat ``GOV_10Q_GGDEBT``（欧盟 27 国，季度）。三者口径均为「一般政府总
+  债务 / GDP」；观测日统一归一到**期末**（FRED 用期初日期，Eurostat 用
+  ``2026-Q2`` 这种标签，都不是 ISO 日期，前端 ``Date.parse`` 会得到 NaN）
 
 降级与口径
 ----------
@@ -64,7 +83,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "dxy",
         "name": "美元指数",
         "unit": "点位",
-        "weight": 0.15,
+        "weight": 0.13,
         "positive": False,
         "best": 94.0,
         "worst": 107.0,  # 美元强 → 黄金弱
@@ -73,7 +92,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "us2y",
         "name": "美债2Y收益率",
         "unit": "%",
-        "weight": 0.06,
+        "weight": 0.05,
         "positive": False,
         "best": 3.0,
         "worst": 5.0,  # 短端定价的是美联储政策预期 → 偏高 = 偏鹰 = 黄金弱
@@ -82,7 +101,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "us10y",
         "name": "美债10Y收益率",
         "unit": "%",
-        "weight": 0.08,
+        "weight": 0.07,
         "positive": False,
         "best": 3.8,
         "worst": 5.4,
@@ -91,7 +110,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "us30y",
         "name": "美债30Y收益率",
         "unit": "%",
-        "weight": 0.06,
+        "weight": 0.05,
         "positive": False,
         "best": 4.3,
         "worst": 5.7,
@@ -100,7 +119,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "curve_10y2y",
         "name": "美债10Y-2Y利差",
         "unit": "%",
-        "weight": 0.10,
+        "weight": 0.09,
         # 倒挂（利差为负）= 衰退定价 = 利多黄金 → 与利差数值**负相关**
         "positive": False,
         "best": -0.5,
@@ -110,7 +129,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "real10y",
         "name": "美债10Y实际利率",
         "unit": "%",
-        "weight": 0.20,
+        "weight": 0.18,
         "positive": False,
         "best": 0.8,
         "worst": 3.2,  # 实际利率是黄金的定价锚 → 越高越压制金价
@@ -119,7 +138,7 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "vix",
         "name": "VIX恐慌指数",
         "unit": "点位",
-        "weight": 0.10,
+        "weight": 0.09,
         "positive": True,
         "best": 30.0,
         "worst": 13.0,  # 恐慌上升 → 避险利好黄金
@@ -128,12 +147,87 @@ MACRO_FACTOR_RULES: list[dict] = [
         "key": "cb_gold",
         "name": "国际央行购金量",
         "unit": "吨/年",
-        "weight": 0.25,
+        "weight": 0.22,
         "positive": True,
         "best": 1200.0,
         "worst": 500.0,  # 央行持续购金 → 结构性利多
+        # V0.119.0：WGC GDT 是**季度**数据 ⇒ 与 3 个政府债务因子同口径。
+        # 它的 data_date 是自由文本（"2025Q3–2026Q2 滚动12月"）⇒ 前端解析不出
+        # 滞后天数，本来就不会亮滞后 chip；这里给 cadence 只是为了挂上
+        # 中性的「季度数据」chip，让用户知道这个日期是**季末**而不是今天。
+        "cadence": "quarterly",
+        "max_lag_days": 300,
+    },
+    {
+        "key": "us_gov_debt",
+        "name": "美国政府债务/GDP",
+        "unit": "%",
+        "weight": 0.05,
+        # V0.119.0：债务↑ = 利多黄金（debasement / 财政货币化口径）。
+        # 反向通道（债务↑→实际利率↑→金价跌）已由 real10y(18%) 承担，不再重复计权。
+        "positive": True,
+        "best": 140.0,
+        "worst": 60.0,  # 1990s 约 60%；2020 峰值 132.7
+        "cadence": "quarterly",
+        "max_lag_days": 300,
+    },
+    {
+        "key": "cn_gov_debt",
+        "name": "中国政府债务/GDP",
+        "unit": "%",
+        "weight": 0.04,
+        "positive": True,
+        "best": 95.0,
+        "worst": 40.0,  # 2013-15 约 40%；2024 创历史新高 88.3
+        "cadence": "annual",
+        # 1100 天 ≈ 3 年，不是「550 天（1.5 年）」。
+        #
+        # 实测 2026-10-26：FRED 的 IMF WEO 年度序列（GGGDTACNA188N）最新观测是
+        # **2024-12-31**（= 664 天前）—— 年度序列的**观测年本身就落后日历 1~2 年**
+        # （FRED 只发实际值，预测值不进这条序列）。拿 550 天当阈值的话，这一行
+        # **永远亮红灯** —— 常亮的告警等于没有告警（freshness 降级 UX 纪律）。
+        #
+        # 3 年的语义 = 「WEO 连续 2 次年更没更新」才算源真的断了。
+        "max_lag_days": 1100,
+    },
+    {
+        "key": "eu_gov_debt",
+        "name": "欧洲政府债务/GDP",
+        "unit": "%",
+        "weight": 0.03,
+        "positive": True,
+        "best": 95.0,
+        "worst": 60.0,  # 2000-08 约 60-70%；2020-21 峰值 91.4
+        "cadence": "quarterly",
+        "max_lag_days": 300,
     },
 ]
+
+#: 不参与「近 252 日滚动 90/10 分位」的因子（低频 / 结构性）
+#:
+#: 季度/年度因子若参与滚动分位：日频落表会把同一个值重复几十次 ⇒
+#: P10 == P90 ⇒ 阈值退化（``_friendly_score`` 撞 ``best == worst`` 恒返回 50），
+#: 且样本不足会让 ``is_dynamic_active`` 把**整个宏观面**的「滚动分位」标识打掉。
+#: ``cb_gold``（季度合计）是同一类问题的先例。
+#:
+#: 定义放在这里（而不是 ``macro_thresholds``）是因为 ``MacroIndexOut`` 也要用它
+#: 算出「可滚动因子清单」给前端 —— 两处各维护一份清单必然腐化。
+SKIP_ROLLING_FACTORS: frozenset[str] = frozenset(
+    {"cb_gold", "us_gov_debt", "cn_gov_debt", "eu_gov_debt"}
+)
+
+#: 日频因子的更新节奏 + 自动源滞后告警阈值（日历日）
+#:
+#: V0.119.0 引入：低频因子（季度/年度）的 data_date 天然滞后几百天，
+#: 用同一个 4 天阈值会**永久亮红灯** —— 常亮的告警等于没有告警。
+#: 低频因子改用自己的 ``max_lag_days``，前端另挂「季度/年度」chip 说明口径。
+_DAILY_CADENCE = "daily"
+_DAILY_MAX_LAG_DAYS = 4
+
+# 统一补齐节奏字段（只在这里定义一次默认，避免散落两处的默认值互相漂移）
+for _rule in MACRO_FACTOR_RULES:
+    _rule.setdefault("cadence", _DAILY_CADENCE)
+    _rule.setdefault("max_lag_days", _DAILY_MAX_LAG_DAYS)
 
 # 技术面/宏观面/消息面合成权重（默认 30/40/30，中短期 ETF 波段操作）
 TECH_WEIGHT = 0.30
@@ -155,6 +249,10 @@ STATIC_REF: dict[str, dict] = {
         "date": "2025Q3–2026Q2 滚动12月",
         "note": "世界黄金协会 GDT Q2 2026（季度明细：Q1 56.5 / Q2 288.9）",
     },
+    # V0.119.0 政府债务组（日期用**观测期末**，与 live 源的口径一致）
+    "us_gov_debt": {"value": 122.59, "date": "2026-03-31", "note": "静态参考值"},
+    "eu_gov_debt": {"value": 82.9, "date": "2026-06-30", "note": "静态参考值"},
+    "cn_gov_debt": {"value": 88.33, "date": "2024-12-31", "note": "静态参考值"},
 }
 
 #: 静态回退的 source 前缀 —— 这些值**不是**市场读数，不得写入历史表
@@ -350,6 +448,8 @@ class MacroFactorService:
                     data_date=data_date,
                     source=source,
                     tier=source_tier(source),
+                    cadence=rule.get("cadence", _DAILY_CADENCE),
+                    max_lag_days=int(rule.get("max_lag_days", _DAILY_MAX_LAG_DAYS)),
                     score=round(score, 1),
                     direction=direction,
                     weight=weight,
@@ -360,7 +460,7 @@ class MacroFactorService:
 
         # V0.118.0：因子缺失时按「剩余因子权重归一化」计分（与前端预览口径一致：
         # 前端 renderPreview 对缺失面也是按剩余权重归一，而不是用 0 充当分值）。
-        # 正常情况下 8 个因子齐全、total_weight == 1.0，该分支不改变任何结果。
+        # 正常情况下 11 个因子齐全、total_weight == 1.0，该分支不改变任何结果。
         if total_weight > 0 and abs(total_weight - 1.0) > 1e-9:
             logger.warning("宏观因子权重合计 %.4f ≠ 1，按剩余权重归一化", total_weight)
             total = total / total_weight
@@ -386,6 +486,10 @@ class MacroFactorService:
             # 旧 MacroIndexOut 没此字段，Pydantic 默认 extra="ignore" 自动忽略
             macro_dynamic=macro_dynamic,
             dynamic_factors=dynamic_factors,
+            # V0.119.0：有资格参与滚动分位的因子清单（前端「N/M」的分母）
+            rolling_factors=[
+                r["key"] for r in MACRO_FACTOR_RULES if r["key"] not in SKIP_ROLLING_FACTORS
+            ],
         )
 
     async def _collect(self) -> dict[str, tuple[float, str, str]]:
@@ -417,12 +521,13 @@ class MacroFactorService:
         lkg = await self._collect_last_known_good()
         values.update(lkg)
 
-        # 并发拉取 4 组外部源；任一失败只影响自己的因子
+        # 并发拉取 5 组外部源；任一失败只影响自己的因子
         results = await asyncio.gather(
             self._collect_treasury(),
             self._collect_fred(),
             self._collect_yahoo(),
             self._collect_central_bank(),
+            self._collect_eurostat(),
             return_exceptions=True,
         )
         live: dict[str, tuple[float, str, str]] = {}
@@ -535,9 +640,19 @@ class MacroFactorService:
         return out
 
     async def _collect_fred(self) -> dict[str, tuple[float, str, str]]:
-        """FRED：``DFII10``（10Y 实际利率）+ ``VIXCLS``（VIX）。"""
+        """FRED：``DFII10``（10Y 实际利率）+ ``VIXCLS``（VIX）。
+
+        V0.119.0 追加**低频**序列（``FRED_PERIODIC_SERIES``）：季度/年度序列
+        走单独的 ``fetch_fred_periodic_latest`` —— 它按序列给足回看天数
+        （默认 30 天窗口对低频序列一条都取不到），并把观测日归一到**期末**。
+        """
         from app.config import get_settings
-        from app.repositories.macro_sources import FRED_SERIES, fetch_fred_latest
+        from app.repositories.macro_sources import (
+            FRED_PERIODIC_SERIES,
+            FRED_SERIES,
+            fetch_fred_latest,
+            fetch_fred_periodic_latest,
+        )
 
         cfg = get_settings()
         out: dict[str, tuple[float, str, str]] = {}
@@ -552,7 +667,49 @@ class MacroFactorService:
                 continue
             value, d = latest
             out[factor_key] = (value, d.isoformat(), f"FRED {series_id}")
+
+        for series_id, (factor_key, lookback_days, period) in FRED_PERIODIC_SERIES.items():
+            try:
+                latest = await fetch_fred_periodic_latest(
+                    series_id,
+                    base_url=cfg.fred_csv_url,
+                    lookback_days=lookback_days,
+                    period=period,
+                )
+            except Exception as exc:
+                logger.warning("FRED %s 取数失败 (%s)，用静态参考值", series_id, exc)
+                continue
+            if latest is None:
+                logger.warning("FRED %s 无数据，用静态参考值", series_id)
+                continue
+            value, d = latest
+            out[factor_key] = (value, d.isoformat(), f"FRED {series_id}")
         return out
+
+    async def _collect_eurostat(self) -> dict[str, tuple[float, str, str]]:
+        """Eurostat 季度一般政府债务/GDP（欧盟 27 国）。
+
+        官方一手源（马斯特里赫特口径：一般政府总债务 / GDP）。
+        实测 2026-10-26：数据集 ``GOV_10Q_GGDEBT``、``geo=EU27_2020`` →
+        2026-Q2 = 82.9（EA20 口径同源可得 89.3）。
+        """
+        from app.config import get_settings
+        from app.repositories.macro_sources import (
+            EUROSTAT_GOV_DEBT_DATASET,
+            fetch_eurostat_gov_debt,
+        )
+
+        cfg = get_settings()
+        try:
+            latest = await fetch_eurostat_gov_debt(base_url=cfg.eurostat_stats_url)
+        except Exception as exc:
+            logger.warning("Eurostat 取数失败 (%s)，用静态参考值", exc)
+            return {}
+        if latest is None:
+            logger.warning("Eurostat 无数据，用静态参考值")
+            return {}
+        value, d = latest
+        return {"eu_gov_debt": (value, d.isoformat(), f"Eurostat {EUROSTAT_GOV_DEBT_DATASET}")}
 
     async def _collect_yahoo(self) -> dict[str, tuple[float, str, str]]:
         """Yahoo：``DX-Y.NYB``（美元指数 DXY）。"""
@@ -627,5 +784,6 @@ class MacroFactorService:
         }[direction]
         return (
             f"宏观参考指数 {score:.1f}/100，{txt}"
-            "（美元指数、美债2Y·10Y·30Y、10Y-2Y利差、10Y实际利率、VIX、央行购金）"
+            "（美元指数、美债2Y·10Y·30Y、10Y-2Y利差、10Y实际利率、VIX、央行购金、"
+            "美/中/欧政府债务）"
         )

@@ -35,7 +35,10 @@ ROLLING_KEYS = ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix"
 
 @pytest.fixture(autouse=True)
 def _stub_macro_sources(monkeypatch):
-    """打桩 4 个外部源 —— V0.118.0 起 7 个因子来自外部源，漏打桩=单测真联网。"""
+    """打桩 5 个外部源 —— V0.118.0 起 7 个因子来自外部源，漏打桩=单测真联网。
+
+    V0.119.0 又加了 2 个源（低频 FRED 序列 / Eurostat），同样必须打桩。
+    """
     from datetime import date as _date
 
     from app.repositories.market_data import USTYield
@@ -49,9 +52,19 @@ def _stub_macro_sources(monkeypatch):
     async def fake_yahoo(symbol, **kwargs):
         return None
 
+    async def fake_fred_periodic(series_id, **kwargs):
+        return None
+
+    async def fake_eurostat(**kwargs):
+        return None
+
     monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
     monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
     monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+    monkeypatch.setattr(
+        "app.repositories.macro_sources.fetch_fred_periodic_latest", fake_fred_periodic
+    )
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_eurostat_gov_debt", fake_eurostat)
 
 
 @pytest.fixture
@@ -194,3 +207,30 @@ class TestMacroFactorServiceDynamic:
         assert result.macro_dynamic is False
         assert "dxy" not in result.dynamic_factors
         assert set(result.dynamic_factors) == set(ROLLING_KEYS) - {"dxy"}
+
+    async def test_gov_debt_factors_never_dynamic(self, repo: MacroFactorHistoryRepository) -> None:
+        """V0.119.0：3 个政府债务因子种满 252 日也不进 ``dynamic_factors``。
+
+        季度/年度序列日频落表 ⇒ P10 == P90 ⇒ 滚动分位退化成常数。
+        """
+        for k in ("us_gov_debt", "cn_gov_debt", "eu_gov_debt"):
+            await _seed_one_factor(
+                repo,
+                k,
+                [100.0 + i * 0.1 for i in range(252)],
+                source="FRED GFDEGDQ188S",
+                data_date="2026-03-31",
+            )
+        for k in ROLLING_KEYS:
+            await _seed_one_factor(repo, k, [96.0 + i * 0.1 for i in range(252)])
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        svc = MacroFactorService(settings=None, central_bank=None, threshold_calculator=calc)
+        result = await svc.evaluate()
+
+        assert result.macro_dynamic is True
+        assert set(result.dynamic_factors) == set(ROLLING_KEYS)
+        for k in ("us_gov_debt", "cn_gov_debt", "eu_gov_debt"):
+            assert k not in result.dynamic_factors
+        # rolling_factors（前端「N/M」的分母）也只含 7 个日频因子
+        assert set(result.rolling_factors) == set(ROLLING_KEYS)

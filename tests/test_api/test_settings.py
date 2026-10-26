@@ -12,15 +12,18 @@ async def test_get_weights_default(client: AsyncClient) -> None:
     body = resp.json()
 
     assert body["trend"]["structure"] == 0.30
-    # V0.118.0：宏观面默认权重 5 → 8 因子
-    assert body["macro"]["dxy"] == 0.15
-    assert body["macro"]["us2y"] == 0.06
-    assert body["macro"]["us10y"] == 0.08
-    assert body["macro"]["us30y"] == 0.06
-    assert body["macro"]["curve_10y2y"] == 0.10
-    assert body["macro"]["real10y"] == 0.20
-    assert body["macro"]["vix"] == 0.10
-    assert body["macro"]["cb_gold"] == 0.25
+    # V0.119.0：宏观面默认权重 8 → 11 因子（政府债务组 12%）
+    assert body["macro"]["dxy"] == 0.13
+    assert body["macro"]["us2y"] == 0.05
+    assert body["macro"]["us10y"] == 0.07
+    assert body["macro"]["us30y"] == 0.05
+    assert body["macro"]["curve_10y2y"] == 0.09
+    assert body["macro"]["real10y"] == 0.18
+    assert body["macro"]["vix"] == 0.09
+    assert body["macro"]["cb_gold"] == 0.22
+    assert body["macro"]["us_gov_debt"] == 0.05
+    assert body["macro"]["cn_gov_debt"] == 0.04
+    assert body["macro"]["eu_gov_debt"] == 0.03
     assert body["combine"]["tech"] == 0.30
     assert body["combine"]["news"] == 0.30
 
@@ -36,14 +39,17 @@ async def test_put_and_get_weights(client: AsyncClient) -> None:
             "drawdown": 0.1,
         },
         "macro": {
-            "dxy": 0.15,
-            "us2y": 0.06,
-            "us10y": 0.08,
-            "us30y": 0.06,
-            "curve_10y2y": 0.10,
-            "real10y": 0.20,
-            "vix": 0.10,
-            "cb_gold": 0.25,
+            "dxy": 0.13,
+            "us2y": 0.05,
+            "us10y": 0.07,
+            "us30y": 0.05,
+            "curve_10y2y": 0.09,
+            "real10y": 0.18,
+            "vix": 0.09,
+            "cb_gold": 0.22,
+            "us_gov_debt": 0.05,
+            "cn_gov_debt": 0.04,
+            "eu_gov_debt": 0.03,
         },
         "combine": {"tech": 0.5, "macro": 0.3, "news": 0.2},
     }
@@ -66,14 +72,17 @@ async def test_put_invalid_sum_422(client: AsyncClient) -> None:
             "drawdown": 0.1,
         },
         "macro": {
-            "dxy": 0.15,
-            "us2y": 0.06,
-            "us10y": 0.08,
-            "us30y": 0.06,
-            "curve_10y2y": 0.10,
-            "real10y": 0.20,
-            "vix": 0.10,
-            "cb_gold": 0.25,
+            "dxy": 0.13,
+            "us2y": 0.05,
+            "us10y": 0.07,
+            "us30y": 0.05,
+            "curve_10y2y": 0.09,
+            "real10y": 0.18,
+            "vix": 0.09,
+            "cb_gold": 0.22,
+            "us_gov_debt": 0.05,
+            "cn_gov_debt": 0.04,
+            "eu_gov_debt": 0.03,
         },
         "combine": {"tech": 0.6, "macro": 0.4, "news": 0.2},
     }

@@ -674,8 +674,15 @@ function render(d) {
   // V0.118.0：宏观面 5 因子 → 8 因子（7 个可滚动，cb_gold 走季度 hardcode）。
   // 角标文案从后端 dynamic_factors 逐因子明细派生，不再硬编码因子个数
   // （旧文案「5 因子中 ≥4」在 8 因子下既会撒谎，口径也和 is_dynamic_active 变了）。
+  // V0.119.0：政府债务组（季度/年度）同样走 hardcode —— 可滚动因子清单由后端
+  // rolling_factors 给出，前端不再维护「排除 cb_gold」这种硬编码清单（会腐化）。
   const macroFactorsArr = d.macro?.factors || [];
-  const macroRollingTotal = macroFactorsArr.filter(f => f.key !== "cb_gold").length;
+  const macroRollingTotal = Array.isArray(d.macro?.rolling_factors)
+    ? d.macro.rolling_factors.length
+    // 兜底：只有老后端（V0.118.x，没这个字段）才会走到这里 —— 那时后端本来只有
+    // cb_gold 一个不滚动因子，所以排除 cb_gold 恰好是对的。新后端一定给
+    // rolling_factors，这条分支不会被执行。
+    : macroFactorsArr.filter(f => f.key !== "cb_gold").length;
   const macroDynamicCount = (d.macro?.dynamic_factors || []).length;
   const macroBadgeHint = macroDynamic
     ? `${macroRollingTotal} 个可滚动因子全部使用近 252 日滚动 90/10 分位`

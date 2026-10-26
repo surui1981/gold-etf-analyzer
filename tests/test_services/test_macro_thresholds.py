@@ -1,12 +1,12 @@
 """V0.79.0 Step E：MacroThresholdCalculator + MacroFactorHistoryRepository 测试。
 
 覆盖：
-- 空表 → 8 因子全回退 hardcode（cb_gold 显式跳过）
+- 空表 → 11 因子全回退 hardcode（4 个低频因子显式跳过）
 - 60/252 样本下的 percentile 正确性
 - 41-59 样本边界 → 单因子回退 hardcode
 - 24h TTL 缓存命中
 - (target, date) key 隔离
-- cb_gold 即使种 252 日也走 hardcode
+- cb_gold / 3 个政府债务因子即使种 252 日也走 hardcode
 - upsert_batch 幂等
 - is_dynamic_active 边界
 - _percentile 边界（n=1、pct=0/100、夹值插值）
@@ -112,14 +112,17 @@ class TestCalculatorWithEmptyTable:
 
 
 class TestCalculatorWithData:
-    """有数据场景：7 个滚动因子切到 percentile，cb_gold 永远 hardcode。
+    """有数据场景：7 个滚动因子切到 percentile，低频 4 因子永远 hardcode。
 
     V0.118.0：可滚动因子从 4 个变成 7 个（+us2y / +curve_10y2y / +real10y）。
     ``is_dynamic_active`` 的口径同步改成「**全部**可滚动因子都动态」——
     旧版的 ``>= 4`` 在 7 个因子里会松成「过半即算」，badge 会撒谎。
+
+    V0.119.0：因子总数 8 → 11，但**可滚动数仍是 7** —— 新增的 3 个政府债务
+    因子是季度/年度低频序列，与 ``cb_gold`` 同类，显式跳过滚动。
     """
 
-    #: 7 个可滚动因子（cb_gold 是季度合计，显式跳过）
+    #: 7 个可滚动因子（cb_gold 与 3 个政府债务因子显式跳过）
     ROLLING = ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix")
 
     async def test_252_samples_all_rolling_factors_dynamic(
@@ -164,8 +167,28 @@ class TestCalculatorWithData:
         calc = MacroThresholdCalculator(repo=repo, min_samples=60)
         thresholds = await calc.get_or_compute("default")
         assert thresholds["cb_gold"] == (1200.0, 500.0)  # hardcode
-        # 仅 cb_gold dynamic，4 个滚动因子回退 → False
+        # 仅 cb_gold dynamic，7 个滚动因子回退 → False
         assert calc.is_dynamic_active(thresholds) is False
+
+    async def test_gov_debt_factors_even_with_252_samples_still_hardcode(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """V0.119.0：3 个政府债务因子即使种满 252 日也走 hardcode。
+
+        季度/年度序列日频落表会把同一个值重复几十次 ⇒ P10 == P90 ⇒
+        滚动分位退化成常数（``_friendly_score`` 撞 best == worst 分支恒返回 50）。
+        """
+        await _seed(repo, "us_gov_debt", [122.59] * 252)
+        await _seed(repo, "cn_gov_debt", [88.33] * 252)
+        await _seed(repo, "eu_gov_debt", [82.9] * 252)
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+        hardcode = _hardcode_dict()
+
+        assert thresholds["us_gov_debt"] == hardcode["us_gov_debt"]
+        assert thresholds["cn_gov_debt"] == hardcode["cn_gov_debt"]
+        assert thresholds["eu_gov_debt"] == hardcode["eu_gov_debt"]
 
     async def test_60_samples_minimum_dynamic(self, repo: MacroFactorHistoryRepository) -> None:
         await _seed(repo, "dxy", [96.0 + i * 0.1 for i in range(60)])
@@ -225,9 +248,11 @@ class TestRollingSignConvention:
     async def test_every_rolling_factor_follows_its_own_sign(
         self, repo: MacroFactorHistoryRepository
     ) -> None:
-        """逐因子核对方向：8 条规则里每个可滚动因子都对得上自己的 ``positive`` 标志。"""
+        """逐因子核对方向：每个**可滚动**因子都对得上自己的 ``positive`` 标志。"""
+        from app.services.macro import SKIP_ROLLING_FACTORS
+
         for rule in MACRO_FACTOR_RULES:
-            if rule["key"] == "cb_gold":
+            if rule["key"] in SKIP_ROLLING_FACTORS:
                 continue
             await _seed(repo, rule["key"], [10.0 + i * 0.2 for i in range(100)])
 
@@ -236,7 +261,7 @@ class TestRollingSignConvention:
 
         for rule in MACRO_FACTOR_RULES:
             key = rule["key"]
-            if key == "cb_gold":
+            if key in SKIP_ROLLING_FACTORS:
                 continue
             best, worst = thresholds[key]
             if rule["positive"]:

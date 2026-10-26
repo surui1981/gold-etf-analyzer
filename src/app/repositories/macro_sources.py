@@ -35,9 +35,11 @@ V0.110.0 之前，宏观面 5 个因子里有 3 个是「无自动源」的：
 from __future__ import annotations
 
 import asyncio
+import calendar
 import csv
 import io
 import json
+import re
 import time
 import urllib.parse
 import urllib.request
@@ -47,16 +49,43 @@ from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-#: FRED 序列 ID → 宏观因子 key（``real10y`` / ``vix``）
+#: FRED 序列 ID → 宏观因子 key（``real10y`` / ``vix``）—— **日频**序列
 FRED_SERIES: dict[str, str] = {
     "DFII10": "real10y",  # 10 年期 TIPS 实际收益率（%）
     "VIXCLS": "vix",  # CBOE 波动率指数收盘价
+}
+
+#: FRED **低频**序列 → (因子 key, 回看天数, 观测期类型)
+#:
+#: 低频序列与日频序列有两处不同，混用会静默取不到值：
+#: ① ``fetch_fred_latest`` 默认只回看 30 天 —— 季度/年度序列在这个窗口里
+#:    **一条数据都没有**，必须按序列给足回看天数；
+#: ② 观测日不是「当天」而是**观测期的期初**（FRED 季度序列用季初日期，
+#:    年度序列用年初日期）—— 拿它当「数据日期」会让滞后天数凭空多出
+#:    一整个季度/一年，必须归一到**期末**。
+#:
+#: ==================  ======================  ======  ==========
+#: 序列                 因子                     回看    期型
+#: ==================  ======================  ======  ==========
+#: ``GFDEGDQ188S``     美国政府债务/GDP（CBO）   200 天  quarterly
+#: ``GGGDTACNA188N``   中国政府债务/GDP（IMF）   900 天  annual
+#: ==================  ======================  ======  ==========
+FRED_PERIODIC_SERIES: dict[str, tuple[str, int, str]] = {
+    # 美国联邦债务/GDP（季度，Q = quarterly；注意 ``GFDEGDN188S`` 是无效 ID）
+    "GFDEGDQ188S": ("us_gov_debt", 200, "quarterly"),
+    # 中国一般政府总债务/GDP（IMF WEO 年度，N = annual）
+    "GGGDTACNA188N": ("cn_gov_debt", 900, "annual"),
 }
 
 #: Yahoo 指数代码 → 宏观因子 key（``dxy``）
 YAHOO_SYMBOLS: dict[str, str] = {
     "DX-Y.NYB": "dxy",  # ICE 美元指数（DXY 本体）
 }
+
+#: Eurostat「季度一般政府债务」数据集（``na_item=GD`` / ``sector=S13`` / ``unit=PC_GDP``）
+EUROSTAT_GOV_DEBT_DATASET = "GOV_10Q_GGDEBT"
+#: Eurostat「欧洲」默认地理口径：欧盟 27 国
+EUROSTAT_GOV_DEBT_GEO = "EU27_2020"
 
 #: 模块级 TTL 缓存（秒）—— key 为完整 URL
 _TTL_SECONDS = 300
@@ -194,6 +223,136 @@ def parse_yahoo_chart_json(text: str) -> list[tuple[date, float]]:
     return out
 
 
+# ───────────────────── 观测期归一（低频因子专用） ─────────────────────
+
+
+def _days_in_month(year: int, month: int) -> int:
+    return calendar.monthrange(year, month)[1]
+
+
+def _add_months(d: date, months: int) -> date:
+    """加月份（自动处理月末，如 1-31 + 1 月 → 2-28/29）。"""
+    y = d.year + (d.month - 1 + months) // 12
+    m = (d.month - 1 + months) % 12 + 1
+    return date(y, m, min(d.day, _days_in_month(y, m)))
+
+
+def fred_period_end(obs: date, period: str) -> date:
+    """把 FRED 低频序列的**观测期期初日期**换算成**期末日期**。
+
+    FRED 的季度/年度序列用期初日期标注观测（``2026-01-01`` = 2026Q1），
+    期末才是这个读数真正「代表」的那一天。归一后：
+
+    - 前端的滞后天数才对得上（否则凭空多算一整个季度/一年）；
+    - 三个低频因子的 ``data_date`` 口径统一（都是 ISO 期末日），
+      ``Date.parse`` 能解析（``Date.parse('2026-Q2')`` 是 ``NaN``）。
+
+    ``period`` 取 ``"quarterly"`` / ``"annual"``；其他值原样返回。
+    """
+    if period == "quarterly":
+        return _add_months(obs, 3) - timedelta(days=1)
+    if period == "annual":
+        return _add_months(obs, 12) - timedelta(days=1)
+    return obs
+
+
+def eurostat_period_end(label: str) -> date | None:
+    """Eurostat 期间标签 → 期末日期。
+
+    ``"2026-Q2"`` → ``2026-06-30``；``"2026"`` → ``2026-12-31``；
+    ``"2026-Q1"`` → ``2026-03-31``。无法解析返回 ``None``。
+    """
+    label = (label or "").strip()
+    m = re.fullmatch(r"(\d{4})-Q([1-4])", label)
+    if m:
+        year, q = int(m.group(1)), int(m.group(2))
+        month = q * 3
+        return date(year, month, _days_in_month(year, month))
+    m = re.fullmatch(r"(\d{4})", label)
+    if m:
+        year = int(m.group(1))
+        return date(year, 12, 31)
+    return None
+
+
+# ───────────────────── Eurostat 解析（JSON-stat） ─────────────────────
+
+
+def _json_stat_records(payload: dict) -> list[tuple[dict, object]]:
+    """JSON-stat 响应 → ``[(维度组合 dict, 值), ...]``。
+
+    Eurostat 的 dissemination API 返回 JSON-stat 2.0：``id`` 是维度名列表、
+    ``size`` 是各维度基数、``value`` 用**扁平下标**（行优先）编码。
+    下标要按 ``size`` 逐位拆开才能还原成维度组合。
+
+    ⚠ ``category.index`` 有两种形态：单值维度是 dict（``{"GD": 0}``），
+    多值维度是 list（``["2026-Q1", "2026-Q2"]``）—— 两种都要能处理。
+    """
+    ids = payload.get("id") or []
+    size = payload.get("size") or []
+    if len(ids) != len(size):
+        return []
+    cats: list[list[str]] = []
+    for dim in ids:
+        cat = ((payload.get("dimension") or {}).get(dim) or {}).get("category") or {}
+        idx = cat.get("index")
+        if isinstance(idx, dict):
+            order: list[str] = [""] * len(idx)
+            for code, pos in idx.items():
+                if isinstance(pos, int) and 0 <= pos < len(order):
+                    order[pos] = code
+        elif isinstance(idx, list):
+            order = list(idx)
+        else:
+            order = []
+        cats.append(order)
+    out: list[tuple[dict, object]] = []
+    for flat, val in (payload.get("value") or {}).items():
+        try:
+            rem = int(flat)
+        except (TypeError, ValueError):
+            continue
+        coords: list[int] = []
+        for s in reversed(size):
+            coords.append(rem % s)
+            rem //= s
+        coords.reverse()
+        rec = {ids[i]: cats[i][coords[i]] for i in range(len(ids)) if coords[i] < len(cats[i])}
+        out.append((rec, val))
+    return out
+
+
+def parse_eurostat_gov_debt(text: str) -> list[tuple[str, float]]:
+    """解析 Eurostat「季度一般政府债务」→ ``[(期间标签, 值), ...]``（期间升序）。
+
+    只取 ``na_item=GD``（一般政府总债务）/ ``sector=S13``（一般政府）/
+    ``unit=PC_GDP``（占 GDP 百分比）三条同时成立的记录。
+
+    缺值处理：Eurostat 用 ``status`` 标注（``"p"``=暂定 / ``"e"``=预估），
+    值为 ``None`` 或非数字的一律跳过 —— **不向前填充**（同 ``parse_fred_csv``
+    的理由：填充会把「这一期没数据」伪装成「这一期就是这个数」）。
+    """
+    out: list[tuple[str, float]] = []
+    try:
+        payload = json.loads(text)
+    except (json.JSONDecodeError, TypeError) as exc:
+        logger.warning("Eurostat JSON 解析失败: %s", exc)
+        return out
+    for rec, val in _json_stat_records(payload):
+        if rec.get("na_item") != "GD" or rec.get("sector") != "S13":
+            continue
+        if rec.get("unit") != "PC_GDP":
+            continue
+        if not isinstance(val, (int, float)) or isinstance(val, bool):
+            continue
+        label = str(rec.get("time") or "")
+        if not label:
+            continue
+        out.append((label, float(val)))
+    out.sort(key=lambda t: t[0])
+    return out
+
+
 # ───────────────────── 取数 ─────────────────────
 
 
@@ -292,3 +451,63 @@ async def fetch_yahoo_latest(
         return None
     d, v = series[-1]
     return v, d
+
+
+async def fetch_fred_periodic_latest(
+    series_id: str,
+    *,
+    base_url: str,
+    lookback_days: int,
+    period: str,
+) -> tuple[float, date] | None:
+    """取 FRED **低频**序列的最新值，并把观测日归一到**期末**。
+
+    → ``(数值, 期末日期)``；无数据返回 ``None``。
+
+    ``lookback_days`` 必须给足（季度 200 天 / 年度 900 天）—— 默认的 30 天窗口
+    对低频序列**一条数据都取不到**（静默返回 None ⇒ 因子掉进静态兜底）。
+    """
+    series = await fetch_fred_series(
+        series_id,
+        base_url=base_url,
+        start=date.today() - timedelta(days=lookback_days),
+        end=date.today(),
+    )
+    if not series:
+        return None
+    obs, v = series[-1]
+    return v, fred_period_end(obs, period)
+
+
+async def fetch_eurostat_gov_debt(
+    *,
+    base_url: str,
+    geo: str = EUROSTAT_GOV_DEBT_GEO,
+    periods: int = 2,
+) -> tuple[float, date] | None:
+    """取 Eurostat 季度一般政府债务/GDP → ``(数值, 期末日期)``；无数据返回 ``None``。
+
+    ``periods`` 取最近 N 期（默认 2）：最新一期可能是暂定值或缺值，
+    多取一期兜底 —— 但**只用最新那个有值的**（不向前填充）。
+
+    ⚠ Eurostat 无 UA 限制（实测 2026-10-26：Python-urllib / Mozilla / 无 UA
+    三种都 200），与 FRED（不发 UA 才对）相反。
+    """
+    url = (
+        f"{base_url.format(dataset=urllib.parse.quote(EUROSTAT_GOV_DEBT_DATASET))}"
+        f"?format=JSON&lang=en&geo={urllib.parse.quote(geo)}&unit=PC_GDP"
+        f"&na_item=GD&sector=S13&lastTimePeriod={max(1, int(periods))}"
+    )
+    text = await _fetch_text(url, user_agent=None)
+    if text is None:
+        return None
+    series = parse_eurostat_gov_debt(text)
+    if not series:
+        logger.warning("Eurostat %s/%s 无有效数据点", EUROSTAT_GOV_DEBT_DATASET, geo)
+        return None
+    label, value = series[-1]
+    period_end = eurostat_period_end(label)
+    if period_end is None:
+        logger.warning("Eurostat 期间标签无法解析: %s", label)
+        return None
+    return value, period_end

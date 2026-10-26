@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.118.1** ｜ **最近更新：2026-10-26** ｜ **状态：一致，无漂移**
+> **基线：V0.119.0** ｜ **最近更新：2026-10-27** ｜ **状态：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.118.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.119.0**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.118.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.118.1` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.118.1` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.118.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.119.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.119.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.119.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.119.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.118.1
+GET /openapi.json  →  info.version = 0.119.0
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -52,19 +52,21 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **70** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **45** 段 / 44 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **54** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **106** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **71** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **46** 段 / 45 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **55** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
+| git tag | **107** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
 
-> **45 段 ≠ 44 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **46 段 ≠ 45 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **106 个 tag 本地与远端一致**（2026-10-26 已全部推送，含 V0.118.1）：远端 106 = 本地 106，
+> **107 个 tag 本地与远端一致**（2026-10-27 已全部推送，含 V0.119.0）：远端 107 = 本地 107，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated 100 / lightweight 6，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated 101 / lightweight 6，两侧分布相同。
+> ⚠️ 计数**含随本次发版新建的 `v0.119.0`** —— 这个 tag 就打在本文件所在的那个
+> commit 上（与 V0.118.1 同一套路：先按「打完之后」的数写文档，再打 tag）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -173,7 +175,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > **同源派生的东西要连「顺序」一起同源**，不只是「集合」同源 ——
 > 而面板里「第一条命中」是**有语义的**（默认选中 + 回车）。
 
-### 再下一轮：V0.118.1（2026-10-26）
+### 上一轮：V0.118.1（2026-10-26）
 
 | 项 | 状态 |
 |---|---|
@@ -189,7 +191,27 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
 
-### 上一轮：V0.118.0（2026-10-25）
+### 本轮：V0.119.0（2026-10-27）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 宏观面 **8 → 11 因子**（+`us_gov_debt` 5% / `cn_gov_debt` 4% / `eu_gov_debt` 3%，旧 8 个按 ×0.88 等比缩放）；符号取「债务↑ = 利多黄金」（debasement 口径）；低频因子新增 `cadence` / `max_lag_days`（日频 4 / 季度 300 / 年度 **1100** 天）避免告警永久亮红灯；`MacroIndexOut.rolling_factors` 让后端自己声明哪些因子可滚动（前端不再硬编码 `f.key !== "cb_gold"`）；`LEGACY_MACRO_8_DEFAULTS` 迁移守卫（8 键默认直落新默认 / 8 键自定义 ×0.88 缩放） |
+| `__version__` | ✅ 已 bump 到 `0.119.0`（4 处同步） |
+| git tag | ✅ `v0.119.0` |
+
+> 起因是**用户诉求**：「我们需要再宏观因子添加 美国 欧洲 和中国政府这些经济体的政府债务，
+> 添加到宏观因子，先制定计划，我们分析它的权重。」
+>
+> 权重三处已**逐项拍板**：① 符号方向 = 债务↑ 利多黄金（debasement）；
+> ② 政府债务组总权重 = **12%**（美 5 / 中 4 / 欧 3），旧 8 个 ×0.88 等比缩放；
+> ③ 欧洲口径 = **欧盟 27 国**（`EU27_2020`，不是欧元区 20 国的 89.3）。
+>
+> 触发条件是**改了 `static/*.html` + `static/*.js`**（`weights.html` / `trend.html` /
+> `silver.js` / `help.js` / 3 个 i18n 文件）⇒ 按 V0.100.1 必须 bump `sw.js`
+> ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
+> 详见 [releases/v0.119.0.md](releases/v0.119.0.md)。
+
+### 再上一轮：V0.118.0（2026-10-25）
 
 | 项 | 状态 |
 |---|---|

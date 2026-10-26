@@ -30,7 +30,7 @@ import time
 from datetime import date
 
 from app.repositories.macro_factor_history import MacroFactorHistoryRepository
-from app.services.macro import MACRO_FACTOR_RULES
+from app.services.macro import MACRO_FACTOR_RULES, SKIP_ROLLING_FACTORS
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,7 +38,9 @@ logger = get_logger(__name__)
 # cb_gold 是季度合计，每日 _collect() 返回同一滚动 12 月合计值，
 # 252 日 252 个相同值 → percentile 全 50 → 失去动态意义。
 # 因此 calculator 显式跳过 cb_gold，始终走 MACRO_FACTOR_RULES 中的 hardcode。
-_SKIP_ROLLING_FACTORS = frozenset({"cb_gold"})
+# V0.119.0：政府债务组（季度/年度）是同一类问题 —— 清单统一在
+# ``services/macro.py::SKIP_ROLLING_FACTORS``（前端也要用它算「N/M」分母）。
+_SKIP_ROLLING_FACTORS = SKIP_ROLLING_FACTORS
 
 
 def _percentile(sorted_values: list[float], pct: float) -> float:

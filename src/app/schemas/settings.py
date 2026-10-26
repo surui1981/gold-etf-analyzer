@@ -27,6 +27,26 @@ LEGACY_MACRO_DEFAULTS: dict[str, float] = {
     "cb_gold": 0.25,
 }
 
+#: V0.118.x 的宏观面 8 因子**默认**权重（政府债务组加入前的默认）。
+#:
+#: 与 ``LEGACY_MACRO_DEFAULTS`` 同理：存量配置**恰好等于**这组值 ⇒ 用户从没
+#: 自定义过（存的就是当时的默认值）⇒ 升级后应直接落到 V0.119.0 的新默认，
+#: 而不是对旧默认做按比例缩放（那会得到 dxy 13.2% / cb_gold 22% 这类
+#: 「谁都没设计过」的权重 —— 相对比例虽对，但绝对值是缩放出来的）。
+#:
+#: ⚠ 漏掉这个常量会有静默后果：8 键存量默认配置会走进按比例缩放分支，
+#: 用户的「没动过权重」变成「权重被系统改过」。
+LEGACY_MACRO_8_DEFAULTS: dict[str, float] = {
+    "dxy": 0.15,
+    "us2y": 0.06,
+    "us10y": 0.08,
+    "us30y": 0.06,
+    "curve_10y2y": 0.10,
+    "real10y": 0.20,
+    "vix": 0.10,
+    "cb_gold": 0.25,
+}
+
 
 class TrendWeightConfig(BaseModel):
     """技术面趋势 5 维度权重。"""
@@ -46,41 +66,46 @@ class TrendWeightConfig(BaseModel):
 
 
 class MacroWeightConfig(BaseModel):
-    """宏观面 8 因子权重（V0.118.0 起）。
+    """宏观面 11 因子权重（V0.119.0 起）。
 
-    分组：美元 15% / 名义利率（2Y+10Y+30Y）20% / 曲线形态 10% /
-    实际利率 20% / 风险偏好 10% / 结构性需求 25%。
+    分组：美元 13% / 名义利率（2Y+10Y+30Y）17% / 曲线形态 9% /
+    实际利率 18% / 风险偏好 9% / 结构性需求 22% / 政府债务 12%（美5+中4+欧3）。
+
+    V0.119.0：旧 8 个因子按 ×0.88 **等比缩放**（相对比例完全不动），
+    腾出 12% 给新增的政府债务组 —— 详见 ``services/macro.py`` 的模块 docstring。
     """
 
-    dxy: float = Field(0.15, ge=0, le=1, description="美元指数")
-    us2y: float = Field(0.06, ge=0, le=1, description="美债2Y收益率")
-    us10y: float = Field(0.08, ge=0, le=1, description="美债10Y收益率")
-    us30y: float = Field(0.06, ge=0, le=1, description="美债30Y收益率")
-    curve_10y2y: float = Field(0.10, ge=0, le=1, description="美债10Y-2Y利差")
-    real10y: float = Field(0.20, ge=0, le=1, description="美债10Y实际利率")
-    vix: float = Field(0.10, ge=0, le=1, description="VIX恐慌指数")
-    cb_gold: float = Field(0.25, ge=0, le=1, description="国际央行购金量")
+    dxy: float = Field(0.13, ge=0, le=1, description="美元指数")
+    us2y: float = Field(0.05, ge=0, le=1, description="美债2Y收益率")
+    us10y: float = Field(0.07, ge=0, le=1, description="美债10Y收益率")
+    us30y: float = Field(0.05, ge=0, le=1, description="美债30Y收益率")
+    curve_10y2y: float = Field(0.09, ge=0, le=1, description="美债10Y-2Y利差")
+    real10y: float = Field(0.18, ge=0, le=1, description="美债10Y实际利率")
+    vix: float = Field(0.09, ge=0, le=1, description="VIX恐慌指数")
+    cb_gold: float = Field(0.22, ge=0, le=1, description="国际央行购金量")
+    us_gov_debt: float = Field(0.05, ge=0, le=1, description="美国政府债务/GDP")
+    cn_gov_debt: float = Field(0.04, ge=0, le=1, description="中国政府债务/GDP")
+    eu_gov_debt: float = Field(0.03, ge=0, le=1, description="欧洲政府债务/GDP")
 
     @model_validator(mode="before")
     @classmethod
     def _migrate_missing_factors(cls, data: Any) -> Any:
-        """旧版 5 因子配置 → 8 因子：新增因子按默认份额从旧因子里**按比例扣除**。
+        """旧版配置 → 11 因子：新增因子按默认份额从旧因子里**按比例扣除**。
 
-        **为什么必须做**：V0.118.0 之前存进 ``app_settings`` 的权重 JSON 只有
-        5 个 key 且合计 = 1.0。直接给 3 个新字段加默认值，合计会变成 1.36 →
+        **为什么必须做**：存进 ``app_settings`` 的权重 JSON 只有旧版那几��� key
+        且合计 = 1.0。直接给新字段加默认值，合计会 > 1 →
         ``_sum_to_one`` 抛错 → ``services/settings.py::_load_weights`` 的异常兜底
         路径会**静默把用户的自定义权重重置为默认**（用户毫无察觉）。
 
         **迁移规则**：新增因子的默认份额（合计 ``add``）从旧因子里按各自占比扣除
         （等比例缩放，保留用户对各因子的相对偏好），再补上新因子的默认值。
-        全部 8 个 key 都给全时**原样返回**，不做任何干预。
+        全部 key 都给全时**原样返回**，不做任何干预。
 
-        **例外（V0.118.0 补）**：存量配置**恰好等于旧版默认权重**
-        （``LEGACY_MACRO_DEFAULTS``）⇒ 用户从没自定义过 ⇒ 直接落到**新默认**，
-        不做按比例缩放。否则「没动过权重」的用户会拿到
-        dxy 16% / us10y 12.8% / us30y 9.6% / vix 9.6% / cb_gold 16%
-        这组谁都没设计过的权重 —— 与本版设计（15 / 8 / 6 / 10 / 25 + 新增 36%）
-        不符。真正的自定义值不等于旧默认 ⇒ 仍走按比例迁移。
+        **例外**（"旧默认值也是一种用户状态"）：存量配置**恰好等于某一版默认权重**
+        （``LEGACY_MACRO_DEFAULTS`` = 5 键 / ``LEGACY_MACRO_8_DEFAULTS`` = 8 键）
+        ⇒ 用户从没自定义过 ⇒ 直接落到**新默认**，不做按比例缩放。否则
+        「没动过权重」的用户会拿到 dxy 13.2% / cb_gold 22% 这类从缩放算出来的
+        权重。真正的自定义值不等于旧默认 ⇒ 仍走按比例迁移。
         """
         if not isinstance(data, dict):
             return data
@@ -95,10 +120,11 @@ class MacroWeightConfig(BaseModel):
         if not present:
             return data
         # 「用户从没自定义过」⇒ 直接换成新默认（而不是对旧默认做按比例缩放）
-        if set(present) == set(LEGACY_MACRO_DEFAULTS) and all(
-            abs(present[k] - v) < 1e-9 for k, v in LEGACY_MACRO_DEFAULTS.items()
-        ):
-            return {k: float(fields[k].default) for k in fields}
+        for legacy in (LEGACY_MACRO_DEFAULTS, LEGACY_MACRO_8_DEFAULTS):
+            if set(present) == set(legacy) and all(
+                abs(present[k] - v) < 1e-9 for k, v in legacy.items()
+            ):
+                return {k: float(fields[k].default) for k in fields}
         add = sum(float(fields[k].default) for k in missing)
         base = sum(present.values())
         if base <= 0:
@@ -125,6 +151,9 @@ class MacroWeightConfig(BaseModel):
             + self.real10y
             + self.vix
             + self.cb_gold
+            + self.us_gov_debt
+            + self.cn_gov_debt
+            + self.eu_gov_debt
         )
         if abs(total - 1.0) > 0.001:
             raise ValueError(f"宏观面权重之和须为 1，当前 {total:.3f}")
@@ -163,6 +192,7 @@ class WeightConfig(BaseModel):
 
 #: 手动校准覆盖的因子集合（与 ``services/macro.py::MACRO_FACTOR_RULES`` 的 key 一一对应）
 #: V0.118.0：5 → 8（新增 us2y / curve_10y2y / real10y）
+#: V0.119.0：8 → 11（新增 us_gov_debt / cn_gov_debt / eu_gov_debt）
 MACRO_FACTOR_KEYS: tuple[str, ...] = (
     "dxy",
     "us2y",
@@ -172,6 +202,9 @@ MACRO_FACTOR_KEYS: tuple[str, ...] = (
     "real10y",
     "vix",
     "cb_gold",
+    "us_gov_debt",
+    "cn_gov_debt",
+    "eu_gov_debt",
 )
 
 
@@ -193,7 +226,7 @@ class MacroFactorOverride(BaseModel):
 
 
 class MacroFactorOverrideSet(BaseModel):
-    """8 个宏观因子的手动覆盖集合；``None`` 表示该因子走自动数据源。"""
+    """11 个宏观因子的手动覆盖集合；``None`` 表示该因子走自动数据源。"""
 
     dxy: MacroFactorOverride | None = None
     us2y: MacroFactorOverride | None = None
@@ -203,6 +236,9 @@ class MacroFactorOverrideSet(BaseModel):
     real10y: MacroFactorOverride | None = None
     vix: MacroFactorOverride | None = None
     cb_gold: MacroFactorOverride | None = None
+    us_gov_debt: MacroFactorOverride | None = None
+    cn_gov_debt: MacroFactorOverride | None = None
+    eu_gov_debt: MacroFactorOverride | None = None
 
     def active(self) -> dict[str, MacroFactorOverride]:
         """返回已设置覆盖的因子（key → override），供 MacroFactorService 消费。"""

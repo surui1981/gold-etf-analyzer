@@ -12,8 +12,10 @@
 字段约定
 --------
 - ``target``：标的维度（V0.79.0 Step E 默认所有 target 共享 ``"default"``，
-  因为 5 个因子都是单一全市场源：H.15 / WGC / 静态参考）；
-- ``factor_key``：dxy / us10y / us30y / vix / cb_gold 五种之一；
+  因为这些因子都是单一全市场源：H.15 / WGC / FRED / Eurostat / 静态参考）；
+- ``factor_key``：``services/macro.py::MACRO_FACTOR_RULES`` 里的 key 之一
+  （V0.119.0 起 11 个：dxy / us2y / us10y / us30y / curve_10y2y / real10y /
+  vix / cb_gold / us_gov_debt / cn_gov_debt / eu_gov_debt）；
 - ``data_date``：因子本身的数据日期（cb_gold 可能跨季度，写成
   ``"2025Q3–2026Q2 滚动12月"`` 形式）；
 - ``snapshot_date``：采集日，每日一条，正好凑成滚动窗口的天然粒度。
@@ -36,7 +38,7 @@ class DailyMacroFactor(Base):
     target: Mapped[str] = mapped_column(
         String(16),
         index=True,
-        comment='标的维度（默认 "default" — 5 因子全市场共享源）',
+        comment='标的维度（默认 "default" — 全部因子全市场共享源）',
     )
     snapshot_date: Mapped[date] = mapped_column(
         Date,
@@ -44,7 +46,7 @@ class DailyMacroFactor(Base):
     )
     factor_key: Mapped[str] = mapped_column(
         String(16),
-        comment="dxy / us10y / us30y / vix / cb_gold",
+        comment="宏观因子 key（见 MACRO_FACTOR_RULES，V0.119.0 起 11 个）",
     )
     value: Mapped[float] = mapped_column(Float, comment="当日该因子原始数值")
     data_date: Mapped[str] = mapped_column(

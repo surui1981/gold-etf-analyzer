@@ -52,7 +52,7 @@
     "评估指数类": {
       "综合指数": "0-100 量化多空：技术面 30% + 宏观面 40% + 消息面 30% 加权",
       "技术面": "5 维度（结构/动量/支撑/动能/回撤）加权合成 0-100",
-      "宏观面": "8 因子（美元/美债2Y·10Y·30Y/10Y-2Y利差/10Y实际利率/VIX/央行购金）合成 0-100",
+      "宏观面": "11 因子（美元/美债2Y·10Y·30Y/10Y-2Y利差/10Y实际利率/VIX/央行购金/美·中·欧政府债务）合成 0-100",
       "消息面": "客户基于投行展望打分 0-100（占 30% 权重）",
       "RSI(14)": "14 日相对强弱指数，>70 超买 / <30 超卖",
     },
@@ -74,6 +74,9 @@
       "10Y 实际利率": "10 年期 TIPS 收益率（扣通胀），黄金零息属性的定价锚，越高越压制金价",
       "VIX": "标普 500 波动率指数（恐慌指数），与黄金正相关（避险）",
       "cb_gold": "国际央行季度净购金（吨），结构性正相关",
+      "us_gov_debt": "美国联邦债务/GDP（季度，CBO）—— 债务越高，货币贬值/购买力受损风险越大，利多黄金",
+      "cn_gov_debt": "中国一般政府总债务/GDP（年度，IMF WEO）—— 债务越高越利多黄金",
+      "eu_gov_debt": "欧盟 27 国一般政府总债务/GDP（季度，Eurostat）—— 债务越高越利多黄金",
     },
     "品种代码类": {
       "Au99.99": "上海黄金交易所 99.99% 纯度黄金现货（元/克）",
@@ -181,13 +184,13 @@
   /* ── Tour 步骤（per page） ────────────────────────────────────────── */
   const TOUR_STEPS = {
     "/static/trend.html": [
-      { selector: ".topnav", text: "顶栏 5 个页面：趋势追踪 / 持仓决策 / 权重 / 消息面 / 央行购金。点击切换。", pos: "bottom" },
+      { selector: ".topnav", text: "顶栏 8 个场景：首页 / 今日要闻 / 决策 / 持仓 / 情报 / 报告存档 / 配置 / AI 智能分析（部分场景下还有子页）。点击切换。", pos: "bottom" },
       { selector: ".headline .index-panel, .index-panel", text: "综合趋势评估指数（0-100），技术 30% × 宏观 40% × 消息 30% 加权", pos: "top" },
-      { selector: "#macroFactors", text: "8 大宏观因子：美元 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金；颜色标识 live / stale / mock", pos: "top" },
+      { selector: "#macroFactors", text: "11 大宏观因子：美元 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金 / 美·中·欧政府债务；颜色标识 live / stale / mock", pos: "top" },
       { selector: "#chartArea", text: "60 天趋势曲线 + MA5/20/40 均线，鼠标悬停看日数据", pos: "top" },
     ],
     "/portfolio": [
-      { selector: ".topnav", text: "切换其他页面（趋势/权重/消息/央行）", pos: "bottom" },
+      { selector: ".topnav", text: "切换其他页面（决策 / 情报 / 配置 等场景；持仓场景下还有「交易历史」子页）", pos: "bottom" },
       { selector: "#alertBar", text: "顶部提醒条（开启 🔔 后档位切换或价格异动 ≥2% 触发）", pos: "bottom" },
       { selector: ".decision-card, .panel", text: "今日购买决策 + 仓位推荐 + 红绿理由对照", pos: "top" },
       { selector: "#posArea", text: "当前持仓 + 实时盈亏；支持软删除 / 撤销 / CSV 导出", pos: "top" },
@@ -318,6 +321,9 @@
 
         <dt>宏观因子（V0.118.0+）</dt>
         <dd>美债 2Y·10Y·30Y：美联储 H.15 CSV ｜ 美元指数：Yahoo <code>DX-Y.NYB</code> ｜ VIX 与 10Y 实际利率：FRED <code>VIXCLS</code> / <code>DFII10</code> ｜ 10Y-2Y 利差由 10Y−2Y 派生</dd>
+
+        <dt>政府债务因子（V0.119.0+）</dt>
+        <dd>美国政府债务/GDP：FRED <code>GFDEGDQ188S</code>（CBO，季度）｜ 中国政府债务/GDP：FRED <code>GGGDTACNA188N</code>（IMF WEO，年度）｜ 欧洲政府债务/GDP：Eurostat <code>GOV_10Q_GGDEBT</code>（欧盟 27 国，季度）</dd>
 
         <dt>央行购金（V0.57.0+）</dt>
         <dd>WGC Gold Demand Trends HTML chart JS（<code>fsapi.gold.org/api/v12/charts/js/...</code>）｜ 月度自动拉取 ｜ <a href="/central-bank">查看</a></dd>

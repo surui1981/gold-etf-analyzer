@@ -12,7 +12,7 @@ class DailySnapshot(Base):
     """每日快照：当日价格参数与趋势/宏观评估值。
 
     - 每日一条（snapshot_date 唯一），重复捕获为更新
-    - ``macro_detail`` 存宏观 5 因子 JSON：{key: {value, score, direction}}
+    - ``macro_detail`` 存宏观因子 JSON：{key: {value, score, direction}}（V0.119.0 起 11 个因子）
 
     - ``tech_detail`` 存技术面 5 维度 JSON（V0.79.0）：{维度名: {score, weight, contribution}}
 
@@ -48,7 +48,9 @@ class DailySnapshot(Base):
     index_level: Mapped[str] = mapped_column(String(16), comment="指数等级")
 
     # 宏观因子明细（JSON）
-    macro_detail: Mapped[str] = mapped_column(Text, comment="宏观 5 因子 JSON")
+    macro_detail: Mapped[str] = mapped_column(
+        Text, comment="宏观因子 JSON（V0.119.0 起 11 个因子）"
+    )
 
     # 技术面 5 维度明细（JSON，V0.79.0）
     # ⚠ 可空：历史 24 条无法回溯补（上游 K 线只覆盖其中 16-17 天，见任务 #162 结论）

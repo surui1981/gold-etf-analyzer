@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.118.1";  // V0.118.1 · 宏观因子「末次落库」兜底层（源挂时不再退回 2026-08-28 常量）+ 手动校准页显示降级/滞后标记；改了 weights.html / backtest.html / help.js / i18n/*.js 必 bump
+const VERSION = "v0.119.0";  // V0.119.0 · 宏观面新增 3 个政府债务因子（美国/中国/欧洲 政府债务/GDP）+ 低频因子 cadence/max_lag_days；改了 weights.html / trend.html / silver.js / help.js / i18n/*.js 必 bump
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

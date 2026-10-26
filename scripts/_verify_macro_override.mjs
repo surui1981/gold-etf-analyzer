@@ -1,6 +1,6 @@
 // scripts/_verify_macro_override.mjs
-// V0.110.0 验证（V0.118.0 更新为 8 因子）：/weights 页「宏观因子手动校准」卡片渲染
-// - 期望：8 行（dxy/us2y/us10y/us30y/curve_10y2y/real10y/vix/cb_gold）全部渲染出当前生效值
+// V0.110.0 验证（V0.119.0 更新为 11 因子）：/weights 页「宏观因子手动校准」卡片渲染
+// - 期望：11 行（8 个日频 + 3 个政府债务）全部渲染出当前生效值
 // - 期望：每行 3 个输入框（number / date / text）+ 1 个清除按钮
 // - 期望：i18n key 无 undefined 泄漏到 textContent
 // - 期望：填值 → 保存 → 卡片行刷新且 source 变「手动输入」+ 滞后 chip
@@ -10,9 +10,21 @@
 import puppeteer from "puppeteer-core";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
-// V0.118.0：宏观面 5 因子 → 8 因子（新增 us2y / curve_10y2y / real10y）
+// V0.118.0：5 → 8 因子；V0.119.0：8 → 11 因子（新增 us_gov_debt / cn_gov_debt / eu_gov_debt）
 // 行数断言是硬编码的 —— 因子数变了不改这里，脚本会静默通过（少渲染的行不会报）。
-const KEYS = ["dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"];
+const KEYS = [
+  "dxy",
+  "us2y",
+  "us10y",
+  "us30y",
+  "curve_10y2y",
+  "real10y",
+  "vix",
+  "cb_gold",
+  "us_gov_debt",
+  "cn_gov_debt",
+  "eu_gov_debt",
+];
 const EXPECTED_ROWS = KEYS.length;
 const nullOverrides = () => Object.fromEntries(KEYS.map((k) => [k, null]));
 
@@ -93,7 +105,7 @@ try {
 const cardExists = await page.$("#macroOverrideCard");
 check(!!cardExists, "宏观因子手动校准卡片存在");
 
-// 2. 8 行全部渲染
+// 2. 11 行全部渲染
 const rows = await page.$$eval("#moRows .mo-row", (els) =>
   els.map((el) => ({
     inputs: el.querySelectorAll("input").length,
@@ -213,7 +225,7 @@ check(consoleErrors.length === 0, `无 JS 报错：${JSON.stringify(consoleError
 
 await browser.close();
 
-console.log("\n=== V0.118.0 宏观因子手动校准（8 因子）· /weights 验证 ===");
+console.log("\n=== V0.119.0 宏观因子手动校准（11 因子）· /weights 验证 ===");
 ok.forEach((l) => console.log("  [OK  ] " + l));
 bad.forEach((l) => console.log("  [FAIL] " + l));
 console.log(`\n结果：${ok.length} passed, ${bad.length} failed`);

@@ -56,6 +56,12 @@ class Settings(BaseSettings):
         "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         "?range={range}&interval={interval}"
     )
+    # ===== V0.119.0 · 政府债务因子数据源 =====
+    # Eurostat dissemination API（季度一般政府债务/GDP）：``{dataset}`` 占位符。
+    # 官方一手源；实测无 UA 限制（与 FRED 相反）。
+    eurostat_stats_url: str = (
+        "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0/data/{dataset}"
+    )
 
     # XAU 实时报价 fallback chain：逗号分隔，按顺序尝试
     # 可选 token：goldapi | sina | etf_history

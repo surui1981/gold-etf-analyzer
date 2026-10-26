@@ -7,18 +7,33 @@ from app.services.macro import MACRO_FACTOR_RULES, MacroFactorService, _friendly
 
 _RULES = {r["key"]: r for r in MACRO_FACTOR_RULES}
 
-#: V0.118.0 的 8 个因子 key
-ALL_KEYS = {"dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"}
-#: 可滚动（参与 252 日滚动分位）的因子 —— cb_gold 是季度合计，显式跳过
-ROLLING_KEYS = ALL_KEYS - {"cb_gold"}
+#: V0.119.0 的 11 个因子 key
+ALL_KEYS = {
+    "dxy",
+    "us2y",
+    "us10y",
+    "us30y",
+    "curve_10y2y",
+    "real10y",
+    "vix",
+    "cb_gold",
+    "us_gov_debt",
+    "cn_gov_debt",
+    "eu_gov_debt",
+}
+#: 可滚动（参与 252 日滚动分位）的因子 ——
+#: cb_gold 是季度合计；3 个政府债务因子是季度/年度低频序列，
+#: 日频落表会把同一个值重复 N 次 ⇒ P10 == P90 ⇒ 阈值退化。全部显式跳过。
+ROLLING_KEYS = ALL_KEYS - {"cb_gold", "us_gov_debt", "cn_gov_debt", "eu_gov_debt"}
 
 
 @pytest.fixture(autouse=True)
 def _stub_macro_sources(monkeypatch):
-    """把 4 个外部源全部打桩 —— **任何漏打桩都会让单测真的联网**。
+    """把 5 个外部源全部打桩 —— **任何漏打桩都会让单测真的联网**。
 
     V0.118.0 起 8 个因子里 7 个来自外部源（H.15 / FRED / Yahoo）。漏打桩的后果：
     CI 无外网 ⇒ 用例挂；本地有外网 ⇒ 用例变慢，且断言随当天行情漂移。
+    V0.119.0 又加了 2 个源（低频 FRED 序列 / Eurostat）。
     个别测试要改 H.15 的返回值时，在自己用例里再 monkeypatch 一次即可
     （后写的 monkeypatch 覆盖先写的）。
     """
@@ -35,9 +50,19 @@ def _stub_macro_sources(monkeypatch):
     async def fake_yahoo(symbol, **kwargs):
         return None
 
+    async def fake_fred_periodic(series_id, **kwargs):
+        return None  # 低频序列（季度/年度）取不到 → 回退静态参考值
+
+    async def fake_eurostat(**kwargs):
+        return None
+
     monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
     monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
     monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+    monkeypatch.setattr(
+        "app.repositories.macro_sources.fetch_fred_periodic_latest", fake_fred_periodic
+    )
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_eurostat_gov_debt", fake_eurostat)
 
 
 def test_weights_sum_to_one() -> None:
@@ -45,10 +70,10 @@ def test_weights_sum_to_one() -> None:
     assert sum(r["weight"] for r in MACRO_FACTOR_RULES) == pytest.approx(1.0)
 
 
-def test_factor_set_is_eight_keys() -> None:
-    """V0.118.0：因子集恰好 8 个，key 集合被锁死（加因子要同步前端 + 权重 schema）。"""
+def test_factor_set_is_eleven_keys() -> None:
+    """V0.119.0：因子集恰好 11 个，key 集合被锁死（加因子要同步前端 + 权重 schema）。"""
     assert {r["key"] for r in MACRO_FACTOR_RULES} == ALL_KEYS
-    assert len(MACRO_FACTOR_RULES) == 8
+    assert len(MACRO_FACTOR_RULES) == 11
 
 
 def test_negative_correlation_mapping() -> None:
@@ -92,8 +117,84 @@ def test_new_factors_friendly_score() -> None:
     assert _friendly_score(0.5, curve) == 50.0
 
 
+def test_gov_debt_friendly_score_is_debasement_direction() -> None:
+    """V0.119.0 新增 3 个政府债务因子：债务↑ = 利多黄金（debasement 口径）。
+
+    符号由 ``best`` / ``worst`` 的相对位置决定，**不靠 positive 字段** ——
+    ``positive`` 只驱动滚动分位的方向。
+    """
+    us = _RULES["us_gov_debt"]
+    assert _friendly_score(140.0, us) == 100.0  # best
+    assert _friendly_score(60.0, us) == 0.0  # worst
+    assert _friendly_score(100.0, us) == 50.0  # 中枢
+    assert _friendly_score(122.59, us) == pytest.approx(78.2375, abs=1e-3)
+
+    cn = _RULES["cn_gov_debt"]
+    assert _friendly_score(95.0, cn) == 100.0
+    assert _friendly_score(40.0, cn) == 0.0
+    assert _friendly_score(88.33, cn) == pytest.approx(87.8727, abs=1e-2)
+
+    eu = _RULES["eu_gov_debt"]
+    assert _friendly_score(95.0, eu) == 100.0
+    assert _friendly_score(60.0, eu) == 0.0
+    assert _friendly_score(82.9, eu) == pytest.approx(65.4286, abs=1e-2)
+
+
+def test_gov_debt_cadence_and_lag_limits() -> None:
+    """低频因子必须声明 cadence / max_lag_days，否则前端会永久亮滞后红灯。
+
+    日频因子滞后 4 天就该告警；季度/年度因子 4 天必红 ⇒ 前端改挂中性 chip。
+    """
+    assert _RULES["us_gov_debt"]["cadence"] == "quarterly"
+    assert _RULES["us_gov_debt"]["max_lag_days"] == 300
+    assert _RULES["eu_gov_debt"]["cadence"] == "quarterly"
+    assert _RULES["eu_gov_debt"]["max_lag_days"] == 300
+    assert _RULES["cn_gov_debt"]["cadence"] == "annual"
+    assert _RULES["cn_gov_debt"]["max_lag_days"] == 1100
+
+    # 存量 8 个因子保持日频口径
+    for key in ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix"):
+        assert _RULES[key]["cadence"] == "daily", key
+        assert _RULES[key]["max_lag_days"] == 4, key
+
+
+def test_gov_debt_lag_threshold_covers_current_observation_age() -> None:
+    """滞后阈值必须**大于**当前真实观测年龄，否则那一行会**永久亮红灯**。
+
+    「常亮的告警等于没有告警」（freshness 降级 UX 纪律）。
+
+    2026-10-26 实测：
+      us 209 天（季度，阈值 300）
+      cn 664 天（年度，阈值 1100 —— WEO 年度序列的观测年本身落后 1~2 年）
+      eu 118 天（季度，阈值 300）
+
+    ⚠ 参考日固定为发版日：这个断言锁的是**设计决定**（阈值要留多少余量），
+    不是「数据永远不���」。源刷新后（观测年推进）阈值应重新评估。
+    """
+    from datetime import date
+
+    from app.services.macro import STATIC_REF
+
+    ref = date(2026, 10, 26)
+    for key in ("us_gov_debt", "cn_gov_debt", "eu_gov_debt"):
+        obs = date.fromisoformat(STATIC_REF[key]["date"])
+        age = (ref - obs).days
+        limit = _RULES[key]["max_lag_days"]
+        assert age < limit, f"{key} 观测已 {age} 天，超过阈值 {limit} 天 ⇒ 会永久亮红灯"
+
+
+def test_gov_debt_excluded_from_rolling_factors() -> None:
+    """3 个低频因子 + cb_gold 必须排除在滚动分位之外（否则 P10 == P90 退化）。"""
+    from app.services.macro import SKIP_ROLLING_FACTORS
+
+    assert "us_gov_debt" in SKIP_ROLLING_FACTORS
+    assert "cn_gov_debt" in SKIP_ROLLING_FACTORS
+    assert "eu_gov_debt" in SKIP_ROLLING_FACTORS
+    assert "cb_gold" in SKIP_ROLLING_FACTORS
+
+
 async def test_macro_evaluate(monkeypatch) -> None:
-    """指数合成：8 因子、分数与方向、贡献求和（绕过 TTL 缓存直接测合成逻辑）。"""
+    """指数合成：11 因子、分数与方向、贡献求和（绕过 TTL 缓存直接测合成逻辑）。"""
 
     async def fake_collect(self):
         return {
@@ -105,12 +206,15 @@ async def test_macro_evaluate(monkeypatch) -> None:
             "real10y": (2.4, "2026-08-28", "静态参考值"),
             "vix": (18.5, "2026-08-28", "静态参考值"),
             "cb_gold": (1019.0, "2025Q3–2026Q2 滚动12月", "WGC GDT Q2 2026"),
+            "us_gov_debt": (122.59, "2026-03-31", "FRED GFDEGDQ188S"),
+            "cn_gov_debt": (88.33, "2024-12-31", "FRED GGGDTACNA188N"),
+            "eu_gov_debt": (82.9, "2026-06-30", "Eurostat GOV_10Q_GGDEBT"),
         }
 
     monkeypatch.setattr(MacroFactorService, "_collect", fake_collect)
     out = await MacroFactorService()._evaluate_uncached()
 
-    assert len(out.factors) == 8
+    assert len(out.factors) == 11
     assert {f.key for f in out.factors} == ALL_KEYS
     assert 0 <= out.score <= 100
     assert out.direction in (
@@ -133,6 +237,23 @@ async def test_macro_evaluate(monkeypatch) -> None:
     assert "Q2 2026" in cb.source  # 数据源含 WGC 季度报告标识
     # 贡献之和 = 指数分（权重已归一化到 1.0）
     assert sum(f.weight for f in out.factors) == pytest.approx(1.0, abs=1e-6)
+
+    # V0.119.0：低频因子把 cadence / max_lag_days 透出（前端据此不亮滞后红灯）
+    us_debt = next(f for f in out.factors if f.key == "us_gov_debt")
+    assert us_debt.cadence == "quarterly"
+    assert us_debt.max_lag_days == 300
+    assert us_debt.source == "FRED GFDEGDQ188S"
+    assert us_debt.data_date == "2026-03-31"
+    cn_debt = next(f for f in out.factors if f.key == "cn_gov_debt")
+    assert cn_debt.cadence == "annual"
+    # 1100 天 ≈ 3 年。**不是 550 天** —— FRED 的 IMF WEO 年度序列最新观测是
+    # 2024-12-31（664 天前，年度序列本身落后日历 1~2 年），
+    # 拿 550 天当阈值会让这一行永远亮红灯（常亮的告警等于没有告警）。
+    assert cn_debt.max_lag_days == 1100
+
+    # V0.119.0：rolling_factors 是后端算出的可滚动清单（前端不再硬编码 filter）
+    assert set(out.rolling_factors) == ROLLING_KEYS
+    assert len(out.rolling_factors) == 7
 
 
 async def test_macro_evaluate_cb_gold_uses_central_bank_service(monkeypatch, db_session) -> None:

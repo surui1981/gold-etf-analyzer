@@ -395,7 +395,7 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
         async def capture_today(self):
             return None  # 跳过 snap 路径，step 3 仍应执行
 
-    # FakeTrend：analyze 走 fake 路径；_macro._collect 返回 8 因子
+    # FakeTrend：analyze 走 fake 路径；_macro._collect 返回 11 因子
     #
     # ⚠️ V0.118.0：source 必须是**真实行情源**标签 —— step 3 用
     # ``is_persistable_source`` 把「静态参考值」挡在历史表外（静态常量不是市场读数，
@@ -411,6 +411,10 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
                 "real10y": (2.64, "2026-10-22", "FRED DFII10"),
                 "vix": (19.03, "2026-10-22", "FRED VIXCLS"),
                 "cb_gold": (1019.0, "2025Q3–2026Q2 滚动12月", "央行购金表自动汇总"),
+                # V0.119.0：3 个政府债务因子（季度/年度低频，走真实源标签 ⇒ 落表）
+                "us_gov_debt": (122.59, "2026-03-31", "FRED GFDEGDQ188S"),
+                "cn_gov_debt": (88.33, "2024-12-31", "FRED GGGDTACNA188N"),
+                "eu_gov_debt": (82.9, "2026-06-30", "Eurostat GOV_10Q_GGDEBT"),
             }
 
     class FakeTrend:
@@ -476,7 +480,7 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
 
     await sch._capture_and_warm(FakeSnapshot(), FakeTrend())
 
-    # 验证：daily_macro_factors 表里应有 8 行（V0.118.0 起宏观面 8 因子）
+    # 验证：daily_macro_factors 表里应有 11 行（V0.119.0 起宏观面 11 因子）
     async with async_session_factory() as session:
         repo = MacroFactorHistoryRepository(session)
         for factor_key in (
@@ -488,6 +492,9 @@ async def test_v079_step_e_capture_and_warm_persists_macro_factors() -> None:
             "real10y",
             "vix",
             "cb_gold",
+            "us_gov_debt",
+            "cn_gov_debt",
+            "eu_gov_debt",
         ):
             count = await repo.count_samples("default", factor_key)
             assert count == 1, f"{factor_key} 期望 1 条历史，实际 {count}"

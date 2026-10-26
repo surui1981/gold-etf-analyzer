@@ -1,31 +1,47 @@
 // scripts/_verify_macro_factors.mjs
-// V0.118.0 验证：/weights 页「宏观面权重」8 因子 + /backtest 页宏观网格用因子 key
+// V0.119.0 验证：/weights 页「宏观面权重」11 因子 + /backtest 页宏观网格用因子 key
 //
 // 覆盖的三件事（V0.118.0 之前没有门禁管）：
-// 1. 宏观面分组渲染出 **8 个**滑块（5 → 8 因子），且合计 = 100%
-// 2. 「恢复默认」把 8 个滑块设成新方案默认值（dxy 15 / us2y 6 / us10y 8 /
-//    us30y 6 / curve 10 / real10y 20 / vix 10 / cb_gold 25）
+// 1. 宏观面分组渲染出 **11 个**滑块（8 → 11 因子），且合计 = 100%
+// 2. 「恢复默认」把 11 个滑块设成新方案默认值（dxy 13 / us2y 5 / us10y 7 /
+//    us30y 5 / curve 9 / real10y 18 / vix 9 / cb_gold 22 /
+//    us_gov_debt 5 / cn_gov_debt 4 / eu_gov_debt 3）
 // 3. /backtest 页宏观网格的 input 用**因子 key**（data-key="dxy"）而不是中文显示名
 //    —— 中文名与快照 macro_detail 的键对不上会让「启用宏观内部权重」跑出 0 行
 //
-// ⚠️ 行数断言写死 8：因子数变了不改这里，脚本会静默通过（少渲染的行不会报）。
+// ⚠️ 行数断言写死 11：因子数变了不改这里，脚本会静默通过（少渲染的行不会报）。
 import puppeteer from "puppeteer-core";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
-const KEYS = ["dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"];
+const KEYS = [
+  "dxy",
+  "us2y",
+  "us10y",
+  "us30y",
+  "curve_10y2y",
+  "real10y",
+  "vix",
+  "cb_gold",
+  "us_gov_debt",
+  "cn_gov_debt",
+  "eu_gov_debt",
+];
 const EXPECTED_ROWS = KEYS.length;
-// V0.118.0 的默认权重（百分比），与后端 MacroWeightConfig 默认值一致
+// V0.119.0 的默认权重（百分比），与后端 MacroWeightConfig 默认值一致
 const DEFAULTS = {
-  dxy: 15,
-  us2y: 6,
-  us10y: 8,
-  us30y: 6,
-  curve_10y2y: 10,
-  real10y: 20,
-  vix: 10,
-  cb_gold: 25,
+  dxy: 13,
+  us2y: 5,
+  us10y: 7,
+  us30y: 5,
+  curve_10y2y: 9,
+  real10y: 18,
+  vix: 9,
+  cb_gold: 22,
+  us_gov_debt: 5,
+  cn_gov_debt: 4,
+  eu_gov_debt: 3,
 };
-// 回测页宏观网格仍是 5 个（新增 3 因子从 V0.118.0 起才落快照，历史快照没有）
+// 回测页宏观网格仍是 5 个（新增因子从 V0.118.0 / V0.119.0 起才落快照，历史快照没有）
 const BACKTEST_MACRO_KEYS = ["dxy", "us10y", "us30y", "vix", "cb_gold"];
 
 const browser = await puppeteer.launch({
@@ -87,7 +103,7 @@ await waitFor(
   { timeout: 30000 },
 );
 
-// 1. 宏观面 8 个滑块
+// 1. 宏观面 11 个滑块
 const sliders = await page.$$eval("#macroRows .w-row", (els) =>
   els.map((el) => ({
     id: el.querySelector("input[type=range]")?.id || "",
@@ -114,14 +130,14 @@ const macroSum = await page.$eval("#macroSum", (el) => ({
 check(macroSum.text === "100%", `宏观面合计显示 100%（实际 ${macroSum.text}）`);
 check(macroSum.cls === "sum-ok", `合计标记为 sum-ok（实际 ${macroSum.cls}）`);
 
-// 3. 标题文案含「8」
+// 3. 标题文案含「11」
 const heading = await page.$eval("#macroRows", () => {
   const h = document.querySelector("h2[data-i18n='weights.macro_title']");
   return h ? h.textContent.trim() : "";
 });
-check(heading.includes("8"), `宏观面标题含因子数 8：${heading}`);
+check(heading.includes("11"), `宏观面标题含因子数 11：${heading}`);
 
-// 4. 「恢复默认」→ 8 个默认值
+// 4. 「恢复默认」→ 11 个默认值
 //    注意：resetAll() 会弹二次确认框，脚本要自己点「确定恢复」
 //    ⚠️ resetAll() 内部是**真的 PUT 保存**（会覆盖线上用户的自定义权重），
 //    所以脚本先备份当前权重、跑完再原样写回去。
@@ -132,7 +148,19 @@ const beforeWeights = await page.evaluate(async () => {
 check(!!beforeWeights, "备份当前权重（供恢复默认测试后回写）");
 await page.evaluate(() => {
   // 先把滑块改成非默认值，确保「恢复默认」真的生效而不是没变化
-  for (const k of ["dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix", "cb_gold"]) {
+  for (const k of [
+    "dxy",
+    "us2y",
+    "us10y",
+    "us30y",
+    "curve_10y2y",
+    "real10y",
+    "vix",
+    "cb_gold",
+    "us_gov_debt",
+    "cn_gov_debt",
+    "eu_gov_debt",
+  ]) {
     const el = document.getElementById("m_" + k);
     if (el) el.value = 1;
   }
@@ -197,7 +225,7 @@ if (beforeWeights) {
   check(Math.abs(nowSum - 1) < 1e-6, `回写后宏观权重合计 = 1（实际 ${nowSum}）`);
 }
 
-// 5. GET /api/v1/settings/weights 返回 8 个宏观 key
+// 5. GET /api/v1/settings/weights 返回 11 个宏观 key
 const weightsApi = await page.evaluate(async () => {
   const r = await fetch("/api/v1/settings/weights");
   return { status: r.status, body: await r.json() };
@@ -215,7 +243,7 @@ check(Math.abs(apiSum - 1) < 1e-6, `API 宏观权重合计 = 1（实际 ${apiSum
 const bodyText = await page.$eval("body", (el) => el.innerText);
 check(!bodyText.includes("undefined"), "权重页无 undefined 泄漏");
 
-await page.screenshot({ path: "/tmp/v01180_weights.png", fullPage: true });
+await page.screenshot({ path: "/tmp/v01190_weights.png", fullPage: true });
 
 // 7. 回测页宏观网格用因子 key
 await page.goto(BASE + "/static/backtest.html", { waitUntil: "networkidle2" });
@@ -242,13 +270,13 @@ for (const k of BACKTEST_MACRO_KEYS) {
 const chineseKey = grid.find((g) => /[一-鿿]/.test(g.key || ""));
 check(!chineseKey, `回测网格 data-key 不含中文（发现 ${chineseKey?.key}）`);
 
-await page.screenshot({ path: "/tmp/v01180_backtest.png", fullPage: true });
+await page.screenshot({ path: "/tmp/v01190_backtest.png", fullPage: true });
 
 check(consoleErrors.length === 0, `无 JS 报错：${JSON.stringify(consoleErrors.slice(0, 3))}`);
 
 await browser.close();
 
-console.log("\n=== V0.118.0 宏观面 8 因子 · /weights + /backtest 验证 ===");
+console.log("\n=== V0.119.0 宏观面 11 因子 · /weights + /backtest 验证 ===");
 ok.forEach((l) => console.log("  [OK  ] " + l));
 bad.forEach((l) => console.log("  [FAIL] " + l));
 console.log(`\n结果：${ok.length} passed, ${bad.length} failed`);
