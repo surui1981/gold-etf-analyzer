@@ -169,6 +169,12 @@ class MacroFactorOut(BaseModel):
     unit: str
     data_date: str = Field(..., description="数据日期（实时或静态标注）")
     source: str = Field("", description="数据源标识（如「美联储 H.15」「静态参考」）")
+    tier: str = Field(
+        "live",
+        description="V0.118.1：取值层级 live（本次真的观测到）/ lkg（末次落库的真实读数，"
+        "上游源当时不可用）/ static（内置常量兜底，非市场读数）。前端据此显示降级提示，"
+        "不必去匹配 source 的中文前缀。",
+    )
     score: float = Field(..., ge=0, le=100, description="黄金友好度 0-100")
     direction: DirectionSignal
     weight: float = Field(..., ge=0, le=1)

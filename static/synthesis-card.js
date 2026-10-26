@@ -225,16 +225,33 @@
   }
 
   /* 数据质量标注。
-     判据必须用后端真正写进 source 的占位标记字面量「静态参考值」
-     （见 services/macro.py STATIC_REF / 降级分支），**不能**用「不是 H.15 就算静态」
-     这种启发式——宏观因子里还有「世界黄金协会 GDT」这类正当季度源（央行购金），
-     用启发式会把真数据误标成兜底值，正好违背本卡「不夸大可信度」的目的。 */
+     判据优先用后端给的 **tier** 字段（V0.118.1：`live` / `lkg` 末次落库 /
+     `static` 内置常量），tier 缺失时才退回匹配 source 的占位标记字面量。
+     **不能**用「不是 H.15 就算静态」这种启发式——宏观因子里还有
+     「世界黄金协会 GDT」这类正当季度源（央行购金），用启发式会把真数据
+     误标成兜底值，正好违背本卡「不夸大可信度」的目的。 */
+  function macroTier(f) {
+    if (f.tier) return f.tier;
+    var s = f.source ? String(f.source) : '';
+    if (s.indexOf('末次落库') >= 0) return 'lkg';
+    if (s.indexOf('静态参考值') >= 0) return 'static';
+    return 'live';
+  }
+
   function qualityNotes(trend, missDims) {
     var notes = [];
     var factors = (trend.macro && trend.macro.factors) || [];
-    var statics = factors.filter(function (f) {
-      return f.source && String(f.source).indexOf('静态参考值') >= 0;
-    });
+    var statics = factors.filter(function (f) { return macroTier(f) === 'static'; });
+    var lkgs = factors.filter(function (f) { return macroTier(f) === 'lkg'; });
+    if (lkgs.length) {
+      var lnames = lkgs.map(function (f) { return f.name; }).filter(Boolean);
+      var lshown = lnames.slice(0, 4).join('、') + (lnames.length > 4 ? ' 等' : '');
+      var ldates = lkgs.map(function (f) { return f.data_date; }).filter(Boolean).sort();
+      notes.push(T('syn.q_macro_lkg',
+        '宏观因子 {n}/{m} 项为降级读数（{names}；最新数据日 {d}，上游数据源当时不可用，用上次真实读数顶替）→ 该维度权重 40%，结论可信度相应打折',
+        { n: lkgs.length, m: factors.length, names: lshown,
+          d: ldates.length ? ldates[ldates.length - 1] : '—' }));
+    }
     if (statics.length) {
       var names = statics.map(function (f) { return f.name; }).filter(Boolean);
       var shown = names.slice(0, 4).join('、') + (names.length > 4 ? ' 等' : '');

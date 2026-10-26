@@ -356,7 +356,7 @@ window.PM_I18N_en_US = {
 
   /* ── V0.110.0 Macro factor manual calibration (macro_factor_overrides) ── */
   "weights.mo_title": "🌍 Macro Factor Manual Calibration",
-  "weights.mo_desc": "All factors now have automatic live feeds (USD Index Yahoo / VIX and 10Y real rate FRED / Treasury yields Fed H.15). Enter the latest readings from your market terminal here to override them — the macro index and composite trend index are recomputed immediately on save. Leave blank to use the automatic source.",
+  "weights.mo_desc": "All factors now have automatic live feeds (USD Index Yahoo / VIX and 10Y real rate FRED / Treasury yields Fed H.15). Enter the latest readings from your market terminal here to override them — the macro index and composite trend index are recomputed immediately on save. Leave blank to use the automatic source. When an automatic feed is unreachable, the app falls back to the last successfully stored real reading (tagged “Degraded · last stored”), and only then to a built-in constant — both fallbacks are flagged in the “Currently effective” column.",
   "weights.mo_factor": "Factor",
   "weights.mo_current": "Currently In Effect",
   "weights.mo_input": "Manual Value",
@@ -371,6 +371,8 @@ window.PM_I18N_en_US = {
   "weights.mo_loading_short": "Loading…",
   "weights.mo_no_reading": "No reading",
   "weights.mo_source_manual": "Manual",
+  "weights.mo_tier_lkg": "Degraded · last stored",
+  "weights.mo_tier_static": "Built-in constant",
   "weights.mo_lag_warn": "{n}d lag",
   "weights.mo_saving": "Saving manual calibration…",
   "weights.mo_saved": "✅ Macro factor overrides saved. Macro index and composite index recomputed from the new readings.",
@@ -944,6 +946,7 @@ window.PM_I18N_en_US = {
   "syn.quality": "Data quality",
   "syn.q_none": "no issues",
   "syn.q_macro_static": "{n}/{m} macro factors are static reference values ({names}; latest data date {d}, not live) → that dimension carries 40% weight, so the verdict is discounted accordingly",
+  "syn.q_macro_lkg": "{n}/{m} macro factors are degraded readings ({names}; latest data date {d} — upstream source was unavailable, so the last real reading is used) → that dimension carries 40% weight, so the verdict is discounted accordingly",
   "syn.q_news_unscored": "News not scored today; counted as neutral 50 (30% weight)",
   "syn.q_degraded": "Quote sources degraded: {n}/{m} markets are demo (mock) data, not live prices",
   "syn.detail_link": "Resonance detail (history + strong-signal hit rate)",

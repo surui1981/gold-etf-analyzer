@@ -646,19 +646,39 @@ function lagDays(dateStr) {
   return Math.floor((Date.now() - t) / 86400000);
 }
 
+/* V0.118.1：自动源读数的滞后告警阈值（日历日）。
+   4 天 = 跨一个长周末仍不提示；超过就说明上游源已经跟不上市场了。
+   手动输入另有更严的口径（> 1 天就提示），因为那是用户自己抄的数。 */
+const AUTO_LAG_WARN_DAYS = 4;
+
 function overrideRowHtml([key, label, unit]) {
   const ov = (overrideState && overrideState[key]) || null;
   const cur = macroFactors[key] || null;
   const isManual = !!(cur && cur.source === "手动输入");
-  const lag = isManual ? lagDays(cur.data_date) : null;
-  const lagChip = lag !== null && lag > 1
+  /* V0.118.1：滞后提示**不再只给手动值**。
+     原实现只在 source === "手动输入" 时算 lag ⇒ 自动源退回 2026-08-28 的内置
+     常量（滞后 59 天）时，页面上一个警告都没有 —— 用户看到的「当前生效」
+     看起来像个正常读数。 */
+  const lag = cur ? lagDays(cur.data_date) : null;
+  const lagLimit = isManual ? 1 : AUTO_LAG_WARN_DAYS;
+  const lagChip = lag !== null && lag > lagLimit
     ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_lag_warn", { n: lag })}</span>`
     : "";
   const srcChip = isManual
     ? `<span class="mo-chip">${t("weights.mo_source_manual")}</span>`
     : "";
+  /* V0.118.1：降级标记。后端用 tier 表达取值层级（live/lkg/static）——
+     lkg = 上游源当时不可用，用「上次成功落库的真实读数」顶上；
+     static = 内置常量兜底，根本不是市场读数。两者都不是「本次观测到的值」，
+     必须让用户看见，否则「当前生效」这一列会骗人。 */
+  const tier = cur ? (cur.tier || "live") : "live";
+  const tierChip = tier === "lkg"
+    ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_tier_lkg")}</span>`
+    : tier === "static"
+    ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_tier_static")}</span>`
+    : "";
   const curTxt = cur
-    ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${lagChip}`
+    ? `${cur.value} ${unit} · ${cur.data_date}${srcChip}${tierChip}${lagChip}`
     : t(macroFactorState === "loading" ? "weights.mo_loading_short" : "weights.mo_no_reading");
   return `<div class="mo-row${isManual ? " is-manual" : ""}">
     <span class="nm">${label}</span>
@@ -745,6 +765,7 @@ function absorbMacroFactors(trendJson) {
   if (!Array.isArray(factors)) { renderOverrides(); return; }
   macroFactors = Object.fromEntries(factors.map(f => [f.key, {
     value: f.value, data_date: f.data_date, source: f.source || "",
+    tier: f.tier || "live",   // V0.118.1：live / lkg / static
   }]));
   renderOverrides();
 }

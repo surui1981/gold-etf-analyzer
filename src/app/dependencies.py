@@ -263,6 +263,7 @@ def get_trend_service(
     news: NewsScoreService = Depends(get_news_score_service),
     central_bank: CentralBankService = Depends(get_central_bank_service),
     macro_thresholds: MacroThresholdCalculator = Depends(get_macro_threshold_calculator),
+    macro_history_repo: MacroFactorHistoryRepository = Depends(get_macro_factor_history_repository),
 ) -> TrendService:
     """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估 + 央行购金服务 + 宏观阈值动态化）。
 
@@ -272,11 +273,14 @@ def get_trend_service(
       走近 252 日滚动 90/10 分位，``cb_gold`` 永远走 hardcode。数据不足（< 60 样本）
       自动回退 hardcode。**运行时回滚路径**：把 ``get_macro_threshold_calculator``
       改为返回 None（无需 revert）。
+    - ``macro_history_repo``（V0.118.1）注入后，宏观因子在上游源抓不到读数时用
+      「上次成功落库的真实读数」顶上，而不是 2026-08-28 的内置常量。
     """
     macro = MacroFactorService(
         settings=settings,
         central_bank=central_bank,
         threshold_calculator=macro_thresholds,
+        history_repo=macro_history_repo,
     )
     return TrendService(
         repo=repo,

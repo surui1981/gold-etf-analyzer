@@ -682,6 +682,7 @@ window.PM_I18N_zh_TW = {
   "syn.quality": "資料品質",
   "syn.q_none": "無異常",
   "syn.q_macro_static": "宏觀因子 {n}/{m} 項為靜態參考值（{names}；最新資料日 {d}，非即時行情）→ 該維度權重 40%，結論可信度相應打折",
+  "syn.q_macro_lkg": "宏觀因子 {n}/{m} 項為降級讀數（{names}；最新資料日 {d}，上游資料源當時不可用，用上次真實讀數頂替）→ 該維度權重 40%，結論可信度相應打折",
   "syn.q_news_unscored": "消息面今日尚未打分，按中性 50 計入評估（占權重 30%）",
   "syn.q_degraded": "行情源降級：{n}/{m} 個市場為演示(Mock)資料，非真實行情",
   "syn.detail_link": "共振詳情（歷史 + 強訊號勝率）",
@@ -1001,7 +1002,7 @@ window.PM_I18N_zh_TW = {
 
   /* ── V0.110.0 宏觀因子手動校準（macro_factor_overrides）── */
   "weights.mo_title": "🌍 宏觀因子手動校準",
-  "weights.mo_desc": "全部因子現均有自動即時來源（美元指數 Yahoo / VIX 與 10Y 實質利率 FRED / 美債殖利率 美國聯準會 H.15）。若在行情終端看到更新讀數，可在此手動輸入取代 —— 儲存後宏觀參考指數與綜合趨勢指數立即依新讀數重算。留空表示沿用自動資料源。",
+  "weights.mo_desc": "全部因子現均有自動即時來源（美元指數 Yahoo / VIX 與 10Y 實質利率 FRED / 美債殖利率 美國聯準會 H.15）。若在行情終端看到更新讀數，可在此手動輸入取代 —— 儲存後宏觀參考指數與綜合趨勢指數立即依新讀數重算。留空表示沿用自動資料源。自動來源不可用時，系統會退到「上次成功落庫的真實讀數」（標「降級·末次讀數」），再不行才用內建常數 —— 兩種降級都會在「目前生效」欄標出來。",
   "weights.mo_factor": "因子",
   "weights.mo_current": "目前生效",
   "weights.mo_input": "手動值",
@@ -1016,6 +1017,8 @@ window.PM_I18N_zh_TW = {
   "weights.mo_loading_short": "載入中…",
   "weights.mo_no_reading": "尚無讀數",
   "weights.mo_source_manual": "手動輸入",
+  "weights.mo_tier_lkg": "降級·末次讀數",
+  "weights.mo_tier_static": "內建常數",
   "weights.mo_lag_warn": "滯後 {n} 天",
   "weights.mo_saving": "正在儲存手動校準…",
   "weights.mo_saved": "✅ 宏觀因子覆蓋已儲存，宏觀參考指數與綜合指數已依新讀數重算。",

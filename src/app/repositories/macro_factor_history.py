@@ -10,7 +10,7 @@
 
 from datetime import date, timedelta
 
-from sqlalchemy import desc, select
+from sqlalchemy import and_, desc, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -137,3 +137,38 @@ class MacroFactorHistoryRepository:
         )
         result = await self._session.execute(stmt)
         return len(result.scalars().all())
+
+    async def get_latest_per_factor(self, target: str = "default") -> dict[str, DailyMacroFactor]:
+        """每个因子**最近一条**落库记录（factor_key → 行）。
+
+        V0.118.1 新增：作为宏观因子「上次成功落库的真实读数」的来源。
+
+        **为什么需要它**：V0.118.0 给 8 个因子都接上了自动实时源，但兜底层仍是
+        ``STATIC_REF`` 里 2026-08-28 的内置常量（dxy 96.5 / vix 18.5）。上游源一挂
+        （DNS 故障、限流、网络抖动），宏观面就静默退回两个半月前的常量 —— 而库里
+        明明存着前几轮抓到的真实读数。历史表就是这个「末次已知真值」的现成来源。
+
+        取 ``snapshot_date`` 最大的那条：那是最近一次**真的观测到**该读数的时点。
+        """
+        sub = (
+            select(
+                DailyMacroFactor.factor_key,
+                func.max(DailyMacroFactor.snapshot_date).label("max_date"),
+            )
+            .where(DailyMacroFactor.target == target)
+            .group_by(DailyMacroFactor.factor_key)
+            .subquery()
+        )
+        stmt = (
+            select(DailyMacroFactor)
+            .join(
+                sub,
+                and_(
+                    DailyMacroFactor.factor_key == sub.c.factor_key,
+                    DailyMacroFactor.snapshot_date == sub.c.max_date,
+                ),
+            )
+            .where(DailyMacroFactor.target == target)
+        )
+        result = await self._session.execute(stmt)
+        return {row.factor_key: row for row in result.scalars().all()}

@@ -356,7 +356,7 @@ window.PM_I18N_ZH_CN = {
 
   /* ── V0.110.0 宏观因子手动校准（macro_factor_overrides）── */
   "weights.mo_title": "🌍 宏观因子手动校准",
-  "weights.mo_desc": "全部因子现均有自动实时源（美元指数 Yahoo / VIX 与 10Y 实际利率 FRED / 美债收益率 美联储 H.15）。若在行情终端看到更新读数，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。",
+  "weights.mo_desc": "全部因子现均有自动实时源（美元指数 Yahoo / VIX 与 10Y 实际利率 FRED / 美债收益率 美联储 H.15）。若在行情终端看到更新读数，可在这里手动录入顶替 —— 保存后宏观参考指数与综合趋势指数立即按新读数重算。留空表示沿用自动数据源。自动源不可用时，系统会退到「上次成功落库的真实读数」（标「降级·末次读数」），再不行才用内置常量 —— 两种降级都会在「当前生效」列标出来。",
   "weights.mo_factor": "因子",
   "weights.mo_current": "当前生效",
   "weights.mo_input": "手动值",
@@ -371,6 +371,8 @@ window.PM_I18N_ZH_CN = {
   "weights.mo_loading_short": "加载中…",
   "weights.mo_no_reading": "暂无读数",
   "weights.mo_source_manual": "手动输入",
+  "weights.mo_tier_lkg": "降级·末次读数",
+  "weights.mo_tier_static": "内置常量",
   "weights.mo_lag_warn": "滞后 {n} 天",
   "weights.mo_saving": "正在保存手动校准…",
   "weights.mo_saved": "✅ 宏观因子覆盖已保存，宏观参考指数与综合指数已按新读数重算。",
@@ -944,6 +946,7 @@ window.PM_I18N_ZH_CN = {
   "syn.quality": "数据质量",
   "syn.q_none": "无异常",
   "syn.q_macro_static": "宏观因子 {n}/{m} 项为静态参考值（{names}；最新数据日 {d}，非实时行情）→ 该维度权重 40%，结论可信度相应打折",
+  "syn.q_macro_lkg": "宏观因子 {n}/{m} 项为降级读数（{names}；最新数据日 {d}，上游数据源当时不可用，用上次真实读数顶替）→ 该维度权重 40%，结论可信度相应打折",
   "syn.q_news_unscored": "消息面今日尚未打分，按中性 50 计入评估（占权重 30%）",
   "syn.q_degraded": "行情源降级：{n}/{m} 个市场为演示(Mock)数据，非真实行情",
   "syn.detail_link": "共振详情（历史 + 强信号胜率）",

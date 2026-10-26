@@ -214,8 +214,13 @@ async def _warm_cache() -> None:
         async with async_session_factory() as session:
             cb_repo = CentralBankPurchaseRepository(session)
             cb_svc = CentralBankService(repo=cb_repo)
-            threshold_calc = MacroThresholdCalculator(repo=MacroFactorHistoryRepository(session))
-            macro = MacroFactorService(central_bank=cb_svc, threshold_calculator=threshold_calc)
+            history_repo = MacroFactorHistoryRepository(session)
+            threshold_calc = MacroThresholdCalculator(repo=history_repo)
+            macro = MacroFactorService(
+                central_bank=cb_svc,
+                threshold_calculator=threshold_calc,
+                history_repo=history_repo,
+            )
             trend = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
@@ -263,8 +268,14 @@ async def _start_daily_scheduler() -> None:
 
             cb_svc = CentralBankService(repo=CentralBankPurchaseRepository(session))
             # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
-            threshold_calc = MacroThresholdCalculator(repo=MacroFactorHistoryRepository(session))
-            macro = MacroFactorService(central_bank=cb_svc, threshold_calculator=threshold_calc)
+            # V0.118.1：同时注入历史仓储 → 上游源挂掉时用「末次落库读数」兜底
+            history_repo = MacroFactorHistoryRepository(session)
+            threshold_calc = MacroThresholdCalculator(repo=history_repo)
+            macro = MacroFactorService(
+                central_bank=cb_svc,
+                threshold_calculator=threshold_calc,
+                history_repo=history_repo,
+            )
             trend_svc = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
@@ -413,9 +424,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         # 用一个独立 session 拼 tool 依赖（lifespan 阶段 session 直接 await 即可）
         async with _asf() as tool_sess:
-            trend_svc = TrendService(
-                MarketDataRepository(tool_sess), MarketDataRepository(tool_sess)
+            # V0.118.1 修：TrendService 的第 2 个位置参数是 **macro**，
+            # 之前误传了第二个 MarketDataRepository ⇒ self._macro 是个仓储，
+            # 而 analyze() 会 await self._macro.evaluate() ⇒ AttributeError
+            # ⇒ /ask 的 get_market_overview 工具**每次调用都失败**（被 tool 层
+            # 兜住并回成一条 error 结果，页面上表现为「工具没给出数据」）。
+            # 这里补一个真正的 MacroFactorService（含末次落库兜底）。
+            from app.repositories.central_bank import CentralBankPurchaseRepository
+            from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+            from app.services.central_bank import CentralBankService
+            from app.services.macro import MacroFactorService
+            from app.services.macro_thresholds import MacroThresholdCalculator
+
+            market_repo = MarketDataRepository(tool_sess)
+            macro_history_repo = MacroFactorHistoryRepository(tool_sess)
+            macro_svc = MacroFactorService(
+                central_bank=CentralBankService(repo=CentralBankPurchaseRepository(tool_sess)),
+                threshold_calculator=MacroThresholdCalculator(repo=macro_history_repo),
+                history_repo=macro_history_repo,
             )
+            trend_svc = TrendService(market_repo, macro_svc)
             # 其余 4 个 service 注入宽表 + market_data
             from app.repositories.news import NewsScoreRepository as _NSR
             from app.repositories.position import PositionRepository as _PR
@@ -426,7 +454,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.services.position import PositionService
             from app.services.scoring_wide import ScoringWideService as _SWS
 
-            market_repo = MarketDataRepository(tool_sess)
             scoring_svc = _SWS(
                 repo=_SWR(tool_sess),
                 snapshot_repo=_SSR(tool_sess),

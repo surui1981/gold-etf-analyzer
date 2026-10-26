@@ -447,3 +447,217 @@ def test_static_sources_are_not_persistable() -> None:
     assert is_persistable_source("Yahoo DX-Y.NYB") is True
     assert is_persistable_source("派生 10Y-2Y") is True
     assert is_persistable_source("手动输入") is True
+
+
+# ───────────────────── V0.118.1 · 末次落库兜底层 ─────────────────────
+#
+# 背景：V0.118.0 给 8 个因子都接上了自动实时源，但兜底层仍是 ``STATIC_REF`` 里
+# 2026-08-28 的内置常量（dxy 96.5 / vix 18.5）。上游源一挂（DNS 故障 / 限流），
+# 宏观面就静默退回两个半月前的常量 —— 而历史表里明明存着前几轮抓到的真值
+# （dxy 101.81）。用户在「宏观因子手动校准」页看到的「当前生效」列因此停在
+# 2026-08-28，且与真实市场差 5 个点，**且没有任何降级提示**。
+#
+# V0.118.1 在自动源与常量之间插入「上次成功落库的真实读数」这一层。
+
+
+class _FakeHistoryRepo:
+    """``MacroFactorHistoryRepository.get_latest_per_factor`` 的最小替身。"""
+
+    def __init__(self, rows: dict) -> None:
+        self._rows = rows
+        self.calls = 0
+
+    async def get_latest_per_factor(self, target: str = "default") -> dict:
+        self.calls += 1
+        return self._rows
+
+
+class _Row:
+    """``DailyMacroFactor`` 的最小替身（只带 service 用到的三个字段）。"""
+
+    def __init__(self, value: float, data_date: str, source: str) -> None:
+        self.factor_key = ""
+        self.value = value
+        self.data_date = data_date
+        self.source = source
+
+
+def _lkg_rows(**kwargs) -> dict:
+    """构造历史行：``_lkg_rows(dxy=(101.81, "2026-10-23", "Yahoo DX-Y.NYB"))``。"""
+    out = {}
+    for key, (value, data_date, source) in kwargs.items():
+        row = _Row(value, data_date, source)
+        row.factor_key = key
+        out[key] = row
+    return out
+
+
+async def test_v01181_source_failure_uses_last_stored_reading(monkeypatch) -> None:
+    """上游源全挂 → 用「上次成功落库的真实读数」，**不是** 2026-08-28 的常量。"""
+
+    async def fake_ust():
+        raise RuntimeError("H.15 unreachable")
+
+    async def fake_fred(series_id, **kwargs):
+        raise RuntimeError("FRED unreachable")
+
+    async def fake_yahoo(symbol, **kwargs):
+        raise RuntimeError("Yahoo unreachable")
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+
+    repo = _FakeHistoryRepo(
+        _lkg_rows(
+            dxy=(101.81, "2026-10-23", "Yahoo DX-Y.NYB"),
+            vix=(19.03, "2026-10-22", "FRED VIXCLS"),
+            us2y=(4.65, "2026-10-22", "美联储 H.15"),
+            us10y=(4.96, "2026-10-22", "美联储 H.15"),
+            us30y=(5.29, "2026-10-22", "美联储 H.15"),
+            real10y=(2.64, "2026-10-22", "FRED DFII10"),
+        )
+    )
+    svc = MacroFactorService(history_repo=repo)
+    values = await svc._collect()
+
+    # 关键：dxy 是 101.81（真值），不是 96.5（08-28 的常量）
+    assert values["dxy"][0] == pytest.approx(101.81)
+    assert values["dxy"][1] == "2026-10-23"
+    assert values["vix"][0] == pytest.approx(19.03)
+    assert values["us10y"][0] == pytest.approx(4.96)
+    assert values["real10y"][0] == pytest.approx(2.64)
+    # 降级必须可辨认：source 带「末次落库」前缀
+    assert values["dxy"][2].startswith("末次落库")
+    assert "Yahoo DX-Y.NYB" in values["dxy"][2]
+
+
+async def test_v01181_live_source_beats_last_stored(monkeypatch) -> None:
+    """自动源可用时优先用自动源（末次落库只是兜底层）。"""
+    from datetime import date
+
+    from app.repositories.market_data import USTYield
+
+    async def fake_ust():
+        return USTYield(us2y=4.05, us10y=4.35, us30y=4.88, data_date=date(2026, 10, 21))
+
+    async def fake_fred(series_id, **kwargs):
+        return {"VIXCLS": (19.03, date(2026, 10, 22))}[series_id]
+
+    async def fake_yahoo(symbol, **kwargs):
+        return (101.81, date(2026, 10, 23))
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_fred_latest", fake_fred)
+    monkeypatch.setattr("app.repositories.macro_sources.fetch_yahoo_latest", fake_yahoo)
+
+    repo = _FakeHistoryRepo(
+        _lkg_rows(
+            dxy=(99.0, "2026-10-01", "Yahoo DX-Y.NYB"),
+            vix=(17.0, "2026-10-01", "FRED VIXCLS"),
+            us2y=(4.00, "2026-10-01", "美联储 H.15"),
+            us10y=(4.20, "2026-10-01", "美联储 H.15"),
+        )
+    )
+    values = await MacroFactorService(history_repo=repo)._collect()
+
+    assert values["dxy"][0] == pytest.approx(101.81)
+    assert values["dxy"][2] == "Yahoo DX-Y.NYB"  # 不是末次落库
+    assert values["vix"][0] == pytest.approx(19.03)
+    assert values["us10y"][0] == pytest.approx(4.35)
+    assert values["us10y"][2] == "美联储 H.15"
+
+
+async def test_v01181_manual_override_still_beats_last_stored(monkeypatch) -> None:
+    """手动覆盖仍然压过末次落库（手动 > 自动源 > 末次落库 > 常量）。"""
+    from app.schemas.settings import MacroFactorOverride
+
+    async def fake_ust():
+        raise RuntimeError("H.15 unreachable")
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+
+    repo = _FakeHistoryRepo(_lkg_rows(dxy=(101.81, "2026-10-23", "Yahoo DX-Y.NYB")))
+    fake = _override_service(dxy=MacroFactorOverride(value=97.42, as_of="2026-10-21"))
+    svc = MacroFactorService(settings=fake, history_repo=repo)
+    values = await svc._collect()
+
+    assert values["dxy"] == (97.42, "2026-10-21", "手动输入")
+
+
+async def test_v01181_no_history_falls_back_to_static_ref(monkeypatch) -> None:
+    """历史表为空（全新部署）→ 仍走内置常量，不报错。"""
+
+    async def fake_ust():
+        raise RuntimeError("H.15 unreachable")
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+
+    values = await MacroFactorService(history_repo=_FakeHistoryRepo({}))._collect()
+    assert values["dxy"] == (96.5, "2026-08-28", "静态参考值")
+
+
+async def test_v01181_history_read_failure_does_not_break_macro(monkeypatch) -> None:
+    """读历史表抛异常 → 回落常量，宏观面不能整体 500。"""
+
+    class _Boom:
+        async def get_latest_per_factor(self, target: str = "default") -> dict:
+            raise RuntimeError("db down")
+
+    async def fake_ust():
+        raise RuntimeError("H.15 unreachable")
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+
+    values = await MacroFactorService(history_repo=_Boom())._collect()
+    assert values["dxy"] == (96.5, "2026-08-28", "静态参考值")
+
+
+async def test_v01181_curve_derived_from_lkg_inputs_is_marked_degraded(monkeypatch) -> None:
+    """末次落库时派生的利差：source 带「末次落库」前缀（混了日期，不算干净观测）。"""
+
+    async def fake_ust():
+        raise RuntimeError("H.15 unreachable")
+
+    monkeypatch.setattr("app.repositories.market_data.fetch_us_treasury_h15", fake_ust)
+
+    repo = _FakeHistoryRepo(
+        _lkg_rows(
+            us2y=(4.65, "2026-10-22", "美联储 H.15"),
+            us10y=(4.96, "2026-10-22", "美联储 H.15"),
+        )
+    )
+    values = await MacroFactorService(history_repo=repo)._collect()
+
+    val, data_date, source = values["curve_10y2y"]
+    assert val == pytest.approx(0.31)
+    assert data_date == "2026-10-22"
+    assert source.startswith("末次落库")
+
+
+def test_v01181_last_known_good_is_not_persistable() -> None:
+    """末次落库值**不得**再落进历史表 —— 旧读数不能被记成今天的观测。"""
+    from app.services.macro import (
+        LAST_KNOWN_GOOD_PREFIX,
+        is_persistable_source,
+    )
+
+    lkg = LAST_KNOWN_GOOD_PREFIX + "·FRED VIXCLS"
+    assert is_persistable_source(lkg) is False
+    assert is_persistable_source(LAST_KNOWN_GOOD_PREFIX + "·派生 10Y-2Y") is False
+    # 真实自动源仍然可落表
+    assert is_persistable_source("FRED VIXCLS") is True
+
+
+def test_v01181_source_tier_classification() -> None:
+    """source → 层级：live / lkg / static。"""
+    from app.services.macro import (
+        LAST_KNOWN_GOOD_PREFIX,
+        STATIC_SOURCE_PREFIX,
+        source_tier,
+    )
+
+    assert source_tier("FRED VIXCLS") == "live"
+    assert source_tier("手动输入") == "live"
+    assert source_tier(LAST_KNOWN_GOOD_PREFIX + "·FRED VIXCLS") == "lkg"
+    assert source_tier(STATIC_SOURCE_PREFIX + "参考值") == "static"

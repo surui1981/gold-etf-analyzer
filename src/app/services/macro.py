@@ -160,20 +160,55 @@ STATIC_REF: dict[str, dict] = {
 #: 静态回退的 source 前缀 —— 这些值**不是**市场读数，不得写入历史表
 STATIC_SOURCE_PREFIX = "静态"
 
+#: 「上次成功落库的真实读数」的 source 前缀（V0.118.1）
+#:
+#: 语义：本次没抓到实时读数，用历史表里**最近一条真的观测**顶上。
+#: 它是真实市场读数，但属于**过去某一刻**的读数 —— 因此
+#: ① 展示时必须能看出它是降级值（前端据此挂琥珀色 chip）；
+#: ② **不得**再落进历史表（否则等于把旧读数记成今天的观测，把滚动分位窗口压平）。
+LAST_KNOWN_GOOD_PREFIX = "末次落库"
+
 #: 派生因子的 source 标识
 CURVE_SOURCE = "派生 10Y-2Y"
 
 
 def is_persistable_source(source: str) -> bool:
-    """判断某个 source 标识是否代表真实市场读数（可写入 ``daily_macro_factors``）。
+    """判断某个 source 标识是否代表**本次真的观测到的**市场读数（可写入历史表）。
 
     ``"静态参考值"`` 是内置常量（dxy/vix 的 2026-08-28 旧值、外部源失败时的兜底），
     写进历史表会污染滚动分位窗口 —— 那样 P10/P90 会被假数据拉偏，
     V0.79.0 Step E 的动态阈值反而比硬编码更糟。
 
+    ``"末次落库·..."``（V0.118.1）是**历史表里的旧读数**顶替本次观测 ——
+    值是真的，但它是过去某一刻的读数，写进今天的 snapshot_date 等于谎报观测时间，
+    同样会压平滚动分位窗口 ⇒ 也不落表。
+
     手动输入（``"手动输入"``）是用户从行情终端抄来的真实读数，**可以**写入。
     """
-    return not source.startswith(STATIC_SOURCE_PREFIX)
+    if source.startswith(STATIC_SOURCE_PREFIX):
+        return False
+    return not source.startswith(LAST_KNOWN_GOOD_PREFIX)
+
+
+def source_tier(source: str) -> str:
+    """source 标识的取值层级：``"live"`` / ``"lkg"`` / ``"static"``。
+
+    - ``live``：本次真的观测到的读数（自动源 / 手动输入 / 由 live 输入派生的利差）
+    - ``lkg``：本次没观测到，用历史表里最近一条真实读数顶上（末次落库）
+    - ``static``：内置常量兜底（不是市场读数）
+
+    派生的 ``curve_10y2y`` 取两个输入里**更弱**的一档 —— 一个输入是常量，
+    整个利差就不是干净的市场观测。
+    """
+    if source.startswith(STATIC_SOURCE_PREFIX):
+        return "static"
+    if source.startswith(LAST_KNOWN_GOOD_PREFIX):
+        return "lkg"
+    return "live"
+
+
+#: 层级强度：live > lkg > static（取 min ⇒ 弱的一档胜出）
+_TIER_RANK = {"live": 0, "lkg": 1, "static": 2}
 
 
 # 宏观综合指数结果缓存时长（秒）；底层 fetcher 自带 5min TTL 缓存
@@ -212,7 +247,13 @@ def _friendly_score(value: float, rule: dict) -> float:
 class MacroFactorService:
     """宏观参考因子采集与评分。"""
 
-    def __init__(self, settings=None, central_bank=None, threshold_calculator=None) -> None:
+    def __init__(
+        self,
+        settings=None,
+        central_bank=None,
+        threshold_calculator=None,
+        history_repo=None,
+    ) -> None:
         # 延迟导入避免循环依赖（settings 服务引用 repositories）
         from app.services.settings import WeightService
 
@@ -223,6 +264,9 @@ class MacroFactorService:
         # V0.79.0 Step E：动态阈值计算器（可选）。未注入时 evaluate 走 hardcode 默认；
         # 注入后逐因子用近 252 日滚动 90/10 分位替换 rule.best/worst。
         self._threshold_calculator = threshold_calculator
+        # V0.118.1：宏观因子历史仓储（可选）。注入后，上游源抓不到读数时用
+        # 「上次成功落库的真实读数」顶上，而不是 2026-08-28 的内置常量。
+        self._history_repo = history_repo
 
     def _resolve_macro_target(self) -> str:
         """V0.79.0 Step E：标的维度归一。
@@ -305,6 +349,7 @@ class MacroFactorService:
                     unit=rule["unit"],
                     data_date=data_date,
                     source=source,
+                    tier=source_tier(source),
                     score=round(score, 1),
                     direction=direction,
                     weight=weight,
@@ -346,8 +391,8 @@ class MacroFactorService:
     async def _collect(self) -> dict[str, tuple[float, str, str]]:
         """采集各因子当前值：(数值, 数据日期, 数据源标识)。
 
-        **优先级链（V0.110.0）**：用户手动覆盖 > 自动数据源（央行购金表 / 美联储
-        H.15 / FRED / Yahoo）> ``STATIC_REF`` 内置静态参考值。
+        **优先级链（V0.118.1）**：用户手动覆盖 > 自动数据源（央行购金表 / 美联储
+        H.15 / FRED / Yahoo）> **上次成功落库的真实读数** > ``STATIC_REF`` 内置静态参考值。
 
         覆盖优先级最高的设计理由：自动源随时可能挂掉并静默回退到过期常量；
         用户从行情终端抄进来的当日读数在任何情况下都比它们新，所以只要设了就用。
@@ -356,10 +401,21 @@ class MacroFactorService:
 
         V0.118.0：4 个外部源（H.15 / FRED×2 / Yahoo）**并发**拉取 ——
         串行会让宏观面接口的最坏耗时变成 4×20s。
+
+        V0.118.1：新增「上次成功落库的真实读数」这一层。原先自动源一挂就直接落到
+        2026-08-28 的内置常量（dxy 96.5），而历史表里明明存着前几轮抓到的真值
+        （dxy 101.81）—— 用户在「宏观因子手动校准」页看到的「当前生效」列因此
+        停在两个半月前，且与真实市场差 5 个点。降级必须**可辨认**：
+        该层的 source 带 ``末次落库`` 前缀（前端据此挂琥珀色 chip），
+        且**不再落表**（旧读数不能被记成今天的观测）。
         """
         values: dict[str, tuple[float, str, str]] = {}
         for key, ref in STATIC_REF.items():
             values[key] = (float(ref["value"]), ref["date"], ref["note"])  # 静态参考值自带 note
+
+        # V0.118.1：先铺「上次成功落库的真实读数」—— 自动源挂掉时的兜底层。
+        lkg = await self._collect_last_known_good()
+        values.update(lkg)
 
         # 并发拉取 4 组外部源；任一失败只影响自己的因子
         results = await asyncio.gather(
@@ -369,13 +425,15 @@ class MacroFactorService:
             self._collect_central_bank(),
             return_exceptions=True,
         )
+        live: dict[str, tuple[float, str, str]] = {}
         for res in results:
             if isinstance(res, BaseException):
-                logger.warning("宏观数据源失败（已回退静态参考值）: %s", res)
+                logger.warning("宏观数据源失败（已回退末次落库/静态参考值）: %s", res)
                 continue
-            values.update(res)
+            live.update(res)
+        values.update(live)
 
-        # V0.110.0：用户手动校准值覆盖前两步的一切结果（静态参考 / 自动源）。
+        # V0.110.0：用户手动校准值覆盖前几步的一切结果（静态参考 / 自动源 / 末次落库）。
         overrides = await self._apply_manual_overrides()
         values.update(overrides)
 
@@ -384,15 +442,72 @@ class MacroFactorService:
         if "curve_10y2y" not in overrides:
             v10, d10, s10 = values["us10y"]
             v2y, d2y, s2y = values["us2y"]
-            real_inputs = is_persistable_source(s10) and is_persistable_source(s2y)
-            # 两个输入的 data_date 都是 ISO 日期（YYYY-MM-DD），字典序即时间序 →
-            # 取较早的那个：利差的有效期只到它最旧的那个输入为止
-            values["curve_10y2y"] = (
-                round(v10 - v2y, 3),
-                min(d10, d2y),
-                CURVE_SOURCE if real_inputs else STATIC_SOURCE_PREFIX + "参考值",
+            # V0.118.1：派生结果取两个输入里**更弱**的一档 ——
+            #   live + live  → 干净的市场观测（可落表）
+            #   掺了末次落库 → 混了不同日期的读数（不可落表，标「末次落库·派生」）
+            #   掺了静态常量 → 不是市场读数（不可落表，标「静态参考值」）
+            tier = max(
+                (source_tier(s10), source_tier(s2y)),
+                key=lambda t: _TIER_RANK[t],
             )
+            # 已经有一份「末次落库」的利差时，别用更弱的静态派生值把它盖掉
+            # （历史表可能只有利差没有 10Y/2Y —— 罕见，但降级方向不能反着来）
+            existing = values.get("curve_10y2y")
+            keep_existing = (
+                tier == "static" and existing is not None and source_tier(existing[2]) == "lkg"
+            )
+            if not keep_existing:
+                # 两个输入的 data_date 都是 ISO 日期（YYYY-MM-DD），字典序即时间序 →
+                # 取较早的那个：利差的有效期只到它最旧的那个输入为止
+                values["curve_10y2y"] = (
+                    round(v10 - v2y, 3),
+                    min(d10, d2y),
+                    {
+                        "live": CURVE_SOURCE,
+                        "lkg": LAST_KNOWN_GOOD_PREFIX + "·" + CURVE_SOURCE,
+                        "static": STATIC_SOURCE_PREFIX + "参考值",
+                    }[tier],
+                )
         return values
+
+    async def _collect_last_known_good(self) -> dict[str, tuple[float, str, str]]:
+        """「上次成功落库的真实读数」兜底层（V0.118.1）。
+
+        取历史表里每个因子最近一条记录。source 加 ``末次落库`` 前缀 ——
+        ① 前端据此挂降级 chip；② ``is_persistable_source`` 据此把它挡在历史表外。
+
+        读历史表失败**绝不能**让宏观面挂掉 —— 与覆盖读取同款兜底：记日志、返回空。
+        """
+        if self._history_repo is None:
+            return {}
+        try:
+            rows = await self._history_repo.get_latest_per_factor(self._resolve_macro_target())
+        except Exception as exc:
+            logger.warning("末次落库读数不可用（回退静态参考值）: %s", exc)
+            return {}
+        if not rows:
+            return {}
+        out: dict[str, tuple[float, str, str]] = {}
+        known_keys = {r["key"] for r in MACRO_FACTOR_RULES}
+        for key, row in rows.items():
+            if key not in known_keys:
+                continue
+            # 源标识里已经带了「静态参考值」「末次落库」的行理论上不该存在
+            # （落表时被挡住了），但历史表可能被手改过 ——
+            # 遇到就跳过，别把常量/旧读数当成「末次真值」再降级一次。
+            if is_persistable_source(row.source) is False:
+                continue
+            out[key] = (
+                float(row.value),
+                row.data_date,
+                LAST_KNOWN_GOOD_PREFIX + "·" + row.source,
+            )
+        if out:
+            logger.info(
+                "宏观因子降级到末次落库读数: %s",
+                sorted(out),
+            )
+        return out
 
     # ───────────────────── 各数据源采集 ─────────────────────
 
