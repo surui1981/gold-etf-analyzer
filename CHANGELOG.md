@@ -4,6 +4,37 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.118.1] · 2026-10-26
+
+`宏观因子「末次落库」兜底层 + 手动校准页降级可见` — bugfix · 详见 [v0.118.1.md](docs/releases/v0.118.1.md)
+
+> 用户：「宏观因子手动校准的数值没有跟踪关键参数更新来更新，修复这个 BUG」
+
+- 🛟 **宏观因子新增「末次落库」兜底层**（源挂时不再退回 2026-08-28 的内置常量）
+  - 新优先级链：手动覆盖 > 自动源 > **末次落库的真实读数** > 内置常量
+  - 「末次落库」= `daily_macro_factors` 里每个因子最近一条落库记录
+    （新增 `MacroFactorHistoryRepository.get_latest_per_factor()`）
+  - 实测：上游全挂时 `dxy` 从常量 **96.5（2026-08-28）** 变成 **101.81（2026-10-23）** ——
+    差 5.3 个点，落在 best/worst 区间内，足以改变因子评分进而改变综合指数
+  - ⚠️ **降级必须可辨认**：`MacroFactorOut` 新增 `tier` 字段（`live`/`lkg`/`static`），
+    降级值 source 带 `末次落库·` 前缀；前端**不靠匹配中文前缀**判断
+  - ⚠️ **降级值不再落表**：旧读数写进今天的 `snapshot_date` 等于谎报观测时间，
+    会把 V0.79.0 的滚动分位窗口压平（与静态值不落表同一条理由）
+- 📉 **权重页「当前生效」列不再骗人**
+  - 滞后 chip 原先**只对手动值生效** ⇒ 自动源退回 59 天前的常量时页面上零提示；
+    现在所有源都提示（自动源 > 4 日、手动值 > 1 日）
+  - 新增降级 chip：`tier=lkg` →「降级·末次读数」/ `tier=static` →「内置常量」
+- 🧾 **综合卡「数据质量」提示补上 `lkg` 档**
+  - 原判据只认 `source.indexOf('静态参考值')` ⇒ 新增的「末次落库」降级对它**完全隐形**
+  - 改用 `tier` 字段判降级；新增 `syn.q_macro_lkg` key × 3 语
+  - 新增门禁 `scripts/_verify_synthesis_quality.mjs`（mock 造两档降级；已反向验证会变红）
+- 🐛 **顺带修掉一个线上真 bug**：`/ask` 的 `get_market_overview` 工具**每次调用都失败**
+  - `main.py` 构造 `TrendService(repo, macro)` 时第 2 位误传 `MarketDataRepository`
+    ⇒ `analyze()` 里 `await self._macro.evaluate()` 抛 `AttributeError`，
+    被 tool 层兜住 ⇒ 页面表现为「工具没给出数据」，**无告警无 500**
+  - `/api/v1/ai/health` 显示 5 个工具已启用 ⇒ 线上活跃路径
+- 🧪 新增 13 个测试（仓储 5 + 服务 8）；i18n 3 语各 +2 个 `mo_tier_*` +1 个 `syn.q_macro_lkg`（`mo_*` 33 个 / `syn.*` 49 个）
+
 ## [V0.118.0] · 2026-10-25
 
 `宏观面 5 因子 → 8 因子（+2Y / +10Y-2Y 利差 / +10Y 实际利率）+ dxy/vix 接实时源 + 滚动分位回填` — feature · 详见 [v0.118.0.md](docs/releases/v0.118.0.md)

@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.118.0** ｜ **最近更新：2026-10-25** ｜ **状态：一致，无漂移**
+> **基线：V0.118.1** ｜ **最近更新：2026-10-26** ｜ **状态：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.118.0**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.118.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.118.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.118.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.118.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.118.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.118.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.118.1` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.118.1` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.118.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.118.0
+GET /openapi.json  →  info.version = 0.118.1
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -52,19 +52,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **69** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **44** 段 / 43 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **53** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **105** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **70** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **45** 段 / 44 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **54** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
+| git tag | **106** 个（本地 = 远端，已同步） | 按版本 checkout 的锚点 |
 
-> **44 段 ≠ 43 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **45 段 ≠ 44 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **105 个 tag 本地与远端一致**（2026-10-25 已全部推送，含 V0.118.0）：远端 105 = 本地 105，
+> **106 个 tag 本地与远端一致**（2026-10-26 已全部推送，含 V0.118.1）：远端 106 = 本地 106，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated 99 / lightweight 6，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated 100 / lightweight 6，两侧分布相同。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -173,7 +173,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > **同源派生的东西要连「顺序」一起同源**，不只是「集合」同源 ——
 > 而面板里「第一条命中」是**有语义的**（默认选中 + 回车）。
 
-### 再下一轮：V0.118.0（2026-10-25）
+### 再下一轮：V0.118.1（2026-10-26）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 宏观因子新增「末次落库」兜底层（上游源挂时退回**真实读数**而不是 2026-08-28 的内置常量，`dxy` 96.5 → 101.81）；`MacroFactorOut` 新增 `tier` 字段让降级可辨认；权重页「当前生效」列的滞后提示覆盖**所有**源（原先只对手动值生效）；顺带修掉 `/ask` 的 `get_market_overview` 工具**每次调用都失败**这个线上真 bug（`TrendService` 第 2 位位置参数误传 `MarketDataRepository`） |
+| `__version__` | ✅ 已 bump 到 `0.118.1`（4 处同步） |
+| git tag | ✅ `v0.118.1` |
+
+> 起因是**用户诉求**：「宏观因子手动校准的数值没有跟踪关键参数更新来更新，
+> 修复这个 BUG」。
+>
+> 实测触发条件是**本机 DNS 解析不了境外域名**（路由器只解析国内域名，
+> 且间歇性发生）⇒ 3 个宏观自动源同时不可用 ⇒ 全部退回 2026-08-28 的常量，
+> 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
+> 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
+
+### 上一轮：V0.118.0（2026-10-25）
 
 | 项 | 状态 |
 |---|---|
@@ -240,7 +256,7 @@ V0.101 / V0.102 两段加了显式说明 —— **它们从未 bump 过版本号
 所属的 commit **就是**发版点。这比在 commit message 里 grep 版本号可靠 ——
 后者会撞上「功能批次标签」（V0.101 / V0.102 从未 bump 过版本号，grep 会把它们错认成发版点）。
 
-现在：`git describe --tags` → `v0.118.0-<N>-g<sha>`，tag 总数 105（本地 = 远端）。
+现在：`git describe --tags` → `v0.118.1-<N>-g<sha>`，tag 总数 106（本地 = 远端）。
 （`-5-gd1aff31` 是**在 `d1aff31` 这个 commit 处实测**的快照值 ——
 `git describe` 的计数每加一个 commit 就 +1，所以别把它当常量，直接跑命令看当前值。）
 
