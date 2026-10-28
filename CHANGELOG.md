@@ -4,7 +4,7 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
-## [V0.120.0] · 2026-10-28
+## [V0.120.0] · 2026-10-29
 
 `新增第 4 个评分面「资金流面」—— 按资金流向各种市场判断（周 3 因子 / 月 3 因子）` — feature · 详见 [v0.120.0.md](docs/releases/v0.120.0.md)
 
