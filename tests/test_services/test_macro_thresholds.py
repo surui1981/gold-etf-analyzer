@@ -321,6 +321,39 @@ class TestIsDynamicActive:
         thresholds["cb_gold"] = (999.0, 111.0)  # 改了也不该影响判定
         assert calc.is_dynamic_active(thresholds) is True
 
+    async def test_rolling_band_equal_to_hardcode_still_counts_as_dynamic(
+        self, repo: MacroFactorHistoryRepository
+    ) -> None:
+        """滚动分位算出的 best/worst **恰好等于**静态带时，仍要算「动态」。
+
+        V0.120.0 修：旧判据是「阈值 ≠ hardcode」。但静态带常常就是拿同一段
+        历史标定的 ⇒ 两者可能逐位相同 ⇒ 该因子被误报成「还在用静态阈值」。
+        实测（资金流面 ``cn_money_gap``）：滚动 P10/P90 = -11.2 / -3.1，
+        与静态带一模一样，旧判据下 badge 说 5/6 而真相是 6/6。
+        """
+        # dxy 静态带 = (94.0, 107.0)。构造 61 个样本让 P10/P90 精确落在这两个值上：
+        # n=61 ⇒ rank = 60×0.1 = 6、60×0.9 = 54 都是整数 ⇒ 无插值误差。
+        dxy_values = [1.0] * 6 + [94.0] + [100.0] * 47 + [107.0] + [200.0] * 6
+        for k in ("us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix"):
+            await _seed(repo, k, [100.0 + i * 0.1 for i in range(61)])
+        await _seed(repo, "dxy", dxy_values)
+
+        calc = MacroThresholdCalculator(repo=repo, min_samples=60)
+        thresholds = await calc.get_or_compute("default")
+        hardcode = _hardcode_dict()
+
+        # 前提：dxy 的滚动带与静态带逐位相同
+        assert thresholds["dxy"] == hardcode["dxy"] == (94.0, 107.0)
+
+        # 旧判据（值比较）把它当成静态 → 6/7 → 整体 False
+        assert calc.is_dynamic_active(thresholds) is False
+
+        # 新判据（用计算器记录的滚动集）→ 7/7 都走了滚动分位 → True
+        assert calc.rolling_keys("default") == frozenset(
+            ("dxy", "us2y", "us10y", "us30y", "curve_10y2y", "real10y", "vix")
+        )
+        assert calc.is_dynamic_active(thresholds, target="default") is True
+
 
 class TestCache:
     """24h TTL + (target, date) key 隔离。"""

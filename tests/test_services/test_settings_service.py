@@ -32,9 +32,11 @@ async def test_default_weights(db_session: AsyncSession) -> None:
     assert w.macro.us_gov_debt == 0.05
     assert w.macro.cn_gov_debt == 0.04
     assert w.macro.eu_gov_debt == 0.03
-    assert w.combine.tech == 0.30
-    assert w.combine.macro == 0.40
-    assert w.combine.news == 0.30
+    # V0.120.0：四面临界 30/40/30 → 25/35/25/15（新增资金流面 15%）
+    assert w.combine.tech == 0.25
+    assert w.combine.macro == 0.35
+    assert w.combine.news == 0.25
+    assert w.combine.flow == 0.15
 
 
 async def test_save_and_read(db_session: AsyncSession) -> None:
@@ -61,7 +63,7 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
             "cn_gov_debt": 0.03,
             "eu_gov_debt": 0.02,
         },
-        combine={"tech": 0.50, "macro": 0.30, "news": 0.20},
+        combine={"tech": 0.50, "macro": 0.30, "news": 0.10, "flow": 0.10},
     )
     await svc.save_weights(custom)
 
@@ -75,7 +77,7 @@ async def test_save_and_read(db_session: AsyncSession) -> None:
     assert trend["结构"] == 0.40
     macro = await svc.macro_weights()
     assert macro["dxy"] == 0.30
-    assert await svc.combine_weights() == (0.50, 0.30, 0.20)
+    assert await svc.combine_weights() == (0.50, 0.30, 0.10, 0.10)
 
     # 持久化验证
     raw = await SettingRepository(db_session).get(WEIGHTS_KEY)
@@ -480,3 +482,109 @@ def test_v01100_override_lag_days_counts_trading_days() -> None:
     # 周末填的读数：周六→周一只隔 1 个日历日但 0 个交易日，不提示滞后
     sat = MacroFactorOverride(value=18.0, as_of=date(2026, 10, 17))
     assert override_lag_days(sat, today=date(2026, 10, 19)) == 0
+
+
+# ───────────────────── V0.120.0 · 三键 → 四键迁移 + 资金流面权重 ─────────────────────
+
+#: V0.119.0 的三键合成权重默认值（技术 / 宏观 / 消息）
+LEGACY_COMBINE_3 = {"tech": 0.30, "macro": 0.40, "news": 0.30}
+
+#: V0.120.0 的四键合成权重默认值（新增资金流面 15%）
+COMBINE_4_DEFAULTS = {"tech": 0.25, "macro": 0.35, "news": 0.25, "flow": 0.15}
+
+#: 资金流面 6 因子默认权重（周 54% / 月 46%）
+MONEY_FLOW_DEFAULTS = {
+    "cot_gold_net": 0.18,
+    "cot_gold_flow": 0.14,
+    "gold_etf_flow": 0.22,
+    "us_liq_net": 0.14,
+    "cn_margin_flow": 0.16,
+    "cn_money_gap": 0.16,
+}
+
+
+def test_combine_legacy_3_defaults_become_new_defaults() -> None:
+    """存量三键**恰好等于旧默认** ⇒ 直接落到四键新默认（25/35/25/15）。
+
+    「旧默认值也是一种用户状态」：存量值恰好等于旧默认 = 用户从没自定义过，
+    迁移时必须直落新默认，而不是按比例缩放出来的 25.5/34/25.5/15。
+    """
+    from app.schemas.settings import CombineWeightConfig
+
+    cfg = CombineWeightConfig.model_validate(LEGACY_COMBINE_3)
+    dumped = cfg.model_dump()
+    assert set(dumped) == set(COMBINE_4_DEFAULTS)
+    for key, want in COMBINE_4_DEFAULTS.items():
+        assert dumped[key] == pytest.approx(want, abs=1e-9), key
+    # 关键：不是缩放值
+    assert dumped["tech"] != pytest.approx(0.255, abs=1e-6)
+
+
+def test_combine_custom_3_keys_are_scaled_not_reset() -> None:
+    """存量三键**自定义**值 ⇒ 三个面按原相对比例缩到 85%，资金流面取 15%。
+
+    **不做迁移会怎样**：flow 拿到默认值 0.15 后合计 = 1.15 → ``_sum_to_one`` 抛错
+    → ``_load_weights`` 的异常兜底路径**静默把用户的自定义权重重置为默认**。
+    """
+    from app.schemas.settings import CombineWeightConfig
+
+    custom3 = {"tech": 0.50, "macro": 0.30, "news": 0.20}
+    cfg = CombineWeightConfig.model_validate(custom3)
+    dumped = cfg.model_dump()
+
+    assert abs(sum(dumped.values()) - 1.0) < 1e-6
+    assert dumped["flow"] == pytest.approx(0.15, abs=1e-9)
+    for key, old in custom3.items():
+        assert dumped[key] == pytest.approx(old * 0.85, abs=1e-6), key
+
+
+async def test_stored_legacy_3_key_combine_becomes_new_defaults(
+    db_session: AsyncSession,
+) -> None:
+    """**端到端**：库里存着三键**旧默认** ⇒ 读出来是四键新默认。"""
+    repo = SettingRepository(db_session)
+    legacy_json = (
+        '{"trend":{"structure":0.3,"momentum":0.2,"support":0.2,'
+        '"momentum_rsi":0.15,"drawdown":0.15},'
+        '"macro":{"dxy":0.13,"us2y":0.05,"us10y":0.07,"us30y":0.05,'
+        '"curve_10y2y":0.09,"real10y":0.18,"vix":0.09,"cb_gold":0.22,'
+        '"us_gov_debt":0.05,"cn_gov_debt":0.04,"eu_gov_debt":0.03},'
+        '"combine":{"tech":0.3,"macro":0.4,"news":0.3}}'
+    )
+    await repo.set(WEIGHTS_KEY, legacy_json)
+    clear_weights_cache()
+
+    svc = _service(db_session)
+    assert await svc.combine_weights() == (0.25, 0.35, 0.25, 0.15)
+
+
+async def test_money_flow_weights_default_and_roundtrip(db_session: AsyncSession) -> None:
+    """资金流面 6 因子权重：默认 18/14/22/14/16/16（合计 1），保存后可回读。"""
+    from app.schemas.settings import MoneyFlowWeightConfig
+
+    svc = _service(db_session)
+    got = await svc.money_flow_weights()
+    assert set(got) == set(MONEY_FLOW_DEFAULTS)
+    assert abs(sum(got.values()) - 1.0) < 1e-6
+    for key, want in MONEY_FLOW_DEFAULTS.items():
+        assert got[key] == pytest.approx(want, abs=1e-9), key
+
+    custom = WeightConfig(
+        flow=MoneyFlowWeightConfig.model_validate(
+            {
+                "cot_gold_net": 0.30,
+                "cot_gold_flow": 0.10,
+                "gold_etf_flow": 0.20,
+                "us_liq_net": 0.10,
+                "cn_margin_flow": 0.15,
+                "cn_money_gap": 0.15,
+            }
+        )
+    )
+    await svc.save_weights(custom)
+    clear_weights_cache()
+
+    got2 = await _service(db_session).money_flow_weights()
+    assert got2["cot_gold_net"] == pytest.approx(0.30, abs=1e-9)
+    assert got2["gold_etf_flow"] == pytest.approx(0.20, abs=1e-9)
+    assert abs(sum(got2.values()) - 1.0) < 1e-6

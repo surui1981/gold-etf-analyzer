@@ -61,7 +61,21 @@ def _percentile(sorted_values: list[float], pct: float) -> float:
 
 
 class MacroThresholdCalculator:
-    """V0.79.0 Step E：滚动百分位动态阈值计算器。"""
+    """V0.79.0 Step E：滚动百分位动态阈值计算器。
+
+    V0.120.0：这个类不再只服务宏观面 —— 「资金流面」复用它算自己的滚动分位，
+    差别通过三个可注入项表达：
+
+    - ``rules``：因子规则清单（资金流面传 ``MONEY_FLOW_FACTOR_RULES``）；
+    - ``skip_rolling``：不参与滚动分位的因子集合（宏观面默认低频因子组；
+      资金流面传空集 —— 6 个因子全部可滚动）；
+    - **每条规则可自带 ``window_days`` / ``min_samples``** 覆盖类级默认值。
+
+    ⚠ 为什么必须有「按因子窗口」：宏观因子是**日频**的（默认 252 天窗口）；
+    资金流因子是**周频 / 月频**的 —— 同一个 252 天窗口对周频只装得下 36 个观测，
+    对月频只有 8 个。窗口不区分节奏 ⇒ 样本不足 ⇒ 阈值永远退回硬编码。
+    资金流面的实际窗口：周频 104 周（728 天）、月频 60 月（1826 天）。
+    """
 
     def __init__(
         self,
@@ -70,18 +84,26 @@ class MacroThresholdCalculator:
         ttl_seconds: int = 86400,
         min_samples: int = 60,
         window_days: int = 252,
+        *,
+        skip_rolling: frozenset[str] | None = None,
     ) -> None:
         self._repo = repo
         self._rules = rules or MACRO_FACTOR_RULES
         self._ttl_seconds = ttl_seconds
         self._min_samples = min_samples
         self._window_days = window_days
+        self._skip_rolling = skip_rolling if skip_rolling is not None else SKIP_ROLLING_FACTORS
         # 模块级缓存 —— 进程内所有 calculator 实例共享（同一进程内阈值唯一）
-        self._cache: dict[tuple[str, str], tuple[float, dict[str, tuple[float, float]]]] = {}
+        # V0.120.0：缓存值从 2 元组扩成 3 元组，第三个元素是
+        # **本轮真正走了滚动分位的因子集合**（见 ``rolling_keys``）。
+        self._cache: dict[
+            tuple[str, str],
+            tuple[float, dict[str, tuple[float, float]], frozenset[str]],
+        ] = {}
         self._lock = asyncio.Lock()
 
     def _rules_hardcode(self) -> dict[str, tuple[float, float]]:
-        """5 因子的 hardcode 默认 best/worst（按 factor_key 索引）。"""
+        """全部因子的 hardcode 默认 best/worst（按 factor_key 索引）。"""
         return {r["key"]: (float(r["best"]), float(r["worst"])) for r in self._rules}
 
     async def get_or_compute(
@@ -111,35 +133,53 @@ class MacroThresholdCalculator:
             if cached is not None and (time.time() - cached[0]) < self._ttl_seconds:
                 return cached[1]
 
-            thresholds = await self._compute_uncached(target, day)
-            self._cache[key] = (time.time(), thresholds)
+            thresholds, rolling = await self._compute_uncached(target, day)
+            self._cache[key] = (time.time(), thresholds, rolling)
             logger.debug(
-                "Macro threshold computed: target=%s date=%s factors=%d",
+                "Macro threshold computed: target=%s date=%s factors=%d rolling=%d",
                 target,
                 day.isoformat(),
                 len(thresholds),
+                len(rolling),
             )
             return thresholds
 
-    async def _compute_uncached(self, target: str, today: date) -> dict[str, tuple[float, float]]:
-        """持锁期间执行：查表 + percentile。"""
+    async def _compute_uncached(
+        self, target: str, today: date
+    ) -> tuple[dict[str, tuple[float, float]], frozenset[str]]:
+        """持锁期间执行：查表 + percentile。
+
+        返回 ``(thresholds, rolling_keys)`` —— ``rolling_keys`` 是**本轮真的
+        用了滚动分位**的因子集合。
+
+        ⚠️ 为什么要显式返回集合，而不是靠「阈值 ≠ hardcode」反推（V0.120.0 修）：
+        静态 best/worst 与滚动分位**可能算出同一个数** —— 资金流面
+        ``cn_money_gap`` 的静态带就是拿同一段 5 年历史标定的，滚动算出来
+        P10=-11.2 / P90=-3.1，与静态带**逐位相同**。用「值不等即动态」判，
+        这个因子会被误报成「还在用静态阈值」⇒ badge 说 5/6、
+        ``flow_dynamic=False``，而真相是 6/6 都在滚动分位上。
+        """
         hardcode = self._rules_hardcode()
         thresholds: dict[str, tuple[float, float]] = {}
+        rolling: set[str] = set()
 
         for rule in self._rules:
             key = rule["key"]
-            # cb_gold 显式跳过滚动（永远走 hardcode）
-            if key in _SKIP_ROLLING_FACTORS:
+            # 低频因子显式跳过滚动（永远走 hardcode）
+            if key in self._skip_rolling:
                 thresholds[key] = hardcode[key]
                 continue
 
+            # V0.120.0：窗口与样本门槛可按因子覆盖（周频 / 月频节奏不同）
+            window_days = int(rule.get("window_days") or self._window_days)
+            min_samples = int(rule.get("min_samples") or self._min_samples)
             samples = await self._repo.get_window(
                 target=target,
                 factor_key=key,
-                days=self._window_days,
+                days=window_days,
                 end_date=today,
             )
-            if len(samples) < self._min_samples:
+            if len(samples) < min_samples:
                 thresholds[key] = hardcode[key]
                 continue
 
@@ -160,15 +200,34 @@ class MacroThresholdCalculator:
                 thresholds[key] = (p90, p10)
             else:
                 thresholds[key] = (p10, p90)
+            rolling.add(key)
 
-        return thresholds
+        return thresholds, frozenset(rolling)
+
+    def rolling_keys(self, target: str, today: date | None = None) -> frozenset[str]:
+        """本轮**真的走了滚动分位**的因子集合。
+
+        - 已计算过（缓存命中或刚算完）→ 返回精确集合；
+        - 从未计算过 → 空集合（此时应回退到「值 ≠ hardcode」的旧判据）。
+        """
+        key = (target, (today or date.today()).isoformat())
+        cached = self._cache.get(key)
+        if cached is None:
+            return frozenset()
+        return cached[2]
 
     async def warm_cache(self, target: str, today: date | None = None) -> None:
         """scheduler / 启动预热：主动 ``get_or_compute`` 并写缓存。"""
         await self.get_or_compute(target, today)
 
-    def is_dynamic_active(self, thresholds: dict[str, tuple[float, float]]) -> bool:
-        """**全部**可滚动因子的阈值都 ≠ hardcode 默认 → True。
+    def is_dynamic_active(
+        self,
+        thresholds: dict[str, tuple[float, float]],
+        *,
+        target: str | None = None,
+        today: date | None = None,
+    ) -> bool:
+        """**全部**可滚动因子的阈值都来自滚动分位 → True。
 
         口径说明（V0.118.0）：V0.79.0 当时只有 4 个可滚动因子，阈值写成硬编码
         ``>= 4``，语义其实是「4 个全都动态才算动态」。因子扩到 8 个（7 个可滚动）
@@ -178,10 +237,24 @@ class MacroThresholdCalculator:
 
         任一因子样本不足（< ``min_samples``）→ 该因子回退 hardcode → 整体判 False，
         与旧版「3/4 → False」的行为对齐。
+
+        ⚠️ V0.120.0：判定依据从「阈值 ≠ hardcode」改成**优先用计算器记录的
+        滚动集**（``rolling_keys``）。原因：滚动分位算出来的 best/worst 可能
+        **恰好等于**静态带（静态带就是拿同一段历史标定的）⇒ 值比较会把这个
+        因子误报成「还在用静态阈值」。传了 ``target`` 就走精确路径；
+        没传（老调用方 / 单元测试直接喂字典）则回退到值比较，行为不变。
         """
         hardcode = self._rules_hardcode()
-        rolling = [k for k in hardcode if k not in _SKIP_ROLLING_FACTORS]
+        rolling = [k for k in hardcode if k not in self._skip_rolling]
         if not rolling:
             return False
+        if target is not None:
+            applied = self.rolling_keys(target, today)
+            # 只有当计算器确实为本 (target, day) 算过，才用精确集合判定
+            if (
+                applied
+                or self._cache.get((target, (today or date.today()).isoformat())) is not None
+            ):
+                return set(rolling).issubset(applied)
         dynamic_count = sum(1 for k in rolling if thresholds.get(k) != hardcode[k])
         return dynamic_count >= len(rolling)

@@ -4,8 +4,8 @@
  * 把散落在「实时评估摘要 / 共振信号卡 / 决策引擎」三处的判断原料**收敛**成一张
  * 置顶结论卡，让首页一屏即可完成综合数据判断：
  *   ① 结论先行：趋势评估指数 + 等级 + 行动建议 + 行动置信度 + 一句话总判
- *   ② 三维构成：技术 30% / 宏观 40% / 消息 30% 分值条（红=利多 绿=利空，配文字箭头）
- *   ③ 一致性：显式指出三维「同向还是打架」——单看三个数字看不出分歧结构
+ *   ② 分面构成：技术 / 宏观 / 消息 / 资金流 4 个面的分值条（红=利多 绿=利空，配文字箭头）
+ *   ③ 一致性：显式指出共振三维「同向还是打架」——单看几个数字看不出分歧结构
  *   ④ 仓位对照：建议仓位 vs 当前持仓状态
  *   ⑤ 决策依据 + 待办事项 + 数据质量折损提示
  *
@@ -58,21 +58,33 @@
 
   var ASSET_ORDER = ['gold', 'silver'];
 
-  /* 维度权重与 index.summary 里的口径一致（技术 30% + 宏观 40% + 消息 30%） */
+  /* 分面定义（V0.120.0 起共 4 个面：技术 / 宏观 / 消息 / 资金流）。
+     **权重不在这里写死** —— 综合指数的面权重由后端下发：
+       index.face_weights         = 实际生效（已剔除无分值的面并归一化）
+       index.face_weights_nominal = 配置原值（被剔除的面只能从这里取权重）
+     旧代码硬编码「技术 30% + 宏观 40% + 消息 30%」有两个后果：
+       ① 消息面未打分时该面被剔除、其余面权重重新归一化，卡片标题会显示一个
+          与实际算法不符的公式（公式 ≠ 算法）；
+       ② V0.120.0 加了资金流面后，资金流根本没出现在这张卡上。
+     nominal 只在**后端没下发**（老后端 / 旧缓存）时兜底。 */
   var DIMS = [
-    { key: 'tech', i18n: 'trend.comp_tech', fallback: '技术面', weight: 30 },
-    { key: 'macro', i18n: 'trend.comp_macro', fallback: '宏观参考', weight: 40 },
-    { key: 'news', i18n: 'trend.comp_news', fallback: '消息面', weight: 30 }
+    { key: 'tech', i18n: 'trend.comp_tech', fallback: '技术面', nominal: 0.25 },
+    { key: 'macro', i18n: 'trend.comp_macro', fallback: '宏观参考', nominal: 0.35 },
+    { key: 'news', i18n: 'trend.comp_news', fallback: '消息面', nominal: 0.25 },
+    { key: 'flow', i18n: 'trend.comp_flow', fallback: '资金流面', nominal: 0.15 }
   ];
 
   /* 共振 5 类 → 一致性措辞（tone 决定配色）。
-     文案必须说明「结构」而非只给形容词：用户要判断的正是「三个维度是否打架」。 */
+     文案必须说明「结构」而非只给形容词：用户要判断的正是「几个维度是否打架」。
+     ⚠️ 共振口径**仍只有 3 个面**（技术/宏观/消息）—— 资金流面暂未纳入共振判定
+     （见 docs/api-reference.md §6.4 已知缺口），故措辞写「共振三维」而不是
+     「三维」—— 否则用户看到 4 根分值条却读到「三维背离」会以为漏了一面。 */
   var CONSISTENCY = {
-    strong_up: { tone: 'up', i18n: 'syn.cons_strong_up', fallback: '三维同向看多（三面 ≥55）→ 共振成立，结构最干净' },
-    strong_down: { tone: 'down', i18n: 'syn.cons_strong_down', fallback: '三维同向看空（三面 ≤45）→ 反向共振成立，结构最干净' },
-    weak_up: { tone: 'weak', i18n: 'syn.cons_weak_up', fallback: '三维中 2 维看多 → 弱共振，方向偏多但强度不足' },
-    divergent: { tone: 'diverge', i18n: 'syn.cons_divergent', fallback: '三维中出现显著背离（任意两维分差 ≥15）→ 反转/分歧结构，最需警惕' },
-    neutral: { tone: 'neutral', i18n: 'syn.cons_neutral', fallback: '三维均在中性区（45~55）→ 无有效方向，等市场表态' }
+    strong_up: { tone: 'up', i18n: 'syn.cons_strong_up', fallback: '共振三维（技术/宏观/消息）同向看多（各 ≥55）→ 共振成立，结构最干净' },
+    strong_down: { tone: 'down', i18n: 'syn.cons_strong_down', fallback: '共振三维（技术/宏观/消息）同向看空（各 ≤45）→ 反向共振成立，结构最干净' },
+    weak_up: { tone: 'weak', i18n: 'syn.cons_weak_up', fallback: '共振三维中 2 维看多 → 弱共振，方向偏多但强度不足' },
+    divergent: { tone: 'diverge', i18n: 'syn.cons_divergent', fallback: '共振三维中出现显著背离（任意两维分差 ≥15）→ 反转/分歧结构，最需警惕' },
+    neutral: { tone: 'neutral', i18n: 'syn.cons_neutral', fallback: '共振三维均在中性区（45~55）→ 无有效方向，等市场表态' }
   };
 
   /* V0.78.0：背离维度对 → i18n 键。缺失时回退服务端返回的 subtype_label（中文），
@@ -118,7 +130,7 @@
     '.syn-level { font-size: 12.5px; color: var(--muted); margin-bottom: 6px; }',
     '.syn-verdict { font-size: 13px; line-height: 1.65; }',
     '.syn-verdict b { color: var(--text); }',
-    /* 三维分值条 */
+    /* 分面分值条 */
     '.syn-bars { margin: 14px 0 4px; }',
     '.syn-bars-head { font-size: 11px; color: var(--muted); margin-bottom: 8px; }',
     '.syn-row { display: grid; grid-template-columns: 64px 1fr 44px 34px 62px; gap: 8px;',
@@ -238,39 +250,85 @@
     return 'live';
   }
 
-  function qualityNotes(trend, missDims) {
+  function qualityNotes(trend, missDims, weights) {
     var notes = [];
     var factors = (trend.macro && trend.macro.factors) || [];
     var statics = factors.filter(function (f) { return macroTier(f) === 'static'; });
     var lkgs = factors.filter(function (f) { return macroTier(f) === 'lkg'; });
+    /* 权重文案取**实际生效**权重（被剔除的面没有生效权重，退回配置权重），
+       不再写死「该维度权重 40%」—— 权重可在权重配置页改，写死就是撒谎。 */
+    var macroW = weights && weights.macro
+      ? (weights.macro.effective != null ? weights.macro.effective : weights.macro.nominal)
+      : 0.35;
+    var macroWPct = fmtW(macroW * 100);
     if (lkgs.length) {
       var lnames = lkgs.map(function (f) { return f.name; }).filter(Boolean);
       var lshown = lnames.slice(0, 4).join('、') + (lnames.length > 4 ? ' 等' : '');
       var ldates = lkgs.map(function (f) { return f.data_date; }).filter(Boolean).sort();
       notes.push(T('syn.q_macro_lkg',
-        '宏观因子 {n}/{m} 项为降级读数（{names}；最新数据日 {d}，上游数据源当时不可用，用上次真实读数顶替）→ 该维度权重 40%，结论可信度相应打折',
+        '宏观因子 {n}/{m} 项为降级读数（{names}；最新数据日 {d}，上游数据源当时不可用，用上次真实读数顶替）→ 该维度权重 {w}%，结论可信度相应打折',
         { n: lkgs.length, m: factors.length, names: lshown,
-          d: ldates.length ? ldates[ldates.length - 1] : '—' }));
+          d: ldates.length ? ldates[ldates.length - 1] : '—', w: macroWPct }));
     }
     if (statics.length) {
       var names = statics.map(function (f) { return f.name; }).filter(Boolean);
       var shown = names.slice(0, 4).join('、') + (names.length > 4 ? ' 等' : '');
       var dates = statics.map(function (f) { return f.data_date; }).filter(Boolean).sort();
       notes.push(T('syn.q_macro_static',
-        '宏观因子 {n}/{m} 项为静态参考值（{names}；最新数据日 {d}，非实时行情）→ 该维度权重 40%，结论可信度相应打折',
+        '宏观因子 {n}/{m} 项为静态参考值（{names}；最新数据日 {d}，非实时行情）→ 该维度权重 {w}%，结论可信度相应打折',
         { n: statics.length, m: factors.length, names: shown,
-          d: dates.length ? dates[dates.length - 1] : '—' }));
+          d: dates.length ? dates[dates.length - 1] : '—', w: macroWPct }));
     }
-    if (trend.news && trend.news.scored === false) {
+    /* V0.120.0：资金流面同款降级披露（宏观面有、资金流面没有 ⇒ 两张卡口径不一致，
+       用户会以为资金流面的读数一定比宏观面「新鲜」）。 */
+    var ff = (trend.flow && trend.flow.factors) || [];
+    var fstatics = ff.filter(function (f) { return macroTier(f) === 'static'; });
+    var flkgs = ff.filter(function (f) { return macroTier(f) === 'lkg'; });
+    var flowW = weights && weights.flow
+      ? (weights.flow.effective != null ? weights.flow.effective : weights.flow.nominal)
+      : 0.15;
+    var flowWPct = fmtW(flowW * 100);
+    if (flkgs.length) {
+      var fnames = flkgs.map(function (f) { return f.name; }).filter(Boolean);
+      var fshown = fnames.slice(0, 4).join('、') + (fnames.length > 4 ? ' 等' : '');
+      var fdates = flkgs.map(function (f) { return f.data_date; }).filter(Boolean).sort();
+      notes.push(T('syn.q_flow_lkg',
+        '资金流因子 {n}/{m} 项为降级读数（{names}；最新数据日 {d}，上游数据源当时不可用，用上次真实读数顶替）→ 该维度权重 {w}%，结论可信度相应打折',
+        { n: flkgs.length, m: ff.length, names: fshown,
+          d: fdates.length ? fdates[fdates.length - 1] : '—', w: flowWPct }));
+    }
+    if (fstatics.length) {
+      var fn2 = fstatics.map(function (f) { return f.name; }).filter(Boolean);
+      var fs2 = fn2.slice(0, 4).join('、') + (fn2.length > 4 ? ' 等' : '');
+      var fd2 = fstatics.map(function (f) { return f.data_date; }).filter(Boolean).sort();
+      notes.push(T('syn.q_flow_static',
+        '资金流因子 {n}/{m} 项为静态参考值（{names}；最新数据日 {d}，非实时行情）→ 该维度权重 {w}%，结论可信度相应打折',
+        { n: fstatics.length, m: ff.length, names: fs2,
+          d: fd2.length ? fd2[fd2.length - 1] : '—', w: flowWPct }));
+    }
+    var newsPending = !!(trend.news && trend.news.scored === false);
+    if (newsPending) {
+      /* V0.100.0 起消息面未打分是**被剔除**（不是「按中性 50 计入」）——
+         后端把该面从 faces 里剔掉、其余面权重重新归一化（见 services/trend.py）。
+         旧文案「按中性 50 计入（占权重 30%）」与实际算法矛盾，已改正。 */
+      var newsW = weights && weights.news
+        ? (weights.news.effective != null ? weights.news.effective : weights.news.nominal)
+        : 0.25;
       notes.push(T('syn.q_news_unscored',
-        '消息面今日尚未打分，按中性 50 计入评估（占权重 30%）'));
+        '消息面今日尚未打分，已剔除并按其余面权重归一化（该面配置权重 {w}%）',
+        { w: fmtW(newsW * 100) }));
     }
     /* 某面数据不足被剔除：结论的「覆盖面」变了，必须显式告知（V0.78.0 Step D）。
-       不能只把那一行画成「—」而不解释 —— 客户看到综合指数却不知少算了一面。 */
-    if (missDims && missDims.length) {
+       不能只把那一行画成「—」而不解释 —— 客户看到综合指数却不知少算了一面。
+       消息面「尚未打分」已由上一条单独说明（性质不同：待打分 vs 数据源挂了），
+       这里不再重复列它。 */
+    var missOther = (missDims || []).filter(function (d) {
+      return !(newsPending && d.key === 'news');
+    });
+    if (missOther.length) {
       notes.push(T('syn.q_face_missing',
         '「{names}」数据不足，未参与综合指数（其余维度已按有效维度归一化）→ 本次结论的覆盖面低于常态',
-        { names: missDims.map(function (d) { return T(d.i18n, d.fallback); }).join('、') }));
+        { names: missOther.map(function (d) { return T(d.i18n, d.fallback); }).join('、') }));
     }
     if (trend.degraded) {
       var srcMap = trend.data_sources || {};
@@ -300,7 +358,7 @@
         var pair = dkey ? (T(dkey, '') || res.subtype_label || '') : (res.subtype_label || '');
         if (pair) { txt += '（' + pair + '）'; }
       }
-      parts.push('三维结构：' + esc(txt));
+      parts.push('共振结构：' + esc(txt));
     }
     if (dec) {
       parts.push('决策引擎给出<b>' + esc(dec.action_label || '—') + '</b>（' + esc(confTxt) + '置信度）');
@@ -329,23 +387,74 @@
     return DIMS.filter(function (d) { return !hasFace(components, d.key); });
   }
 
-  function barRow(dim, components) {
+  /* 面权重解析：优先后端下发，缺失时在本地按 nominal 重新归一化。
+     返回 { key: { effective, nominal } }：
+       effective = 实际生效权重（该面有分值时才有；被剔除的面为 null）
+       nominal   = 配置权重（被剔除的面用它展示「配置上占多少」） */
+  function resolveFaceWeights(idx, components) {
+    var eff = (idx && idx.face_weights && typeof idx.face_weights === 'object') ? idx.face_weights : null;
+    var nom = (idx && idx.face_weights_nominal && typeof idx.face_weights_nominal === 'object')
+      ? idx.face_weights_nominal : null;
+    var out = {};
+    var presentTotal = 0;
+    DIMS.forEach(function (d) {
+      var n = (nom && typeof nom[d.key] === 'number') ? nom[d.key] : d.nominal;
+      out[d.key] = { effective: null, nominal: n, present: hasFace(components, d.key) };
+      if (out[d.key].present) presentTotal += n;
+    });
+    DIMS.forEach(function (d) {
+      var e = (eff && typeof eff[d.key] === 'number') ? eff[d.key] : null;
+      if (e == null && out[d.key].present && presentTotal > 0) {
+        /* 后端没给 face_weights（老后端 / 旧缓存）→ 本地归一化兜底，
+           保证「标题里的公式」与实际算法一致。 */
+        e = out[d.key].nominal / presentTotal;
+      }
+      out[d.key].effective = e;
+    });
+    return out;
+  }
+
+  /* 权重百分比格式化：统一 1 位小数（整数百分比加起来未必等于 100，
+     而这张卡的价值就是让用户能对着公式复算）。 */
+  function fmtW(pct) {
+    if (pct == null || isNaN(pct)) return '—';
+    return (Math.round(pct * 10) / 10).toFixed(1);
+  }
+
+  /* 标题里的公式：只列**实际生效**的面（被剔除的面不进公式），
+     权重用实际生效权重 ⇒ 公式加总 = 综合指数。 */
+  function dimsFormula(weights, components) {
+    return DIMS
+      .filter(function (d) { return hasFace(components, d.key); })
+      .map(function (d) {
+        var w = weights[d.key];
+        var pct = (w.effective != null) ? w.effective : w.nominal;
+        return T(d.i18n, d.fallback) + ' ' + fmtW(pct * 100) + '%';
+      })
+      .join(' ＋ ');
+  }
+
+  function barRow(dim, components, weights) {
+    var w = weights[dim.key];
     if (!hasFace(components, dim.key)) {
+      /* 被剔除的面：展示它的**配置权重**（灰显），并标「未计入」——
+         它没有生效权重（生效权重已被重新归一化分给其余面）。 */
       return '<div class="syn-row syn-row-miss">'
         + '<span class="nm">' + esc(T(dim.i18n, dim.fallback)) + '</span>'
         + '<span class="track"><i style="width:0%;background:var(--muted)"></i></span>'
         + '<span class="val" style="color:var(--muted)">—</span>'
-        + '<span class="wt">' + dim.weight + '%</span>'
+        + '<span class="wt">' + fmtW(w.nominal * 100) + '%</span>'
         + '<span class="dir" style="color:var(--muted)">' + esc(T('syn.row_excluded', '未计入')) + '</span>'
         + '</div>';
     }
     var score = components[dim.key];
+    var pct = (w.effective != null) ? w.effective : w.nominal;
     var m = dirMeta(score >= 55 ? 'bullish' : score <= 45 ? 'bearish' : 'neutral');
     return '<div class="syn-row">'
       + '<span class="nm">' + esc(T(dim.i18n, dim.fallback)) + '</span>'
       + '<span class="track"><i style="width:' + Math.max(0, Math.min(100, score)) + '%;background:' + m.color + '"></i></span>'
       + '<span class="val" style="color:' + m.color + '">' + score.toFixed(1) + '</span>'
-      + '<span class="wt">' + dim.weight + '%</span>'
+      + '<span class="wt">' + fmtW(pct * 100) + '%</span>'
       + '<span class="dir" style="color:' + m.color + '">' + m.text + ' ' + m.arrow + '</span>'
       + '</div>';
   }
@@ -361,6 +470,11 @@
     var res = data.resonance;
     var idx = trend.index || {};
     var components = idx.components || {};
+    /* V0.120.0：面权重一律取后端下发（face_weights = 实际生效、已归一化；
+       face_weights_nominal = 配置原值）。旧代码硬编码「技术 30% + 宏观 40% +
+       消息 30%」—— 消息面未打分时该面被剔除、剩余面权重被重新归一化，
+       硬编码会直接说错话（公式 ≠ 实际算法）。 */
+    var weights = resolveFaceWeights(idx, components);
 
     var level = LEVEL_FALLBACK[idx.level] || idx.level || '—';
     var idxColor = idx.direction === 'bullish' ? 'var(--up)'
@@ -455,10 +569,10 @@
 
     /* ⑥ 数据质量 + 下钻入口 */
     var missDims = missingFaces(components);
-    var notes = qualityNotes(trend, missDims);
+    var notes = qualityNotes(trend, missDims, weights);
     var deg = [];
     if (!dec) deg.push(T('syn.deg_decision', '决策接口暂不可用，以上不含行动建议与仓位参考'));
-    if (!res) deg.push(T('syn.deg_resonance', '共振接口暂不可用，缺三维一致性判定'));
+    if (!res) deg.push(T('syn.deg_resonance', '共振接口暂不可用，缺共振一致性判定'));
     var qualHtml = '<div class="syn-qual">'
       + '<span class="k">' + esc(T('syn.quality', '数据质量')) + '</span>'
       + (notes.length
@@ -503,15 +617,16 @@
 
       + '<div class="syn-bars">'
       + '<div class="syn-bars-head">'
-      + esc(T('syn.dims_head', '三维构成 · 加权 技术 30% ＋ 宏观 40% ＋ 消息 30%（红=利多 绿=利空）'))
+      + esc(T('syn.dims_head', '分面构成 · 加权 {formula}（红=利多 绿=利空）',
+        { formula: dimsFormula(weights, components) }))
       + (missDims.length
         ? ' · <span style="color:var(--chip-warn-fg)">'
-          + esc(T('syn.dims_head_miss', '本次有效维度：{names}（其余数据不足未计入）',
+          + esc(T('syn.dims_head_miss', '本次未计入：{names}（其余面权重已按有效面归一化）',
             { names: missDims.map(function (d) { return T(d.i18n, d.fallback); }).join('、') }))
           + '</span>'
         : '')
       + '</div>'
-      + DIMS.map(function (d) { return barRow(d, components); }).join('')
+      + DIMS.map(function (d) { return barRow(d, components, weights); }).join('')
       + '</div>'
 
       /* V0.86.0：决策可解释性 · 拆解（综合指数按权加权）+ 对比（按当前建议加减） */
@@ -547,6 +662,22 @@
 
   /* ───────────────── 取数 ───────────────── */
 
+  /* i18n 字典就绪信号（V0.120.0）
+   *
+   * ⚠ 卡片内容是 innerHTML 拼出来的，**没有 data-i18n 标记** ⇒ i18n.js 的
+   * apply() 扫不到它。字典没就绪就渲染 ⇒ 卡片锁定在默认语言，且永不更新
+   * （实测：zh-TW 字典延迟 4s ⇒ 标题停在「分面构成」而非「分面構成」）。
+   * 这里在取数前等一次 ready，把「渲染语言」与「字典加载」彻底解耦。
+   */
+  function i18nReady() {
+    try {
+      if (window.I18n && window.I18n.ready && typeof window.I18n.ready.then === 'function') {
+        return window.I18n.ready.catch(function () { /* 失败也要继续渲染 */ });
+      }
+    } catch (e) { /* ignore */ }
+    return Promise.resolve();
+  }
+
   function load() {
     var card = document.getElementById(state.containerId);
     if (!card) return Promise.resolve();
@@ -555,11 +686,13 @@
 
     var asset = ASSETS[state.asset];
     var t = asset.target;
-    return Promise.allSettled([
-      fetchJSON(base() + asset.trend),
-      fetchJSON(base() + '/api/v1/decision/etf?days=60&target=' + encodeURIComponent(t)),
-      fetchJSON(base() + '/api/v1/resonance/signal?target=' + encodeURIComponent(t))
-    ]).then(function (rs) {
+    return i18nReady().then(function () {
+      return Promise.allSettled([
+        fetchJSON(base() + asset.trend),
+        fetchJSON(base() + '/api/v1/decision/etf?days=60&target=' + encodeURIComponent(t)),
+        fetchJSON(base() + '/api/v1/resonance/signal?target=' + encodeURIComponent(t))
+      ]);
+    }).then(function (rs) {
       var trend = rs[0].status === 'fulfilled' ? rs[0].value : null;
       if (!trend) throw new Error(rs[0].reason && rs[0].reason.message ? rs[0].reason.message : '趋势数据不可用');
       render({

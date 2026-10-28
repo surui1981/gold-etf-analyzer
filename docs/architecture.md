@@ -31,6 +31,9 @@ src/app/
 │   ├── scoring.py       # 宏观机会评分引擎（FACTOR_RULES）
 │   ├── trend.py         # 趋势分析 + 追踪指数（TREND_WEIGHTS）
 │   ├── macro.py         # 宏观参考因子评分（11 因子；cb_gold 注入中央银行服务）
+│   ├── money_flow.py    # 资金流面评分（V0.120.0：6 因子 = 周 3 / 月 3；只收流量类读数）
+│   ├── macro_thresholds.py  # 滚动分位阈值计算（按因子 window_days 取窗，周 728 日 / 月 1826 日）
+│   ├── money_flow_backfill.py # 资金流历史回填（按观测日落表，供滚动分位冷启动）
 │   ├── decision.py      # 购买决策引擎（趋势×持仓规则矩阵 + reason_items）
 │   ├── position.py      # 交易面：开仓/加减仓/清仓/盈亏/软删除/CSV 导出（按账本过滤）
 │   ├── account.py       # 账本：默认账本保障 / 增改 / 归档恢复 / 统计（P1 #6）
@@ -55,6 +58,8 @@ src/app/
 │   ├── news.py          # 消息面打分仓储（(score_date, slot) 复合唯一 + 区间查询）
 │   ├── review.py        # 金价日历仓储（upsert 合并后重算涨跌幅 / 取 T 之后第一个交易日）
 │   ├── central_bank.py  # 央行购金 DB CRUD（按国家/季度查询 + upsert）
+│   ├── money_flow_sources.py  # 资金流取数器（CFTC / 东财 ETF / FRED / 沪深融资余额 / PBoC M1·M2）
+│   ├── money_flow_factor_history.py  # 资金流因子历史表仓储（按观测日取窗 + upsert）
 │   ├── central_bank_data.py  # WGC HTML chart JS fetcher（季度合计 + H1 按国家）
 │   ├── user.py          # 用户与会话仓储（邮箱唯一约束 / 会话撤销 / 过期清理，V0.75.0）
 │   └── db.py            # async 引擎与会话工厂
@@ -89,6 +94,7 @@ tests/                   # pytest（**866+ 用例** / 16+ 测试目录，含 fet
 | 宏观 11 因子（V0.119.0） | 美债 2Y·10Y·30Y：美联储 H.15 CSV ｜ 美元指数：Yahoo `DX-Y.NYB` ｜ VIX：FRED `VIXCLS` ｜ 10Y 实际利率：FRED `DFII10` ｜ 10Y-2Y 利差：派生（10Y − 2Y）｜ 央行购金：WGC 季度 ｜ 美国政府债务/GDP：FRED `GFDEGDQ188S`（季度，CBO）｜ 中国政府债务/GDP：FRED `GGGDTACNA188N`（年度，IMF WEO）｜ 欧洲政府债务/GDP：Eurostat `GOV_10Q_GGDEBT`（季度，`EU27_2020`） |
 | **央行购金（V0.57.0 升级）** | **WGC Gold Demand Trends HTML chart JS（`fsapi.gold.org/api/v12/charts/js/...`）**——绕开 XLSX 403 反爬；季度合计 2014Q1–2026Q2 + H1 2026 按国家 + UZB/IRN 手工补丁；月度 1/15/末日 07:30 BJT 自动从 WGC 拉取并 upsert 到 `central_bank_purchases` 表；cb_gold 宏观因子从表汇总 T12M，无数据时回退 STATIC_REF（1019 吨/年） |
 | **金价日历（V0.66.0 新增）** | `gold_price_daily` 表：按 `target`(ny/etf/gram) + `price_date` 唯一，存 `close` / `change_pct` / `source`。**只存客观价格、与 `daily_snapshots` 解耦**，故可回填、可长期积累；由 `POST /api/v1/review/backfill` 从 `/gold/ny-trend` 批量写入（upsert 时在合并后的时间序列上重算涨跌幅，重复回填不抹平已有值）。当前行情源提供约 60 个交易日历史（实测回填 2026-06-25 ~ 09-16） |
+| **资金流 6 因子（V0.120.0）** | CFTC 黄金分类持仓（年文件 `fut_disagg_txt_YYYY.zip`）｜ 黄金 ETF 4 周累计净申赎：**上交所 518880 官方每日份额**（`TOT_VOL`，结算后存量，无重建误差）+ 新浪收盘价 ｜ 美元净流动性：FRED `WALCL` − `WTREGEN` − `RRPONTSYD` ｜ A 股融资余额月变动：上交所 + 深交所 ｜ 中国 M1/M2：PBoC `macro_china_money_supply` |
 | 兜底 | 数据源三态：实时 `live` / 磁盘缓存 `stale` / 演示 `mock`（页面顶部状态条 + 健康度可见） |
 
 > 采集策略：AKShare 为同步阻塞库，经 `asyncio.to_thread` 放入线程池；按源分锁（`etf`/`sge`/`ny`）并发采集避免 V8 全局锁崩溃；统一 30s 超时快速失败而非挂起；内存 + 独立 SQLite 双写缓存（TTL 300s，冷启动 ~1.6s）。WGC fetcher 走异步 HTTP（`httpx.AsyncClient`），同样 30s 超时。

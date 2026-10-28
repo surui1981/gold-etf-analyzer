@@ -138,13 +138,16 @@ class ReviewService:
         if self._trend is None:
             raise ValueError("趋势服务未注入，无法回填价格")
 
-        trend = await self._trend.analyze(days=days, target=target)
-        bars = [(p.date, float(p.close)) for p in trend.points]
+        # ⚠ V0.120.0：走**轻路径**（只取价格序列 + 来源标记），不走 analyze()。
+        # analyze() 会顺带把宏观面 / 消息面 / **资金流面**各拉一遍外网
+        # （实测资金流面单次 8.25s），算出的指数在这里被整段丢掉 ——
+        # 「只要价格」却要等十几秒。与回测的价格日历回填是同一个毛病（同一处修法）。
+        bars, sources = await self._trend.fetch_price_bars(days=days, target=target)
         # ⚠ V0.79.0：原为 `or "live"` —— **方向危险**。来源缺失时把「未知」
         # 标成 ``live`` 等于静默宣称数据真实；而 ``mock``（降级产物）恰为真值
         # 会原样透传、被仓储白名单拒绝 —— 两种情形结果相反且都不可解释。
         # 现统一走 ``services.price_source``：缺失返回空串，交由仓储校验拒绝。
-        source = resolve_price_source(trend.data_sources, target)
+        source = resolve_price_source(sources, target)
         written = await self._gold.upsert_many(target=target, bars=bars, source=source)
 
         logger.info(

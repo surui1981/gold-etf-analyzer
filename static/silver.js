@@ -419,6 +419,76 @@
     el.innerHTML = html;
   }
 
+  // V0.120.0：白银页的第 4 面「资金流面」渲染。
+  //
+  // 与黄金页 trend.html 同一套模式：因子行（.macro-row）+ tier chip + cadence chip。
+  // 关键点：
+  // ① tier（live/lkg/static）必须显示 —— lkg（末次落库）与 static（内置常量）
+  //    都不是「本次观测到的数」，混在实时值里会让人误判。
+  // ② cadence（weekly/monthly）是中性说明 chip，**不**当告警亮红灯 ——
+  //    周/月频因子天生滞后数周，常亮的告警等于没有告警。
+  // ③ 面权重公式由后端 face_weights 下发（实际生效、已归一化），
+  //    不在前端硬编码 30/40/30 —— 消息面未打分时权重被剔除，硬编码会说错话。
+  //    （公式本体在 renderMain 里与「技术面合成方式」角标拼在一起。）
+  function renderMoneyFlowFace(data) {
+    const flow = data && data.flow ? data.flow : null;
+    const infoEl = document.getElementById("flowInfo");
+    const boxEl = document.getElementById("flowFactors");
+    const factors = flow && Array.isArray(flow.factors) ? flow.factors : [];
+
+    if (!flow) {
+      if (infoEl) infoEl.textContent = "";
+      if (boxEl) boxEl.innerHTML = "";
+      return;
+    }
+    const dirTxt =
+      flow.direction === "bullish" ? "利多黄金" : flow.direction === "bearish" ? "利空黄金" : "中性";
+    if (infoEl) {
+      if (flow.score == null) {
+        // 本轮一个因子都没取到读数 —— 不是「0 分」，是「没数」
+        infoEl.textContent = "资金流面本轮无有效读数，整面不可用";
+      } else {
+        // 权重合计 < 1 ⇒ 有因子缺读数被剔除；不说出来用户会以为权重加不到 100% 是 bug
+        const wSum = factors.reduce((a, f) => a + (f.weight || 0), 0);
+        const missing = factors.length ? Math.round((1 - wSum) * 1000) / 10 : 0;
+        const missingNote = missing > 0.05
+          ? ` · ${missing.toFixed(1)} 个因子本轮缺读数（已剔除，权重按剩余归一化）`
+          : "";
+        infoEl.textContent =
+          `资金流面指数 ${flow.score.toFixed(1)}/100 · ${dirTxt} · ` +
+          `周度 ${((flow.weekly_weight || 0) * 100).toFixed(0)}% / 月度 ${((flow.monthly_weight || 0) * 100).toFixed(0)}%${missingNote}`;
+      }
+    }
+    if (!boxEl) return;
+    boxEl.innerHTML = factors
+      .map((f) => {
+        const c =
+          f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "var(--muted)";
+        const tier = f.tier || "live";
+        const tierChip =
+          tier === "lkg"
+            ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:500" title="上游源本次不可用，显示的是末次落库的真实读数">降级</span>`
+            : tier === "static"
+              ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:500" title="上游源本次不可用，显示的是内置常量兜底值（非市场读数）">静态兜底</span>`
+              : "";
+        const cadenceChip =
+          f.cadence === "weekly"
+            ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="周频因子，滚动分位窗口 ${f.window_days != null ? f.window_days : "—"} 日">周度</span>`
+            : f.cadence === "monthly"
+              ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="月频因子，滚动分位窗口 ${f.window_days != null ? f.window_days : "—"} 日">月度</span>`
+              : "";
+        return `
+    <div class="macro-row">
+      <span class="nm" style="width:150px">${f.name || "—"}${tierChip}${cadenceChip}</span>
+      <span class="val">${f.value || "—"} ${f.unit || ""}</span>
+      <span class="bar"><i style="width:${Math.max(0, Math.min(100, f.score || 0))}%; background:${c}"></i></span>
+      <span class="dt">${f.data_date || "—"}</span>
+    </div>
+  `;
+      })
+      .join("");
+  }
+
   function renderMain(data, market = currentMarket) {
     const lvl = data.index?.level || "—";
     const numEl = document.getElementById("idxNum");
@@ -440,6 +510,15 @@
     // 复用 freshness.js 的 fsh-chip fsh-warn 样式（琥珀色 + ▲ 三角）
     const newsForPending = data.news || {};
     const newsPendingSilver = newsForPending.scored === false;
+    // V0.120.0：消息面**配置权重**取后端 face_weights_nominal（不再写死 30%）。
+    // ⚠ I18n.t(key, params) 的第二参是 params —— 传中文兜底串会让字典里的 {n}
+    //   永远替换不掉（白银页会显示字面量「{n}%」）。见下方 pendingHintText 同款修法。
+    const faceNominalSilver =
+      data.index && data.index.face_weights_nominal && typeof data.index.face_weights_nominal === "object"
+        ? data.index.face_weights_nominal
+        : {};
+    const newsNominalPctSilver =
+      faceNominalSilver.news != null ? (faceNominalSilver.news * 100).toFixed(0) : "25";
     const existingPendingSilver = document.getElementById("idxPendingChip");
     if (existingPendingSilver) existingPendingSilver.remove();
     if (newsPendingSilver && data.index?.score != null) {
@@ -448,11 +527,8 @@
       chip.className = "fsh-chip fsh-warn fsh-stale-chip";
       chip.title =
         window.I18n && typeof window.I18n.t === "function"
-          ? window.I18n.t(
-              "trend.pending_tooltip",
-              "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）",
-            )
-          : "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）";
+          ? window.I18n.t("trend.pending_tooltip", { n: newsNominalPctSilver })
+          : `消息面尚未打分，综合指数按其余各面权重归一计算（暂未含消息面 ${newsNominalPctSilver}% 权重）`;
       chip.textContent =
         "▲ " +
         (window.I18n && typeof window.I18n.t === "function"
@@ -508,7 +584,22 @@
         : "[单维度加权]";
     const techComposeBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${techBadgeBg};color:${techBadgeColor};font-size:10px;font-weight:500">${techBadgeText}</span>`;
 
-    document.getElementById("idxMethod").innerHTML = (data.index?.method || "") + techComposeBadge;
+    // V0.120.0：面权重公式由后端 face_weights 下发（实际生效、已归一化）。
+    // 旧代码写死 30/40/30（且 index.method 字段根本不存在 → 一律渲染成空串）。
+    const faceW =
+      data.index && data.index.face_weights && typeof data.index.face_weights === "object"
+        ? data.index.face_weights
+        : {};
+    const FACE_ORDER = ["tech", "macro", "news", "flow"];
+    const faceLabel = (k) =>
+      ({ tech: "技术面", macro: "宏观参考", news: "消息面", flow: "资金流面" })[k] || k;
+    const faceFormula = FACE_ORDER.filter((k) => faceW[k] != null)
+      .map((k) => `${faceLabel(k)}×${(faceW[k] * 100).toFixed(0)}%`)
+      .join(" + ");
+    document.getElementById("idxMethod").innerHTML =
+      (faceFormula ? `📐 运算方法：综合指数 = ${faceFormula}` : data.index?.method || "") + techComposeBadge;
+    // V0.120.0：白银页同步渲染第 4 面「资金流面」
+    renderMoneyFlowFace(data);
     document.getElementById("macroInfo").innerHTML = macro.score != null ? `综合 ${macro.score?.toFixed(1)} / 100${macroBadge}` : "";
     const macroFactorsEl = document.getElementById("macroFactors");
     macroFactorsEl.innerHTML = (macro.factors || [])
@@ -546,13 +637,22 @@
         window.I18n && typeof window.I18n.t === "function"
           ? window.I18n.t("trend.news_unscored_chip", "未打分 · pending")
           : "未打分 · pending";
+      // V0.120.0：权重取**后端下发的配置权重**（face_weights_nominal），不再写死 30%。
+      // ⚠ I18n.t(key, params) 的第二个参数是**替换占位符用的 params**，不是兜底文案 ——
+      //   旧代码把中文兜底串当成 params 传进去，字典里的 {n} 永远替换不掉，
+      //   白银页会直接显示字面量「（{n}% 权重剔除）」。
+      const faceNominal =
+        data.index && data.index.face_weights_nominal && typeof data.index.face_weights_nominal === "object"
+          ? data.index.face_weights_nominal
+          : {};
+      const newsNominalPct = faceNominal.news != null ? (faceNominal.news * 100).toFixed(0) : "25";
       const pendingHintText =
         window.I18n && typeof window.I18n.t === "function"
           ? window.I18n.t(
               "trend.news_pending_hint",
-              "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价",
+              { n: newsNominalPct },
             )
-          : "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价";
+          : `消息面未打分不参与综合指数（${newsNominalPct}% 权重剔除）。去下方「今日消息面打分」完成评价`;
       newsFactorEl.innerHTML = `<div class="macro-row">
       <span class="nm">消息面打分</span>
       <span class="val" style="color:var(--muted)">—</span>

@@ -229,10 +229,15 @@ for _rule in MACRO_FACTOR_RULES:
     _rule.setdefault("cadence", _DAILY_CADENCE)
     _rule.setdefault("max_lag_days", _DAILY_MAX_LAG_DAYS)
 
-# 技术面/宏观面/消息面合成权重（默认 30/40/30，中短期 ETF 波段操作）
-TECH_WEIGHT = 0.30
-MACRO_WEIGHT = 0.40
-NEWS_WEIGHT = 0.30
+# 技术面/宏观面/消息面/**资金流面**合成权重（默认 25/35/25/15，中短期 ETF 波段操作）
+#
+# V0.120.0：加入第 4 个面「资金流面」15%，其余三个面各让 5%。
+# 为什么是 15%：够分量（不是装饰参数），又不至于让一个**没有历史、无法回测**的
+# 新面压过已有的三维。
+TECH_WEIGHT = 0.25
+MACRO_WEIGHT = 0.35
+NEWS_WEIGHT = 0.25
+FLOW_WEIGHT = 0.15
 
 # 静态参考值（外部源失败时的兜底；标注数据日期）
 # ⚠️ 这些不是市场读数 —— 不得写入 daily_macro_factors 历史表（见 is_persistable_source）
@@ -398,11 +403,13 @@ class MacroFactorService:
         # V0.79.0 Step E：每请求只算一次动态阈值（calculator 注入时）。
         # 未注入 → 全 hardcode；注入 → 滚动因子切到 252 日 90/10 分位，cb_gold 永远 hardcode。
         if self._threshold_calculator is not None:
-            thresholds = await self._threshold_calculator.get_or_compute(
-                self._resolve_macro_target()
+            macro_target = self._resolve_macro_target()
+            thresholds = await self._threshold_calculator.get_or_compute(macro_target)
+            macro_dynamic = self._threshold_calculator.is_dynamic_active(
+                thresholds, target=macro_target
             )
-            macro_dynamic = self._threshold_calculator.is_dynamic_active(thresholds)
         else:
+            macro_target = self._resolve_macro_target()
             thresholds = {
                 r["key"]: (float(r["best"]), float(r["worst"])) for r in MACRO_FACTOR_RULES
             }
@@ -412,8 +419,20 @@ class MacroFactorService:
         # macro_dynamic 是「全部可滚动因子都动态」的布尔摘要 —— 只有一个因子样本
         # 不足，它就变 False，但其余因子其实已经在用滚动分位。前端拿这个列表
         # 显示「N/M 个因子使用滚动分位」，比笼统的「数据不足」准确。
+        #
+        # V0.120.0：改用计算器**记录**的滚动集，而不是「阈值 ≠ hardcode」反推 ——
+        # 滚动分位算出的 best/worst 可能恰好等于静态带（静态带就是拿同一段历史
+        # 标定的），值比较会把这样的因子误报成「还在用静态阈值」。
         hardcode = {r["key"]: (float(r["best"]), float(r["worst"])) for r in MACRO_FACTOR_RULES}
-        dynamic_factors = [k for k, v in thresholds.items() if hardcode.get(k) != v]
+        applied = (
+            self._threshold_calculator.rolling_keys(macro_target)
+            if self._threshold_calculator is not None
+            else frozenset()
+        )
+        if applied:
+            dynamic_factors = sorted(applied)
+        else:
+            dynamic_factors = [k for k, v in thresholds.items() if hardcode.get(k) != v]
 
         total = 0.0
         total_weight = 0.0

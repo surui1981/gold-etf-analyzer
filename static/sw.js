@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.119.0";  // V0.119.0 · 宏观面新增 3 个政府债务因子（美国/中国/欧洲 政府债务/GDP）+ 低频因子 cadence/max_lag_days；改了 weights.html / trend.html / silver.js / help.js / i18n/*.js 必 bump
+const VERSION = "v0.120.0";  // V0.120.0 · 新增「资金流面」（第 4 个评分面：CFTC 黄金投机净多 / 黄金 ETF 4 周累计净申赎 / 美元净流动性 / A股融资余额 / M1-M2 剪刀差）；改了 weights.html / trend.html / silver.html / silver.js / i18n/*.js 必 bump
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -129,6 +129,10 @@ const SHELL_ASSETS = [
     "/static/admin/users.html",
     // V0.75.1 综合研判结论卡：宿在首页顶部，离线打开时必须能渲染
     "/static/synthesis-card.js",
+    // V0.120.0：结论卡的「综合指数拆解」由 decision-explainer.js 渲染
+    //   （synthesis-card.js 调 window.PM_DecisionExplainer.renderBreakdown）——
+    //   它与结论卡必须同版本，否则拆解会用旧口径（3 面 / 30-40-30）。
+    "/static/decision-explainer.js",
     // V0.76.0 首页内嵌消息面打分器：宿在首页顶部，离线打开时必须能渲染
     "/static/news-score-widget.js",
     // V0.98 C3：全局 toast / 断网检测 / PWA 安装引导样式（离线打开页面时也要能渲染）
@@ -173,6 +177,13 @@ self.addEventListener("activate", (event) => {
             // 同样按上述模式清 RUNTIME_CACHE 旧 /home + /static/home.html。
             // V0.103：/favorites 同模式（新页进入 SHELL_ASSETS 时旧 RUNTIME_CACHE 里的 307 旧入口需清掉）。
             // V0.111.0：/report-archive 同模式。
+            // V0.120.0：结论卡 / 决策拆解 / i18n 字典改口径（3 面 → 4 面）。
+            //   /static/* 走 cache-first，RUNTIME_CACHE 里的旧副本会**永久**回放
+            //   （浏览器不会因为文件变了就重新拉）—— 必须在这里删掉，
+            //   否则用户看到的还是旧的「三维构成 技术30%/宏观40%/消息30%」。
+            //   SHELL_ASSETS 里的条目由 install 阶段的 cache.addAll 重新 precache
+            //   （覆盖旧副本）；不在 SHELL_ASSETS 的（如 zh-TW / en-US 字典、
+            //   decision-explainer.js）只能靠这里清 RUNTIME_CACHE。
             .then(async () => {
                 const rt = await caches.open(RUNTIME_CACHE);
                 const stale = [
@@ -180,6 +191,13 @@ self.addEventListener("activate", (event) => {
                     "/home", "/static/home.html",
                     "/favorites", "/static/favorites.html",
                     "/report-archive", "/static/report-archive.html",
+                    "/static/synthesis-card.js",
+                    "/static/decision-explainer.js",
+                    "/static/i18n/zh-CN.js",
+                    "/static/i18n/zh-TW.js",
+                    "/static/i18n/en-US.js",
+                    "/static/silver.js",
+                    "/static/help.js",
                 ];
                 for (const url of stale) {
                     const hit = await rt.match(url);

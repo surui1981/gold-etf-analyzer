@@ -153,6 +153,7 @@ def test_glossary_has_at_least_30_terms() -> None:
         "技术面",
         "宏观面",
         "消息面",
+        "资金流面",
         "RSI(14)",
         "MA5 / MA20 / MA40",
         "T12M",
@@ -166,6 +167,12 @@ def test_glossary_has_at_least_30_terms() -> None:
         "us_gov_debt",
         "cn_gov_debt",
         "eu_gov_debt",
+        "cot_gold_net",
+        "cot_gold_flow",
+        "gold_etf_flow",
+        "us_liq_net",
+        "cn_margin_flow",
+        "cn_money_gap",
         "Au99.99",
         "COMEX",
         "SGE",
@@ -190,6 +197,7 @@ def test_glossary_contains_key_term(term: str) -> None:
         "评估指数类",
         "指标/均线类",
         "宏观因子类",
+        "资金流因子类",
         "品种代码类",
         "交易动作类",
         "系统状态类",
@@ -199,6 +207,26 @@ def test_glossary_contains_key_term(term: str) -> None:
         if cat_obj.get(term):
             return
     pytest.fail(f"术语 {term!r} 在 GLOSSARY 中未找到或定义为空")
+
+
+def test_glossary_综合指数口径与后端默认权重一致() -> None:
+    """术语表里的合成权重必须与**后端默认值**一致（防漂移）。
+
+    ⚠ help.js 里的权重说明是硬编码文本。V0.120.0 之前它写着 30/40/30，
+    而后端早已不是那个数 —— 两边各改各的，没人发现。
+    """
+    from app.schemas.settings import CombineWeightConfig
+
+    defaults = CombineWeightConfig()
+    text = _extract_const("GLOSSARY")
+    desc = _extract_balanced_object(text, "评估指数类")["综合指数"]
+    for label, value in (
+        ("技术面", defaults.tech),
+        ("宏观面", defaults.macro),
+        ("消息面", defaults.news),
+        ("资金流面", defaults.flow),
+    ):
+        assert f"{label} {round(value * 100)}%" in desc, f"{label} 权重与后端默认值不一致：{desc}"
 
 
 def test_inline_tooltips_cover_five_pages() -> None:

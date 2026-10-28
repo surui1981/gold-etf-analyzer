@@ -24,8 +24,19 @@ async def test_get_weights_default(client: AsyncClient) -> None:
     assert body["macro"]["us_gov_debt"] == 0.05
     assert body["macro"]["cn_gov_debt"] == 0.04
     assert body["macro"]["eu_gov_debt"] == 0.03
-    assert body["combine"]["tech"] == 0.30
-    assert body["combine"]["news"] == 0.30
+    # V0.120.0：四面临界 30/40/30 → 25/35/25/15（新增资金流面 15%）
+    assert body["combine"]["tech"] == 0.25
+    assert body["combine"]["macro"] == 0.35
+    assert body["combine"]["news"] == 0.25
+    assert body["combine"]["flow"] == 0.15
+    # V0.120.0：资金流面 6 因子权重（周 54% / 月 46%）
+    assert body["flow"]["cot_gold_net"] == 0.18
+    assert body["flow"]["cot_gold_flow"] == 0.14
+    assert body["flow"]["gold_etf_flow"] == 0.22
+    assert body["flow"]["us_liq_net"] == 0.14
+    assert body["flow"]["cn_margin_flow"] == 0.16
+    assert body["flow"]["cn_money_gap"] == 0.16
+    assert abs(sum(body["flow"].values()) - 1.0) < 1e-6
 
 
 async def test_put_and_get_weights(client: AsyncClient) -> None:
@@ -51,7 +62,7 @@ async def test_put_and_get_weights(client: AsyncClient) -> None:
             "cn_gov_debt": 0.04,
             "eu_gov_debt": 0.03,
         },
-        "combine": {"tech": 0.5, "macro": 0.3, "news": 0.2},
+        "combine": {"tech": 0.5, "macro": 0.3, "news": 0.1, "flow": 0.1},
     }
     resp = await client.put("/api/v1/settings/weights", json=payload)
     assert resp.status_code == 200
@@ -59,6 +70,7 @@ async def test_put_and_get_weights(client: AsyncClient) -> None:
 
     resp = await client.get("/api/v1/settings/weights")
     assert resp.json()["combine"]["tech"] == 0.5
+    assert resp.json()["combine"]["flow"] == 0.1
 
 
 async def test_put_invalid_sum_422(client: AsyncClient) -> None:

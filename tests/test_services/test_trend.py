@@ -6,7 +6,7 @@ import pytest
 
 from app.repositories.market_data import GoldKline
 from app.schemas.common import DirectionSignal
-from app.schemas.market import MacroIndexOut, TrendDirection, TrendIndexLevel
+from app.schemas.market import MacroIndexOut, MoneyFlowIndexOut, TrendDirection, TrendIndexLevel
 from app.schemas.news import NewsScoreOut
 from app.services.trend import (
     GROUP_MAPPING,
@@ -79,13 +79,35 @@ class FakeNewsFixed:
         )
 
 
+class FakeFlow:
+    """假资金流面服务：固定分数（V0.120.0 新增的第 4 面）。"""
+
+    def __init__(self, score: float = 50.0) -> None:
+        self._score = score
+
+    async def evaluate(self) -> MoneyFlowIndexOut:
+        return MoneyFlowIndexOut(
+            score=self._score,
+            direction=DirectionSignal.NEUTRAL,
+            factors=[],
+            summary="测试资金流",
+        )
+
+
 def _service(
     klines: list[GoldKline],
     macro_score: float | None = None,
     news: object | None = None,
+    flow: object | str | None = "auto",
 ) -> TrendService:
+    """构造测试用 TrendService。
+
+    ``flow`` 默认注入假资金流面（与生产一致：资金流面**总是**被注入），
+    传 ``None`` 可构造「资金流面整面不可用」的场景。
+    """
     macro = FakeMacro() if macro_score is None else FakeMacroFixed(macro_score)
-    return TrendService(FakeRepo(klines), macro=macro, news=news)
+    flow_svc = FakeFlow() if flow == "auto" else flow
+    return TrendService(FakeRepo(klines), macro=macro, news=news, flow=flow_svc)
 
 
 class FakeRepo:
@@ -193,10 +215,14 @@ async def test_trend_index_components() -> None:
     assert len(result.indicators) == 5
     assert result.index.score >= 55
     assert result.index.level in (TrendIndexLevel.UP, TrendIndexLevel.STRONG_UP)
-    # V0.100：消息面未打分 → news_score=None；剔 news 后归一化（tech×0.3/0.7 + macro×0.4/0.7）
+    # V0.100：消息面未打分 → news_score=None；剔 news 后归一化
+    # V0.120.0：四面临界 —— tech 0.25 / macro 0.35 / news 0.25 / flow 0.15。
+    # news 未打分被剔 ⇒ face_w = 0.25 + 0.35 + 0.15 = 0.75
     tech_sum = sum(i.contribution for i in result.indicators)
     assert tech_sum == pytest.approx(98.5, abs=0.5)
-    assert result.index.score == pytest.approx(tech_sum * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.5)
+    assert result.index.score == pytest.approx(
+        tech_sum * 0.25 / 0.75 + 50.0 * 0.35 / 0.75 + 50.0 * 0.15 / 0.75, abs=0.5
+    )
     # 宏观参考 + 消息面
     assert result.macro.score == 50.0
     assert result.news.score is None  # V0.100：未打分 = None（非中性 50）
@@ -519,23 +545,25 @@ async def test_trend_combined_none_when_all_insufficient() -> None:
     assert all(i.score is None for i in result.indicators)
     assert all(i.contribution is None for i in result.indicators)
     # 关键：不给技术面塞一个中性 50 占位，而是整面消失
-    # V0.100：news 也未打分（默认 None），components 仅含 macro
+    # V0.100：news 也未打分（默认 None）；V0.120.0：资金流面仍在（50 分）
     assert "tech" not in result.index.components
-    assert set(result.index.components) == {"macro"}
-    # 归一化：tech 与 news 都缺 → 仅剩 macro 单独，face_w=0.4 → combined=80.0
-    assert result.index.score == pytest.approx(80.0, abs=0.05)
+    assert set(result.index.components) == {"macro", "flow"}
+    # 归一化：tech 与 news 都缺 → 剩 macro 0.35 + flow 0.15 ⇒ face_w=0.5
+    assert result.index.score == pytest.approx(80.0 * 0.35 / 0.5 + 50.0 * 0.15 / 0.5, abs=0.05)
     assert "技术面" in result.index.summary and "归一化" in result.index.summary
 
 
 async def test_trend_combined_keeps_tech_when_all_dims_valid() -> None:
-    """60 根 K 线：5 维全有效 → 综合指数仍按 技术×30% + 宏观×40% + 消息×30%（回归保护）。"""
+    """60 根 K 线：5 维全有效 → 综合指数按 技术×25% + 宏观×35% + 消息×25% + 资金流×15%（回归保护）。"""
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
     result = await _service(_mk_klines(closes)).analyze(days=60)
 
     # V0.100：消息面未打分 → news 缺席 components；剔 news 后归一化
-    assert set(result.index.components) == {"tech", "macro"}
+    # V0.120.0：资金流面正常参与（50 分）⇒ face_w = 0.25+0.35+0.15 = 0.75
+    assert set(result.index.components) == {"tech", "macro", "flow"}
     assert result.index.score == pytest.approx(
-        result.index.components["tech"] * 0.3 / 0.7 + 50.0 * 0.4 / 0.7, abs=0.15
+        result.index.components["tech"] * 0.25 / 0.75 + 50.0 * 0.35 / 0.75 + 50.0 * 0.15 / 0.75,
+        abs=0.15,
     )
     assert all(i.score is not None and i.reason is None for i in result.indicators)
     # V0.100：消息面默认未打分 → news 缺席 components → 走「消息面未打分」pending 文案
@@ -704,8 +732,9 @@ class FakeWeightService:
     async def trend_weights(self) -> dict[str, float]:
         return dict(TREND_WEIGHTS)
 
-    async def combine_weights(self) -> tuple[float, float, float]:
-        return (0.30, 0.40, 0.30)
+    async def combine_weights(self) -> tuple[float, float, float, float]:
+        # V0.120.0：四面临界（技术 / 宏观 / 消息 / 资金流）
+        return (0.25, 0.35, 0.25, 0.15)
 
     async def group_combine(self) -> bool:
         return self._gc
@@ -775,14 +804,16 @@ async def test_trend_combined_pending_news_renormalizes() -> None:
     assert result.news.direction is None
     assert result.news.pending_reason  # V0.100：未打分必带 pending_reason
 
-    # 综合指数仍为数值（剔 news 后按 tech+macro 加权）
+    # 综合指数仍为数值（剔 news 后按 tech+macro+flow 加权，face_w = 0.25+0.35+0.15 = 0.75）
     assert result.index.score is not None
     tech_score = result.index.components["tech"]
-    assert result.index.score == pytest.approx(tech_score * 0.3 / 0.7 + 60.0 * 0.4 / 0.7, abs=0.15)
+    assert result.index.score == pytest.approx(
+        tech_score * 0.25 / 0.75 + 60.0 * 0.35 / 0.75 + 50.0 * 0.15 / 0.75, abs=0.15
+    )
 
     # news 不在 components 中
     assert "news" not in result.index.components
-    assert set(result.index.components) == {"tech", "macro"}
+    assert set(result.index.components) == {"tech", "macro", "flow"}
 
     # summary 含 pending 文案（区别于 V0.99「不可用」）
     assert "消息面未打分" in result.index.summary
@@ -792,8 +823,8 @@ async def test_trend_combined_pending_news_renormalizes() -> None:
 async def test_trend_pending_news_when_tech_also_none() -> None:
     """V0.100：tech 整面缺失 + news 未打分 → 仅剩 macro；summary 用通用「不可用」表述。
 
-    9 根 K 线时技术面 5 维全缺失 + 默认 news=None → components={macro}，
-    combined=macro_score（face_w=0.4 单独），summary 同时点出 tech 与 news 不可用。
+    9 根 K 线时技术面 5 维全缺失 + 默认 news=None → components={macro, flow}，
+    combined 按剩余两面归一化，summary 同时点出 tech 与 news 不可用。
     当多面同时被剔时（dropped 不止 news）走通用文案，与 V0.78.0 行为一致。
     """
     closes = [round(100 + i * 0.5, 3) for i in range(9)]
@@ -801,8 +832,8 @@ async def test_trend_pending_news_when_tech_also_none() -> None:
     result = await svc.analyze(days=9)
 
     assert all(i.score is None for i in result.indicators)
-    assert set(result.index.components) == {"macro"}
-    assert result.index.score == pytest.approx(70.0, abs=0.05)
+    assert set(result.index.components) == {"macro", "flow"}
+    assert result.index.score == pytest.approx(70.0 * 0.35 / 0.5 + 50.0 * 0.15 / 0.5, abs=0.05)
     # 多面同时被剔 → 走通用「不可用」文案（不专门标 pending）
     assert "技术面" in result.index.summary
     assert "消息面" in result.index.summary
@@ -817,9 +848,11 @@ async def test_trend_news_scored_normalizes_with_full_weight() -> None:
 
     assert result.news.scored is True
     assert result.news.score == 70.0
-    # news 进入 components，三面全有效
-    assert set(result.index.components) == {"tech", "macro", "news"}
+    # news 进入 components，四面全有效（face_w = 1.0）
+    assert set(result.index.components) == {"tech", "macro", "news", "flow"}
     tech_score = result.index.components["tech"]
-    assert result.index.score == pytest.approx(tech_score * 0.3 + 60.0 * 0.4 + 70.0 * 0.3, abs=0.15)
+    assert result.index.score == pytest.approx(
+        tech_score * 0.25 + 60.0 * 0.35 + 70.0 * 0.25 + 50.0 * 0.15, abs=0.15
+    )
     # summary 不应出现「消息面未打分」pending 文案
     assert "消息面未打分" not in result.index.summary

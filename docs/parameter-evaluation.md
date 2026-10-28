@@ -25,9 +25,11 @@
 
 | # | 参数 | 当前值 | 代码位置 | 可调？ |
 |---|------|--------|----------|--------|
-| 1.1 | 综合指数 · 技术权重 | **0.30** | `schemas/settings.py:43` + `services/macro.py:76` | ✅ 用户可调（`weight_config.tech`） |
-| 1.2 | 综合指数 · 宏观权重 | **0.40** | `schemas/settings.py:44` + `services/macro.py:77` | ✅ |
-| 1.3 | 综合指数 · 消息面权重 | **0.30** | `schemas/settings.py:45` + `services/macro.py:78` | ✅ |
+| 1.1 | 综合指数 · 技术权重 | **0.25** | `schemas/settings.py:186` + `services/macro.py:237` | ✅ 用户可调（`weight_config.tech`） |
+| 1.2 | 综合指数 · 宏观权重 | **0.35** | `schemas/settings.py:187` + `services/macro.py:238` | ✅ |
+| 1.3 | 综合指数 · 消息面权重 | **0.25** | `schemas/settings.py:188` + `services/macro.py:239` | ✅ |
+| 1.4 | 综合指数 · **资金流面权重**（V0.120.0 新增） | **0.15** | `schemas/settings.py:189` + `services/macro.py:240` | ✅ |
+| 1.5 | 资金流面 · 面内 6 因子权重（周 54% / 月 46%） | **0.18 / 0.14 / 0.22 / 0.14 / 0.16 / 0.16** | `services/money_flow.py:80` | ✅ |
 | 2.1 | 技术面 · 结构（均线排列 + MA20 斜率） | **0.30** | `services/trend.py:63` + `schemas/settings.py:7` | ✅ |
 | 2.2 | 技术面 · 动量（20 日涨幅） | **0.20** | `services/trend.py:64` + `schemas/settings.py:8` | ✅ |
 | 2.3 | 技术面 · 支撑（相对 MA20/MA40 乖离） | **0.20** | `services/trend.py:65` + `schemas/settings.py:9` | ✅ |
@@ -58,7 +60,7 @@
 | 8.4 | 单维度 → MA20 斜率转得分 | **`50 + slope_pct × 100`**（±0.5%/日） | `services/trend.py:518` | ❌ |
 | 8.5 | 单维度 → 支撑（乖离）转得分 | bias20 × 20 + bias40 × 15 后取平均 | `services/trend.py:624-642` | ❌ |
 | 8.6 | 单维度 → 回撤转得分 | **`100 - drawdown × 10`**（10% 回撤 → 0） | `services/trend.py:558-567` | ❌ |
-| 9.1 | 回测 · 默认权重网格 | `tech=[0.3, 0.4, 0.5]` × `macro=[0.4]` × `news=[0.3]` | `schemas/backtest.py:77-80` | ✅ UI 可改 |
+| 9.1 | 回测 · 默认权重网格 | `tech=[0.3, 0.4, 0.5]` × `macro=[0.4]` × `news=[0.3]` | `schemas/backtest.py:165` | ✅ UI 可改（**V0.120.0 故意不动**：资金流面无历史快照，进网格会算出 0 行） |
 | 9.2 | 回测 · 默认阈值带 | `bullish=[55, 60, 65, 70]` × `bearish=[45, 40, 35, 30]` | `schemas/backtest.py:46-54` | ✅ |
 | 9.3 | 回测 · 默认 days | **90**（范围 20-365） | `schemas/backtest.py:67-72` | ✅ |
 | 9.4 | 回测 · 网格组合上限 | **125** | `schemas/backtest.py:87-92` | ❌ |
@@ -86,6 +88,8 @@
 | V0.74.0 | 告警规则 CRUD（discriminated union）—— **参数从「硬编码」迈向「规则化」第一步** | `services/alert.py` + `schemas/alert.py` |
 | V0.75.1 | 首页综合研判结论卡 —— 三维一致性 + 仓位 + 数据质量折损**显式呈现**给用户 | `static/synthesis-card.js` |
 | V0.76.0 | 首页消息面打分器 —— 让消息面参数从「被动使用」变成「主动参与」 | `static/news-score-widget.js` |
+| V0.119.0 | 宏观面 8 → 11 因子（+美/中/欧政府债务），旧 8 个按 ×0.88 等比缩放 | `services/macro.py:81` |
+| V0.120.0 | 新增第 4 面「资金流面」（6 因子，周 54% / 月 46%），综合权重 30/40/30 → **25/35/25/15**；滚动分位按观测节奏取窗（周 728 日 / 月 1826 日）；3 键旧配置做无损迁移（`LEGACY_COMBINE_3_DEFAULTS`） | `services/money_flow.py:80` + `schemas/settings.py:178` |
 
 **关键观察**：
 - 从 V0.20 到 V0.71.0（一年半），**核心权重从未被回测引擎实际扫描优化**——回测引擎 V0.71.0 才上线，之前所有"经验值"靠人工拍数。

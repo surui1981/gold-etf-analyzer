@@ -70,10 +70,15 @@
   .composition { margin-top: 12px; padding: 12px 14px; background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; }
   .comp-title { font-size: 12.5px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
   .comp-row { display: flex; align-items: center; gap: 10px; margin: 6px 0; }
-  .comp-name { flex: 0 0 56px; font-size: 12.5px; color: #374151; }
+  .comp-name { flex: 0 0 66px; font-size: 12.5px; color: #374151; }
   .comp-track { flex: 1; height: 9px; background: #eceef1; border-radius: 999px; overflow: hidden; }
   .comp-fill { display: block; height: 100%; border-radius: 999px; }
+  /* V0.120.0：被剔除的面（消息面未打分等）—— 不画条、权重用原配置值并注明未计入 */
+  .comp-fill-na { width: 0; background: transparent; }
+  .comp-weight { flex: 0 0 48px; text-align: right; font-size: 12px; color: var(--muted); }
   .comp-score { flex: 0 0 30px; text-align: right; font-size: 12.5px; font-weight: 600; color: #374151; }
+  .comp-na { flex: 0 0 42px; font-size: 11.5px; font-weight: 500; color: var(--muted); }
+  .comp-note { margin-top: 8px; font-size: 11.5px; color: var(--muted); line-height: 1.6; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--border); }
   th:first-child, td:first-child { text-align: left; }
@@ -785,21 +790,63 @@ function buildFactors(d) {
   });
 }
 
+/* V0.120.0：指数构成改为四面（技术 / 宏观 / 消息 / 资金流）。
+ * 权重一律取后端下发的 face_weights（**实际生效**——被剔除的面已归一化），
+ * 不再硬编码 30/40/30：消息面未打分时它被剔除，硬编码会直接说错话。
+ * 被剔除的面用 face_weights_nominal 取它原本的配置权重，并明确标「未计入」——
+ * 原先用 `sc || 0` 渲染，缺失面会显示成「0 分」（看着像看空），是错的。 */
+const COMP_FACES = [
+  { key: "tech",  label: "技术面" },
+  { key: "macro", label: "宏观面" },
+  { key: "news",  label: "消息面" },
+  { key: "flow",  label: "资金流面" },
+];
+const COMP_NOMINAL = { tech: 0.25, macro: 0.35, news: 0.25, flow: 0.15 };
+
+function compWeights(idx) {
+  const c = (idx && idx.components) || {};
+  const eff = (idx && idx.face_weights && typeof idx.face_weights === "object") ? idx.face_weights : null;
+  const nom = (idx && idx.face_weights_nominal && typeof idx.face_weights_nominal === "object") ? idx.face_weights_nominal : null;
+  const rows = COMP_FACES.map(f => {
+    const has = Object.prototype.hasOwnProperty.call(c, f.key) && typeof c[f.key] === "number";
+    const nominal = (nom && typeof nom[f.key] === "number") ? nom[f.key] : COMP_NOMINAL[f.key];
+    return { key: f.key, label: f.label, has, score: has ? c[f.key] : null, nominal };
+  });
+  const presentTotal = rows.filter(r => r.has).reduce((a, r) => a + r.nominal, 0);
+  rows.forEach(r => {
+    const e = (eff && typeof eff[r.key] === "number") ? eff[r.key] : null;
+    r.effective = e != null ? e : (r.has && presentTotal > 0 ? r.nominal / presentTotal : null);
+  });
+  return rows;
+}
+
 function buildComposition(idx) {
   if (!idx || !idx.components) return "";
-  const c = idx.components;
-  const order = [["技术面", c.tech], ["宏观面", c.macro], ["消息面", c.news]];
+  const rows = compWeights(idx);
+  const effText = rows.filter(r => r.effective != null)
+    .map(r => `${r.label} ${(r.effective * 100).toFixed(1)}%`).join(" · ");
+  const dropped = rows.filter(r => !r.has);
   return `<div class="composition">
-    <div class="comp-title">指数构成（技术 30% · 宏观 40% · 消息 30%）</div>
-    ${order.map(([name, sc]) => {
-      const s = sc || 0;
+    <div class="comp-title">指数构成（${effText || "—"}）</div>
+    ${rows.map(r => {
+      if (!r.has) {
+        return `<div class="comp-row">
+          <span class="comp-name">${r.label}</span>
+          <span class="comp-track"><span class="comp-fill comp-fill-na"></span></span>
+          <span class="comp-weight">${(r.nominal * 100).toFixed(1)}%</span>
+          <span class="comp-score comp-na">未计入</span>
+        </div>`;
+      }
+      const s = r.score;
       const color = s >= 55 ? "var(--up)" : s <= 45 ? "var(--down)" : "var(--muted)";
       return `<div class="comp-row">
-        <span class="comp-name">${name}</span>
+        <span class="comp-name">${r.label}</span>
         <span class="comp-track"><span class="comp-fill" style="width:${s}%;background:${color}"></span></span>
+        <span class="comp-weight">${(r.effective * 100).toFixed(1)}%</span>
         <span class="comp-score">${s.toFixed(0)}</span>
       </div>`;
     }).join("")}
+    ${dropped.length ? `<div class="comp-note">${dropped.map(r => `${r.label}（配置 ${(r.nominal * 100).toFixed(1)}%）`).join("、")}本次未计入，其余面权重已按有效面归一化。</div>` : ""}
   </div>`;
 }
 

@@ -115,10 +115,25 @@ class WeightService:
             "eu_gov_debt": w.eu_gov_debt,
         }
 
-    async def combine_weights(self) -> tuple[float, float, float]:
-        """综合指数合成权重：(技术面, 宏观面, 消息面)。"""
+    async def combine_weights(self) -> tuple[float, float, float, float]:
+        """综合指数合成权重：(技术面, 宏观面, 消息面, **资金流面**)。
+
+        V0.120.0：新增第 4 个面（默认 25 / 35 / 25 / 15）。
+        """
         w = (await self.get_weights()).combine
-        return w.tech, w.macro, w.news
+        return w.tech, w.macro, w.news, w.flow
+
+    async def money_flow_weights(self) -> dict[str, float]:
+        """资金流面因子权重（英文 key，供 MoneyFlowService）。V0.120.0 新增 6 个因子。"""
+        w = (await self.get_weights()).flow
+        return {
+            "cot_gold_net": w.cot_gold_net,
+            "cot_gold_flow": w.cot_gold_flow,
+            "gold_etf_flow": w.gold_etf_flow,
+            "us_liq_net": w.us_liq_net,
+            "cn_margin_flow": w.cn_margin_flow,
+            "cn_money_gap": w.cn_money_gap,
+        }
 
     async def group_combine(self) -> bool:
         """技术面 5 维度是否按组内平均合成（V0.79.0 Step F）。

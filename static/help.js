@@ -50,10 +50,11 @@
   /* ── 30+ 术语速查表（modal 第二 tab） ────────────────────────────── */
   const GLOSSARY = {
     "评估指数类": {
-      "综合指数": "0-100 量化多空：技术面 30% + 宏观面 40% + 消息面 30% 加权",
+      "综合指数": "0-100 量化多空：技术面 25% + 宏观面 35% + 消息面 25% + 资金流面 15% 加权",
       "技术面": "5 维度（结构/动量/支撑/动能/回撤）加权合成 0-100",
       "宏观面": "11 因子（美元/美债2Y·10Y·30Y/10Y-2Y利差/10Y实际利率/VIX/央行购金/美·中·欧政府债务）合成 0-100",
-      "消息面": "客户基于投行展望打分 0-100（占 30% 权重）",
+      "消息面": "客户基于投行展望打分 0-100（占 25% 权重）",
+      "资金流面": "6 因子（CFTC 黄金投机净多/4 周变化、黄金 ETF 4 周累计净申赎、美元净流动性 4 周变化、A 股融资余额月变动、M1-M2 剪刀差）合成 0-100（占 15% 权重）",
       "RSI(14)": "14 日相对强弱指数，>70 超买 / <30 超卖",
     },
     "指标/均线类": {
@@ -77,6 +78,14 @@
       "us_gov_debt": "美国联邦债务/GDP（季度，CBO）—— 债务越高，货币贬值/购买力受损风险越大，利多黄金",
       "cn_gov_debt": "中国一般政府总债务/GDP（年度，IMF WEO）—— 债务越高越利多黄金",
       "eu_gov_debt": "欧盟 27 国一般政府总债务/GDP（季度，Eurostat）—— 债务越高越利多黄金",
+    },
+    "资金流因子类": {
+      "cot_gold_net": "CFTC 黄金管理基金净多占总持仓比（%）—— 投机盘看多拥挤度，水平越高越利多黄金",
+      "cot_gold_flow": "CFTC 黄金管理基金净多 4 周变化（张）—— 钱**正在**买还是正在撤",
+      "gold_etf_flow": "黄金 ETF（518880）4 周累计净申赎（亿元）—— 国内真金白银进场的唯一直接度量",
+      "us_liq_net": "美元净流动性（WALCL−TGA−RRP）4 周变化（$M）—— 钱在系统里的总量变化",
+      "cn_margin_flow": "A 股融资余额月环比（%）—— 机会成本口径：余额**下降**=股市杠杆撤出=利多黄金",
+      "cn_money_gap": "中国 M1−M2 剪刀差（pp）—— 机会成本口径：剪刀差**走阔**=钱淤积存款=利多黄金",
     },
     "品种代码类": {
       "Au99.99": "上海黄金交易所 99.99% 纯度黄金现货（元/克）",
@@ -142,6 +151,7 @@
       { selector: "#macroFactors .ftitle, #macroFactors h2, #macroFactors h3", term: "宏观面" },
       { selector: "#macroFactors [data-key='cb_gold'], #macroFactors .factor[data-name*='cb'], #macroFactors .row[data-key='cb']", term: "cb_gold" },
       { selector: "#chartArea .chart-legend, .legend", term: "MA5 / MA20 / MA40" },
+      { selector: "#flowFactors .ftitle, #flowFactors h2, #flowFactors h3, #flowInfo", term: "资金流面" },
       { selector: ".indicators [data-name*='RSI'], .indicators .ind[data-key*='动能']", term: "RSI(14)" },
       { selector: ".ny-panel .ny-title, .ny-card .title", term: "COMEX" },
       { selector: ".gram-panel .gram-title, .gram-card .title", term: "Au99.99" },
@@ -185,7 +195,7 @@
   const TOUR_STEPS = {
     "/static/trend.html": [
       { selector: ".topnav", text: "顶栏 8 个场景：首页 / 今日要闻 / 决策 / 持仓 / 情报 / 报告存档 / 配置 / AI 智能分析（部分场景下还有子页）。点击切换。", pos: "bottom" },
-      { selector: ".headline .index-panel, .index-panel", text: "综合趋势评估指数（0-100），技术 30% × 宏观 40% × 消息 30% 加权", pos: "top" },
+      { selector: ".headline .index-panel, .index-panel", text: "综合趋势评估指数（0-100），技术面 25% × 宏观面 35% × 消息面 25% × 资金流面 15% 加权（可在权重配置页调整）", pos: "top" },
       { selector: "#macroFactors", text: "11 大宏观因子：美元 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金 / 美·中·欧政府债务；颜色标识 live / stale / mock", pos: "top" },
       { selector: "#chartArea", text: "60 天趋势曲线 + MA5/20/40 均线，鼠标悬停看日数据", pos: "top" },
     ],
@@ -254,7 +264,7 @@
       <h3>每日 5 步流程</h3>
       <ol class="pmh-guide">
         <li><b>看趋势</b> → <a href="/static/trend.html">趋势追踪页</a>：综合指数 + 宏观因子 + 60 天曲线</li>
-        <li><b>打消息面</b> → <a href="/news">消息面评估页</a>：基于投行展望打分（30% 权重）</li>
+        <li><b>打消息面</b> → <a href="/news">消息面评估页</a>：基于投行展望打分（25% 权重）</li>
         <li><b>看决策</b> → <a href="/portfolio">持仓与决策页</a>：今日动作 + 仓位推荐 + 红绿理由</li>
         <li><b>记交易</b> → 持仓决策页底部：开仓/加仓/减仓/清仓（含二次确认）</li>
         <li><b>看央行</b> → <a href="/central-bank">央行购金页</a>：T12M / Top 10 / 季度明细</li>

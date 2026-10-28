@@ -24,6 +24,9 @@ from app.repositories.gold_inventory import GoldInventoryRepository  # V0.115.0 
 from app.repositories.macro_factor_history import MacroFactorHistoryRepository  # V0.79.0 Step E
 from app.repositories.market_data import MarketDataRepository
 from app.repositories.market_providers import build_provider_bundle
+from app.repositories.money_flow_factor_history import (  # V0.120.0 资金流面
+    MoneyFlowFactorHistoryRepository,
+)
 from app.repositories.news import NewsScoreRepository
 from app.repositories.news_feed import NewsFeedRepository  # V0.102 今日要闻
 from app.repositories.position import PositionRepository
@@ -46,6 +49,10 @@ from app.services.freshness import FreshnessService
 from app.services.gold_inventory import GoldInventoryService  # V0.115.0 COMEX 库存
 from app.services.macro import MacroFactorService  # V0.79.0 Step E
 from app.services.macro_thresholds import MacroThresholdCalculator  # V0.79.0 Step E
+from app.services.money_flow import (  # V0.120.0 资金流面
+    MONEY_FLOW_FACTOR_RULES,
+    MoneyFlowService,
+)
 from app.services.news import NewsScoreService
 from app.services.news_feed import NewsFeedService  # V0.102 今日要闻
 from app.services.portfolio import PortfolioAnalyticsService
@@ -115,6 +122,35 @@ def get_macro_threshold_calculator(
     ``get_trend_service`` 让 ``MacroFactorService`` 走动态阈值。
     """
     return MacroThresholdCalculator(repo=repo)
+
+
+async def get_money_flow_factor_history_repository(
+    session: AsyncSession = Depends(get_db_session),
+) -> MoneyFlowFactorHistoryRepository:
+    """资金流因子历史仓储依赖（V0.120.0）。"""
+    return MoneyFlowFactorHistoryRepository(session)
+
+
+def get_money_flow_threshold_calculator(
+    repo: MoneyFlowFactorHistoryRepository = Depends(get_money_flow_factor_history_repository),
+) -> MacroThresholdCalculator:
+    """资金流面滚动分位计算器依赖（V0.120.0）。
+
+    与宏观面**共用** ``MacroThresholdCalculator`` 这个类，但参数不同：
+
+    - ``rules`` 换成资金流面的 6 个因子；
+    - ``skip_rolling`` 传空集（6 个因子全部可滚动）；
+    - 每条规则自带 ``window_days``（周频 728 天 / 月频 1826 天）与
+      ``min_samples`` —— 宏观面是日频，252 天窗口；资金流面是周/月频，
+      用同一个窗口会只装下 36 个（周）/ 8 个（月）样本。
+    """
+    return MacroThresholdCalculator(
+        repo=repo,
+        rules=MONEY_FLOW_FACTOR_RULES,
+        skip_rolling=frozenset(),
+        window_days=728,
+        min_samples=40,
+    )
 
 
 def get_scoring_service() -> OpportunityScoringService:
@@ -264,6 +300,10 @@ def get_trend_service(
     central_bank: CentralBankService = Depends(get_central_bank_service),
     macro_thresholds: MacroThresholdCalculator = Depends(get_macro_threshold_calculator),
     macro_history_repo: MacroFactorHistoryRepository = Depends(get_macro_factor_history_repository),
+    flow_thresholds: MacroThresholdCalculator = Depends(get_money_flow_threshold_calculator),
+    flow_history_repo: MoneyFlowFactorHistoryRepository = Depends(
+        get_money_flow_factor_history_repository
+    ),
 ) -> TrendService:
     """黄金趋势追踪服务依赖（行情仓储 + 权重配置 + 消息面评估 + 央行购金服务 + 宏观阈值动态化）。
 
@@ -275,6 +315,9 @@ def get_trend_service(
       改为返回 None（无需 revert）。
     - ``macro_history_repo``（V0.118.1）注入后，宏观因子在上游源抓不到读数时用
       「上次成功落库的真实读数」顶上，而不是 2026-08-28 的内置常量。
+    - ``flow_*``（V0.120.0）注入后，资金流面（第 4 面）在滚动分位样本足够时
+      走动态阈带；样本不足时回退 ``MONEY_FLOW_FACTOR_RULES`` 里的实测静态带。
+      ``flow_history_repo`` 同样提供「末次落库」降级层。
     """
     macro = MacroFactorService(
         settings=settings,
@@ -282,12 +325,18 @@ def get_trend_service(
         threshold_calculator=macro_thresholds,
         history_repo=macro_history_repo,
     )
+    flow = MoneyFlowService(
+        settings=settings,
+        threshold_calculator=flow_thresholds,
+        history_repo=flow_history_repo,
+    )
     return TrendService(
         repo=repo,
         macro=macro,
         settings=settings,
         news=news,
         central_bank=central_bank,
+        flow=flow,
     )
 
 

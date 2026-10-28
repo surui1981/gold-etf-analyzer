@@ -14,6 +14,11 @@ class DailySnapshot(Base):
     - 每日一条（snapshot_date 唯一），重复捕获为更新
     - ``macro_detail`` 存宏观因子 JSON：{key: {value, score, direction}}（V0.119.0 起 11 个因子）
 
+    - ``flow_detail`` 存资金流因子 JSON（V0.120.0 起 6 因子，与 macro_detail 同构）——
+      **本版还不建回测网格**（资金流面今天没有任何历史快照，加了会算出 0 行），
+      但历史必须从今天开始攒：约 1 年后资金流面才有资格进网格，
+      届时若没有 per-factor 明细，这 1 年就白等了。
+
     - ``tech_detail`` 存技术面 5 维度 JSON（V0.79.0）：{维度名: {score, weight, contribution}}
 
     ⚠ **为什么需要 ``tech_detail``（V0.79.0）**
@@ -58,6 +63,26 @@ class DailySnapshot(Base):
     # （沿用 V0.78.0 Step D「数据不足 ≠ 中性」的纪律）。
     tech_detail: Mapped[str | None] = mapped_column(
         Text, nullable=True, comment="技术面 5 维度 JSON（V0.79.0；历史行为 NULL）"
+    )
+
+    # 资金流面分（V0.120.0）
+    # ⚠ **可空是刻意的**：`MoneyFlowIndexOut.score` 允许为 None —— 本轮一个因子都没
+    # 取到真实读数时整面从综合指数**剔除**（不是记 0 分，见 services/money_flow.py）。
+    # 存成 0.0 会把「没数」误读成「资金正在撤离黄金」。
+    # 历史行（迁移前）本列为 NULL ⇒ 语义 = 「该日没有资金流面数据」，
+    # 消费方**必须显式跳过**而非用 50 兜底（V0.78.0 Step D「数据不足 ≠ 中性」）。
+    flow_index: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="资金流面指数 0-100（V0.120.0；NULL=整面不可用，非 0 分）",
+    )
+
+    # 资金流 6 因子明细（JSON，V0.120.0）—— 与 ``macro_detail`` 同构
+    # ⇒ 将来「资金流面内部权重」回测网格可直接复用 ``_aggregate_from_detail``。
+    flow_detail: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+        comment="资金流因子 JSON（V0.120.0 起 6 因子；历史行为 NULL）",
     )
 
     # ⚠ V0.79.0 任务 #163：行情来源标记（**溯源用，不可省**）

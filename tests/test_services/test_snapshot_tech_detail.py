@@ -103,6 +103,9 @@ class _FakeTrendOut:
         self.macro = _Macro()
         self.news = _News()
         self.indicators = indicators
+        # V0.120.0：`capture_today` 会读 `flow` 落 `flow_index` / `flow_detail`
+        # （资金流面；未注入服务时为 None）。桩不同构 ⇒ AttributeError。
+        self.flow = None
         self.index = type("_I", (), {"score": 50.0, "level": TrendIndexLevel.SIDEWAYS})()
         # 默认标为 live（可信）；用例可传 {"sge": "mock"} 等覆盖
         self.data_sources = data_sources if data_sources is not None else {"ny": "live"}

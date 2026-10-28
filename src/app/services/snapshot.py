@@ -86,6 +86,32 @@ class DailySnapshotService:
         }
         tech_detail = json.dumps(tech_detail_obj, ensure_ascii=False) if tech_detail_obj else None
 
+        # V0.120.0：落资金流面分 + 6 因子明细。
+        # ⚠ **面分可空**：`MoneyFlowIndexOut.score` 为 None 时（本轮一个因子都没取到
+        # 真实读数 ⇒ 整面从综合指数剔除，**不是 0 分**）⇒ 本列存 NULL。
+        # 存 0.0 会把「没数」误读成「资金正在撤离黄金」——
+        # 这正是 V0.100 起消息面 `news_index` 用 50.0 兜底时踩过的坑的**反面**：
+        # 消息面是「没打分」（语义接近中性），资金流面是「数据源挂了」（语义是未知）。
+        # ⚠ 因子明细与 ``macro_detail`` 同构（6 个因子各自带 score）。
+        # 「整面不可用」时 ``factors`` 是**空列表**（见 money_flow.py）⇒ 明细为 NULL。
+        flow = trend.flow
+        flow_index = flow.score if flow is not None else None  # None = 整面不可用
+        flow_detail_obj = (
+            {
+                f.key: {
+                    "value": f.value,
+                    "score": f.score,
+                    "direction": f.direction.value,
+                    "unit": f.unit,
+                    "data_date": f.data_date,
+                }
+                for f in flow.factors
+            }
+            if flow is not None
+            else {}
+        )
+        flow_detail = json.dumps(flow_detail_obj, ensure_ascii=False) if flow_detail_obj else None
+
         # 行情来源：复用 #161 的解析（target→市场 key 映射，gram 记作 sge）。
         # ⚠ 缺失时返回空串而**不兜底 live** —— 那会静默宣称数据可信。
         source = resolve_price_source(trend.data_sources, GUIDE_TARGET)
@@ -110,6 +136,9 @@ class DailySnapshotService:
             index_level=trend.index.level.value,
             macro_detail=macro_detail,
             tech_detail=tech_detail,
+            # V0.120.0：资金流面（可空 —— 整面不可用时是 NULL，不是 0 分）
+            flow_index=flow_index,
+            flow_detail=flow_detail,
             # ⚠ V0.79.0 任务 #163：落行情来源，否则事后无法区分真值与 mock 产物
             # （实测历史上 5 条快照的 close 是 mock 序列末值，且无从辨识）。
             data_source=source,

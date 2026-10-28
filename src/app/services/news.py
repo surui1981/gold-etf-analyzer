@@ -178,8 +178,12 @@ class NewsScoreService:
             last_notes=(prev.notes or "") if prev is not None else "",
         )
 
-    async def get_today_score(self) -> float:
-        """当日消息面有效分值（供趋势服务合成）；未打分返回中性 50。"""
+    async def get_today_score(self) -> float | None:
+        """当日消息面有效分值（供趋势服务合成）；未打分返回 ``None``。
+
+        V0.100 起不再用「中性 50」兜底 —— 50 是一个**判断**（多空平衡），
+        会被当成真实算出来的结论。返回 None 让趋势服务剔整面并按剩余面归一化。
+        """
         out = await self.get_today()
         return out.score
 

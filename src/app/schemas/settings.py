@@ -47,6 +47,21 @@ LEGACY_MACRO_8_DEFAULTS: dict[str, float] = {
     "cb_gold": 0.25,
 }
 
+#: V0.120.0 之前的**合成权重**默认（技术面 / 宏观面 / 消息面 三键）。
+#:
+#: V0.120.0 加入第 4 个面「资金流面」后，新默认变成 25 / 35 / 25 / 15。
+#: 存量三键配置**恰好等于**这组值 ⇒ 用户从没自定义过 ⇒ 直接落到新默认；
+#: 真正的自定义值 ⇒ 仍走按比例迁移（三个面缩到 85%，资金流面 15%），
+#: 保留用户对三个面的相对偏好。
+#:
+#: ⚠ 漏掉这个常量会有静默后果：三键存量默认配置会走进按比例缩放分支，
+#: 用户的「没动过权重」变成「权重被系统改过」（25.5/34/25.5/15 这类）。
+LEGACY_COMBINE_3_DEFAULTS: dict[str, float] = {
+    "tech": 0.30,
+    "macro": 0.40,
+    "news": 0.30,
+}
+
 
 class TrendWeightConfig(BaseModel):
     """技术面趋势 5 维度权重。"""
@@ -161,16 +176,115 @@ class MacroWeightConfig(BaseModel):
 
 
 class CombineWeightConfig(BaseModel):
-    """综合指数合成权重：技术面 vs 宏观面 vs 消息面（中短期 ETF 波段操作）。"""
+    """综合指数合成权重：技术面 vs 宏观面 vs 消息面 vs **资金流面**（中短期 ETF 波段操作）。
 
-    tech: float = Field(0.30, ge=0, le=1, description="技术面占比（默认 30%）")
-    macro: float = Field(0.40, ge=0, le=1, description="宏观面占比（默认 40%）")
-    news: float = Field(0.30, ge=0, le=1, description="消息面占比（默认 30%，客户评估）")
+    V0.120.0：新增第 4 个面 ``flow``（默认 15%），其余三个面等比降到
+    25 / 35 / 25。存量 3 键配置由 ``_migrate_missing_face``（before 校验器）
+    做**无损迁移** —— 不做迁移会让用户自定义的权重静默重置，见该方法 docstring。
+    """
+
+    tech: float = Field(0.25, ge=0, le=1, description="技术面占比（默认 25%）")
+    macro: float = Field(0.35, ge=0, le=1, description="宏观面占比（默认 35%）")
+    news: float = Field(0.25, ge=0, le=1, description="消息面占比（默认 25%，客户评估）")
+    flow: float = Field(0.15, ge=0, le=1, description="资金流面占比（默认 15%，V0.120.0 新增）")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_missing_face(cls, data: Any) -> Any:
+        """旧版 3 键配置 → 4 键：新增资金流面，其余三个面按比例缩放。
+
+        **为什么必须做**：存进 ``app_settings`` 的合成权重 JSON 只有 tech/macro/news
+        三键且合计 = 1.0。直接给新字段加默认值 0.15，合计会变成 1.15 →
+        ``_sum_to_one`` 抛错 → ``services/settings.py::_load_weights`` 的异常兜底路径
+        会**静默把用户的自定义权重重置为默认**（用户毫无察觉）。
+
+        **迁移规则**：
+        - 存量值**恰好等于** ``LEGACY_COMBINE_3_DEFAULTS``（旧默认值 30/40/30）
+          ⇒ 用户从没自定义过 ⇒ 直接落到**新默认** 25/35/25/15；
+        - 否则（真正的自定义值）⇒ 三个面按原相对比例缩放到 85%，资金流面取 15%。
+        """
+        if not isinstance(data, dict):
+            return data
+        if "flow" in data:
+            return data
+        present: dict[str, float] = {}
+        for k in ("tech", "macro", "news"):
+            v = data.get(k)
+            if isinstance(v, (int, float)) and not isinstance(v, bool):
+                present[k] = float(v)
+        if not present:
+            return data
+        legacy = LEGACY_COMBINE_3_DEFAULTS
+        if set(present) == set(legacy) and all(
+            abs(present[k] - v) < 1e-9 for k, v in legacy.items()
+        ):
+            # 「用户从没自定义过」⇒ 直接换成新默认（而不是对旧默认做按比例缩放）
+            return {
+                "tech": 0.25,
+                "macro": 0.35,
+                "news": 0.25,
+                "flow": 0.15,
+            }
+        flow = 0.15
+        base = sum(present.values())
+        if base <= 0:
+            return data
+        scale = max(0.0, base - flow) / base
+        migrated = {k: round(v * scale, 6) for k, v in present.items()}
+        migrated["flow"] = flow
+        total = sum(migrated.values())
+        if abs(total - 1.0) > 1e-9:
+            anchor = max(migrated, key=migrated.get)
+            migrated[anchor] = round(migrated[anchor] + (1.0 - total), 6)
+        return migrated
 
     @model_validator(mode="after")
     def _sum_to_one(self) -> "CombineWeightConfig":
-        if abs(self.tech + self.macro + self.news - 1.0) > 0.001:
-            raise ValueError(f"合成权重之和须为 1，当前 {self.tech + self.macro + self.news:.3f}")
+        total = self.tech + self.macro + self.news + self.flow
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(f"合成权重之和须为 1，当前 {total:.3f}")
+        return self
+
+
+class MoneyFlowWeightConfig(BaseModel):
+    """资金流面 6 因子权重（V0.120.0 新增）。
+
+    周频 54% / 月频 46%：
+
+    ==================  ==========  =====  ==================================
+    因子                  节奏         权重  符号
+    ==================  ==========  =====  ==================================
+    ``cot_gold_net``     周           18%   + 投机净多占 OI 越高越利多黄金
+    ``cot_gold_flow``    周           14%   + 4 周净多增加 = 钱正在买黄金
+    ``gold_etf_flow``    周           22%   + 4 周累计净申购（国内真金白银进场）
+    ``us_liq_net``       月           14%   + 美元净流动性扩张利多黄金
+    ``cn_margin_flow``   月           16%   − 股市杠杆撤退 = 黄金机会成本下降
+    ``cn_money_gap``     月           16%   − 剪刀差走阔 = 存款淤积 = 抗通胀需求升
+    ==================  ==========  =====  ==================================
+
+    ``gold_etf_flow`` 权重最高（22%）：它是**唯一直接度量「国内的钱有没有买黄金」**
+    的因子，而本项目的用户就是国内黄金 ETF 持有人。
+    """
+
+    cot_gold_net: float = Field(0.18, ge=0, le=1, description="黄金投机净多占 OI")
+    cot_gold_flow: float = Field(0.14, ge=0, le=1, description="黄金投机净多 4 周变化")
+    gold_etf_flow: float = Field(0.22, ge=0, le=1, description="黄金ETF 4 周累计净申赎")
+    us_liq_net: float = Field(0.14, ge=0, le=1, description="美元净流动性 4 周变化")
+    cn_margin_flow: float = Field(0.16, ge=0, le=1, description="A股融资余额月变动")
+    cn_money_gap: float = Field(0.16, ge=0, le=1, description="中国 M1-M2 剪刀差")
+
+    @model_validator(mode="after")
+    def _sum_to_one(self) -> "MoneyFlowWeightConfig":
+        total = (
+            self.cot_gold_net
+            + self.cot_gold_flow
+            + self.gold_etf_flow
+            + self.us_liq_net
+            + self.cn_margin_flow
+            + self.cn_money_gap
+        )
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(f"资金流面权重之和须为 1，当前 {total:.3f}")
         return self
 
 
@@ -180,6 +294,7 @@ class WeightConfig(BaseModel):
     trend: TrendWeightConfig = Field(default_factory=TrendWeightConfig)
     macro: MacroWeightConfig = Field(default_factory=MacroWeightConfig)
     combine: CombineWeightConfig = Field(default_factory=CombineWeightConfig)
+    flow: MoneyFlowWeightConfig = Field(default_factory=MoneyFlowWeightConfig)
     # V0.79.0 Step F：技术面 5 维度合成方式开关。True=组内平均（默认；降低内部相关性），
     # False=单维度加权（历史行为，向后兼容）。不影响宏观/消息面合成。
     group_combine: bool = Field(

@@ -464,14 +464,18 @@ class BacktestService:
             return False, f"价格日历已有数据（{start} ~ {end}），跳过回填"
 
         try:
-            trend = await self._trend.analyze(days=days, target=target)
+            # ⚠ V0.120.0：走**轻路径**（只取价格序列 + 来源标记），不走 analyze()。
+            # analyze() 会顺带把宏观面 / 消息面 / **资金流面**各拉一遍外网
+            # （实测资金流面单次 8.25s），算出的指数在这里被整段丢掉 ——
+            # 「只要价格」却要等十几秒，还会把回测拖过超时预算。
+            bars, sources = await self._trend.fetch_price_bars(days=days, target=target)
         except Exception as exc:
             logger.warning(
-                "Price calendar backfill aborted: analyze failed target=%s: %s", target, exc
+                "Price calendar backfill aborted: price fetch failed target=%s: %s", target, exc
             )
             return False, f"取数失败：{exc}"
 
-        source = self._resolve_price_source(trend.data_sources, target)
+        source = self._resolve_price_source(sources, target)
         # ⚠ 约束 1：只认真实数据源。`mock` 是降级产物，写库即污染。
         if source not in _TRUSTED_PRICE_SOURCES:
             logger.warning(
@@ -482,7 +486,6 @@ class BacktestService:
             )
             return False, f"数据源为 {source or '未知'}（非真实行情），已跳过回填以免写入假价格"
 
-        bars = [(p.date, float(p.close)) for p in trend.points]
         if not bars:
             return False, "取数结果为空"
 

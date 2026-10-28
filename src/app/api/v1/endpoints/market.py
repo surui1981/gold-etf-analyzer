@@ -548,6 +548,7 @@ def _gold_to_silver(gold: GoldTrendOut) -> SilverTrendOut:
         tech_composed_by=gold.tech_composed_by,
         macro=gold.macro,
         news=gold.news,
+        flow=gold.flow,
         data_sources=gold.data_sources,
         degraded=gold.degraded,
         freshness=gold.freshness,

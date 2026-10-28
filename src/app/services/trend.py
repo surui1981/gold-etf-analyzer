@@ -22,7 +22,7 @@
   宏观 + 消息面仍正常合成综合指数。
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Literal, NamedTuple
 
 from app.repositories.market_data import (
@@ -53,7 +53,14 @@ from app.schemas.market import (
 from app.schemas.thresholds import DirectionThreshold, LevelThreshold
 from app.services import cache as served_cache
 from app.services.freshness import build_data_freshness
-from app.services.macro import MACRO_WEIGHT, NEWS_WEIGHT, TECH_WEIGHT, MacroFactorService
+from app.services.macro import (
+    FLOW_WEIGHT,
+    MACRO_WEIGHT,
+    NEWS_WEIGHT,
+    TECH_WEIGHT,
+    MacroFactorService,
+)
+from app.services.money_flow import MoneyFlowService
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -106,11 +113,12 @@ DIM_MIN_BARS: dict[str, int] = {
     "回撤": 10,
 }
 
-# 综合指数三面中文名（摘要文案用；与 ``components`` 的英文 key 对应）
+# 综合指数四面中文名（摘要文案用；与 ``components`` 的英文 key 对应）
 _FACE_LABELS: dict[str, str] = {
     "tech": "技术面",
     "macro": "宏观参考",
     "news": "消息面",
+    "flow": "资金流面",
 }
 
 # 各标的计价单位（用于摘要）
@@ -305,7 +313,7 @@ def _fmt_score(score: float | None, digits: int = 1) -> str:
 
 
 class TrendService:
-    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数（技术×30% + 宏观×40% + 消息面×30%）。"""
+    """趋势追踪：价格序列 + 均线 + 参数明细 + 追踪指数（技术25% + 宏观35% + 消息25% + 资金流15%）。"""
 
     def __init__(
         self,
@@ -314,6 +322,7 @@ class TrendService:
         settings=None,
         news=None,
         central_bank=None,
+        flow: MoneyFlowService | None = None,
     ) -> None:
         self._repo = repo
         self._macro = macro or MacroFactorService(settings=settings, central_bank=central_bank)
@@ -321,10 +330,14 @@ class TrendService:
         from app.services.settings import WeightService
 
         self._settings: WeightService | None = settings
-        # 消息面评估（客户打分）；未注入时消息面按中性 50 处理
+        # 消息面评估（客户打分）；未注入时消息面**不参与**综合指数
+        # （V0.100 起 score=None，走 faces tuple 的剔整面分支，不是「中性 50 兜底」）
         from app.services.news import NewsScoreService
 
         self._news: NewsScoreService | None = news
+        # V0.120.0：资金流面（第 4 个面）。未注入时该面整体不参与综合指数
+        # （走 faces tuple 的剔整面分支，与技术面/消息面不可用同形）。
+        self._flow: MoneyFlowService | None = flow
 
     @staticmethod
     def invalidate_cached_results(target: str | None = None) -> int:
@@ -402,6 +415,48 @@ class TrendService:
         served_cache.set_served(target, result, interval=interval)
         return result
 
+    async def fetch_price_bars(
+        self,
+        days: int = 60,
+        target: str = GUIDE_TARGET,
+    ) -> tuple[list[tuple[date, float]], dict[str, str]]:
+        """只取 **(日期, 收盘价)** 与数据源标记 —— **不评估任何评分面**。
+
+        ⚠️ **为什么需要这条轻路径（V0.120.0 修）**
+
+        回测的「价格日历回填」（``services/backtest.py::ensure_price_calendar``）
+        只要**收盘价序列 + 来源标记**，但它走的是 ``analyze()`` ⇒ 顺带把
+        **宏观面 / 消息面 / 资金流面**各拉一遍外网，算出来的指数又被整段丢掉。
+
+        实测代价（2026-10-28）：``MoneyFlowService.evaluate()`` 单次 **8.25s**
+        （CFTC 年文件 zip + FRED CSV + 沪深融资余额 + PBoC M1/M2 + 上交所份额），
+        宏观面另需数秒 ⇒ 「只要价格」却要等十几秒。
+        后果不是「慢一点」而是**功能坏掉**：``tests/test_api/test_async_backtest.py``
+        的异步回测用例只有 15s 预算 ⇒ 直接超时失败。
+
+        ⇒ 本方法只做「取 K 线 + 报数据源状态」两件事（``_load_klines`` 走仓储层
+        自带的 TTL 缓存，``source_status()`` 不触网），**一个评分面都不算**。
+
+        Args:
+            days: 取多少个交易日的 K 线。
+            target: 标的类型（ny / etf / gram / silver_*）。
+
+        Returns:
+            ``(bars, data_sources)`` —— bars 是 ``(日期, 收盘价)`` 列表（按时间升序）。
+
+        Raises:
+            ValueError: 历史数据不足（<2 个交易日）。
+        """
+        target = target if target in _TARGET_UNITS else GUIDE_TARGET
+        klines, _symbol, _name = await self._load_klines(days=days, target=target)
+        if len(klines) < 2:
+            raise ValueError("历史数据不足，无法取价格序列")
+
+        bars = [(k.date, float(k.close)) for k in klines]
+        status = getattr(self._repo, "source_status", None)
+        sources: dict[str, str] = status() if callable(status) else {}
+        return bars, sources
+
     async def _analyze_uncached(
         self,
         days: int,
@@ -466,13 +521,18 @@ class TrendService:
         # 权重：用户配置优先（趋势维度 + 技术/宏观/消息面合成比），否则内置默认
         if self._settings is not None:
             tech_weights = await self._settings.trend_weights()
-            tech_w, macro_w, news_w = await self._settings.combine_weights()
+            tech_w, macro_w, news_w, flow_w = await self._settings.combine_weights()
             # V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权）
             use_group_combine = await self._settings.group_combine()
             weights_meta = {"group_combine": use_group_combine}
         else:
             tech_weights = TREND_WEIGHTS
-            tech_w, macro_w, news_w = TECH_WEIGHT, MACRO_WEIGHT, NEWS_WEIGHT
+            tech_w, macro_w, news_w, flow_w = (
+                TECH_WEIGHT,
+                MACRO_WEIGHT,
+                NEWS_WEIGHT,
+                FLOW_WEIGHT,
+            )
             # 无 settings（fallback）保持组内平均默认（与 WeightConfig 默认一致）
             weights_meta = {"group_combine": True}
 
@@ -509,6 +569,9 @@ class TrendService:
             )
         macro_index = await self._macro.evaluate()
 
+        # V0.120.0：资金流面（第 4 个面）。未注入服务 → 整面不参与（下方 faces 剔除）。
+        flow_index = await self._flow.evaluate() if self._flow is not None else None
+
         # 消息面：客户当日打分（未打分 → None，进剔整面分支）
         news_score: float | None = None
         news_direction: DirectionSignal | None = None
@@ -531,6 +594,7 @@ class TrendService:
             ("tech", tech_index.score, tech_w),
             ("macro", macro_index.score, macro_w),
             ("news", news_score, news_w),
+            ("flow", flow_index.score if flow_index is not None else None, flow_w),
         )
         valid_faces: list[tuple[str, float, float]] = [
             (k, float(v), w) for k, v, w in faces if v is not None and w > 0.0
@@ -543,8 +607,15 @@ class TrendService:
         if combined is None:  # pragma: no cover - 防御分支：宏观/消息面恒有值
             logger.error("Combined index unavailable: no face carries a valid score")
             level, level_dir = TrendIndexLevel.SIDEWAYS, DirectionSignal.NEUTRAL
-            index_summary = "综合趋势评估指数不可用：技术面、宏观参考、消息面均无有效分值"
+            # V0.120.0：四面（技术 / 宏观 / 消息 / 资金流）—— 不写死面名，
+            # 免得再加一个面时这条文案又漏一个。
+            index_summary = (
+                "综合趋势评估指数不可用："
+                + "、".join(_FACE_LABELS[k] for k, _, _ in faces)
+                + "均无有效分值"
+            )
             components: dict[str, float] = {}
+            face_weights: dict[str, float] = {}
         else:
             level, level_dir = self._to_level(combined)
             formula = " + ".join(
@@ -553,12 +624,17 @@ class TrendService:
             notes: list[str] = []
             missing_dims = [i.name for i in indicators if i.score is None]
             if dropped:
-                # V0.100：仅消息面被剔 → 用 i18n 文案标识「pending」语义
-                if set(dropped) == {"news"}:
+                # V0.100：消息面未打分 → 用 pending 语义标识（**不能**被
+                # 「资金流面也不可用」吞掉 —— 两者是不同性质的问题：
+                # pending 是「还没打分、待定」，不可用是「数据源挂了」）。
+                # V0.120.0：资金流面加入后，dropped 可能同时含 news 与 flow，
+                # 必须分开表述，否则消息面的 pending 语义会被丢掉。
+                if "news" in dropped:
                     notes.append("消息面未打分，综合指数待定；已剔除并按剩余面权重归一化")
-                else:
+                others = [k for k in dropped if k != "news"]
+                if others:
                     notes.append(
-                        f"{'、'.join(_FACE_LABELS[k] for k in dropped)} 不可用，"
+                        f"{'、'.join(_FACE_LABELS[k] for k in others)} 不可用，"
                         "已剔除并按剩余面权重归一化"
                     )
             elif missing_dims:
@@ -571,12 +647,21 @@ class TrendService:
                 f"= {formula}{note}"
             )
             components = {k: round(v, 1) for k, v, _ in valid_faces}
+            # V0.120.0：各面**实际生效**权重（已归一化）。前端「运算方法」用它渲染，
+            # 不再硬编码 30/40/30 —— 消息面未打分时权重被剔除并归一化，
+            # 硬编码会直接说错话。
+            face_weights = {k: round(w / face_w, 4) for k, _, w in valid_faces}
+        # V0.120.0：配置权重（剔除前）。前端要说明「消息面 X% 权重被剔除」，
+        # 而被剔除的面根本不在 face_weights 里 —— 只能从配置值取。
+        face_weights_nominal = {k: round(float(w), 4) for k, _, w in faces}
         final_index = TrendIndexOut(
             score=combined,
             level=level,
             direction=level_dir,
             summary=index_summary,
             components=components,
+            face_weights=face_weights,
+            face_weights_nominal=face_weights_nominal,
         )
         news_index = NewsIndexOut(
             score=news_score,
@@ -587,7 +672,7 @@ class TrendService:
         )
         logger.info(
             "Trend analyzed: interval=%s %s bars, %s (%+.2f%%), index=%s"
-            " (tech=%s×%.0f%%, macro=%.1f×%.0f%%, news=%s×%.0f%%)",
+            " (tech=%s×%.0f%%, macro=%.1f×%.0f%%, news=%s×%.0f%%, flow=%s×%.0f%%)",
             interval,
             len(klines),
             direction.value,
@@ -599,6 +684,8 @@ class TrendService:
             macro_w * 100,
             _fmt_score(news_score),
             news_w * 100,
+            _fmt_score(flow_index.score if flow_index is not None else None),
+            flow_w * 100,
         )
         status = getattr(self._repo, "source_status", None)
         sources: dict[str, str] = status() if callable(status) else {}
@@ -626,6 +713,7 @@ class TrendService:
             tech_composed_by=tech_index.composed_by,
             macro=macro_index,
             news=news_index,
+            flow=flow_index,
             data_sources=sources,
             degraded=degraded,
             freshness=freshness,

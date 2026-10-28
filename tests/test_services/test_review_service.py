@@ -348,3 +348,42 @@ async def test_meta_reports_price_progress(db_session: AsyncSession) -> None:
     assert "美元指数" in m.basis_tags
     assert m.horizons == [1, 3, 5]
     assert any(t["key"] == "ny" for t in m.targets)
+
+
+async def test_backfill_uses_light_price_path(db_session: AsyncSession) -> None:
+    """★ 价格回填只取价格 ⇒ **不得**走 ``analyze()``（那会顺带评估 4 个评分面）。
+
+    ⚠ V0.120.0 修的真缺陷：回填走 ``TrendService.analyze()`` ⇒ 顺带把
+    宏观面 / 消息面 / **资金流面**各拉一遍外网（实测资金流面单次 **8.25s**），
+    算出来的指数被整段丢掉 —— 「只要价格」却要等十几秒。
+    与回测的价格日历回填是同一个毛病（同一处修法、同一类护栏）。
+    """
+    from app.repositories.review import GoldPriceRepository
+    from app.services.review import ReviewService
+
+    class _FakeTrend:
+        """只实现轻路径 —— ``analyze()`` 一旦被调用就炸（防回归）。"""
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def fetch_price_bars(self, days: int = 60, target: str = "ny"):
+            self.calls += 1
+            last = date(2026, 10, 6)
+            return [(last - timedelta(days=i), 100.0 + i) for i in range(30)], {target: "live"}
+
+        async def analyze(self, days: int = 60, target: str = "ny"):
+            raise AssertionError("价格回填不该走 analyze()（会顺带评估 4 个评分面）")
+
+    trend = _FakeTrend()
+    svc = ReviewService(
+        gold=GoldPriceRepository(db_session),
+        news=NewsScoreRepository(db_session),
+        trend=trend,  # type: ignore[arg-type]
+    )
+
+    out = await svc.backfill(days=30, target="ny")
+
+    assert trend.calls == 1
+    assert out.written == 30
+    assert out.source == "live"

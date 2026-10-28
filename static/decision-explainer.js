@@ -7,10 +7,10 @@
  *   ③ 决策行动 chip（BUY_HEAVY / SELL ...）只给一个标签，不知道「触发条件是什么」；
  *
  * 本模块提供 4 个工具函数供 synthesis-card.js / portfolio.html 共用：
- *   ① `breakdownRows(decision)`     — 综合指数拆解（技术 X × 30% + 宏观 Y × 40% + 消息 Z × 30%）
+ *   ① `breakdownRows(decision)`     — 综合指数拆解（各面分值 × 后端下发的实际生效权重）
  *   ② `compareCard(decision)`       — 「按建议应加减 ¥X」对比卡
  *   ③ `tooltipFor(action, ctx)`     — hover 决策行动的 3 行解释
- *   ④ `dimensionBars(components)`   — 三维横向条形图（共振可视化）
+ *   ④ `dimensionBars(components)`   — 三维横向条形图（共振可视化，仍是 3 面口径）
  *
  * 设计要点
  * --------
@@ -30,11 +30,30 @@
 (function () {
   'use strict';
 
-  /* 维度顺序与默认排序一致：宏观 40% / 技术 30% / 消息 30% */
+  /* 分面定义（V0.120.0 起共 4 个面：技术 / 宏观 / 消息 / 资金流）。
+     **权重不在这里写死** —— 综合指数的面权重由后端下发：
+       decision.trend_index.face_weights         = 实际生效（已剔除无分值的面并归一化）
+       decision.trend_index.face_weights_nominal = 配置原值（被剔除的面只能从这里取）
+     旧代码硬编码「技术 30 / 宏观 40 / 消息 30」有两个后果：
+       ① 消息面未打分时该面被剔除、其余面权重重新归一化，公式行会显示一个
+          **加起来 ≠ 总分** 的算式（公式 ≠ 算法）；
+       ② V0.120.0 加了资金流面后，资金流根本没进拆解。
+     nominal 只在**后端没下发**（老后端 / 旧缓存）时兜底。 */
   var DIM_DEFS = [
-    { key: 'tech',  i18n: 'trend.comp_tech',  fallback: '技术面', weight: 30 },
-    { key: 'macro', i18n: 'trend.comp_macro', fallback: '宏观面', weight: 40 },
-    { key: 'news',  i18n: 'trend.comp_news',  fallback: '消息面', weight: 30 }
+    { key: 'tech',  i18n: 'trend.comp_tech',  fallback: '技术面',   nominal: 0.25 },
+    { key: 'macro', i18n: 'trend.comp_macro', fallback: '宏观面',   nominal: 0.35 },
+    { key: 'news',  i18n: 'trend.comp_news',  fallback: '消息面',   nominal: 0.25 },
+    { key: 'flow',  i18n: 'trend.comp_flow',  fallback: '资金流面', nominal: 0.15 }
+  ];
+
+  /* 共振口径**仍只有 3 个面**（技术 / 宏观 / 消息）—— 资金流面暂未纳入共振一致性
+     判定（见 docs/api-reference.md §6.4 的已知缺口）。dimensionBars 读的是
+     /api/v1/resonance/signal 的 components，**不能**复用 DIM_DEFS，
+     否则会给用户画出一根永远为空的「资金流面」条。 */
+  var RESONANCE_DIMS = [
+    { key: 'tech',  i18n: 'trend.comp_tech',  fallback: '技术面' },
+    { key: 'macro', i18n: 'trend.comp_macro', fallback: '宏观面' },
+    { key: 'news',  i18n: 'trend.comp_news',  fallback: '消息面' }
   ];
 
   /* 决策行动 → tooltip 三行解释（hover 显示）。
@@ -99,9 +118,48 @@
     return sign + '¥' + Math.round(v).toLocaleString('zh-CN');
   }
 
-  /* ───────────────── ① 拆解：综合指数拆成加权三分 X 分 ───────────────── */
+  /* 权重百分比格式化：统一 1 位小数。
+     整数百分比（30% / 40% / 30%）加起来未必等于 100%（33+47+20 才是 100），
+     而这张卡的意义就是「让用户验证加权算式」—— 权重取整会让公式对不上总分。
+     1 位小数可让「各面分值 × 权重」复算到总分（误差 ≤ 0.1）。 */
+  function fmtW(pct) {
+    if (pct == null || isNaN(pct)) return '—';
+    return (Math.round(pct * 10) / 10).toFixed(1);
+  }
 
-  /* trend_index = { score, level, direction, summary, components: { tech, macro, news } }
+  /* 面权重解析：优先后端下发，缺失时在本地按 nominal 重新归一化。
+     返回 { key: { effective, nominal } }：
+       effective = 实际生效权重（该面有分值时才有；被剔除的面为 null）
+       nominal   = 配置权重（被剔除的面用它展示「配置上占多少」） */
+  function resolveFaceWeights(idx, components) {
+    var eff = (idx && idx.face_weights && typeof idx.face_weights === 'object') ? idx.face_weights : null;
+    var nom = (idx && idx.face_weights_nominal && typeof idx.face_weights_nominal === 'object')
+      ? idx.face_weights_nominal : null;
+    var out = {};
+    var presentTotal = 0;
+    DIM_DEFS.forEach(function (d) {
+      var v = (components && Object.prototype.hasOwnProperty.call(components, d.key))
+        ? components[d.key] : null;
+      var n = (nom && typeof nom[d.key] === 'number') ? nom[d.key] : d.nominal;
+      out[d.key] = { effective: null, nominal: n, present: typeof v === 'number' };
+      if (typeof v === 'number') presentTotal += n;
+    });
+    DIM_DEFS.forEach(function (d) {
+      var e = (eff && typeof eff[d.key] === 'number') ? eff[d.key] : null;
+      if (e == null && out[d.key].present && presentTotal > 0) {
+        /* 后端没给 face_weights（老后端 / 旧缓存）→ 本地归一化兜底，
+           保证「各面贡献相加 = 总分」这条不变量仍成立。 */
+        e = out[d.key].nominal / presentTotal;
+      }
+      out[d.key].effective = e;
+    });
+    return out;
+  }
+
+  /* ───────────────── ① 拆解：综合指数拆成加权各面 X 分 ───────────────── */
+
+  /* trend_index = { score, level, direction, summary, components: { tech, macro, news, flow },
+                    face_weights, face_weights_nominal }
      任一 component 缺失（V0.78.0 Step D 「数据不足未计入」）→ 显示「— 未计入」，
      不能伪装成 50 或 0。 */
   function breakdownRows(decision) {
@@ -110,16 +168,23 @@
     var c = idx.components || {};
     var score = (typeof idx.score === 'number') ? idx.score : null;
     var total = (score != null) ? score : null;
+    var w = resolveFaceWeights(idx, c);
 
     return DIM_DEFS.map(function (d) {
       var v = (c && Object.prototype.hasOwnProperty.call(c, d.key)) ? c[d.key] : null;
       var present = (typeof v === 'number');
-      var contribution = present ? (v * d.weight / 100) : null;
+      var eff = w[d.key].effective;
+      /* 有分值的面用**实际生效**权重（已被后端归一化）⇒ 各面贡献相加 = 总分；
+         被剔除的面没有生效权重，展示它的**配置权重**并标「未计入」。 */
+      var used = present && eff != null ? eff : w[d.key].nominal;
+      var contribution = present ? (v * used) : null;
       return {
         key: d.key,
         name: tr(d.i18n, d.fallback),
-        weight: d.weight,
-        value: v,           // null = 缺失
+        weight: used * 100,          // 展示用百分比
+        nominalWeight: w[d.key].nominal * 100,
+        applied: present,            // 该权重是否真的参与了计算
+        value: v,                    // null = 缺失
         contribution: contribution,
         present: present,
         missing: !present,
@@ -128,42 +193,39 @@
     });
   }
 
-  /* 把 breakdownRows 渲染成 HTML（3 行 + 总分 + 公式）。
+  /* 把 breakdownRows 渲染成 HTML（各面行 + 总分 + 公式）。
      缺失行显示「— 未计入」并降透明度，不参与公式合计（V0.78.0 已归一化）。 */
   function renderBreakdown(decision) {
     var rows = breakdownRows(decision);
     if (!rows.length) return '';
-    var sumContribution = 0;
-    var validWeights = 0;
     var htmlRows = rows.map(function (r) {
       if (r.missing) {
         return '<div class="de-row de-row-miss">'
           + '<span class="de-nm">' + esc(r.name) + '</span>'
           + '<span class="de-track"><i style="width:0%;background:var(--muted)"></i></span>'
           + '<span class="de-val" style="color:var(--muted)">—</span>'
-          + '<span class="de-wt">' + r.weight + '%</span>'
+          + '<span class="de-wt">' + fmtW(r.nominalWeight) + '%</span>'
           + '<span class="de-contrib" style="color:var(--muted)">'
           + esc(tr('syn.row_excluded', '未计入')) + '</span>'
           + '</div>';
       }
-      sumContribution += r.contribution;
-      validWeights += r.weight;
       var color = r.value >= 55 ? 'var(--up)' : r.value <= 45 ? 'var(--down)' : 'var(--muted)';
       var arrow = r.value >= 55 ? '↑' : r.value <= 45 ? '↓' : '→';
       return '<div class="de-row">'
         + '<span class="de-nm">' + esc(r.name) + '</span>'
         + '<span class="de-track"><i style="width:' + Math.max(0, Math.min(100, r.value)) + '%;background:' + color + '"></i></span>'
         + '<span class="de-val" style="color:' + color + '">' + r.value.toFixed(1) + '</span>'
-        + '<span class="de-wt">×' + r.weight + '%</span>'
+        + '<span class="de-wt">×' + fmtW(r.weight) + '%</span>'
         + '<span class="de-contrib" style="color:' + color + '">+'
         + r.contribution.toFixed(1) + ' ' + arrow + '</span>'
         + '</div>';
     }).join('');
 
-    /* 公式行：直接展示「加权计算式」，让用户验证 30/40/30 加权是否正确 */
+    /* 公式行：直接展示「加权计算式」，让用户验证各面加权是否正确。
+       权重取后端下发的**实际生效**权重 ⇒ 该式加总 = 综合指数。 */
     var formula = rows.map(function (r) {
       if (r.missing) return esc(r.name) + '(—)';
-      return esc(r.name) + ' ' + r.value.toFixed(1) + ' × ' + r.weight + '%';
+      return esc(r.name) + ' ' + r.value.toFixed(1) + ' × ' + fmtW(r.weight) + '%';
     }).join(' ＋ ');
     var totalTxt = (decision.trend_index && typeof decision.trend_index.score === 'number')
       ? decision.trend_index.score.toFixed(1) : '—';
@@ -277,14 +339,16 @@
   /* ───────────────── ④ 三维横向条形图（共振可视化） ───────────────── */
 
   /* components: { tech, macro, news } —— 来自 /api/v1/resonance/signal，
-     与 trend_index.components 同结构但**阈值口径不同**（共振用 55/45 + 标准差折扣） */
+     与 trend_index.components 同结构但**阈值口径不同**（共振用 55/45 + 标准差折扣）。
+     注意：共振口径仍只有 3 个面（资金流面暂未纳入），故这里用 RESONANCE_DIMS
+     而不是 DIM_DEFS —— 后者是综合指数的 4 个面，两者不可混用。 */
   function dimensionBars(components, opts) {
     if (!components) return '';
     var title = (opts && opts.title) ? opts.title
       : tr('decision.explain_dim_title', '三维共振');
     return '<div class="de-dim">'
       + '<div class="de-dim-head">' + esc(title) + '</div>'
-      + DIM_DEFS.map(function (d) {
+      + RESONANCE_DIMS.map(function (d) {
         var v = (components && Object.prototype.hasOwnProperty.call(components, d.key))
           ? components[d.key] : null;
         if (v == null) {

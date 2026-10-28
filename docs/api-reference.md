@@ -55,7 +55,7 @@
 | GET | `/api/v1/trades` | 交易历史查询（分页 + 汇总） | query: `account_id/side/position_id/symbol/keyword/start/end/page/page_size` |
 | GET | `/api/v1/trades/export` | 交易历史 CSV 导出（含汇总） | 同上（无分页） |
 | GET | `/api/v1/decision/etf` | 购买决策（趋势指数×持仓 + 仓位推荐 + 红绿理由） | `days`(20-250)、`account_id` |
-| GET/PUT | `/api/v1/settings/weights` | 权重配置读取/保存 | body: `{tech, macro, news}` 等 |
+| GET/PUT | `/api/v1/settings/weights` | 权重配置读取/保存 | body: `{trend, macro, combine:{tech,macro,news,flow}, flow:{6 因子}, group_combine}` |
 | GET/PUT | `/api/v1/news-score` | 消息面打分（客户评估；当日 3 槽位 + 加权有效分值） | body: `{score, notes, slot?, basis?, review_note?, score_date?}` |
 | DELETE | `/api/v1/news-score/{slot}` | 撤销当日某一次打分（释放槽位） | `score_date`（可选，默认当日） |
 | GET | `/api/v1/news-score/history` | 历史打分记录（跨日回看） | `limit`(1-100) |
@@ -112,6 +112,8 @@
   "points": [/* 60 个 {date, close, ma5, ma20, ma40} */],
   "metrics": { /* start/end/change_pct/high/low/ma20/ma40/direction/summary */ },
   "indicators": [ /* 5 个维度 {name, value, score, direction, weight, contribution, detail} */ ],
+  "macro": { /* 宏观面指数 + 11 因子明细 */ },
+  "flow": { /* 资金流面指数 + 6 因子明细（V0.120.0；score 可为 null） */ },
   "index": { "score": 95.0, "level": "strong_up", "direction": "bullish", "summary": "..." }
 }
 ```
@@ -164,7 +166,7 @@
   「技术面 5 维度对 W/M K 不适用，已按中性 50 计入（非『数据不足』）」。该披露是 V0.78.0
   Step D 补上的 —— 原文案写在内部对象上，从未进入响应。
 
-### 6.3 宏观参考指数（综合趋势指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%）
+### 6.3 宏观参考指数（综合趋势指数 = 技术面 × 25% + 宏观面 × 35% + 消息面 × 25% + 资金流面 × 15%）
 
 | 因子 | 权重 | 与黄金关系 | 友好度100分位 | 友好度0分位 | 数据源 |
 |------|------|-----------|--------------|------------|-------|
@@ -201,16 +203,71 @@
   （`daily` / `quarterly` / `annual`）与 `max_lag_days`（日频 4 / 季度 300 / 年度 1100）。
   滞后告警阈值按 `max_lag_days` 逐因子判定 —— 季度 / 年度因子的 `data_date`
   天然滞后几百天，用日频的 4 天阈值会**永久亮红灯**（常亮的告警等于没有告警）。
-- 综合趋势指数 = 技术面 × 30% + 宏观面 × 40% + 消息面 × 30%（`services/macro.py::TECH_WEIGHT/MACRO_WEIGHT/NEWS_WEIGHT`，用户可在 `/weights` 调整）
-- **任一面不可用时剔除该面、按剩余面权重归一化（V0.78.0 Step D）**：目前仅技术面可能不可用
-  （5 个维度全部数据不足）。此时 `index.components` **不含**该 key、`index.summary` 注明
-  「已剔除并按剩余面权重归一化」，`/weights` 预览同步按剩余面归一化。宏观面有静态参考兜底、
-  消息面未打分为 50，二者结构上恒有值 ⇒ 对外 `index.score` 恒为数值。
+- 综合趋势指数 = 技术面 × 25% + 宏观面 × 35% + 消息面 × 25% + **资金流面 × 15%**
+  （`services/macro.py::TECH_WEIGHT/MACRO_WEIGHT/NEWS_WEIGHT/FLOW_WEIGHT`，用户可在 `/weights` 调整）
+- **任一面不可用时剔除该面、按剩余面权重归一化（V0.78.0 Step D）**：技术面可能不可用
+  （5 个维度全部数据不足），**资金流面也可能不可用**（V0.120.0：5 个外部源全挂时
+  `flow.score = null`）。此时 `index.components` **不含**该 key、`index.summary` 注明
+  「已剔除并按剩余面权重归一化」，`/weights` 预览同步按剩余面归一化。
+  消息面未打分同样是 **`null`**（V0.100 起：未打分 ⇒ 消息面**不参与**综合指数，
+  其配置权重被剔除、其余面按有效面归一化）。宏观面有静态参考兜底、结构上恒有值。
+- **`index.face_weights` / `index.face_weights_nominal`（V0.120.0 新增）** ——
+  前端**不重算权重**（用户可在 `/weights` 改权重，写死在前端必然与实际算法对不上）：
+  | 字段 | 含义 | 用途 |
+  |---|---|---|
+  | `face_weights` | 各面**实际生效**权重（已剔除不可用的面并按剩余面归一化） | 「运算方法」公式、结论卡分面权重条 —— 公式必须等于实际算法 |
+  | `face_weights_nominal` | 各面**配置权重**（剔除/归一化之前的原值，恒含 4 个面） | 说明「消息面 X% 权重被剔除」—— 被剔除的面**不在** `face_weights` 里，只能从这里取 |
+  两者同时给，是为了让前端既能算「现在按什么加权」，又能说清「谁没参与、原本占多少」。
+  ⚠️ 老 client 用 Pydantic v2 默认 `extra="ignore"` 解析新 response 不报错。
 - ⚠ **已知下游耦合**：`services/resonance.py::compute_resonance` 对缺失维度按中性 50 兜底
   （其原设计如此），故上述边角场景下共振信号仍按 50 参与 —— 已记入 `docs/roadmap.md`
   的 V0.79.0 待办。
 
-### 6.4 告警规则 + Web Push 订阅（V0.72.0）
+### 6.4 资金流面（第 4 个评分面，V0.120.0）
+
+**只收流量 / 数量类读数，不收价格类读数** —— 汇率、利率、SHIBOR 归宏观面，
+避免同一条逻辑计两遍。
+
+| 因子 | 节奏 | 面内权重 | 与黄金关系 | 友好度100分位 | 友好度0分位 | 数据源 |
+|------|------|---------|-----------|--------------|------------|-------|
+| 黄金投机净多占 OI | 周 | 18% | 正相关（仓位拥挤度） | 34.10% | 6.49% | CFTC 分类持仓（年文件） |
+| 黄金投机净多 4 周变化 | 周 | 14% | 正相关（钱在不在买） | +41,616 张 | -43,005 张 | CFTC 分类持仓 |
+| 黄金 ETF 4 周累计净申赎 | 周 | 22% | 正相关（国内真金白银进场） | +74.25 亿元 | -20.84 亿元 | 上交所 518880 官方份额 |
+| 美元净流动性 4 周变化 | 月 | 14% | 正相关（钱在系统里的总量） | +130,328 $M | -252,039 $M | FRED `WALCL`/`WTREGEN`/`RRPONTSYD` |
+| A股融资余额月变动 | 月 | 16% | **负相关**（机会成本口径） | -4.30% | +6.03% | 上交所 + 深交所融资余额 |
+| 中国 M1-M2 剪刀差 | 月 | 16% | **负相关**（机会成本口径） | -11.2 pp | -3.1 pp | PBoC `macro_china_money_supply` |
+
+- **周频合计 54% / 月频合计 46%**（用户明确要求「关注近期的资金数据，按周和月的关键因子」）。
+  `flow.weekly_weight` / `flow.monthly_weight` 直接给出这两个比例，前端据此分组展示。
+- **负号口径**：`cn_margin_flow` / `cn_money_gap` 取**机会成本**符号 —— 值越高越利空黄金
+  （杠杆钱留在股市 / 钱淤积在定期存款 ⇒ 抗通胀资产需求下降）。
+  它们与正号因子共用同一套 `score = clamp((value − worst) / (best − worst) × 100, 0, 100)`
+  公式，方向差异只体现在 `best` / `worst` 的取值上。
+- **滚动分位按观测节奏取窗（V0.120.0 新机制）**：周频因子窗口 **728 日（104 周）**、
+  月频 **1826 日（60 月）**，不用日频的 252 日 —— 日频落表会把同一个周值重复约 5 次、
+  把 P10/P90 压平成同一条线（阈值退化，`best == worst` 恒返回 50）。
+  历史表 `daily_money_flow_factors.snapshot_date` 存**因子自身的观测日**，
+  只在出现新观测时写一行 ⇒ 窗口内天然是不同观测。
+- **`flow.score` 可空（与宏观面不同）**：一个因子都没取到读数时 `score = null`，
+  **整面从综合指数里剔除**（不按 0 分计入）—— 0 分会被读成「极度利空」。
+- **降级链复用宏观面三件套**：`tier` 字段区分 `live`（本次真的观测到）/ `lkg`
+  （末次落库的真实读数）/ `static`（内置常量兜底，**不是市场读数**）；
+  静态兜底值与末次落库值都**不写历史表**（`is_persistable_source`）。
+- **观测锚点（V0.120.0 修掉的真缺陷）**：周频因子锚在 **ISO 周的最后一个交易日**，
+  月频因子锚在**已过完的月的日历月末**（观测值按「该日当天或之前最近的一条」取值）——
+  实时采集 / 历史回填 / 静态标定**三处共用同一份锚点函数**
+  （`repositories/money_flow_sources.py::week_end_days()` / `month_end_days()`）。
+  ⚠️ `us_liq_net` 的**源是周更**（FRED H.4.1），但它的值是「**4 周变化**」⇒
+  按周采样时相邻两次观测**重叠 3/4**，有效样本只剩名义值的 1/4（`min_samples` 达标是假象）
+  ⇒ 所以它的**观测节奏是月**，不是周。因子里返回的 `data_date` 会显示实际窗口
+  （如 `2026-08-31~2026-09-30`）。
+- **滞后口径**：周频因子 `max_lag_days = 14`、月频 `60` —— 超过才亮红灯。
+- 配置位置：`services/money_flow.py::MONEY_FLOW_FACTOR_RULES`；阈值滚动分位由
+  `services/macro_thresholds.py` 统一计算（按因子的 `window_days` 取窗）。
+- ⚠️ **共振信号尚未纳入本面**：`services/resonance.py` 至今只读 tech / macro / news
+  三个面 ⇒ 首页「一致性判定」暂时看不到资金流面。这是**已知缺口**，不是设计。
+
+### 6.5 告警规则 + Web Push 订阅（V0.72.0）
 
 **alert_rules**（持久化到 `app_settings` 表，key=`alert_rules`；与 weight_config / backtest_config 同表）：
 
@@ -242,7 +299,7 @@
 - `private_key`: PEM 编码 EC P-256 私钥（启动时若不存在则自动生成一次）
 - `public_key`: base64url 编码的 X962 UncompressedPoint（暴露给前端订阅）
 
-### 6.5 认证与账号体系（V0.75.0 第 ① 步）
+### 6.6 认证与账号体系（V0.75.0 第 ① 步）
 
 > ⚠️ **本版是「认证骨架」**：已具备凭证校验、会话与权限守卫的完整链路，但业务表（持仓 / 账本 / 消息面 / 快照等）**尚未加 `user_id` 列**，因此**尚无数据隔离** —— 能登录进来的人看到的是同一份数据。数据隔离在 V0.75.2 落地，找回密码 + 用户管理在 V0.75.3 落地。
 
@@ -287,29 +344,29 @@
 | 文档暴露 | `AUTH_ENABLED=true` 且 `APP_ENV=prod` 时自动关闭 `/docs` / `/redoc` / `/openapi.json` |
 | 审计埋点 | `login_success` / `login_fail` / `logout` / `authz_violation` 四类事件进前后端同一白名单 |
 
-### 6.6 首页综合研判结论卡（V0.75.1）
+### 6.7 首页综合研判结论卡（V0.75.1）
 
-> 设计出发点：**缺的不是数据，是收敛**。首页此前把综合指数 / 三维分值 / 共振类别 / 决策建议 / 建议仓位 / 理由明细平铺在 6 个面板里，用户需要自己横向扫一遍再心算「到底该不该动」。结论卡只做一件事——**把这些原料按决策顺序排成一条线**。
+> 设计出发点：**缺的不是数据，是收敛**。首页此前把综合指数 / 分面分值 / 共振类别 / 决策建议 / 建议仓位 / 理由明细平铺在 6 个面板里，用户需要自己横向扫一遍再心算「到底该不该动」。结论卡只做一件事——**把这些原料按决策顺序排成一条线**。
 
 | 口径 | 规则 |
 |------|------|
 | 三大数据源 | `GET /api/v1/market/gold/trend?days=60&target=` （必需）+ `GET /api/v1/decision/etf?days=60&target=` + `GET /api/v1/resonance/signal?target=`（后两者失败仅降级对应区块，`Promise.allSettled`） |
 | 结论行 | 行动建议与置信度**一律取后端 `decision`**（`action` / `action_label` / `confidence` ∈ low·medium·high），前端不自造阈值 |
-| 三维分值 | 技术面 30% / 宏观面 40% / 消息面 30%，权重与 `/weights` 页面同源（`index.components`）；红=利多 绿=利空 **且附 ↑↓→ 文字符号**（满足色觉障碍可读性） |
-| 一致性判定 | **不在前端重算** —— 直接取 `/api/v1/resonance/signal` 的 `signal`（5 类：`strong_up` / `strong_down` / `weak_up` / `divergent` / `neutral`）。后端阈值引用 `schemas/thresholds.py` 的 `DirectionThreshold.BULLISH`(55) / `BEARISH`(45)（V0.78.0 起不再裸写字面量），`confidence = avg × (1 - stdev/55)`。**`divergent` 自 V0.78.0 起改为「三维任意一对分差 ≥ 15」**（原仅判 tech vs macro 且要求方向相反，会整类漏掉「消息面看多 + 技术看空」这类反转先行信号），取**幅度最大**的一对，并由 `subtype` 标明维度对 `tech_macro` / `tech_news` / `macro_news`、`subtype_label` 给中文说明（前端 i18n 键缺失时回退它）。**理由**：若前端另立一套阈值，后端调参后两处口径必然打架 |
+| 分面分值 | 技术面 25% / 宏观面 35% / 消息面 25% / 资金流面 15%（V0.120.0 起四面），权重与 `/weights` 页面同源（`index.components`）；红=利多 绿=利空 **且附 ↑↓→ 文字符号**（满足色觉障碍可读性） |
+| 一致性判定 | **不在前端重算** —— 直接取 `/api/v1/resonance/signal` 的 `signal`（5 类：`strong_up` / `strong_down` / `weak_up` / `divergent` / `neutral`）。后端阈值引用 `schemas/thresholds.py` 的 `DirectionThreshold.BULLISH`(55) / `BEARISH`(45)（V0.78.0 起不再裸写字面量），`confidence = avg × (1 - stdev/55)`。**`divergent` 自 V0.78.0 起改为「三维任意一对分差 ≥ 15」**（⚠️ 共振信号**至今仍只看 tech/macro/news 三个面**，资金流面未纳入 —— 见 §6.4）（原仅判 tech vs macro 且要求方向相反，会整类漏掉「消息面看多 + 技术看空」这类反转先行信号），取**幅度最大**的一对，并由 `subtype` 标明维度对 `tech_macro` / `tech_news` / `macro_news`、`subtype_label` 给中文说明（前端 i18n 键缺失时回退它）。**理由**：若前端另立一套阈值，后端调参后两处口径必然打架 |
 | 仓位对照 | 后端 `position_ratio` 恒为 `0`（`services/position.py` 注释「账户本金未知，暂不估算」）→ 卡片**不展示「当前仓位 X%」**，只显示「空仓 / 持有 N 份 · 浮盈浮亏」，避免用 0 编造出「仓位 0%」的假信号 |
 | 数据质量折损 | ① 宏观因子的**取值层级** `MacroFactorOut.tier`（V0.118.1）：`live`（本次真的观测到）/ `lkg`（上游源当时不可用，用上次成功落库的真实读数顶替）/ `static`（内置常量兜底，非市场读数）。`lkg` 与 `static` 各自的项数 / 名称 / 最新数据日分别提示（`syn.q_macro_lkg` / `syn.q_macro_static`）。判据**优先用 tier 字段**，tier 缺失时才退回匹配 source 的占位标记字面量；**不能**用「非 H.15 即静态」这类启发式——央行购金来源是 `世界黄金协会 GDT Q2 2026`，属正当季度源；② 消息面 `scored=false` 时提示未打分；③ `trend.degraded=true` 时报出 mock 源市场数。三者都直接扣减「结论可信度」的提示，**如实标注优先于观感统一** |
 | 品种切换 | 黄金 `etf` / 白银 `silver_etf`，一次切换使 trend / decision / resonance **三个 target 同步生效**，选择记忆于 `localStorage.pm_synthesis_asset` |
 | 刷新 | 60s 轮询 + `inflight` 重入保护（防止慢响应叠加）；`i18n:change` 事件触发重渲染；`aria-live="polite"` 播报结论变化 |
 | i18n | 自持 `T(key, fallback)` 包装：缺失 key 时**回落到中文硬编码**（`I18n.t()` 查不到会返回 key 字面量，若不兜底页面上会直接出现 `syn.cons_strong_up` 这种裸 key）；三语各 49 个 `syn.*` 键，并由 2 条门禁守住（脚本引用键三语齐全 + 三语键集合严格一致） |
 
-### 6.7 首页内嵌消息面打分器（V0.76.0）
+### 6.8 首页内嵌消息面打分器（V0.76.0）
 
 `static/news-score-widget.js`（IIFE + `window.PM_NewsScore = { mount, load, openSlot, getState }`，自注入 `<style>` 并全部走 `--up/--down/--muted/--accent/--border/--card` 变量 → 4 主题免覆盖），自动挂载到 `trend.html` 的 `#newsScoreCard`（位于 `#synthesisCard` 之下、实时评估摘要之上）。
 
 | 方面 | 说明 |
 |------|------|
-| 起因 | 消息面占综合评估指数 **30%**，却是三维中唯一**由用户自己产出**的维度。V0.75.1 收敛「今日操作清单」后，首页只剩 `#newsFactor` 一行只读展示 —— 想打一次分必须整页跳到 `/news` |
+| 起因 | 消息面占综合评估指数 **30%**（V0.120.0 起 25%），却是各面中唯一**由用户自己产出**的维度。V0.75.1 收敛「今日操作清单」后，首页只剩 `#newsFactor` 一行只读展示 —— 想打一次分必须整页跳到 `/news` |
 | 组件构成 | ① **3 槽位状态一览**（分值 / 权重 1:2:3 / 方向 / 提交时刻 / 备注 / 补录标记 + 逐槽「修改」「撤销」）② **当日有效分值** + **后端算式原样展示**（`(1×45 + 2×70) ÷ 3 = 61.7`）③ **内嵌编辑器**（滑杆 + 快捷档位 + 沿用上次 + 方向判定 + 研判备注 + 12 依据标签 + 复盘批注）④ **状态提示条**（未打分 / 还有 N 次 / 三次已用完，三态配色走 `--chip-*-bg/fg/bd`） |
 | 接口 | 复用既有 `GET|PUT|DELETE /api/v1/news-score`（**未新增任何端点**，`app.openapi()` 仍为 67 paths / 76 operations）；依据标签取 `GET /api/v1/review/meta` 的 `basis_tags`（失败时回落到内置 6 个标签，不阻塞打分主流程） |
 | 口径同源 | 方向阈值（>55 看多 / <45 看空）与当日有效分值 **1:2:3 加权**一律取后端（`services.news.aggregate_slots`，与 `/news`、复盘页同源）；**前端只做展示与提交，绝不重算加权** |
@@ -322,7 +379,7 @@
 
 ---
 
-### 6.8 阈值常量（V0.78.0）
+### 6.9 阈值常量（V0.78.0）
 
 `src/app/schemas/thresholds.py` 集中管理全部分数阈值，取代原先散落在 6 个服务模块里的裸字面量。四组枚举**语义互不相同，不可互相套用**：
 

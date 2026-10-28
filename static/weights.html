@@ -239,7 +239,7 @@
     <h2 data-i18n="weights.tech_title">📈 技术面权重（趋势 5 维度）</h2>
     <div class="desc" data-i18n="weights.tech_desc">综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配</div>
     <div id="trendRows"></div>
-    <div class="sum-line" data-i18n="weights.sum_trend">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n-html="weights.sum_trend">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
 
   <!-- 宏观面权重 -->
@@ -247,7 +247,7 @@
     <h2 data-i18n="weights.macro_title">🌐 宏观面权重（11 大参考因子）</h2>
     <div class="desc" data-i18n="weights.macro_desc">美元指数 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金 / 美·中·欧政府债务，对黄金友好度评分的权重</div>
     <div id="macroRows"></div>
-    <div class="sum-line" data-i18n="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n-html="weights.sum_macro">宏观面合计：<b id="macroSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
 
   <!-- V0.110.0 · 宏观因子手动校准；V0.118.0 起全部因子均有自动源（美元=Yahoo / VIX=FRED / 美债=H.15 / 实际利率=FRED），本卡改为「人工顶替」用途 -->
@@ -272,15 +272,34 @@
 
   <!-- 合成权重 -->
   <div class="card">
-    <h2 data-i18n="weights.combine_title">⚖️ 合成权重（技术面 / 宏观面 / 消息面）</h2>
-    <div class="desc" data-i18n="weights.combine_desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比（默认 30/40/30，中短期 ETF 波段操作）</div>
+    <h2 data-i18n="weights.combine_title">⚖️ 合成权重（技术面 / 宏观面 / 消息面 / 资金流面）</h2>
+    <div class="desc" data-i18n="weights.combine_desc">综合趋势评估指数 = 技术面×占比 + 宏观参考×占比 + 消息面×占比 + 资金流面×占比（默认 25/35/25/15，中短期 ETF 波段操作）</div>
     <div id="combineRows"></div>
-    <div class="sum-line" data-i18n="weights.sum_combine">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div class="sum-line" data-i18n-html="weights.sum_combine">合成合计：<b id="combineSum" class="sum-ok">100%</b>（须为 100%）</div>
     <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <span style="font-size:12.5px;color:var(--muted)" data-i18n="weights.preset_label">预设：</span>
-      <button class="chip" onclick="applyPreset(0.20, 0.50, 0.30)" data-i18n="weights.preset_conservative">保守（重宏观）</button>
-      <button class="chip" onclick="applyPreset(0.30, 0.40, 0.30)" data-i18n="weights.preset_balanced">均衡（默认）</button>
-      <button class="chip" onclick="applyPreset(0.45, 0.30, 0.25)" data-i18n="weights.preset_aggressive">激进（重技术）</button>
+      <button class="chip" onclick="applyPreset(0.20, 0.45, 0.20, 0.15)" data-i18n="weights.preset_conservative">保守（重宏观）</button>
+      <button class="chip" onclick="applyPreset(0.25, 0.35, 0.25, 0.15)" data-i18n="weights.preset_balanced">均衡（默认）</button>
+      <button class="chip" onclick="applyPreset(0.40, 0.30, 0.15, 0.15)" data-i18n="weights.preset_aggressive">激进（重技术）</button>
+    </div>
+  </div>
+
+  <!-- V0.120.0：资金流面 6 因子面内权重（周频 / 月频两档） -->
+  <div class="card">
+    <h2 data-i18n="weights.flow_title">💰 资金流面因子权重（周频 / 月频）</h2>
+    <div class="desc" data-i18n="weights.flow_desc">资金流面只看「钱往哪儿流」，不收价格类读数（利率 / 汇率归宏观面，避免同一逻辑计两遍）。周频 3 个因子合计 54%（更近、领先性更强），月频 3 个合计 46%（更稳、噪声低）。阈带来自实测历史分位，不是拍脑袋。</div>
+    <div id="flowRows"></div>
+    <div class="sum-line" data-i18n-html="weights.sum_flow">资金流面合计：<b id="flowSum" class="sum-ok">100%</b>（须为 100%）</div>
+    <div style="margin-top:10px">
+      <div class="mo-head" aria-hidden="true">
+        <span data-i18n="weights.flow_reading_title">当前读数</span>
+        <span class="cur" style="width:176px" data-i18n="weights.mo_current">当前生效</span>
+        <span style="width:96px" data-i18n="weights.flow_contribution">贡献</span>
+        <span style="width:150px"></span>
+        <span style="width:132px"></span>
+        <span></span>
+      </div>
+      <div id="flowReadings"><div class="mo-empty">正在读取资金流因子当前读数…</div></div>
     </div>
   </div>
 
@@ -349,7 +368,30 @@ const MACRO_FIELDS = [
   ["cn_gov_debt", "中国政府债务/GDP"],
   ["eu_gov_debt", "欧洲政府债务/GDP"],
 ];
-const COMBINE_FIELDS = [["tech", "技术面"], ["macro", "宏观面"], ["news", "消息面（客户评估）"]];
+const COMBINE_FIELDS = [
+  ["tech", "技术面"],
+  ["macro", "宏观面"],
+  ["news", "消息面（客户评估）"],
+  // V0.120.0：新增第 4 个面 —— 资金流面（看「钱往哪儿流」）
+  ["flow", "资金流面"],
+];
+// V0.120.0：资金流面 6 因子面内权重（周频 3 个 54% / 月频 3 个 46%）
+// 与后端 schemas/settings.py::MoneyFlowWeightConfig 默认值逐字一致
+const MONEY_FLOW_FIELDS = [
+  ["cot_gold_net", "黄金投机净多占 OI（周）"],
+  ["cot_gold_flow", "黄金投机净多 4 周变化（周）"],
+  ["gold_etf_flow", "黄金ETF 4 周累计净申赎（周）"],
+  ["us_liq_net", "美元净流动性 4 周变化（月）"],
+  ["cn_margin_flow", "A股融资余额月变动（月）"],
+  ["cn_money_gap", "中国 M1-M2 剪刀差（月）"],
+];
+// V0.120.0：资金流面默认权重（与后端 MoneyFlowWeightConfig 逐字一致）
+// 后端没给 flow 字段时（老版本 / 迁移前）用它兜底，否则 6 个滑块全是 0%、
+// 合计标红「0% ≠ 100%」，用户连保存都做不了。
+const MONEY_FLOW_DEFAULT_WEIGHTS = {
+  cot_gold_net: 0.18, cot_gold_flow: 0.14, gold_etf_flow: 0.22,
+  us_liq_net: 0.14, cn_margin_flow: 0.16, cn_money_gap: 0.16,
+};
 
 let state = null;
 
@@ -387,12 +429,23 @@ function render() {
   const trend = state.trend || {};
   const macro = state.macro || {};
   const combine = state.combine || {};
+  const flow = state.flow || {};
   const trendPcts = toIntPercents(TREND_FIELDS.map(([k]) => trend[k]));
   const macroPcts = toIntPercents(MACRO_FIELDS.map(([k]) => macro[k]));
   const combinePcts = toIntPercents(COMBINE_FIELDS.map(([k]) => combine[k]));
+  // V0.120.0：资金流面 6 因子。整组缺失时（老后端 / 迁移前）退回内置默认，
+  // 否则 6 个滑块全是 0%、合计标红，用户连保存都做不了。
+  const flowRaw = MONEY_FLOW_FIELDS.map(([k]) => (
+    typeof flow[k] === "number" && isFinite(flow[k]) && flow[k] > 0 ? flow[k] : 0
+  ));
+  const flowTotal = flowRaw.reduce((a, b) => a + b, 0);
+  const flowPcts = toIntPercents(
+    flowTotal > 0 ? flowRaw : MONEY_FLOW_FIELDS.map(([k]) => MONEY_FLOW_DEFAULT_WEIGHTS[k]),
+  );
   document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l], i) => rowHtml("t_" + k, l, trendPcts[i])).join("");
   document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l], i) => rowHtml("m_" + k, l, macroPcts[i])).join("");
   document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l], i) => rowHtml("c_" + k, l, combinePcts[i])).join("");
+  document.getElementById("flowRows").innerHTML = MONEY_FLOW_FIELDS.map(([k, l], i) => rowHtml("f_" + k, l, flowPcts[i])).join("");
   // V0.79.0 Step F：技术面合成方式 radio 状态（缺字段向后兼容 → 默认勾选「组内平均」）
   const gc = state.group_combine !== false;
   document.getElementById("gcOn").checked = gc;
@@ -401,18 +454,41 @@ function render() {
 }
 
 function update() {
-  const sumOf = (prefix, fields) => fields.reduce((s, [k]) => s + (parseInt(document.getElementById(prefix + k).value) || 0), 0);
+  // ⚠ V0.120.0：滑块行是**拿到权重配置后才画出来的**，而 i18n 初始化完成会广播
+  // i18n:change（首次打开非默认语言时）⇒ update() 可能在行还不存在时被调用。
+  // 那时直接跳过，理由有两条：
+  //   1. 不能崩 —— getElementById 返回 null，.value 抛
+  //      "Cannot read properties of null" ⇒ **整页脚本中断**（后面全都不跑）；
+  //   2. 不能把合计写成 0% —— 行还没画，根本不存在「合计 0%」这回事，
+  //      写上去就是给用户看一眼假的红灯。
+  // render() 画完行会自己再调一次 update() ⇒ 状态不会漏。
+  if (!document.getElementById("c_tech")) return;
+  // 下面的取值一律空安全：万一某个 id 拼错，不至于让整页脚本挂掉
+  const val = (id) => {
+    const el = document.getElementById(id);
+    return el ? el.value : "";
+  };
+  const setPct = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  const sumOf = (prefix, fields) => fields.reduce((s, [k]) => s + (parseInt(val(prefix + k)) || 0), 0);
   const setSum = (id, v) => {
     const el = document.getElementById(id);
+    // V0.120.0：合计行改用 data-i18n-html —— 字典里带 <b id="...">，apply() 会整体
+    // 替换 innerHTML。元素万一不在（字典漏了 <b>）不能让整个 update() 崩掉。
+    if (!el) return;
     el.textContent = v + "%";
     el.className = v === 100 ? "sum-ok" : "sum-bad";
   };
   setSum("trendSum", sumOf("t_", TREND_FIELDS));
   setSum("macroSum", sumOf("m_", MACRO_FIELDS));
   setSum("combineSum", sumOf("c_", COMBINE_FIELDS));
-  TREND_FIELDS.forEach(([k]) => document.getElementById("t_" + k + "-pct").textContent = document.getElementById("t_" + k).value + "%");
-  MACRO_FIELDS.forEach(([k]) => document.getElementById("m_" + k + "-pct").textContent = document.getElementById("m_" + k).value + "%");
-  COMBINE_FIELDS.forEach(([k]) => document.getElementById("c_" + k + "-pct").textContent = document.getElementById("c_" + k).value + "%");
+  setSum("flowSum", sumOf("f_", MONEY_FLOW_FIELDS));
+  TREND_FIELDS.forEach(([k]) => setPct("t_" + k + "-pct", val("t_" + k) + "%"));
+  MACRO_FIELDS.forEach(([k]) => setPct("m_" + k + "-pct", val("m_" + k) + "%"));
+  COMBINE_FIELDS.forEach(([k]) => setPct("c_" + k + "-pct", val("c_" + k) + "%"));
+  MONEY_FLOW_FIELDS.forEach(([k]) => setPct("f_" + k + "-pct", val("f_" + k) + "%"));
   renderPreview();  // 拖动实时预览
 }
 
@@ -433,14 +509,20 @@ function levelOf(score) {
 }
 
 function combineValues() {
-  const v = (k) => (parseInt(document.getElementById("c_" + k).value) || 0) / 100;
-  return { tech: v("tech"), macro: v("macro"), news: v("news") };
+  // ⚠ 同 update()：滑块行可能还没画出来（首次加载时序）⇒ 取值必须空安全
+  const v = (k) => {
+    const el = document.getElementById("c_" + k);
+    return (parseInt(el ? el.value : "") || 0) / 100;
+  };
+  // V0.120.0：四面临界（技术 / 宏观 / 消息 / 资金流）
+  return { tech: v("tech"), macro: v("macro"), news: v("news"), flow: v("flow") };
 }
 
-function applyPreset(t, m, n) {
+function applyPreset(t, m, n, f) {
   document.getElementById("c_tech").value = Math.round(t * 100);
   document.getElementById("c_macro").value = Math.round(m * 100);
   document.getElementById("c_news").value = Math.round(n * 100);
+  document.getElementById("c_flow").value = Math.round(f * 100);
   update();
 }
 
@@ -449,7 +531,7 @@ function renderPreview() {
   if (!baseComponents) return;
 
   const w = combineValues();
-  const sum = w.tech + w.macro + w.news;
+  const sum = w.tech + w.macro + w.news + w.flow;
   // V0.78.0 Step D：某面数据不足时后端不再下发该 key。预览必须与页面口径一致 ——
   // 缺失面按「剔除 + 剩余面权重归一化」计算，而不是用 0 充当分值。
   const faceNum = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -457,13 +539,15 @@ function renderPreview() {
     { label: "技术面", v: faceNum(baseComponents.tech), w: w.tech },
     { label: "宏观参考", v: faceNum(baseComponents.macro), w: w.macro },
     { label: "消息面", v: faceNum(baseComponents.news), w: w.news },
+    // V0.120.0：第 4 面 —— 资金流面
+    { label: "资金流面", v: faceNum(baseComponents.flow), w: w.flow },
   ];
   const missFaces = previewFaces.filter(f => f.v === null);
   const availFaces = previewFaces.filter(f => f.v !== null && f.w > 0);
   const faceSum = availFaces.reduce((a, f) => a + f.w, 0);
   const preview = missFaces.length && faceSum > 0
     ? availFaces.reduce((a, f) => a + f.v * f.w / faceSum, 0)
-    : (baseComponents.tech ?? 0) * w.tech + (baseComponents.macro ?? 0) * w.macro + (baseComponents.news ?? 0) * w.news;
+    : previewFaces.reduce((a, f) => a + (f.v ?? 0) * f.w, 0);
   const missFaceTxt = missFaces.length
     ? `<br><b style="color:#946300">${missFaces.map(f => f.label).join("、")} 数据不足，未参与综合指数（以上按剩余面权重归一化）</b>`
     : "";
@@ -491,6 +575,7 @@ function renderPreview() {
       = 技术面 ${faceNum(baseComponents.tech) !== null ? baseComponents.tech.toFixed(1) : "—"}×${(w.tech * 100).toFixed(0)}%
       + 宏观参考 ${faceNum(baseComponents.macro) !== null ? baseComponents.macro.toFixed(1) : "—"}×${(w.macro * 100).toFixed(0)}%
       + 消息面 ${faceNum(baseComponents.news) !== null ? baseComponents.news.toFixed(1) : "—"}×${(w.news * 100).toFixed(0)}%
+      + 资金流面 ${faceNum(baseComponents.flow) !== null ? baseComponents.flow.toFixed(1) : "—"}×${(w.flow * 100).toFixed(0)}%
       ${missFaceTxt}
       ${valid ? "" : '<br><b style="color:#c92a2a">合成合计须为 100% 才可保存（当前 ' + (sum * 100).toFixed(0) + '%）</b>'}
     </div>`;
@@ -500,8 +585,10 @@ async function loadTrendForPreview() {
   try {
     const d = await fetch(API_BASE + "/api/v1/market/gold/trend?days=60").then(r => r.json());
     baseIndex = d.index.score;
+    // V0.120.0：components 现在可能含第 4 面「flow」；后端没下发 = 该面不可用
     baseComponents = d.index.components || { tech: 0, macro: 0, news: 0 };
     absorbMacroFactors(d);  // V0.110.0：宏观因子当前读数 → 手动校准表的「当前生效」列
+    absorbMoneyFlowFactors(d);  // V0.120.0：资金流因子当前读数 → 权重面板下方
     renderPreview();
   } catch (e) {
     // 预览失败时让「当前生效」列落到"暂无读数"而不是永远停在「加载中」
@@ -512,6 +599,47 @@ async function loadTrendForPreview() {
   }
 }
 
+/* V0.120.0：资金流因子当前读数（只读展示）。
+ *
+ * 与宏观面不同：资金流面**没有**手动校准入口（本期不做），
+ * 所以这里只是把「这个因子现在读数多少、什么档的数据」摆出来，
+ * 让用户调权重时知道自己在调什么 —— 而不是让 6 个滑块凭空出现。
+ * tier（live / lkg / static）必须显示：lkg 与 static 都不是「本次观测到的值」。
+ */
+let moneyFlowFactors = [];
+function absorbMoneyFlowFactors(d) {
+  const arr = (d && d.flow && Array.isArray(d.flow.factors)) ? d.flow.factors : [];
+  moneyFlowFactors = arr;
+  const box = document.getElementById("flowReadings");
+  if (!box) return;
+  if (!arr.length) {
+    box.innerHTML = '<div class="desc" style="color:var(--muted)">暂无资金流读数（上游源不可用时页面会显示降级标记）。</div>';
+    return;
+  }
+  const t = (k, fallback) => (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(k, fallback) : fallback;
+  box.innerHTML = arr.map(f => {
+    const tier = f.tier || "live";
+    const tierChip = tier === "lkg"
+      ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_tier_lkg", "降级")}</span>`
+      : tier === "static"
+        ? `<span class="mo-chip mo-chip-warn">${t("weights.mo_tier_static", "静态兜底")}</span>`
+        : "";
+    const cadenceChip = f.cadence === "weekly"
+      ? `<span class="mo-chip">周度</span>`
+      : f.cadence === "monthly"
+        ? `<span class="mo-chip">月度</span>`
+        : "";
+    const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "var(--muted)";
+    return `<div class="mo-row">
+      <span class="nm">${f.name ?? "—"}</span>
+      <span class="cur">${f.value ?? "—"} ${f.unit ?? ""} · ${f.data_date ?? "—"} · 友好度 ${f.score != null ? f.score.toFixed(0) : "—"}${tierChip}${cadenceChip}</span>
+      <span style="color:${c};font-weight:600">${f.contribution != null ? f.contribution.toFixed(1) : "—"}</span>
+      <span></span><span></span><span></span>
+    </div>`;
+  }).join("");
+}
+
 function collect() {
   const pick = (prefix, fields) => Object.fromEntries(fields.map(([k]) => [k, (parseInt(document.getElementById(prefix + k).value) || 0) / 100]));
   // V0.79.0 Step F：技术面合成方式（组内平均 vs 单维度加权）
@@ -519,6 +647,8 @@ function collect() {
   return {
     trend: pick("t_", TREND_FIELDS),
     macro: pick("m_", MACRO_FIELDS),
+    // V0.120.0：资金流面 6 因子面内权重（新增组）
+    flow: pick("f_", MONEY_FLOW_FIELDS),
     combine: pick("c_", COMBINE_FIELDS),
     group_combine,
   };
@@ -530,6 +660,7 @@ async function save() {
   const sums = [
     Object.values(body.trend).reduce((a, b) => a + b, 0),
     Object.values(body.macro).reduce((a, b) => a + b, 0),
+    Object.values(body.flow).reduce((a, b) => a + b, 0),
     Object.values(body.combine).reduce((a, b) => a + b, 0),
   ];
   if (sums.some(s => Math.abs(s - 1) > 0.001)) { msg.className = "msg err"; msg.textContent = "各组权重之和必须为 100%，请调整后再保存。"; return; }
@@ -575,14 +706,23 @@ async function resetAll() {
   // 客户此前既得不到确认提示（一次误点即不可逆），也看不到失败反馈（失败时页面毫无动静，
   // 会误以为已经恢复成功，而实际权重没变）。
   const ok = await confirmDialog(
-    "确定恢复默认权重？这会把「技术面 / 宏观面 / 消息面」的全部自定义权重整体覆盖为内置默认值" +
+    "确定恢复默认权重？这会把「技术面 / 宏观面 / 消息面 / 资金流面」的全部自定义权重整体覆盖为内置默认值" +
     "并立即保存，综合指数与决策会随之改变；原有自定义值无法撤销。"
   );
   if (!ok) return;
   const msg = document.getElementById("msg");
   // V0.119.0：宏观面默认权重改为 11 因子（与后端 MacroWeightConfig 默认值逐字一致）
+  // V0.120.0：合成权重改为四键（25/35/25/15）+ 新增资金流面 6 因子组
   // ⚠ 漏掉任何新 key 都会被后端 _sum_to_one 判为「合计 ≠ 1」⇒ 422 ⇒ 恢复默认失败。
-  const body = { trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 }, macro: { dxy: .13, us2y: .05, us10y: .07, us30y: .05, curve_10y2y: .09, real10y: .18, vix: .09, cb_gold: .22, us_gov_debt: .05, cn_gov_debt: .04, eu_gov_debt: .03 }, combine: { tech: .30, macro: .40, news: .30 }, group_combine: true };
+  // ⚠⚠ combine 漏 flow 更隐蔽：后端迁移守卫会把三键缩放成 85% 再补 flow=0.15，
+  // 于是「恢复默认」不报错，但技术面变成 25.5% —— 看起来成功了，其实没恢复成默认。
+  const body = {
+    trend: { structure: .30, momentum: .20, support: .20, momentum_rsi: .15, drawdown: .15 },
+    macro: { dxy: .13, us2y: .05, us10y: .07, us30y: .05, curve_10y2y: .09, real10y: .18, vix: .09, cb_gold: .22, us_gov_debt: .05, cn_gov_debt: .04, eu_gov_debt: .03 },
+    flow: { cot_gold_net: .18, cot_gold_flow: .14, gold_etf_flow: .22, us_liq_net: .14, cn_margin_flow: .16, cn_money_gap: .16 },
+    combine: { tech: .25, macro: .35, news: .25, flow: .15 },
+    group_combine: true,
+  };
   msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
   try {
     const r = await fetch(API, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -647,7 +787,9 @@ function t(key, params) {
   return key;
 }
 // 切语言时重渲染手动校准行（行内容是 JS 拼的，i18n 的 DOM 应用覆盖不到）
-document.addEventListener("i18n:change", renderOverrides);
+// V0.120.0：还要重算合计行 —— 合计行改用 data-i18n-html，apply() 会把 innerHTML
+// 整个换掉（数字回到字典里的 {sum}），必须重跑 update() 把真实数字写回去。
+document.addEventListener("i18n:change", () => { renderOverrides(); update(); });
 
 /** 覆盖值的滞后天数（日历日；仅用于提示，与后端 trading_days 略宽但足够直观） */
 function lagDays(dateStr) {

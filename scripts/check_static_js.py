@@ -229,6 +229,144 @@ def _node_syntax_error(path: str, node: str) -> str | None:
     return detail[0] if detail else "语法错误"
 
 
+#: 这些关键字之后期待一个「表达式」⇒ 紧跟的 ``/`` 开启正则字面量而非除号
+_KEYWORDS_BEFORE_EXPR = {
+    "return",
+    "typeof",
+    "instanceof",
+    "in",
+    "of",
+    "new",
+    "delete",
+    "void",
+    "case",
+    "do",
+    "else",
+    "yield",
+    "await",
+    "throw",
+}
+
+
+def _regex_can_start(prev: str, prev_word: str) -> bool:
+    """判断某个 ``/`` 位置是否开启正则字面量（而非除号）。
+
+    判据 = 简化版的「此处期待一个表达式」：
+    - 前一个有效字符是运算符 / 左括号 / 逗号 / 赋值号 ⇒ 正则；
+    - 前一个有效字符是标识符字符 / 数字 / 右括号 / 右方括号 ⇒ 除号；
+    - 前一个词是 ``return`` 这类关键字 ⇒ 正则。
+    """
+    if not prev:
+        return True
+    if prev in ",=:[!&|?{};+-*%~^<>":
+        return True
+    if prev.isalnum() or prev in "_$)]}":
+        return prev_word in _KEYWORDS_BEFORE_EXPR
+    return False
+
+
+def _strip_js_comments(js: str) -> str:
+    """剥掉 JS 的 ``//`` 行注释与 ``/* */`` 块注释。
+
+    **为什么必须剥**：注释里只要出现「代码样文字」（如 ``apply() 会整体替换
+    innerHTML``），:data:`CALL_RE` 就会把它当成一次真实的函数调用 ⇒ 门禁报出
+    「疑似调用了未定义的函数」。这类误报**每次写注释解释代码时都会触发**，
+    而人只会去改注释而不是改门禁 —— 于是门禁逐渐失去公信力。
+
+    同样的机制也吃 DOM id 检查：注释里写 ``getElementById("foo")`` 举例，
+    而 ``foo`` 在 HTML 里不存在 ⇒ 报「JS 引用了 HTML 中不存在的 id」。
+
+    实现要点（字符串 / 模板串 / 正则字面量必须原样保留）：
+    - 字符串（含转义）整体跳过；
+    - 正则字面量整体跳过（字符类 ``[...]`` 内的 ``/`` 不终止正则），
+      否则 ``/[/*]/`` 这种写法会被误当成块注释起始；
+    - **正则必须能在同一行内闭合**：找不到闭合 ``/`` 就当普通字符处理 ——
+      宁可漏剥一条注释，也不能把真代码吞掉（吞代码会让门禁**假绿**）；
+    - 块注释内的换行**保留**（否则行号全乱，排查时对不上原文）。
+    """
+    out: list[str] = []
+    i = 0
+    n = len(js)
+    prev = ""  # 上一个「有效」字符（跳过空白与注释）
+    prev_word = ""  # 上一个标识符 / 关键字
+    while i < n:
+        c = js[i]
+        # ── 字符串 / 模板串 ──
+        if c in "\"'`":
+            quote = c
+            out.append(c)
+            i += 1
+            while i < n:
+                if js[i] == "\\":
+                    out.append(js[i : i + 2])
+                    i += 2
+                    continue
+                out.append(js[i])
+                if js[i] == quote:
+                    i += 1
+                    break
+                i += 1
+            prev = quote
+            prev_word = ""
+            continue
+        # ── 注释 / 正则字面量 ──
+        if c == "/" and i + 1 < n:
+            nxt = js[i + 1]
+            if nxt == "/":
+                j = js.find("\n", i)
+                i = n if j == -1 else j
+                continue
+            if nxt == "*":
+                j = js.find("*/", i + 2)
+                i = n if j == -1 else j + 2
+                continue
+            if _regex_can_start(prev, prev_word):
+                end = _regex_literal_end(js, i)
+                if end is not None:
+                    out.append(js[i:end])
+                    i = end
+                    prev = "/"
+                    prev_word = ""
+                    continue
+        out.append(c)
+        if c.isalnum() or c in "_$":
+            prev_word += c
+        elif c.isspace():
+            pass
+        else:
+            prev_word = ""
+        if not c.isspace():
+            prev = c
+        i += 1
+    return "".join(out)
+
+
+def _regex_literal_end(js: str, start: int) -> int | None:
+    """若 ``js[start]`` 是正则字面量的起始，返回它**结束后的下标**；否则 None。
+
+    找不到闭合 ``/``（或闭合前遇到换行）⇒ 返回 None —— 调用方据此把它当普通
+    字符处理，**绝不能把真代码当注释吞掉**。
+    """
+    i = start + 1
+    n = len(js)
+    in_class = False
+    while i < n:
+        ch = js[i]
+        if ch == "\\":
+            i += 2
+            continue
+        if ch == "\n":
+            return None
+        if ch == "[":
+            in_class = True
+        elif ch == "]":
+            in_class = False
+        elif ch == "/" and not in_class:
+            return i + 1
+        i += 1
+    return None
+
+
 def _declared_names(js: str) -> set[str]:
     """收集脚本内所有本地声明名（函数 / 变量 / 解构 / 回调参数）。"""
     names = set(FUNC_DEF_RE.findall(js))
@@ -292,10 +430,14 @@ def _check_file(path: str, node: str | None) -> list[str]:
                 os.unlink(tmp)
 
     js = "\n".join(blocks)
+    # 注释必须先剥：注释里的「代码样文字」（apply() / getElementById("x")）
+    # 会被后面的正则当成真实调用 / 真实引用 ⇒ 误报；反过来注释里写
+    # `function foo(){}` 也会让未定义调用**假绿**。两侧都得剥。
+    js_stripped = _strip_js_comments(js)
 
     # 2) 未定义函数调用
-    declared = _declared_names(js)
-    called = set(CALL_RE.findall(js))
+    declared = _declared_names(js_stripped)
+    called = set(CALL_RE.findall(js_stripped))
     undefined = sorted(
         c
         for c in called
@@ -307,9 +449,9 @@ def _check_file(path: str, node: str | None) -> list[str]:
     # 3) DOM id 一致性
     # 动态拼接生成的 id（如 rowHtml("c_" + k, ...)）无法静态判定，
     # 命中已知前缀的一律放过，避免误报。
-    ids_defined = set(ID_RE.findall(html)) | _shared_js_ids()
-    ids_used = set(GET_ID_RE.findall(js))
-    dyn_prefixes = tuple(set(DYN_PREFIX_RE.findall(js)))
+    ids_defined = set(ID_RE.findall(HTML_COMMENT_RE.sub("", html))) | _shared_js_ids()
+    ids_used = set(GET_ID_RE.findall(js_stripped))
+    dyn_prefixes = tuple(set(DYN_PREFIX_RE.findall(js_stripped)))
     missing = sorted(
         i for i in ids_used - ids_defined if not (dyn_prefixes and i.startswith(dyn_prefixes))
     )

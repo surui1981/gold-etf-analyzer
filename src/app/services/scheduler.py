@@ -308,6 +308,42 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
     except Exception as exc:
         logger.warning("Macro factor persist/warmup failed: %s", exc)
 
+    # ── step 4（V0.120.0）：资金流因子落表 ──
+    # 与宏观因子同一套纪律，但**落表键是因子自身的观测日**（不是采集日）：
+    # CFTC 是周二、融资余额是月末、FRED 是周三 —— 同一个采集日会反复覆盖
+    # 同一行，历史表里就只剩「最近一次采集日」这一个观测点。
+    # 滚动分位窗口按观测日取窗（周频 728 天 / 月频 1826 天），窗内天然是不同观测。
+    #
+    # 静态兜底值与「末次落库」值**不落表**（见 money_flow.persistable_rows）。
+    #
+    # V0.120.0：与宏观面同款**顺带回填历史** —— backfill_money_flow_history
+    # 只补样本不足（<30）的因子，补满后每天调用近乎零成本（只是多一次
+    # count_samples 查询）。不回填的话 6 个因子永远停在静态阈带，滚动分位
+    # 永远不激活（冷启动缺陷，与 V0.118.0 宏观面同一个坑）。
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.money_flow_factor_history import MoneyFlowFactorHistoryRepository
+        from app.services.money_flow_backfill import backfill_money_flow_history
+
+        flow_svc = getattr(trend_svc, "_flow", None)
+        if flow_svc is None:
+            logger.info("资金流面未注入本次调度，跳过落表")
+        else:
+            rows = await flow_svc.persistable_rows()
+            async with async_session_factory() as session:
+                repo = MoneyFlowFactorHistoryRepository(session)
+                written = await repo.upsert_batch(target="default", rows=rows)
+            logger.info(
+                "Money flow factors persisted: %d rows (%d written)",
+                len(rows),
+                written,
+            )
+            filled = await backfill_money_flow_history(repo, target="default")
+            if filled:
+                logger.info("Money flow history backfilled: %s", filled)
+    except Exception as exc:
+        logger.warning("Money flow factor persist failed: %s", exc)
+
 
 async def intraday_warm_once(
     trend_svc: TrendService,

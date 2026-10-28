@@ -65,15 +65,34 @@ class _FakeTrendOut:
 
 
 class _FakeTrend:
-    """TrendService 替身：可编排「取数成功 / 抛异常 / 降级为 mock」三种结局。"""
+    """TrendService 替身：可编排「取数成功 / 抛异常 / 降级为 mock」三种结局。
+
+    ⚠ V0.120.0：回测的价格日历回填改走 **``fetch_price_bars()``**（轻路径，
+    只取价格序列与来源标记，**不评估任何评分面**）。
+    这里必须实现**新方法** —— 少一个就是 ``AttributeError`` 被
+    ``except Exception`` 吞掉 ⇒ 回填静默变成「取数失败」（无异常的失效）。
+    """
 
     def __init__(self, *, source: str = "live", n: int = 30, raise_exc: bool = False) -> None:
         self.source = source
         self.n = n
         self.raise_exc = raise_exc
         self.calls = 0
+        self.analyze_calls = 0
+
+    async def fetch_price_bars(
+        self, days: int = 60, target: str = "etf"
+    ) -> tuple[list[tuple[date, float]], dict[str, str]]:
+        self.calls += 1
+        if self.raise_exc:
+            raise RuntimeError("provider down")
+        last = date(2026, 10, 6)
+        bars = [(last - timedelta(days=i), 10.0 + i * 0.1) for i in range(self.n)]
+        return bars, {target: self.source}
 
     async def analyze(self, days: int = 60, target: str = "etf") -> _FakeTrendOut:
+        """旧路径（保留只为向后兼容；回测已不再走它）。"""
+        self.analyze_calls += 1
         self.calls += 1
         if self.raise_exc:
             raise RuntimeError("provider down")
@@ -238,6 +257,29 @@ def test_force_backfills_despite_existing() -> None:
     assert ok is True
     assert trend.calls == 1
     assert len(gold.upsert_calls) == 1
+
+
+# ─────────────── 约束 4（V0.120.0 新增）：回填不得触发任何评分面 ───────────────
+
+
+def test_backfill_does_not_evaluate_any_scoring_face() -> None:
+    """★ 回填只取价格 ⇒ **不得**走 ``analyze()``（那会顺带评估 4 个评分面）。
+
+    ⚠ V0.120.0 修的真缺陷：回填走 ``TrendService.analyze()`` ⇒ 顺带把
+    宏观面 / 消息面 / **资金流面**各拉一遍外网 —— 实测资金流面单次 **8.25s**
+    （CFTC 年文件 zip + FRED CSV + 沪深融资余额 + PBoC M1/M2 + 上交所份额），
+    算出来的指数被整段丢掉。后果不是「慢一点」而是**功能坏掉**：
+    ``tests/test_api/test_async_backtest.py`` 的异步回测用例只有 15s 预算 ⇒ 超时失败。
+    """
+    gold = _FakeGold()
+    trend = _FakeTrend()
+    svc = _svc(gold, trend)
+
+    ok, why = asyncio.run(svc.ensure_price_calendar("etf"))
+
+    assert ok is True, why
+    assert trend.analyze_calls == 0, "回填不该走 analyze()（会顺带评估宏观/消息/资金流面）"
+    assert trend.calls == 1, "但确实取过一次价格"
 
 
 # ─────────────── 幂等 / 边界 ───────────────

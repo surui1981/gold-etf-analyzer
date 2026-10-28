@@ -22,6 +22,12 @@ COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
         ("tech_detail", "TEXT", "NULL"),
         # V0.79.0 任务 #163：行情来源标记（历史行 NULL = 未标记，不可当作 live）
         ("data_source", "VARCHAR(16)", "NULL"),
+        # V0.120.0：资金流面两列（面分 + 6 因子明细）——
+        # 回测网格今天不动，但历史**从今天开始攒**（迁移 r2s3t4u5v6w）。
+        # ⚠ flow_index **可空且不回填**：整面不可用时是 NULL 而不是 0 分
+        # （0 分会被读成「资金正在撤离黄金」，真相是「没数」）；历史行保持 NULL。
+        ("flow_index", "FLOAT", "NULL"),
+        ("flow_detail", "TEXT", "NULL"),
     ],
     # V0.80.0 任务 #159 第 2 批：另两张用户数据表加 user_id
     "analysis_records": [

@@ -1,7 +1,8 @@
 /*!
  * news-score-widget.js —— 首页内嵌「消息面打分 · 客户评价」（V0.76.0）
  *
- * 背景：消息面占当日综合评估指数 30% 权重，但 V0.75.1 收敛「今日操作清单」后，
+ * 背景：消息面占当日综合评估指数的一部分权重（默认 25%，V0.120.0 起可在
+ * 权重配置页调整），但 V0.75.1 收敛「今日操作清单」后，
  * 首页只剩 `#newsFactor` 一行**只读**展示，打分入口无处可去 —— 用户必须跳到
  * `/news` 才能记录一次判断。首页是每日必看的落地页，为了打一次分而整页跳转，
  * 是本页最大的易用性缺口。本组件把打分能力**内联**到首页，保存后即时刷新
@@ -58,6 +59,10 @@
   var FETCH_TIMEOUT_MS = 20000;
   var MAX_SLOTS = 3;
   var FALLBACK_BASIS = ['美元指数', '美债收益率', '实际利率', '央行购金', '地缘风险', '技术面'];
+  var WEIGHTS_PATH = '/api/v1/settings/weights';
+  /* V0.120.0：消息面在综合指数里的**配置权重**由后端下发（用户可在权重配置页改）。
+     写死 30% 会与实际算法对不上（V0.120.0 起默认 25%）；取不到时退回 25。 */
+  var newsWeightPct = '25';
 
   /* 方向阈值必须与后端一致（services/news.py::direction_of）：
      >55 看多（利多黄金，红）/ <45 看空（利空黄金，绿）/ 其间中性。 */
@@ -271,7 +276,13 @@
   function hintLine() {
     var m = meta();
     if (!m.scored) {
-      return { cls: 'info', html: T('nsw.hint_none', '尚未打分，当前按 <b>中性 50</b> 参与评估（占综合指数 30%）。今日还有 <b>3</b> 次机会。') };
+      /* V0.120.0：未打分时消息面是**被剔除**（不是「按中性 50 计入」——
+         后端把该面从 faces 里剔掉、其余面权重重新归一化，见 services/trend.py）。
+         旧文案「按中性 50 参与评估」与实际算法相反，必须改。 */
+      return {
+        cls: 'info',
+        html: T('nsw.hint_none', '尚未打分 —— 消息面<b>不参与</b>综合指数（配置权重 {w}% 已剔除，其余面按有效面归一化）。今日还有 <b>3</b> 次机会。', { w: newsWeightPct })
+      };
     }
     if (m.remaining > 0) {
       return {
@@ -325,7 +336,7 @@
 
     var tagHtml = m.scored
       ? T('nsw.tag_scored', '今日已打 {u}/{max} 次 · 有效 {v}', { u: m.used, max: m.max, v: num(d.score) })
-      : T('nsw.tag_unscored', '今日未打分（中性 50）');
+      : T('nsw.tag_unscored', '今日未打分（不参与综合指数）');
 
     var byS = bySlot(state.editSlot);
     var saveLabel = byS
@@ -351,16 +362,16 @@
       '<div class="nsw-alert ' + hint.cls + '">' + hint.html + '</div>' +
 
       '<div class="nsw-eff">' +
-        '<div><div class="n">' + (m.scored ? num(d.score) : '50.0') + '</div>' +
+        '<div><div class="n">' + (m.scored ? num(d.score) : '—') + '</div>' +
         '<div class="l" style="color:' + over + '">' +
-          (m.scored ? esc(dirTxt(d.direction)) : T('nsw.neutral_default', '中性参考（未打分）')) +
+          (m.scored ? esc(dirTxt(d.direction)) : T('nsw.neutral_default', '未打分 · 不参与综合指数')) +
         '</div></div>' +
         '<div class="nsw-eff-meta">' +
-          '<div style="font-size:12px;color:var(--muted)">' + T('nsw.eff_label', '当日有效消息面分值（占综合指数 30%）') + '</div>' +
+          '<div style="font-size:12px;color:var(--muted)">' + T('nsw.eff_label', '当日有效消息面分值（占综合指数 {w}%）', { w: newsWeightPct }) + '</div>' +
           '<div class="nsw-formula">' + (d.formula
             ? esc(T('nsw.formula', '加权口径：{f} = {v}', { f: d.formula, v: num(d.score) }))
             : esc(d.scored ? T('nsw.formula_single', '仅 1 次打分，直接采用该次分值')
-                           : T('nsw.formula_none', '尚未打分，按中性 50 参与评估'))) + '</div>' +
+                           : T('nsw.formula_none', '尚未打分 —— 消息面不参与综合指数（权重已剔除）'))) + '</div>' +
           '<div class="nsw-prog">' + [1, 2, 3].map(function (k) {
             return '<span class="' + (k <= m.used ? 'on' : '') + '"></span>';
           }).join('') + '</div>' +
@@ -489,10 +500,37 @@
     renderBasis();
   }
 
+  /* 取消息面在综合指数里的配置权重（失败不阻塞打分主流程） */
+  async function loadCombineWeights() {
+    try {
+      var w = await fetchJSON(apiBase() + WEIGHTS_PATH);
+      var c = (w && w.combine) || {};
+      if (typeof c.news === 'number') newsWeightPct = (c.news * 100).toFixed(0);
+    } catch (e) {
+      /* 权重取不到就用默认 25 —— 权重是展示性信息，不该挡住打分 */
+    }
+  }
+
+  /* i18n 字典就绪信号（V0.120.0）
+   *
+   * ⚠ 本组件是 innerHTML 拼出来的，没有 data-i18n 标记 ⇒ i18n.js 的 apply()
+   * 扫不到它。字典没就绪就渲染 ⇒ 首次打开非默认语言时卡片锁定在默认语言。
+   */
+  function i18nReady() {
+    try {
+      if (window.I18n && window.I18n.ready && typeof window.I18n.ready.then === 'function') {
+        return window.I18n.ready.catch(function () { /* 失败也要继续渲染 */ });
+      }
+    } catch (e) { /* ignore */ }
+    return Promise.resolve();
+  }
+
   async function load() {
     if (state.inflight) return;
     state.inflight = true;
     try {
+      await i18nReady();
+      await loadCombineWeights();
       var d = await fetchJSON(apiBase() + NEWS_PATH);
       state.today = d;
       /* 默认编辑目标：优先下一个空闲槽位；三次用尽时落在最后一次（权重最高、
@@ -590,7 +628,7 @@
   }
 
   /* 写成功后：① 让宿主页立即刷新评估口径；② 刷新置顶结论卡。
-     消息面占综合指数 30%，打完分若不刷新，用户会看到"结论没变"而误判无效。 */
+     消息面占综合指数的一部分权重，打完分若不刷新，用户会看到"结论没变"而误判无效。 */
   function afterWrite() {
     try {
       window.dispatchEvent(new CustomEvent('news-score-changed'));

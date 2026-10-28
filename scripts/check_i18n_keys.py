@@ -77,6 +77,17 @@ V083_KEY_PREFIXES = (
     "cmd.",
     # V0.115.0：首页贵金属走势区（home.* 整个 namespace 纳入，67 键，实测 3 语零缺口）
     "home.",
+    # V0.120.0：补三个此前**完全不在门禁视野内**的命名空间 ——
+    #   原因：它们的 key 都通过**本地包装器** T(key, fallback) / tr(key, fallback)
+    #   取（字典没命中就回退中文，绝不渲染 key 字面量），而门禁此前只扫
+    #   `I18n.t('key')` 与 `tr('key')` 两种形式 —— synthesis-card.js / news-score-widget.js
+    #   / scoring.js 各自定义的 `T(` 一个都没扫到。
+    #   V0.120.0 已把 `T('key')` 加进扫描正则（见 extract_html_keys），
+    #   这三个 namespace 现在必须 3 语齐（实测 138 键 × 3 语零缺口）。
+    "syn.",  # 结论卡（synthesis-card.js）
+    "nsw.",  # 消息面打分器（news-score-widget.js）
+    "scoring.",  # 打分汇总页（scoring.js）
+    "decision.",  # 决策拆解（decision-explainer.js，tr() 形式，V0.86 起就有）
 )
 
 
@@ -129,11 +140,20 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
     #   command-palette.js 12 个 cmd.*，漏一语都不会报。
     #   实测 `tr(` 只出现在这两个文件里，且都是 i18n 用途，无同名误伤。
     tr_call_re = re.compile(r'\btr\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
+    # V0.120.0：补本地包装 `T('key', 'fallback')` 形式。synthesis-card.js /
+    #   news-score-widget.js / scoring.js 各自定义了同名 T(key, fallback, params)
+    #   包装器（字典没命中就回退中文，绝不渲染 key 字面量），但**既有的
+    #   `I18n.t(` / `tr(` 两个正则都扫不到它们** ⇒ syn.* / nsw.* / scoring.*
+    #   三个命名空间此前**完全不在门禁视野内**，漏一语不会报。
+    #   正则用 `(?<![A-Za-z0-9_])` 前置断言，避免命中 `fmtT(` / `getT(` 之类；
+    #   只认字符串字面量（模板字面量 `` T(`scoring.hit_rate_${h}`) `` 动态拼接，
+    #   扫不出来也不该扫）。
+    t_call_re = re.compile(r'(?<![A-Za-z0-9_])T\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
     for path in glob.glob(os.path.join(static_dir, "*.js")):
         rel = os.path.relpath(path, static_dir)
         with open(path, encoding="utf-8") as f:
             content = f.read()
-        for rx in (js_attr_re, js_call_re, tr_call_re):
+        for rx in (js_attr_re, js_call_re, tr_call_re, t_call_re):
             for m in rx.finditer(content):
                 k = m.group(1)
                 if not k:

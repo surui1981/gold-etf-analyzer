@@ -284,7 +284,23 @@ console.log("=".repeat(70));
   console.log("\n[6] 既有缺陷修复验证");
   const t = read("trend.html");
   ok("trend 快照卡已改 .value（4 处）", countOf(t, /<div class="value" id="snap(Latest|Max|Min|Delta)"/g) === 4, String(countOf(t, /<div class="value" id="snap(Latest|Max|Min|Delta)"/g)));
-  ok("trend 不再有 .val 的错用（.macro-row .val 的两处保留）", countOf(t, /<span class="val"/g) === 2, String(countOf(t, /<span class="val"/g)));
+  // V0.120.0：资金流面新增了一处 `.macro-row .val`（第 3 处）——
+  // 所以这里不再写死「几处」，而是断言**每一处 `<span class="val">` 都长在
+  // `.macro-row` 行里**（.val 是宏/流/消息因子行的专用类；误用到别处会串样式）。
+  // 写死数字的版本在 V0.120.0 加了第 3 处合法用法后会假红 —— 门禁不能因为
+  // 「合法的第 3 处」而被迫改成「≥2」（那会放过真正的误用）。
+  {
+    const valIdx = [];
+    const re = /<span class="val"/g;
+    let m;
+    while ((m = re.exec(t)) !== null) valIdx.push(m.index);
+    const orphans = valIdx.filter((i) => !t.slice(Math.max(0, i - 700), i).includes('class="macro-row"'));
+    ok(
+      "trend 的 .val 全部长在 .macro-row 行里（无孤儿）",
+      valIdx.length >= 3 && orphans.length === 0,
+      `共 ${valIdx.length} 处，孤儿 ${orphans.length} 处`,
+    );
+  }
 
   const n = read("news.html");
   const thead = n.slice(n.indexOf("<thead>"), n.indexOf("</thead>"));
@@ -987,11 +1003,19 @@ await Promise.all(pending);
     ok("C2 取消确认时 → 一个保存请求都不发（原先会直接覆盖）", r1.fetchCount === 0);
 
     const r2 = await runReset(true, { ok: true, status: 200, json: async () => null });
+    // V0.120.0：合成权重从 3 面（30/40/30）改成 4 面（25/35/25/15），
+    // 并新增资金流面 6 因子组 —— 断言必须跟着改，否则「恢复默认」会悄悄
+    // 写回旧权重（前端与后端默认值不一致 ⇒ 保存后综合指数变脸）。
     ok("C2 确认后 → 提交的确实是内置默认权重",
-      r2.fetchCount === 1 && r2.fetched.trend.structure === 0.3 && r2.fetched.combine.news === 0.3);
-    const sums = [r2.fetched.trend, r2.fetched.macro, r2.fetched.combine]
+      r2.fetchCount === 1
+      && r2.fetched.trend.structure === 0.3
+      && r2.fetched.combine.news === 0.25
+      && r2.fetched.combine.flow === 0.15
+      && r2.fetched.flow.cot_gold_net === 0.18,
+      JSON.stringify({ combine: r2.fetched.combine, flow: r2.fetched.flow }));
+    const sums = [r2.fetched.trend, r2.fetched.macro, r2.fetched.flow, r2.fetched.combine]
       .map((o) => Object.values(o).reduce((x, y) => x + y, 0));
-    ok("C2 默认值三组各自归一（各组和 = 1）", sums.every((s) => Math.abs(s - 1) < 1e-9), JSON.stringify(sums));
+    ok("C2 默认值四组各自归一（各组和 = 1）", sums.every((s) => Math.abs(s - 1) < 1e-9), JSON.stringify(sums));
     ok("C2 成功后 → 提示成功并重渲染",
       r2.doc.getElementById("msg").textContent.includes("已恢复默认") && r2.rendered === 1);
 

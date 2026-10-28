@@ -71,6 +71,8 @@ class SnapshotRepository:
                 "index_level",
                 "macro_detail",
                 "tech_detail",
+                "flow_index",
+                "flow_detail",
                 "data_source",
             ):
                 setattr(existing, field, getattr(snapshot, field))

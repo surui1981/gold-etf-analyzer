@@ -150,7 +150,23 @@ class TrendIndexOut(BaseModel):
     summary: str
     components: dict[str, float] = Field(
         default_factory=dict,
-        description="各面分值 components: tech / macro / news（供权重调整实时预览）",
+        description="各面分值 components: tech / macro / news / flow（供权重调整实时预览）",
+    )
+    face_weights: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "各面**实际生效**权重（已剔除不可用的面并按剩余面归一化）。"
+            "V0.120.0：前端「运算方法」用它渲染公式 —— 硬编码 30/40/30 会在"
+            "消息面未打分（权重被剔除并归一化）时说错话。"
+        ),
+    )
+    face_weights_nominal: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "V0.120.0：各面**配置权重**（剔除/归一化之前的原始值）。"
+            "前端用它说明「消息面 X% 权重被剔除」—— 被剔除的那个面不在 "
+            "``face_weights`` 里，只能从这里取它原本的权重。"
+        ),
     )
     composed_by: Literal["weighted", "grouped"] = Field(
         "weighted",
@@ -219,6 +235,100 @@ class MacroIndexOut(BaseModel):
         description="V0.119.0：**有资格**参与滚动分位的因子 key 列表（= 全部因子"
         "减去低频因子）。前端用它做「N/M」的分母 —— 不要再在前端硬编码"
         "「排除 cb_gold」之类的清单，两份清单必然腐化。",
+    )
+
+
+class MoneyFlowFactorOut(BaseModel):
+    """单资金流因子：当前值 + 黄金友好度评分 + 方向。
+
+    与 ``MacroFactorOut`` 同构（前端复用同一套渲染模式），差别在
+    ``cadence`` 取值：资金流因子只有 ``weekly`` / ``monthly`` 两档
+    （用户要求「关注近期资金数据，按周和月的关键因子」）。
+    """
+
+    key: str = Field(
+        ...,
+        description="因子标识 cot_gold_net/cot_gold_flow/gold_etf_flow/"
+        "us_liq_net/cn_margin_flow/cn_money_gap",
+    )
+    name: str
+    value: str = Field(..., description="当前值（文本）")
+    unit: str
+    data_date: str = Field(..., description="数据日期（该因子自身的观测日）")
+    source: str = Field("", description="数据源标识（如「CFTC 分类持仓」「上交所 ETF 份额」）")
+    tier: str = Field(
+        "live",
+        description="取值层级 live（本次真的观测到）/ lkg（末次落库的真实读数，"
+        "上游源当时不可用）/ static（内置常量兜底，非市场读数）。",
+    )
+    cadence: str = Field(
+        "weekly",
+        description="更新节奏 weekly / monthly。非日频因子的 data_date 天然滞后数天到数周，"
+        "前端据此改挂「周度/月度」说明，不拿日频的 4 天阈值判滞后。",
+    )
+    max_lag_days: int = Field(
+        14,
+        description="自动源滞后告警阈值（日历日）。周频 14 天 / 月频 60 天 —— "
+        "超过才说明源真的断了（常亮的告警等于没有告警）。",
+    )
+    window_days: int = Field(
+        728,
+        description="滚动分位窗口长度（日历日）。周频 104 周=728 日 / 月频 60 月=1826 日 —— "
+        "按因子的观测节奏取窗，不能用日频的 252 日（会把同一个周值重复约 5 次、"
+        "把 P10/P90 压平成同一条线）。",
+    )
+    score: float = Field(..., ge=0, le=100, description="黄金友好度 0-100")
+    direction: DirectionSignal
+    weight: float = Field(
+        ...,
+        ge=0,
+        le=1,
+        description="**配置权重**（面内占比）。与宏观面同款约定：读数缺失的因子被剔除后，"
+        "``weight`` 保持配置原值不缩放，本次实际生效的权重体现在 ``contribution`` 上。",
+    )
+    contribution: float = Field(
+        ...,
+        ge=0,
+        le=100,
+        description="对资金流面指数的贡献分（= 友好度 × 本次生效权重）。"
+        "剔除因子后按剩余权重归一化，故 Σcontribution = 本次指数分。",
+    )
+    detail: str
+
+
+class MoneyFlowIndexOut(BaseModel):
+    """资金流面指数（6 因子加权合成，周 3 / 月 3）。"""
+
+    score: float | None = Field(
+        None,
+        ge=0,
+        le=100,
+        description="资金流面指数 0-100。**None = 本轮一个因子都没取到读数** —— "
+        "此时整面从综合指数里剔除（不按 0 分计入），与宏观面「恒有值」不同："
+        "资金流的 5 个外部源全挂是可能发生的，0 分会被当成「极度利空」。",
+    )
+    direction: DirectionSignal
+    factors: list[MoneyFlowFactorOut] = Field(..., description="资金流因子明细")
+    summary: str
+    flow_dynamic: bool = Field(
+        False,
+        description="阈值是否来自滚动 90/10 分位；False=回退静态 best/worst（样本不足）",
+    )
+    dynamic_factors: list[str] = Field(
+        default_factory=list,
+        description="实际使用滚动分位阈值的因子 key 列表（``flow_dynamic`` 是布尔摘要）",
+    )
+    rolling_factors: list[str] = Field(
+        default_factory=list,
+        description="有资格参与滚动分位的因子 key 列表（前端「N/M」的分母）。",
+    )
+    weekly_weight: float = Field(
+        0.0,
+        description="周频因子合计权重（面内占比）—— 用户明确要求分周/月两档，前端据此分组展示。",
+    )
+    monthly_weight: float = Field(
+        0.0,
+        description="月频因子合计权重（面内占比）。",
     )
 
 
@@ -308,6 +418,11 @@ class GoldTrendOut(BaseModel):
     )
     macro: MacroIndexOut = Field(..., description="宏观参考指数（美元指数/美债/VIX/央行购金）")
     news: NewsIndexOut = Field(..., description="消息面指数（客户评估）")
+    flow: MoneyFlowIndexOut | None = Field(
+        None,
+        description="V0.120.0：资金流面指数（钱往哪儿流：CFTC 投机净多 / 黄金 ETF 净申赎 / "
+        "美元净流动性 / A股融资余额 / M1-M2 剪刀差）。None=本轮未参与综合指数。",
+    )
     data_sources: dict[str, str] = Field(
         default_factory=dict,
         description="数据源状态：etf/sge/ny → live（真实）或 mock（降级演示）",
@@ -489,6 +604,11 @@ class SilverTrendOut(BaseModel):
     )
     macro: MacroIndexOut
     news: NewsIndexOut
+    flow: MoneyFlowIndexOut | None = Field(
+        None,
+        description="V0.120.0：资金流面（第 4 面）。与宏观面同样按「同一套因子」"
+        "跨金/银共用 —— 宏观面里同样有黄金专属因子（cb_gold 央行购金）。",
+    )
     data_sources: dict[str, str] = Field(default_factory=dict)
     degraded: bool = False
     freshness: DataFreshnessOut | None = None

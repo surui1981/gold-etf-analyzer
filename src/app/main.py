@@ -204,11 +204,14 @@ async def _warm_cache() -> None:
 
         # 注入央行购金服务 → cb_gold 因子从表自动计算（不再硬编码 STATIC_REF）
         # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
+        # V0.120.0：注入资金流面（第 4 面）→ 预热时也带上钱从哪儿来
         from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+        from app.repositories.money_flow_factor_history import MoneyFlowFactorHistoryRepository
         from app.services.cache import set_served
         from app.services.central_bank import CentralBankService
         from app.services.macro import MacroFactorService
         from app.services.macro_thresholds import MacroThresholdCalculator
+        from app.services.money_flow import MONEY_FLOW_FACTOR_RULES, MoneyFlowService
         from app.services.trend import GUIDE_TARGET, TrendService
 
         async with async_session_factory() as session:
@@ -221,11 +224,24 @@ async def _warm_cache() -> None:
                 threshold_calculator=threshold_calc,
                 history_repo=history_repo,
             )
+            flow_history_repo = MoneyFlowFactorHistoryRepository(session)
+            flow = MoneyFlowService(
+                settings=None,  # 预热时无权重服务 → 用规则默认权重
+                threshold_calculator=MacroThresholdCalculator(
+                    repo=flow_history_repo,
+                    rules=MONEY_FLOW_FACTOR_RULES,
+                    skip_rolling=frozenset(),
+                    window_days=728,
+                    min_samples=40,
+                ),
+                history_repo=flow_history_repo,
+            )
             trend = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
                 settings=None,
                 news=None,  # 预热时未打分 → 中性 50
+                flow=flow,
             )
             result = await trend.analyze(days=60, target=GUIDE_TARGET)
             # V0.79.0 Step E：warm threshold cache 让首屏不空跑 percentile
@@ -264,7 +280,9 @@ async def _start_daily_scheduler() -> None:
 
         async with async_session_factory() as session:
             from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+            from app.repositories.money_flow_factor_history import MoneyFlowFactorHistoryRepository
             from app.services.macro_thresholds import MacroThresholdCalculator
+            from app.services.money_flow import MONEY_FLOW_FACTOR_RULES, MoneyFlowService
 
             cb_svc = CentralBankService(repo=CentralBankPurchaseRepository(session))
             # V0.79.0 Step E：注入 MacroThresholdCalculator → 宏观因子走 252 日滚动百分位
@@ -276,11 +294,25 @@ async def _start_daily_scheduler() -> None:
                 threshold_calculator=threshold_calc,
                 history_repo=history_repo,
             )
+            # V0.120.0：资金流面（第 4 面）同样注入历史仓储 → 滚动分位 + 末次落库兜底
+            flow_history_repo = MoneyFlowFactorHistoryRepository(session)
+            flow = MoneyFlowService(
+                settings=None,
+                threshold_calculator=MacroThresholdCalculator(
+                    repo=flow_history_repo,
+                    rules=MONEY_FLOW_FACTOR_RULES,
+                    skip_rolling=frozenset(),
+                    window_days=728,
+                    min_samples=40,
+                ),
+                history_repo=flow_history_repo,
+            )
             trend_svc = TrendService(
                 repo=MarketDataRepository(),
                 macro=macro,
                 settings=None,
                 news=None,
+                flow=flow,
             )
 
         async def _capture_with_session():
@@ -432,9 +464,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             # 这里补一个真正的 MacroFactorService（含末次落库兜底）。
             from app.repositories.central_bank import CentralBankPurchaseRepository
             from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+            from app.repositories.money_flow_factor_history import MoneyFlowFactorHistoryRepository
             from app.services.central_bank import CentralBankService
             from app.services.macro import MacroFactorService
             from app.services.macro_thresholds import MacroThresholdCalculator
+            from app.services.money_flow import MONEY_FLOW_FACTOR_RULES, MoneyFlowService
 
             market_repo = MarketDataRepository(tool_sess)
             macro_history_repo = MacroFactorHistoryRepository(tool_sess)
@@ -443,7 +477,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 threshold_calculator=MacroThresholdCalculator(repo=macro_history_repo),
                 history_repo=macro_history_repo,
             )
-            trend_svc = TrendService(market_repo, macro_svc)
+            # V0.120.0：/ask 的 get_market_overview 工具也要能看到资金流面
+            flow_history_repo = MoneyFlowFactorHistoryRepository(tool_sess)
+            flow_svc = MoneyFlowService(
+                threshold_calculator=MacroThresholdCalculator(
+                    repo=flow_history_repo,
+                    rules=MONEY_FLOW_FACTOR_RULES,
+                    skip_rolling=frozenset(),
+                    window_days=728,
+                    min_samples=40,
+                ),
+                history_repo=flow_history_repo,
+            )
+            trend_svc = TrendService(market_repo, macro_svc, flow=flow_svc)
             # 其余 4 个 service 注入宽表 + market_data
             from app.repositories.news import NewsScoreRepository as _NSR
             from app.repositories.position import PositionRepository as _PR

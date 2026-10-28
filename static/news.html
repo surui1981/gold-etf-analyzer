@@ -144,7 +144,7 @@
 
   <div class="hero">
     <h1 data-i18n="news.h1">消息面评估 · 黄金价格投资辅助工具</h1>
-    <p class="intro">综合趋势指数 = <b>技术面 30%</b> + <b>宏观面 40%</b> + <b>消息面 30%</b>。消息面由<b>您本人</b>基于主流财经网站的<b>投行黄金走势展望与预期</b>研判打分（0-100 看多强度）。<b>每日提供 3 次打分机会</b>（第 1/2/3 次），当日有效分值按<b>越晚权重越高</b>的 1:2:3 加权合成后汇入当日评估与购买决策。</p>
+    <p class="intro">综合趋势指数 = <span id="introWeights"><b>技术面 25%</b> + <b>宏观面 35%</b> + <b>消息面 25%</b> + <b>资金流面 15%</b></span>。消息面由<b>您本人</b>基于主流财经网站的<b>投行黄金走势展望与预期</b>研判打分（0-100 看多强度）。<b>每日提供 3 次打分机会</b>（第 1/2/3 次），当日有效分值按<b>越晚权重越高</b>的 1:2:3 加权合成后汇入当日评估与购买决策。</p>
   </div>
 
   <!-- 参考信息来源 -->
@@ -171,9 +171,11 @@
       <div>
         <div class="desc">当日有效消息面分值</div>
         <!-- V0.77.1 A3：原先此处静态写着 50.0 —— 接口失败时 renderAll 直接 return，
-             这个静态值就永远留在页面上。而 50 恰好是「中性」，又真实占综合指数 30% 权重，
+             这个静态值就永远留在页面上。而 50 恰好是「中性」，又真实占综合指数的权重，
              客户会把它当成「今天消息面中性」这一结论来用。改为占位「—」：
-             有数据时由 renderAll 填真值，取数失败时由 renderLoadFailure 显式说明。 -->
+             有数据时由 renderAll 填真值，取数失败时由 renderLoadFailure 显式说明。
+             V0.120.0：消息面未打分时后端 score=None（该面被剔除、不参与综合指数），
+             fmtScore(null) → 「—」，不再是「中性 50 计入」。 -->
         <div class="eff-score" id="effScore">—</div>
       </div>
       <div class="eff-meta">
@@ -241,7 +243,7 @@
     </div>
   </div>
 
-  <footer>gold-etf-analyzer · 消息面权重 30% · 每日 3 次打分 · 打分仅供参考，不构成投资建议</footer>
+  <footer>gold-etf-analyzer · 消息面权重 <span id="footNewsWeight">25%</span> · 每日 3 次打分 · 打分仅供参考，不构成投资建议</footer>
 </div>
 </main>
 
@@ -257,6 +259,40 @@ let forceReload = false;
 let basisOptions = [];   // V0.66.0：研判依据标签（loadBasisOptions 异步加载）
 let selectedBasis = new Set(); // V0.66.0：当前选中的标签集合
 let hintTimer = null;    // V0.66.0：分值→校准提示的 debounce 句柄
+/* V0.120.0：消息面在综合指数里的**配置权重**由后端下发（用户可在权重配置页改）。
+   写死 30% 会与实际算法对不上（V0.120.0 起默认 25%）；取不到时退回 25。
+   同样地，intro 里的四面权重也必须跟着配置走 —— 写死就是撒谎。 */
+let newsWeightPct = 25;
+const COMBINE_FACES = [
+  { key: "tech",  label: "技术面" },
+  { key: "macro", label: "宏观面" },
+  { key: "news",  label: "消息面" },
+  { key: "flow",  label: "资金流面" },
+];
+const COMBINE_NOMINAL = { tech: 0.25, macro: 0.35, news: 0.25, flow: 0.15 };
+
+async function loadCombineWeights() {
+  try {
+    const r = await fetch(API_BASE + "/api/v1/settings/weights");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const w = await r.json();
+    const c = (w && w.combine) || {};
+    if (typeof c.news === "number") newsWeightPct = Math.round(c.news * 100);
+    const el = document.getElementById("introWeights");
+    if (el) {
+      el.innerHTML = COMBINE_FACES
+        .map(f => {
+          const v = typeof c[f.key] === "number" ? c[f.key] : COMBINE_NOMINAL[f.key];
+          return `<b>${f.label} ${(v * 100).toFixed(0)}%</b>`;
+        })
+        .join(" + ");
+    }
+    const fw = document.getElementById("footNewsWeight");
+    if (fw) fw.textContent = newsWeightPct + "%";
+  } catch (e) {
+    /* 权重取不到就用默认 25 —— 权重是展示性信息，不该挡住打分主流程 */
+  }
+}
 
 function dirOf(v) { return v > 55 ? "bullish" : v < 45 ? "bearish" : "neutral"; }
 function dirTxt(d) { return { bullish: "看多展望（利多黄金）", bearish: "看空展望（利空黄金）", neutral: "中性展望" }[d]; }
@@ -282,7 +318,7 @@ function fmtScore(v) {
 /* V0.77.1 A3：取数失败时的显式失败态。
    原实现只在状态标签里塞一句「加载失败」，而下面「当日有效消息面分值」仍显示静态的
    50.0、「尚未打分，按中性 50 参与评估」也还留着 —— 于是「取数失败」与「确实还没打分」
-   在界面上长得一模一样，而 50 恰好是中性、又真占综合指数 30% 权重，
+   在界面上长得一模一样，而 50 恰好是中性、又真占综合指数的权重，
    客户会把一个根本没取到的值当成今天的结论使用。 */
 function renderLoadFailure(msg) {
   state = null;
@@ -320,7 +356,7 @@ function renderAll() {
   if (d.scored) {
     status.innerHTML = `<span class="dir-tag" style="background:${dirColor(d.direction)}">已打 ${d.used_slots ?? 0}/${d.max_slots ?? 3} 次 · 有效 ${fmtScore(d.score)}</span>`;
   } else {
-    status.innerHTML = '<span style="font-size:12px;color:var(--up)">今日未打分（中性 50）</span>';
+    status.innerHTML = '<span style="font-size:12px;color:var(--up)">今日未打分（不参与综合指数）</span>';
   }
 
   // 提示条
@@ -328,7 +364,7 @@ function renderAll() {
   alert.style.display = "block";
   if (!d.scored) {
     alert.style.background = "#fff4e5"; alert.style.color = "#8a5300"; alert.style.border = "1px solid #ffd8a8";
-    alert.innerHTML = "尚未打分，当前按<b>中性 50</b>参与评估（占 30% 权重）。今日还有 <b>3</b> 次打分机会，建议查阅上方投行展望后完成第 1 次打分。";
+    alert.innerHTML = `尚未打分 —— 消息面<b>不参与</b>综合指数（配置权重 ${newsWeightPct}% 已剔除，其余面按有效面归一化）。今日还有 <b>3</b> 次打分机会，建议查阅上方投行展望后完成第 1 次打分。`;
   } else if ((d.remaining_slots ?? 0) > 0) {
     alert.style.background = "#e7f5ff"; alert.style.color = "#1971c2"; alert.style.border = "1px solid #a5d8ff";
     alert.innerHTML = `今日已打分 <b>${d.used_slots ?? 0}</b> 次，还有 <b>${d.remaining_slots ?? 0}</b> 次机会。随着盘中信息更新，可继续打分——<b>越晚的一次权重越高</b>，对当日指数影响越大。`;
@@ -344,7 +380,7 @@ function renderAll() {
     `<span class="dir-tag" style="background:${dirColor(d.direction)}">${dirTxt(d.direction) || "中性展望"}</span>`;
   document.getElementById("effFormula").textContent = d.formula
     ? "加权口径：" + d.formula + " = " + fmtScore(d.score)
-    : (d.scored ? "仅 1 次打分，直接采用该次分值" : "尚未打分，按中性 50 参与评估");
+    : (d.scored ? "仅 1 次打分，直接采用该次分值" : "尚未打分 —— 消息面不参与综合指数（权重已剔除）");
   document.getElementById("effProgress").innerHTML =
     [1, 2, 3].map(n => `<span class="${n <= (d.used_slots ?? 0) ? "on" : ""}"></span>`).join("");
 
@@ -597,6 +633,7 @@ async function loadHistory() {
 
 (async function init() {
   try {
+    await loadCombineWeights();
     const r = await fetch(API);
     if (!r.ok) throw new Error("HTTP " + r.status);
     state = await r.json();

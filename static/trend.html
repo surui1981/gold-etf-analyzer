@@ -316,6 +316,8 @@
         <div class="macro-box">
           <div class="macro-title" data-i18n="trend.macro_label">🌐 宏观参考因子 <span style="font-weight:400;color:var(--muted);font-size:11px" id="macroInfo"></span></div>
           <div id="macroFactors"></div>
+          <div class="macro-title" style="margin-top:8px" data-i18n="trend.flow_label">💰 资金流面 <span style="font-weight:400;color:var(--muted);font-size:11px" id="flowInfo"></span></div>
+          <div id="flowFactors"></div>
           <div class="macro-title" style="margin-top:8px" data-i18n="trend.news_label">🗞️ 消息面评估 <span style="font-weight:400;color:var(--muted);font-size:11px" id="newsInfo"></span></div>
           <div id="newsFactor"></div>
         </div>
@@ -600,6 +602,12 @@ function render(d) {
 
   // 追踪指数
   const idx = d.index;
+  // V0.120.0：面权重由后端下发 —— face_weights = 实际生效（已剔除/归一化），
+  // face_weights_nominal = 配置原值（被剔除的那个面只能从这里取它的权重）。
+  const faceW = (idx.face_weights && typeof idx.face_weights === "object") ? idx.face_weights : {};
+  const faceNominal = (idx.face_weights_nominal && typeof idx.face_weights_nominal === "object")
+    ? idx.face_weights_nominal : {};
+  const newsNominalPct = faceNominal.news != null ? (faceNominal.news * 100).toFixed(0) : "—";
   const idxColor = idx.direction === "bullish" ? "var(--up)" : idx.direction === "bearish" ? "var(--down)" : "var(--muted)";
   const idxNumEl = document.getElementById("idxNum");
   idxNumEl.textContent = idx.score != null ? idx.score.toFixed(1) : "—";
@@ -621,8 +629,8 @@ function render(d) {
     chip.id = "idxPendingChip";
     chip.className = "fsh-chip fsh-warn fsh-stale-chip";
     chip.title = (window.I18n && typeof window.I18n.t === "function")
-      ? window.I18n.t("trend.pending_tooltip", "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）")
-      : "消息面尚未打分，综合指数按技术+宏观归一计算（暂未含消息面权重）";
+      ? window.I18n.t("trend.pending_tooltip", { n: newsNominalPct })
+      : `消息面尚未打分，综合指数按其余各面权重归一计算（暂未含消息面 ${newsNominalPct}% 权重）`;
     chip.textContent = "▲ " + ((window.I18n && typeof window.I18n.t === "function")
       ? window.I18n.t("trend.pending_chip", "消息面 pending")
       : "消息面 pending");
@@ -657,8 +665,24 @@ function render(d) {
     ? "5 维度按组内先平均再加权（趋势 0.50 / 超买 0.30 / 风险 0.20），降低内部相关性"
     : "5 维度独立按 TREND_WEIGHTS 加权（历史行为）";
   const techComposeBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${techBadgeBg};color:${techBadgeColor};font-size:10px;font-weight:500" title="${techBadgeHint}">${techBadgeText}</span>`;
+  // V0.120.0：综合指数的面权重由**后端下发**（index.face_weights = 已归一化的实际生效权重，
+  // 见上方 faceW 定义）。旧代码硬编码「技术面×30% + 宏观×40% + 消息面×30%」—— 但消息面
+  // 未打分时该面被剔除、剩余面权重被重新归一化，硬编码会直接说错话（公式 ≠ 实际算法）。
+  const FACE_ORDER = ["tech", "macro", "news", "flow"];
+  const faceLabel = (k) => ({
+    tech: "技术面",
+    macro: "宏观参考",
+    news: "<a href='/news' style='color:var(--accent)'>消息面</a>",
+    flow: "资金流面",
+  })[k] || k;
+  const faceFormula = FACE_ORDER
+    .filter(k => faceW[k] != null)
+    .map(k => `${faceLabel(k)}×${(faceW[k] * 100).toFixed(0)}%`)
+    .join(" + ");
   document.getElementById("idxMethod").innerHTML =
-    "📐 <b>运算方法</b>：综合指数 = 技术面×30% + 宏观参考×40% + <a href='/news' style='color:var(--accent)'>消息面</a>×30%；技术面 = " +
+    "📐 <b>运算方法</b>：综合指数 = " +
+    (faceFormula || "技术面×25% + 宏观参考×35% + <a href='/news' style='color:var(--accent)'>消息面</a>×25% + 资金流面×15%") +
+    "；技术面 = " +
     techFormula +
     techComposeBadge +
     "。权重可在 <a href='/weights.html' style='color:var(--accent)'>权重配置页</a> 调整";
@@ -703,6 +727,71 @@ function render(d) {
     </div>`;
   }).join("");
 
+  // V0.120.0：资金流面（第 4 面）因子明细
+  // 渲染模式与宏观面同构（.macro-row），多挂两个 chip：
+  // ① tier（live/lkg/static）—— lkg（末次落库）与 static（内置常量）都不是
+  //    「本次观测到的数」，必须标出来（V0.118.1 纪律）
+  // ② cadence（weekly/monthly）—— 周/月频因子的 data_date 天然滞后数周，
+  //    不能拿日频的 4 天阈值判「滞后告警」（常亮的告警等于没有告警）
+  const flow = d.flow || null;
+  const flowFactorsArr = flow?.factors || [];
+  const flowDynamic = flow?.flow_dynamic === true;
+  const flowRollingTotal = Array.isArray(flow?.rolling_factors)
+    ? flow.rolling_factors.length
+    : flowFactorsArr.length;
+  const flowDynamicCount = (flow?.dynamic_factors || []).length;
+  const flowBadgeBg = flowDynamic ? "#e8f7ee" : "#e9ecef";
+  const flowBadgeColor = flowDynamic ? "var(--up)" : "var(--muted)";
+  const flowBadgeText = (window.I18n && typeof window.I18n.t === "function")
+    ? window.I18n.t(flowDynamic ? "trend.flow_dynamic_badge" : "trend.flow_static_badge")
+    : (flowDynamic ? "[动态]" : "[静态]");
+  // 窗口长度按因子节奏给（周 728 日 / 月 1826 日）—— 从因子明细派生，
+  // 不在前端硬编码「252 日」（那是日频口径，用在这里会把分位窗口压平）。
+  const flowWindows = [...new Set(flowFactorsArr.map(f => f.window_days).filter(v => v != null))];
+  const flowBadgeHint = flowDynamic
+    ? `${flowRollingTotal} 个因子全部使用滚动 90/10 分位（窗口 ${flowWindows.join(" / ")} 日）`
+    : (flowDynamicCount > 0
+        ? `${flowDynamicCount}/${flowRollingTotal} 个因子使用滚动 90/10 分位，其余样本不足回退静态阈带`
+        : "样本不足，阈值回退静态阈带（实测历史分位）");
+  const flowBadge = `<span class="src" style="margin-left:6px;padding:1px 6px;border-radius:8px;background:${flowBadgeBg};color:${flowBadgeColor};font-size:10px;font-weight:500" title="${flowBadgeHint}">${flowBadgeText}</span>`;
+  const flowDirectionTxt = flow?.direction === "bullish" ? "利多黄金" : flow?.direction === "bearish" ? "利空黄金" : "中性";
+  // 权重合计 < 1 ⇒ 有因子本轮没取到读数（被剔除）。必须说出来 ——
+  // 否则下面每行显示的「面内权重」加起来不足 100%，用户会以为是 bug。
+  const flowWeightSum = flowFactorsArr.reduce((a, f) => a + (f.weight ?? 0), 0);
+  const flowMissingCnt = flowFactorsArr.length
+    ? Math.round((1 - flowWeightSum) * 1000) / 10
+    : 0;
+  const flowMissingNote = flowMissingCnt > 0.05
+    ? ` · ${flowMissingCnt.toFixed(1)} 个因子本轮缺读数（已剔除，权重按剩余归一化）`
+    : "";
+  document.getElementById("flowInfo").innerHTML = flow
+    ? (flow.score == null
+        ? `资金流面本轮无有效读数，整面不可用${flowBadge}`
+        : `资金流面指数 ${flow.score.toFixed(1)}/100 · ${flowDirectionTxt} · 周度 ${((flow.weekly_weight ?? 0) * 100).toFixed(0)}% / 月度 ${((flow.monthly_weight ?? 0) * 100).toFixed(0)}%${flowMissingNote}${flowBadge}`)
+    : "";
+  document.getElementById("flowFactors").innerHTML = flowFactorsArr.map(f => {
+    const c = f.direction === "bullish" ? "var(--up)" : f.direction === "bearish" ? "var(--down)" : "var(--muted)";
+    const tier = f.tier || "live";
+    const tierChip = tier === "lkg"
+      ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:500" title="上游源本次不可用，显示的是末次落库的真实读数">降级</span>`
+      : tier === "static"
+        ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:500" title="上游源本次不可用，显示的是内置常量兜底值（非市场读数）">静态兜底</span>`
+        : "";
+    const cadenceChip = f.cadence === "weekly"
+      ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="周频因子，滚动分位窗口 ${f.window_days ?? "—"} 日">周度</span>`
+      : f.cadence === "monthly"
+        ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="月频因子，滚动分位窗口 ${f.window_days ?? "—"} 日">月度</span>`
+        : "";
+    const srcBadge = f.source ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
+    return `<div class="macro-row">
+      <span class="nm" style="width:150px">${f.name ?? "—"}${tierChip}${cadenceChip}</span>
+      <span class="val">${f.value ?? "—"} ${f.unit ?? ""}</span>
+      <span class="bar"><i style="width:${(f.score ?? 0)}%;background:${c}"></i></span>
+      <span class="dt">${f.data_date ?? "—"}</span>
+    </div>
+    <div class="desc" style="font-size:10.5px;color:var(--muted);margin:-2px 0 4px 150px">${srcBadge} 友好度 ${f.score?.toFixed(0) ?? "—"}/100 · 面内权重 ${((f.weight ?? 0) * 100).toFixed(0)}%</div>`;
+  }).join("");
+
   // 消息面评估
   // V0.100：未打分时显式「— · 今日未打分」（替代旧「未打分（中性 50）」表述）
   document.getElementById("newsInfo").textContent = news.scored
@@ -728,8 +817,8 @@ function render(d) {
     </div>
     <div class="desc" style="font-size:11px;color:var(--muted);margin-top:2px">
       💬 ${(window.I18n && typeof window.I18n.t === "function")
-        ? window.I18n.t("trend.news_pending_hint", "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价")
-        : "消息面未打分不参与综合指数（30% 权重剔除）。去下方「今日消息面打分」完成评价"}
+        ? window.I18n.t("trend.news_pending_hint", { n: newsNominalPct })
+        : `消息面未打分不参与综合指数（${newsNominalPct}% 权重剔除）。去下方「今日消息面打分」完成评价`}
     </div>`;
 
   // 趋势参数维度
@@ -1104,7 +1193,7 @@ function startTrendPolling() {
 }
 
 // V0.76.0：首页内嵌消息面打分器（#newsScoreCard）保存/撤销后主动重算评估口径。
-// 消息面占综合指数 30%，后端在写成功时已失效 served cache；此处立即拉一次，
+// 消息面占综合指数 25%（V0.120.0 起默认；权重可在权重配置页调整），后端在写成功时已失效 served cache；此处立即拉一次，
 // 否则用户打完分要等最长 60s 轮询才看到指数与「消息面评估」行变化，会误判为没生效。
 window.addEventListener("news-score-changed", () => {
   refreshTrendQuotes();
