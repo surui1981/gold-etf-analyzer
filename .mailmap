@@ -50,3 +50,7 @@
 surui1981 <surui1981@users.noreply.github.com> <rui@local>
 surui1981 <surui1981@users.noreply.github.com> <surui_1981@163.com>
 surui1981 <surui1981@users.noreply.github.com> rui su <surui1981@users.noreply.github.com>
+# V0.82–V0.120 期间又冒出两个身份（V0.120.1 发版核对 shortlog 时发现，2026-10-31 补入）：
+# 只影响 shortlog / blame 的显示，不改写任何提交对象（SHA / tree / 标签全不变）。
+surui1981 <surui1981@users.noreply.github.com> <rui.su@example.com>
+surui1981 <surui1981@users.noreply.github.com> <rui.su@local>
