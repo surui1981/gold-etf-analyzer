@@ -347,7 +347,7 @@ class MoneyFlowService:
             logger.warning("CFTC 观测不足 5 周，cot_gold_flow 暂缺")
         return out
 
-    async def _collect_etf(self) -> dict[str, FlowReading]:
+    async def _collect_etf(self, today: date | None = None) -> dict[str, FlowReading]:
         """黄金 ETF 4 周累计净申赎（亿元）。
 
         口径：**上交所官方每日基金份额**（万份）× 窗口末日收盘价。
@@ -357,6 +357,15 @@ class MoneyFlowService:
         本因子的规则声明 ``cadence=weekly``，若末日跟着最新交易日走，
         每日调度就会一天写一行，而相邻几天的 4 周累计窗口几乎是同一个数
         ⇒ 同一周被重复计入滚动分位窗口 ⇒ 样本量虚高、近期状态被过度加权。
+
+        Args:
+            today: 「今天」，用于判定哪一周算「已过完」；默认取系统日期。
+                ⚠️ 这个参数存在的理由（勿删）：``week_end_days()`` 内部本来就用
+                ``date.today()``，若这里不把 today 透传下去，**任何依赖具体日期的测试
+                都会随真实时钟漂移** —— V0.120.0 的两个用例把「今天」写死成注释里的
+                2026-10-28，时钟走到 10-31（周六）后本周被判为「已过完」，
+                锚点从 10-23 跳到 10-30，用例**永久变红**（当时 CI 之所以绿只是因为
+                CI 跑在 10-29）。显式传 today 才能让「周才前进一格」这条规则被稳定地验证。
         """
         from app.repositories.money_flow_sources import (
             GOLD_ETF_SYMBOL,
@@ -370,7 +379,8 @@ class MoneyFlowService:
         if not closes:
             return {}
         trading_days = sorted(closes)
-        week_ends = week_end_days(trading_days)
+        # ⚠️ today 必须透传（不传 ⇒ week_end_days 自己取系统日期 ⇒ 测试随时钟漂移）
+        week_ends = week_end_days(trading_days, today=today)
         if len(week_ends) < 2:
             logger.warning("交易日不足两周，gold_etf_flow 暂缺")
             return {}
@@ -420,7 +430,7 @@ class MoneyFlowService:
             )
         }
 
-    async def _collect_us_liquidity(self) -> dict[str, FlowReading]:
+    async def _collect_us_liquidity(self, today: date | None = None) -> dict[str, FlowReading]:
         """美元净流动性 4 周变化（$M）—— **月频观测**。
 
         净流动性 = WALCL（美联储总资产）− WTREGEN（国库券）− RRPONTSYD（逆回购）。
@@ -430,13 +440,17 @@ class MoneyFlowService:
         本因子取的是「4 周变化」，相邻两次观测**重叠 3/4** ⇒ 按周落表会让
         有效样本数只剩名义值的 1/4（同一个量被重复计入滚动分位窗口）。
         详见 ``repositories/money_flow_sources.py::fetch_us_net_liquidity_monthly``。
+
+        Args:
+            today: 「今天」，用于判定哪个月算「已过完」；默认取系统日期。
+                （透传原因同 :meth:`_collect_etf`；这里不传会在跨月时同样漂移。）
         """
         from app.repositories.money_flow_sources import (
             US_LIQ_SOURCE,
             fetch_us_net_liquidity_monthly,
         )
 
-        rows = await fetch_us_net_liquidity_monthly()
+        rows = await fetch_us_net_liquidity_monthly(today=today)
         if not rows:
             return {}
         obs_date, delta, prev_end = rows[-1]
@@ -449,7 +463,7 @@ class MoneyFlowService:
             )
         }
 
-    async def _collect_cn_margin(self) -> dict[str, FlowReading]:
+    async def _collect_cn_margin(self, today: date | None = None) -> dict[str, FlowReading]:
         """A 股融资余额月环比（%）。
 
         沪深两市「融资余额」相加 → 取**完整月末**值 → 环比变化率。
@@ -459,6 +473,10 @@ class MoneyFlowService:
         而同一个月的 20 来行几乎是同一个数 ⇒ 同一月被重复计入滚动分位窗口
         ⇒ 样本量虚高、当前月被过度加权。且「月内变动」与「月环比」不是同一个量。
         取已过完的月份后，观测日 = 该月最后一个交易日 ⇒ 一个月恰好一行。
+
+        Args:
+            today: 「今天」，用于判定「当月是否已过完」；默认取系统日期。
+                （透传原因同 :meth:`_collect_etf`。）
         """
         from app.repositories.money_flow_sources import (
             MARGIN_SOURCE,
@@ -476,7 +494,7 @@ class MoneyFlowService:
                 by_month[key] = (d, v)
         months = sorted(by_month)
         # 丢掉**还没过完**的当月（其「月末值」其实是月内至今值）
-        today = date.today()
+        today = today or date.today()
         if months and months[-1] == (today.year, today.month):
             months = months[:-1]
         if len(months) < 2:

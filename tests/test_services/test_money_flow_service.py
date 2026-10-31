@@ -28,6 +28,14 @@ from app.services.money_flow import (
 )
 
 KEYS = [r["key"] for r in MONEY_FLOW_FACTOR_RULES]
+
+# ── 观测网格用例共用的「今天」 ──────────────────────────────────────────
+# ⚠️ 必须**显式固定**，不要让它随系统时钟漂移：
+# 这些用例验证的是「观测日锚在已过完的周 / 月」，而「是否过完」是相对今天判定的。
+# V0.120.0 初版把「今天是 2026-10-28」只写进注释、实际用系统日期 ⇒
+# 时钟走到 10-31（周六）后本周被判为已过完，锚点从 10-23 跳到 10-30，
+# 两个用例**永久变红**（当时的 CI 绿只是因为 CI 跑在 10-29）。
+FIXED_TODAY = date(2026, 10, 28)
 RULE_BY_KEY = {r["key"]: r for r in MONEY_FLOW_FACTOR_RULES}
 
 
@@ -468,7 +476,7 @@ async def test_融资余额_只取已过完的月份(monkeypatch):
 
     monkeypatch.setattr(mfs, "fetch_cn_margin_balances", _fake)
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_cn_margin()
+    out = await svc._collect_cn_margin(today=FIXED_TODAY)
     assert "cn_margin_flow" in out
     r = out["cn_margin_flow"]
     # 2026-09-30 vs 2026-08-31：20400 / 21000 - 1 = -2.857%
@@ -488,7 +496,7 @@ async def test_融资余额_只有当月数据时整条缺失(monkeypatch):
 
     monkeypatch.setattr(mfs, "fetch_cn_margin_balances", _fake)
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_cn_margin()
+    out = await svc._collect_cn_margin(today=FIXED_TODAY)
     assert out == {}
 
 
@@ -525,10 +533,10 @@ async def test_黄金ETF_窗口末日锚在周末日而不是最新交易日(mon
     monkeypatch.setattr(mfs, "fetch_sse_etf_shares", _fake_shares)
 
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_etf()
+    out = await svc._collect_etf(today=FIXED_TODAY)
     assert "gold_etf_flow" in out
     r = out["gold_etf_flow"]
-    # 「今天」是 2026-10-28（周三）⇒ 本周（10-26 ~ 11-01）还没过完 ⇒ 末日回退到 10-23（周五）
+    # 固定「今天」= 2026-10-28（周三）⇒ 本周（10-26 ~ 11-01）还没过完 ⇒ 末日回退到 10-23（周五）
     assert r.obs_date == date(2026, 10, 23)
     assert r.data_date == "2026-09-25~2026-10-23"
     # Δ = (1000 - 2000) 万份 × 1.0 元/份 = -1000 万元 = -0.1 亿元
@@ -559,7 +567,7 @@ async def test_黄金ETF_周末日份额未发布时自动往前回退(monkeypat
     monkeypatch.setattr(mfs, "fetch_sse_etf_shares", _fake_shares)
 
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_etf()
+    out = await svc._collect_etf(today=FIXED_TODAY)
     assert "gold_etf_flow" in out
     assert out["gold_etf_flow"].obs_date == date(2026, 10, 16)
 
@@ -590,10 +598,10 @@ async def test_美元流动性_观测日锚在月末而不是最新周(monkeypat
     monkeypatch.setattr(macro_sources, "fetch_fred_series", _fake_fred)
 
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_us_liquidity()
+    out = await svc._collect_us_liquidity(today=FIXED_TODAY)
     assert "us_liq_net" in out
     r = out["us_liq_net"]
-    # 「今天」是 2026-10-28 ⇒ 当月还没过完 ⇒ 锚点回退到 09-30
+    # 固定「今天」= 2026-10-28 ⇒ 当月还没过完 ⇒ 锚点回退到 09-30
     assert r.obs_date == date(2026, 9, 30)
     assert r.data_date == "2026-08-31~2026-09-30"
     # asof(9-30) 的 WALCL 减去 asof(8-31) 的 WALCL（中间隔 5 个周三）
@@ -620,6 +628,6 @@ async def test_美元流动性_只取已过完的月份(monkeypatch):
     monkeypatch.setattr(macro_sources, "fetch_fred_series", _fake_fred)
 
     svc = MoneyFlowService(settings=None, threshold_calculator=None, history_repo=None)
-    out = await svc._collect_us_liquidity()
+    out = await svc._collect_us_liquidity(today=FIXED_TODAY)
     assert out["us_liq_net"].obs_date == date(2026, 9, 30)
     assert out["us_liq_net"].obs_date.month != 10
