@@ -4,6 +4,30 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.120.1] · 2026-10-31
+
+`拆掉资金流观测网格测试的时间炸弹 —— 「今天」改为可注入，不再随系统时钟漂移` — bugfix · 详见 [v0.120.1.md](docs/releases/v0.120.1.md)
+
+> 触发场景：本地同步到 V0.120.0 后跑全量回归，10-31（周六）当天出现 2 个失败，
+> 而远程 CI 在 10-29 是绿的 —— **同一份代码、同一个测试，仅因时钟前进两天就从绿变红**。
+
+- ⏰ **修 2 个已在今天变红、且会永久红的用例**（`test_money_flow_service.py`）
+  - `test_黄金ETF_窗口末日锚在周末日而不是最新交易日` / `test_黄金ETF_周末日份额未发布时自动往前回退`
+  - **根因**：用例把「今天是 2026-10-28」只写进注释，实际由
+    `week_end_days(trading_days)` 内部 `date.today()` 自己取系统时钟 ⇒
+    10-31（周六）起「本周（10-26~11-01）已过完」成立，锚点由 **10-23 跳到 10-30**
+  - ⚠ 同源隐患：两条月频用例（融资余额 / 美元流动性）会在 **11-01 起**变红，本轮一并拆掉
+- 🔧 **把「今天」做成可注入参数**（生产路径全部不传 ⇒ `None` → 系统日期，**行为与修复前逐字相同**）：
+  - `_collect_etf(today=None)` → `week_end_days(trading_days, today=today)`
+  - `_collect_us_liquidity(today=None)` → `fetch_us_net_liquidity_monthly(today=today)`
+  - `_collect_cn_margin(today=None)` → `today = today or date.today()`
+  - 对照：`money_flow_backfill.py:162` **早就**传了 `today=end`，只有实时采集路径漏透传
+- 🧪 **测试加 `FIXED_TODAY = date(2026,10,28)`**，6 个依赖时钟的用例显式传参
+  - **负向验证**（证明 `today` 真被使用而非碰巧绿）：同数据下
+    `_collect_etf(today=X)` → `10-28⇒10-23` / `10-31⇒10-30` / `11-09⇒10-30` / `None⇒10-30`
+- 📌 **教训（通用）**：凡用 `date.today()` 判「周期是否已过完」的逻辑，都要把 today 做成
+  可注入参数 —— 否则 CI 绿只代表「CI 那一刻的时间巧合」，测试会随时间腐烂。
+
 ## [V0.120.0] · 2026-10-29
 
 `新增第 4 个评分面「资金流面」—— 按资金流向各种市场判断（周 3 因子 / 月 3 因子）` — feature · 详见 [v0.120.0.md](docs/releases/v0.120.0.md)

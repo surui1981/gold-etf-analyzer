@@ -5,7 +5,7 @@
 > 本文件 §一 §二 V0.68-V0.77 全部版本**已落地交付**；§四 不变项（Invariants）已迁移至 [roadmap.md 附录 C](roadmap.md#附录-c--不变项invariants源自-ux-roadmapmd-四)；附录 A 工时汇总、附录 B 验证清单、附录 C 可观测性总表、附录 D 配置速查仅作历史参考。
 >
 > **当前活跃路线**（V0.100.0 基线 + V0.101 Python 3.13 收口 + V0.102 K 项多市场独立校准 + V0.96+ backlog + 维护线 + 风险）请查阅 [docs/roadmap.md](roadmap.md)：
-> - 单源历史里程碑表（V0.50 → V0.100.0 一表收敛）见 [roadmap.md §1](roadmap.md#1-历史里程碑截至-v01000)
+> - 单源历史里程碑表（V0.50 → 当前 一表收敛）见 [roadmap.md §1](roadmap.md#1-历史里程碑)
 > - V0.96+ Backlog（候选 A-G 落地状态 + K 项正式化）见 [roadmap.md §3](roadmap.md#3-v096-backlog)
 > - 维护线 + 风险 + 立即可启动的下一步见 [roadmap.md §4-§6](roadmap.md)
 >

@@ -5,7 +5,7 @@
 > 本文件 §一 现状评估、§二 UX P0-P3、§三 实施路线 V0.50-V0.67 **已全部交付**；§三·五 下一阶段路线（V0.67.0→V0.72.0）**已全部落地**；§四 验收度量（工程性评估 81.5→84.3 起点为 V0.67.0）已基线归档；§五 部署状态已迁移至 [roadmap.md 附录 D](roadmap.md#附录-d--部署状态速查源自-improvement-pathmd-五)；§六 UX Roadmap（[ux-roadmap.md](ux-roadmap.md)）同步归档。
 >
 > **当前活跃路线**（V0.100.0 基线 + V0.101 Python 3.13 收口 + V0.102 K 项 + V0.96+ backlog + 维护线 + 风险）请查阅 [docs/roadmap.md](roadmap.md)：
-> - 单源历史里程碑表（V0.50 → V0.100.0 一表收敛）见 [roadmap.md §1](roadmap.md#1-历史里程碑截至-v01000)
+> - 单源历史里程碑表（V0.50 → 当前 一表收敛）见 [roadmap.md §1](roadmap.md#1-历史里程碑)
 > - 推进主线（V0.101 Python 3.13 + V0.102 K 项）见 [roadmap.md §2](roadmap.md#2-推进主线v0101-主动作)
 > - V0.96+ Backlog 见 [roadmap.md §3](roadmap.md#3-v096-backlog)
 > - 维护线 + 风险 + 立即可启动的下一步见 [roadmap.md §4-§6](roadmap.md)

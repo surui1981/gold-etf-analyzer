@@ -3,7 +3,7 @@
 > **目标读者**：用户 + 开发者 ｜ **状态**：活跃 ｜ **最近更新**：2026-10-18
 >
 > 本文件是项目的"产品定位 + 当前能力概览"入口，**不带版本号**（能力 × 版本对照见 [docs/releases/index.md](releases/index.md)）。
-> 历史版本号与演进脉络见 [docs/roadmap.md §1](roadmap.md#1-历史里程碑截至-v01000)；发版节点见 [CHANGELOG.md](../CHANGELOG.md)。
+> 历史版本号与演进脉络见 [docs/roadmap.md §1](roadmap.md#1-历史里程碑)；发版节点见 [CHANGELOG.md](../CHANGELOG.md)。
 >
 > 其他文档：[getting-started](getting-started.md) · [architecture](architecture.md) ·
 > [api-reference](api-reference.md) · [development](development.md)
