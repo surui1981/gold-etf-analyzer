@@ -108,6 +108,43 @@ def mock_llm_tool_use():
 
 
 @pytest.fixture
+def mock_llm_tool_use_with_args():
+    """LLM 触发 1 轮 tool_use，**入参非空**（V0.120.2 回归用例）。
+
+    ⚠️ **为什么必须非空**：``AIMessageRepository.insert`` 落库时写的是
+    ``json.dumps(tool_input) if tool_input else None`` —— **空 dict ``{}`` 是 falsy
+    ⇒ 落库 NULL ⇒ schema 校验不炸 ⇒ 真缺陷被空入参藏住**（见
+    ``stub-hides-replaced-caller``）。真实 LLM 传的是非空入参
+    （实测 ``get_scoring_summary({"from": ..., "to": ...})``），只有那种情况才会炸。
+    """
+    fake = MagicMock()
+    tool_call = ToolCall(
+        id="tc-002",
+        name="get_scoring_summary",
+        input={"from": "2025-09-01", "to": "2026-03-29"},
+    )
+    fake.ask = AsyncMock(
+        side_effect=[
+            ClaudeResponse(
+                text="",
+                tool_calls=[tool_call],
+                input_tokens=100,
+                output_tokens=30,
+                stop_reason="tool_use",
+            ),
+            ClaudeResponse(
+                text="命中分析已生成。",
+                tool_calls=[],
+                input_tokens=200,
+                output_tokens=60,
+                stop_reason="end_turn",
+            ),
+        ]
+    )
+    return fake
+
+
+@pytest.fixture
 def mock_tool_dispatcher():
     """假 tool dispatcher：get_market_overview 返固定 JSON。"""
     fake = MagicMock()
@@ -823,6 +860,107 @@ async def test_send_message_stream_error_event_yields_error(
             assert "upstream 502" in err_ev.get("msg", "") or "upstream 502" in err_ev.get(
                 "data", ""
             )
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+# ────────────── V0.120.2 回归：tool_input 落库是 JSON 字符串 ──────────────
+
+
+@pytest.mark.asyncio
+async def test_tool_input_nonempty_roundtrips_as_dict(
+    as_ai_user,
+    mock_llm_tool_use_with_args,
+    mock_tool_dispatcher,
+    mock_settings,
+) -> None:
+    """V0.120.2 回归：tool_use 入参**非空**时，接口必须把落库的 JSON 字符串解码回 dict。
+
+    缺陷链：``repositories/ai_chat.py`` 存 ``json.dumps(tool_input)``（字符串）
+    ⇒ ``AIMessageOut.tool_input`` 声明是 ``dict[str, Any] | None``
+    ⇒ ``from_attributes=True`` 把字符串直接喂给 dict 校验 ⇒ ValidationError
+    ⇒ **整个对话 500**（前端只见「加载对话失败：Internal Server Error」）。
+
+    契约来源：前端 ``static/ask.js::summarizeInput`` 按 ``input.from`` /
+    ``input.days`` 取值 ⇒ 对外必须是**对象**，不是 JSON 字符串。
+    """
+    app.state.llm_client = mock_llm_tool_use_with_args
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "帮我看看命中分析"},
+            )
+            assert r2.status_code == 200, r2.text
+            tool_use_msg = next(m for m in r2.json()["responses"] if m.get("tool_name"))
+            assert isinstance(tool_use_msg["tool_input"], dict), tool_use_msg["tool_input"]
+            assert tool_use_msg["tool_input"] == {"from": "2025-09-01", "to": "2026-03-29"}
+
+            # 用户报的症状：重新打开该对话（GET 详情）⇒ 此前 500
+            r3 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            assert r3.status_code == 200, r3.text
+            stored = next(m for m in r3.json()["messages"] if m.get("tool_name"))
+            assert stored["tool_input"] == {"from": "2025-09-01", "to": "2026-03-29"}
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_get_conversation_survives_corrupt_tool_input(
+    as_ai_user,
+    mock_llm_text,
+    mock_tool_dispatcher,
+    mock_settings,
+    db_session,
+) -> None:
+    """脏数据（tool_input 存的不是合法 JSON）⇒ 该字段置 None，**对话仍能打开**。
+
+    纪律同 ``SnapshotOut.macro_detail``：数据不足 ≠ 中性，**不兜底为 ``{}``**
+    （空对象会被前端当成「工具没带参数」来渲染，是另一种假数据）；
+    但**一个坏字段不该让整个对话打不开**。
+    """
+    from app.models.ai_chat import AIMessage
+
+    app.state.llm_client = mock_llm_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            db_session.add(
+                AIMessage(
+                    id="msg-corrupt-tool-input",
+                    conversation_id=cid,
+                    user_id=as_ai_user.id,
+                    role="assistant",
+                    content="",
+                    tool_name="get_scoring_summary",
+                    tool_input="{not-json",
+                )
+            )
+            await db_session.commit()
+
+            r2 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            assert r2.status_code == 200, r2.text
+            corrupt = next(m for m in r2.json()["messages"] if m["id"] == "msg-corrupt-tool-input")
+            assert corrupt["tool_input"] is None
     finally:
         app.state.llm_client = None
         app.state.tool_dispatcher = None

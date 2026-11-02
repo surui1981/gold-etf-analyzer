@@ -4,6 +4,31 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.120.2] · 2026-11-02
+
+`修 /ask 页「加载对话失败：Internal Server Error」—— tool_input 落库是 JSON 字符串，接口边界没解码` — bugfix · 详见 [v0.120.2.md](docs/releases/v0.120.2.md)
+
+> 用户报：「在应用智能分析页面使用对话功能，对话出现加载对话失败：Internal Server Error」。
+
+- 🐛 **修整个对话打不开的 500**（`GET /conversations/{id}` + 同步 `POST /messages` 两条路径都炸）
+  - **根因**：`ai_messages.tool_input` 列存的是 **JSON 字符串**（`json.dumps(...)`），
+    而 `AIMessageOut.tool_input` 对外声明是 **dict**；`from_attributes=True` 把原始字符串
+    直接喂给 dict 校验 ⇒ `ValidationError` ⇒ **整个响应 500**
+  - ⇒ **一个坏字段 = 整个对话不可用**（对话详情一次性返回全部消息，任一条坏就全挂）
+- 🔧 **在 schema 边界加 `mode="before"` 解码器**（`src/app/schemas/ai_chat.py`）
+  - **落库侧是对的，错的是接口边界没解码** —— 与 `SnapshotOut.macro_detail` 完全同类，照抄它
+  - dict 直接透传 / str 走 `json.loads` / 损坏或顶层非 dict ⇒ **置 `None` + log warning**
+  - ⚠ **不兜底为 `{}`**：数据不足 ≠ 中性，空对象会被前端当成「工具没带参数」渲染（另一种假数据）
+- 🧪 **补 2 条回归用例**（`tool_input` 此前**零覆盖**：`grep -rn "tool_input" tests/` 返回 0 行）
+  - `test_tool_input_nonempty_roundtrips_as_dict`（非空入参 ⇒ 对外必须是 dict，且能重开对话）
+  - `test_get_conversation_survives_corrupt_tool_input`（脏 JSON ⇒ 置 `None`，**对话仍能打开**）
+  - **反向验证**：撤销修复 ⇒ 2 条用例全红，失败点正是 `ai.py:144` / `ai.py:222` 两处
+- 📌 **教训（通用）**：mock 的**空入参把真缺陷藏住了** —— `if tool_input else None` 把 `{}`
+  判成 falsy ⇒ 落库 NULL ⇒ 校验不炸；真实 LLM 传非空入参才炸。**桩藏住被替换的调用方**，
+  测试桩的参数要**贴近真实调用**。
+- 🔍 **全库扫同类缺陷**：4 个 Text 列里，`macro_detail` 早有解码器、`tech_detail` 类型本就是 str、
+  `flow_detail` 未对外暴露 ⇒ **`tool_input` 是唯一漏网，已补齐**
+
 ## [V0.120.1] · 2026-10-31
 
 `拆掉资金流观测网格测试的时间炸弹 —— 「今天」改为可注入，不再随系统时钟漂移` — bugfix · 详见 [v0.120.1.md](docs/releases/v0.120.1.md)

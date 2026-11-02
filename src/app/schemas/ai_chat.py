@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.ai_chat import DEFAULT_MODEL
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 # ────────────── Conversation ──────────────
 
@@ -65,6 +69,60 @@ class AIMessageOut(BaseModel):
     latency_ms: int | None = None
     error_code: str | None = None
     created_at: datetime
+
+    @field_validator("tool_input", mode="before")
+    @classmethod
+    def _parse_tool_input(cls, v: Any) -> dict[str, Any] | None:
+        """反序列化 tool_input：dict 直接透传 / str JSON 解析 / None / 损坏 → None。
+
+        ⚠️ **V0.120.2 修的真缺陷（本文件的存在理由）**
+        落库格式（``repositories/ai_chat.py:172``）是 ``json.dumps(...)`` **字符串**，
+        而本 schema 对外契约是 **dict**（前端按 ``input.from`` / ``input.days`` 取值，
+        见 ``static/ask.js::summarizeInput``）。
+        ``from_attributes=True`` 会把 ORM 的**字符串**属性直接喂给 ``dict[str, Any]``
+        ⇒ Pydantic ValidationError ⇒ **整个对话 500**
+        （前端只看到「加载对话失败：Internal Server Error」）。
+
+        **落库侧是对的，错的是接口边界没解码** —— 与 ``SnapshotOut.macro_detail``
+        完全同类（那列也是 Text JSON、schema 也是 dict），修法照抄它。
+
+        **为什么此前 2007 条测试全绿**：mock LLM 的 tool_use 入参是**空 dict ``{}``**
+        ⇒ ``repositories`` 的 ``if tool_input else None`` 把它判成 falsy ⇒ 落库 NULL
+        ⇒ 校验通过。真实 LLM 传的是**非空**入参
+        （实测 ``get_scoring_summary({"from": ..., "to": ...})``）⇒ 存成 JSON 字符串
+        ⇒ 才炸。⇒ 空入参把真缺陷藏住了（见 ``stub-hides-replaced-caller``）。
+
+        损坏 JSON（脏数据）按同一纪律处理：log warning + 置 None ——
+        **一个坏字段不该让整个对话打不开**（数据不足 ≠ 中性，不兜底为 ``{}``）。
+        """
+        if v is None:
+            return None
+        if isinstance(v, dict):
+            return v
+        if isinstance(v, str):
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, dict):
+                    return parsed
+                preview = v[:200] + ("…" if len(v) > 200 else "")
+                logger.warning(
+                    "AIMessageOut.tool_input 顶层非 dict（%s）→ 置 None（preview=%r）",
+                    type(parsed).__name__,
+                    preview,
+                )
+                return None
+            except (json.JSONDecodeError, ValueError):
+                preview = v[:200] + ("…" if len(v) > 200 else "")
+                logger.warning(
+                    "AIMessageOut.tool_input JSON 反序列化失败 → 置 None（preview=%r）",
+                    preview,
+                )
+                return None
+        logger.warning(
+            "AIMessageOut.tool_input 收到非预期类型 %s → 置 None",
+            type(v).__name__,
+        )
+        return None
 
 
 class AIConversationDetailOut(BaseModel):

@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.120.1** ｜ **最近更新：2026-10-31** ｜ **状态：一致，无漂移**
+> **基线：V0.120.2** ｜ **最近更新：2026-11-02** ｜ **状态：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.120.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.120.2**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.1` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.1` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.2` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.2` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.120.1
+GET /openapi.json  →  info.version = 0.120.2
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -191,6 +191,14 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 且间歇性发生）⇒ 3 个宏观自动源同时不可用 ⇒ 全部退回 2026-08-28 的常量，
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
+
+### 本轮：V0.120.2（2026-11-02 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **修 `/ask` 页「加载对话失败：Internal Server Error」** —— `ai_messages.tool_input` 列存的是 **JSON 字符串**（`json.dumps(...)`），而 `AIMessageOut.tool_input` 对外声明是 **dict**；`from_attributes=True` 把原始字符串直接喂给 dict 校验 ⇒ `ValidationError` ⇒ **整个对话 500**（对话详情一次性返回全部消息，**一条坏消息 = 整个对话打不开**）。修法：在 schema 边界加 `mode="before"` 解码器（**落库侧是对的，错的是接口边界没解码** —— 与 `SnapshotOut.macro_detail` 完全同类，照抄它）；损坏 JSON ⇒ 置 `None` + log warning，**不兜底为 `{}`**。受影响两条路径：`GET /conversations/{id}` + 同步 `POST /messages`（前端 SSE 降级时的回退路径）；SSE 流式路径不受影响。**此前 2007 条测试全绿的原因**：mock 的 tool_use 入参是**空 dict `{}`** ⇒ `if tool_input else None` 判成 falsy ⇒ 落库 NULL ⇒ 校验不炸 —— **空入参把真缺陷藏住了**。详见 [releases/v0.120.2.md](releases/v0.120.2.md) |
+| `__version__` | ✅ 已 bump 到 `0.120.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| git tag | ⏳ 待打 `v0.120.2`（annotated） |
 
 ### 本轮：V0.120.1（2026-10-31 发版）
 
