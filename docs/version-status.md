@@ -52,22 +52,26 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **73** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **48** 段 / 47 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **57** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **109** 个（本地 = 远端，已同步；含 `v0.120.1`） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **74** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **49** 段 / 48 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **58** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
+| git tag | **110** 个（本地 = 远端，已同步；含 `v0.120.2`） | 按版本 checkout 的锚点 |
 
-> **48 段 ≠ 47 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **49 段 ≠ 48 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **109 个 tag 本地与远端一致**（2026-10-31 已全部推送，含 V0.120.1）：远端 109 = 本地 109，
+> **110 个 tag 本地与远端一致**（2026-11-02 已全部推送，含 V0.120.2）：远端 110 = 本地 110，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated **102** / lightweight 7，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated **104** / lightweight **6**，两侧分布相同。
+> （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
+> （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表），
+> 而 109 = 103 annotated + 6 lightweight。本版按 `git for-each-ref --format='%(objecttype)'`
+> **实测**改写。⇒ 这正是 §3.3 说的那类「内容腐化」：门禁只校验版本号，不校验计数。）
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
-> 必须把 `^{}` 行去掉再数，否则 109 个 tag 会数成 212 行。
+> 必须把 `^{}` 行去掉再数，否则 110 个 tag 会数成 214 行（实测 `ls-remote --tags` 原始行数 = 214）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -198,7 +202,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 |---|---|
 | 内容 | ✅ **修 `/ask` 页「加载对话失败：Internal Server Error」** —— `ai_messages.tool_input` 列存的是 **JSON 字符串**（`json.dumps(...)`），而 `AIMessageOut.tool_input` 对外声明是 **dict**；`from_attributes=True` 把原始字符串直接喂给 dict 校验 ⇒ `ValidationError` ⇒ **整个对话 500**（对话详情一次性返回全部消息，**一条坏消息 = 整个对话打不开**）。修法：在 schema 边界加 `mode="before"` 解码器（**落库侧是对的，错的是接口边界没解码** —— 与 `SnapshotOut.macro_detail` 完全同类，照抄它）；损坏 JSON ⇒ 置 `None` + log warning，**不兜底为 `{}`**。受影响两条路径：`GET /conversations/{id}` + 同步 `POST /messages`（前端 SSE 降级时的回退路径）；SSE 流式路径不受影响。**此前 2007 条测试全绿的原因**：mock 的 tool_use 入参是**空 dict `{}`** ⇒ `if tool_input else None` 判成 falsy ⇒ 落库 NULL ⇒ 校验不炸 —— **空入参把真缺陷藏住了**。详见 [releases/v0.120.2.md](releases/v0.120.2.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
-| git tag | ⏳ 待打 `v0.120.2`（annotated） |
+| git tag | ✅ `v0.120.2`（annotated；tag 对象 `3f8420b1` → commit `23c7bda3`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
 ### 本轮：V0.120.1（2026-10-31 发版）
 
