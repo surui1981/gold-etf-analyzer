@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.120.2";  // V0.120.2 · 修 /ask 页「加载对话失败：Internal Server Error」（后端 AIMessageOut.tool_input 落库 JSON 字符串未解码 ⇒ 整个对话 500）；本次未改 static/ 逻辑，仅随版本号换代以清旧缓存
+const VERSION = "v0.120.3";  // V0.120.3 · 修 /ask 回复不可读：①回传 assistant(tool_use) 回合（缺它上游 400/吐出 miniMax 原生协议）②清洗残留协议标记 ③工具层真缺陷（get_user_portfolio 调错类 / get_scoring_summary 强制 from-to）④正文为空的安全网；本次未改 static/ 逻辑，仅随版本号换代以清旧缓存
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

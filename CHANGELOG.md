@@ -4,6 +4,37 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.120.3] · 2026-11-03
+
+`修 /ask 回复不可读 —— 上游原生 tool-call 协议被当正文吐出 + 工具层真缺陷 + 正文为空无兜底` — bugfix · 详见 [v0.120.3.md](docs/releases/v0.120.3.md)
+
+> 用户报：「对话给出的格式 不方便阅读」，贴出的原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`。
+> **这不是排版丑，是上游把它的原生调用协议当成正文吐出来了。**
+
+- 🔧 **请求侧补回 assistant(tool_use) 回合**（**主因** · 同步 + SSE 两处）
+  - Anthropic 协议要求 `assistant(tool_use) → user(tool_result)` **配对**；
+    原实现**只** append 了 `user(tool_result)` ⇒ 上游收到畸形会话
+  - **直连上游 A/B 证据**：缺 assistant 回合 ⇒ **HTTP 400**；补上 ⇒ **HTTP 200 + 完整 Markdown**
+  - ⚠️ 多个 tool_result 必须放在**同一条** user 消息里（拆成多条同样是畸形）
+- 🧹 **读时清洗协议残留**（新 `src/app/utils/protocol_strip.py`）
+  - 库里**已有 8 条污染行**（生产库实测）⇒ 新会话不产生垃圾也没用，旧对话照样是垃圾
+  - 读时清洗对历史 + 新行**同时生效** ⇒ **不写生产库、不用迁移**，原始数据留作证据
+  - **只清洗 assistant**：tool 消息正文本身就是 JSON（含 `name` 键），清洗会毁掉工具数据
+  - 流式路径同清（跨 delta 切断的哨兵也能识别）
+- 🐛 **工具层真缺陷**（**旧缺陷**，被协议修复暴露出来 —— 线上 100% 报错）
+  - `get_user_portfolio` 调错类：`equity_curve`/`performance` 在 **`PortfolioAnalyticsService`** 上，
+    不在 `PositionService` 上 ⇒ 恒返 AttributeError ⇒ 模型反复重试 ⇒ **正文为空**
+  - `get_scoring_summary` 强制要 from/to ⇒ 模型漏参就报错 ⇒ 同样把轮次耗尽
+    ⇒ 改缺省「近 30 天」+ 返回体报告**实际区间**（不产生假数据）
+  - system prompt 加规则 9「今天是 YYYY-MM-DD」⇒ 模型算得出日期区间
+- 🛟 **加安全网**：整轮**没有正文** ⇒ 补一次**不带工具**的调用强制作答
+  （纯文本传递 ⇒ 零协议风险；失败不抛 ⇒ 宁可空也不要整轮 500）
+- 📌 **教训**：这正是「**桩藏住被替换的调用方**」第 3 次踩 ——
+  `_FakePosition` **自己实现了**被调方**没有**的方法 ⇒ 5 条 tool 测试全绿，线上全坏。
+  ⇒ **通用解法**：用 `ast` 把「代码调的方法」与「**真实类**的方法集」对账（不依赖桩）
+- 🧪 **补 12 条用例**（协议清洗 6 + 端点 4 + 工具 2 + prompt 2），**6 组逐条反向验证**
+  （撤销修复 ⇒ 对应用例变红 ⇒ 恢复 ⇒ 变绿）
+
 ## [V0.120.2] · 2026-11-02
 
 `修 /ask 页「加载对话失败：Internal Server Error」—— tool_input 落库是 JSON 字符串，接口边界没解码` — bugfix · 详见 [v0.120.2.md](docs/releases/v0.120.2.md)

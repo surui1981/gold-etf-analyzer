@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.120.2** ｜ **最近更新：2026-11-02** ｜ **状态：一致，无漂移**
+> **基线：V0.120.3** ｜ **最近更新**：2026-11-03 ｜ **状态**：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.120.2**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.120.3**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.2` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.2` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.3` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.3` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.120.2
+GET /openapi.json  →  info.version = 0.120.3
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -195,6 +195,14 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 且间歇性发生）⇒ 3 个宏观自动源同时不可用 ⇒ 全部退回 2026-08-28 的常量，
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
+
+### 本轮：V0.120.3（2026-11-03 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **修 `/ask` 回复不可读** —— 用户报「对话给出的格式 不方便阅读」，原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`：**这不是排版丑，是上游把原生 tool-call 协议当正文吐了出来**。4 层根因：①**请求侧缺 assistant(tool_use) 回合**（Anthropic 协议要求配对；原实现只 append 了 `user(tool_result)` ⇒ 上游收到畸形会话；**直连 A/B：缺 ⇒ HTTP 400，补 ⇒ HTTP 200 + 完整 Markdown**；同步 + SSE 两处都补，多个 tool_result 必须在**同一条** user 消息里）；②**库里已有 8 条污染行** ⇒ 读时清洗（新 `src/app/utils/protocol_strip.py`；历史 + 新行同时生效、**不写生产库不用迁移**；⚠️ 只清洗 assistant —— tool 消息正文本身就是 JSON，清洗会毁掉工具数据）；③**工具层真缺陷**（`get_user_portfolio` 调错类：`equity_curve`/`performance` 在 `PortfolioAnalyticsService` 上不在 `PositionService` 上 ⇒ 线上 100% 报错；`get_scoring_summary` 强制要 from/to ⇒ 模型漏参就报错 ⇒ 改缺省「近 30 天」+ 报告实际区间；system prompt 加规则 9「今天是几号」）；④**正文为空无兜底** ⇒ 加安全网（整轮无正文 ⇒ 补一次不带工具的调用强制作答，纯文本传递零协议风险）。**历史回放同样修**（`_to_claude_messages` 按回合重建 tool_use/tool_result，1:1 用原生块、多 tool 退化成纯文本）。**教训**：「桩藏住被替换的调用方」第 3 次踩 ⇒ 通用解法：用 `ast` 把「代码调的方法」与「**真实类**的方法集」对账，不依赖桩。详见 [releases/v0.120.3.md](releases/v0.120.3.md) |
+| `__version__` | ✅ 已 bump 到 `0.120.3`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| git tag | ⏳ 待推送 `v0.120.3` |
 
 ### 本轮：V0.120.2（2026-11-02 发版）
 
