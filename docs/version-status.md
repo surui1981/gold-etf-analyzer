@@ -55,23 +55,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **74** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **49** 段 / 48 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **58** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **110** 个（本地 = 远端，已同步；含 `v0.120.2`） | 按版本 checkout 的锚点 |
+| git tag | **111** 个（本地 = 远端，已同步；含 `v0.120.3`） | 按版本 checkout 的锚点 |
 
 > **49 段 ≠ 48 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **110 个 tag 本地与远端一致**（2026-11-02 已全部推送，含 V0.120.2）：远端 110 = 本地 110，
+> **111 个 tag 本地与远端一致**（2026-11-03 已全部推送，含 V0.120.3）：远端 111 = 本地 111，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated **104** / lightweight **6**，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated **105** / lightweight **6**，两侧分布相同。
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
 > （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表），
 > 而 109 = 103 annotated + 6 lightweight。本版按 `git for-each-ref --format='%(objecttype)'`
 > **实测**改写。⇒ 这正是 §3.3 说的那类「内容腐化」：门禁只校验版本号，不校验计数。）
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
-> 必须把 `^{}` 行去掉再数，否则 110 个 tag 会数成 214 行（实测 `ls-remote --tags` 原始行数 = 214）。
+> 必须把 `^{}` 行去掉再数，否则 111 个 tag 会数成 216 行（实测 `ls-remote --tags` 原始行数 = 216）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -202,7 +202,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 |---|---|
 | 内容 | ✅ **修 `/ask` 回复不可读** —— 用户报「对话给出的格式 不方便阅读」，原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`：**这不是排版丑，是上游把原生 tool-call 协议当正文吐了出来**。4 层根因：①**请求侧缺 assistant(tool_use) 回合**（Anthropic 协议要求配对；原实现只 append 了 `user(tool_result)` ⇒ 上游收到畸形会话；**直连 A/B：缺 ⇒ HTTP 400，补 ⇒ HTTP 200 + 完整 Markdown**；同步 + SSE 两处都补，多个 tool_result 必须在**同一条** user 消息里）；②**库里已有 8 条污染行** ⇒ 读时清洗（新 `src/app/utils/protocol_strip.py`；历史 + 新行同时生效、**不写生产库不用迁移**；⚠️ 只清洗 assistant —— tool 消息正文本身就是 JSON，清洗会毁掉工具数据）；③**工具层真缺陷**（`get_user_portfolio` 调错类：`equity_curve`/`performance` 在 `PortfolioAnalyticsService` 上不在 `PositionService` 上 ⇒ 线上 100% 报错；`get_scoring_summary` 强制要 from/to ⇒ 模型漏参就报错 ⇒ 改缺省「近 30 天」+ 报告实际区间；system prompt 加规则 9「今天是几号」）；④**正文为空无兜底** ⇒ 加安全网（整轮无正文 ⇒ 补一次不带工具的调用强制作答，纯文本传递零协议风险）。**历史回放同样修**（`_to_claude_messages` 按回合重建 tool_use/tool_result，1:1 用原生块、多 tool 退化成纯文本）。**教训**：「桩藏住被替换的调用方」第 3 次踩 ⇒ 通用解法：用 `ast` 把「代码调的方法」与「**真实类**的方法集」对账，不依赖桩。详见 [releases/v0.120.3.md](releases/v0.120.3.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.3`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
-| git tag | ⏳ 待推送 `v0.120.3` |
+| git tag | ✅ `v0.120.3`（annotated；tag 对象 `fea0084c` → commit `8626e8e4`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
 ### 本轮：V0.120.2（2026-11-02 发版）
 
