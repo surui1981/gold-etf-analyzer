@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -189,8 +190,6 @@ async def test_claude_client_4xx_no_retry() -> None:
 @dataclass
 class _FakeTrend:
     async def analyze(self, days: int, target: str, interval: str) -> Any:
-        from datetime import date
-
         from app.schemas.common import DirectionSignal
         from app.schemas.market import (
             GoldTrendMetrics,
@@ -285,16 +284,83 @@ class _FakeScoring:
 
 @dataclass
 class _FakePosition:
-    async def equity_curve(self, days: int, account_id: Any) -> Any:
+    """⚠️ **V0.120.3**：这个桩之前**自己实现了** ``equity_curve`` / ``performance``，
+    而生产的 ``PositionService`` **根本没有**这两个方法（它们在
+    ``PortfolioAnalyticsService`` 上）⇒ 5 条 tool 测试全绿，线上
+    ``get_user_portfolio`` 100% 报 AttributeError。
+
+    这就是「桩藏住被替换的调用方」。现在桩**只**暴露真实类有的方法，
+    并由 ``test_tool_dispatcher_calls_only_real_service_methods`` 做对账。
+    """
+
+    async def summary(self, account_id: Any = None) -> Any:
+        from app.schemas.position import PositionSummary
+
+        return PositionSummary(
+            has_position=True,
+            quantity=1000.0,
+            avg_cost=6.2,
+            pnl=350.0,
+            pnl_pct=5.6,
+            position_ratio=0.35,
+            grams_held=None,
+        )
+
+    async def list_positions(self, account_id: Any = None) -> list[Any]:
+        from datetime import datetime
+
+        from app.schemas.position import PositionOut
+
+        return [
+            PositionOut(
+                id=1,
+                account_id=1,
+                symbol="518880",
+                name="黄金 ETF",
+                quantity=1000.0,
+                avg_cost=6.2,
+                grams_held=None,
+                status="open",
+                opened_at=datetime(2026, 9, 1, 9, 30),
+                market_price=6.55,
+                market_value=6550.0,
+                pnl=350.0,
+                pnl_pct=5.6,
+            )
+        ]
+
+
+@dataclass
+class _FakePortfolio:
+    """``PortfolioAnalyticsService`` 的桩（``equity_curve`` / ``performance``）。"""
+
+    async def equity_curve(self, days: int = 90, account_id: Any = None) -> Any:
         from app.schemas.portfolio import EquityCurveOut, EquityPoint, EquitySummary
 
         return EquityCurveOut(
             days=days,
-            points=[EquityPoint(date="2026-10-14", value=120000.0)],
-            summary=EquitySummary(),
+            points=[
+                EquityPoint(
+                    date="2026-10-14",
+                    price=6.55,
+                    quantity=1000.0,
+                    cost=6200.0,
+                    market_value=6550.0,
+                    realized_pnl=0.0,
+                    unrealized_pnl=350.0,
+                    total_pnl=350.0,
+                    return_pct=5.6,
+                )
+            ],
+            summary=EquitySummary(
+                latest_market_value=6550.0,
+                latest_return_pct=5.6,
+                total_invested=6200.0,
+                total_pnl=350.0,
+            ),
         )
 
-    async def performance(self, account_id: Any) -> Any:
+    async def performance(self, account_id: Any = None) -> Any:
         from app.schemas.portfolio import PerformanceOut
 
         return PerformanceOut(
@@ -367,8 +433,6 @@ class _FakeFreshness:
 @dataclass
 class _FakeMarket:
     async def get_gold_history(self, days: int) -> Any:
-        from datetime import date
-
         from app.repositories.market_data import GoldKline
 
         return [
@@ -385,6 +449,7 @@ async def test_tool_dispatcher_executes_5_tools() -> None:
         trend_service=_FakeTrend(),
         scoring_service=_FakeScoring(),
         position_service=_FakePosition(),
+        portfolio_service=_FakePortfolio(),
         freshness_service=_FakeFreshness(),
         market_data_repository=_FakeMarket(),
     )
@@ -447,6 +512,7 @@ async def test_tool_dispatcher_unknown_tool_returns_error() -> None:
         trend_service=_FakeTrend(),
         scoring_service=_FakeScoring(),
         position_service=_FakePosition(),
+        portfolio_service=_FakePortfolio(),
         freshness_service=_FakeFreshness(),
         market_data_repository=_FakeMarket(),
     )
@@ -456,6 +522,97 @@ async def test_tool_dispatcher_unknown_tool_returns_error() -> None:
     )
     assert r.is_error is True
     assert "unknown tool" in r.content
+
+
+@pytest.mark.asyncio
+async def test_tool_dispatcher_scoring_defaults_to_last_30_days() -> None:
+    """``get_scoring_summary`` 不传 from/to ⇒ 缺省近 30 天（V0.120.3）。
+
+    ⚠️ 原实现直接返 ``{"error": "from/to required"}`` ⇒ 模型拿到错误就反复
+    重试同一个工具 ⇒ 工具轮次耗尽 ⇒ **最终正文为空**。
+    """
+    from app.utils.market_clock import cn_today
+
+    dispatcher = ToolDispatcher(
+        trend_service=_FakeTrend(),
+        scoring_service=_FakeScoring(),
+        position_service=_FakePosition(),
+        portfolio_service=_FakePortfolio(),
+        freshness_service=_FakeFreshness(),
+        market_data_repository=_FakeMarket(),
+    )
+    r = await dispatcher.execute(
+        ToolCall(id="t2b", name="get_scoring_summary", input={}),
+        user_id=1,
+    )
+    assert r.is_error is False, r.content
+    parsed = json.loads(r.content)
+    assert parsed["to"] == cn_today().isoformat()
+    # 缺省 30 天窗口
+    start = date.fromisoformat(parsed["from"])
+    end = date.fromisoformat(parsed["to"])
+    assert (end - start).days == 30
+
+
+def test_tool_dispatcher_calls_only_real_service_methods() -> None:
+    """防「桩藏住被替换的调用方」——**通用解法**（V0.120.3）。
+
+    ⚠️ 这条断言的存在理由：``_FakePosition`` **自己实现了**
+    ``equity_curve`` / ``performance``，而生产的 ``PositionService``
+    **根本没有**这两个方法（它们在 ``PortfolioAnalyticsService`` 上）
+    ⇒ 5 条 tool 测试全绿，线上 ``get_user_portfolio`` 100% 报 AttributeError。
+
+    本门禁**不依赖桩**：用 ``ast`` 扫 ``tools.py`` 里真实的
+    ``self._<svc>.<method>(...)`` 调用（注释 / docstring 不算），逐个与
+    **真实类**的方法集对账 —— 调错类 / 调不存在的方法都会红。
+
+    ⚠️ 用 ``ast`` 而不是正则：正则会把 docstring 里那段「原实现调
+    ``self._position.equity_curve(...)``」的历史说明也扫进来 ⇒ 假红。
+    """
+    import ast
+    from pathlib import Path
+
+    import app.services.llm.tools as tools_mod
+    from app.repositories.market_data import MarketDataRepository
+    from app.services.freshness import FreshnessService
+    from app.services.portfolio import PortfolioAnalyticsService
+    from app.services.position import PositionService
+    from app.services.scoring_wide import ScoringWideService
+    from app.services.trend import TrendService
+
+    src = Path(tools_mod.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(src)
+
+    called: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Attribute)
+            and isinstance(node.value.value, ast.Name)
+            and node.value.value.id == "self"
+        ):
+            called.setdefault(node.value.attr, set()).add(node.attr)
+
+    real_classes = {
+        "_trend": TrendService,
+        "_scoring": ScoringWideService,
+        "_position": PositionService,
+        "_portfolio": PortfolioAnalyticsService,
+        "_freshness": FreshnessService,
+        "_market": MarketDataRepository,
+    }
+    for attr, cls in real_classes.items():
+        names = called.get(attr, set())
+        assert names, f"tools.py 里没找到任何 self.{attr}.* 调用（门禁口径可能失效）"
+        for name in sorted(names):
+            assert hasattr(cls, name), (
+                f"tools.py 调用 self.{attr}.{name}()，但真实的 {cls.__name__} 没有这个方法"
+            )
+
+    # 反向锁：PositionService **不该**有 equity_curve / performance
+    # （它们在 PortfolioAnalyticsService 上）—— 混用会让线上 100% 报错
+    assert not hasattr(PositionService, "equity_curve")
+    assert not hasattr(PositionService, "performance")
 
 
 def test_claude_client_base_url_default() -> None:

@@ -6,10 +6,11 @@ import json
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.models.ai_chat import DEFAULT_MODEL
+from app.models.ai_chat import DEFAULT_MODEL, ROLE_ASSISTANT
 from app.utils.logger import get_logger
+from app.utils.protocol_strip import strip_protocol_markup
 
 logger = get_logger(__name__)
 
@@ -123,6 +124,23 @@ class AIMessageOut(BaseModel):
             type(v).__name__,
         )
         return None
+
+    @model_validator(mode="after")
+    def _strip_protocol_markup(self) -> AIMessageOut:
+        """清洗 assistant 正文里的 miniMax 原生 tool-call 协议残留（V0.120.3）。
+
+        ⚠️ **只清洗 assistant**：tool 消息正文**本身就是** JSON（含 ``name`` 键），
+        清洗规则 3 会把工具数据整段毁掉。
+
+        为什么要读时清洗而不是改库：污染行是上游会话畸形时落下的（生产库实测 8 条），
+        读时清洗对历史行与新行**同时生效**，不用写生产库、不用迁移。
+        原始数据保留在库里作为证据。
+        """
+        if self.role == ROLE_ASSISTANT and self.content:
+            cleaned = strip_protocol_markup(self.content)
+            if cleaned != self.content:
+                self.content = cleaned
+        return self
 
 
 class AIConversationDetailOut(BaseModel):

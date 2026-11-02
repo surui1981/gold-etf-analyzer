@@ -116,6 +116,37 @@ class AIChatService:
 
     # ────────────── 核心：发送消息 ──────────────
 
+    def _final_answer_prompt(self, *, user_msg: AIMessage, all_msgs: list[AIMessage]) -> str:
+        """构造「安全网」提示：把本轮已有内容压成**一段纯文本**。
+
+        ⚠️ **V0.120.3**：线上「正文为空」有两种成因 ——
+        (a) 工具连续报错 ⇒ 模型反复重试同一个工具 ⇒ ``max_tool_rounds`` 耗尽；
+        (b) 模型只发 ``tool_use`` 不发正文。
+        两种情况用户都只看到**空白回复**（不是格式问题）。
+
+        ⚠️ 为什么不复用 ``messages`` 列表：那里面是 assistant(tool_use) /
+        user(tool_result) 块，miniMax 代理对 tool_use_id 配对极敏感（2013）。
+        **纯文本 = 零协议风险**。
+
+        Args:
+            user_msg: 本轮的用户消息
+            all_msgs: 本轮已产生的消息（assistant / tool）
+
+        Returns:
+            一段纯文本提示（作为单条 user 消息发给模型）
+        """
+        parts: list[str] = [f"用户问题：\n{user_msg.content}"]
+        for m in all_msgs[1:]:
+            if m.role == ROLE_ASSISTANT and m.content:
+                parts.append(f"（此前分析）\n{m.content}")
+            elif m.role == ROLE_TOOL:
+                parts.append(f"（工具 {m.tool_name or '?'} 的返回）\n{m.content}")
+        parts.append(
+            "请基于以上信息直接给出最终结论（不要再调用任何工具）。"
+            "若数据缺失就明说缺什么，不要编造数字。"
+        )
+        return "\n\n".join(parts)
+
     async def send_message(
         self,
         *,
@@ -162,6 +193,8 @@ class AIChatService:
         total_in_tok = 0
         total_out_tok = 0
         start_ts = datetime.utcnow()
+        # 本轮是否出现过正文（用来判断要不要走「安全网」补一段结论）
+        has_text = False
 
         for round_idx in range(self._max_tool_rounds):
             try:
@@ -224,6 +257,7 @@ class AIChatService:
 
             total_in_tok += response.input_tokens
             total_out_tok += response.output_tokens
+            has_text = has_text or bool(response.text)
 
             # 持久化 assistant 消息
             tool_input_json: dict[str, Any] | None = None
@@ -250,6 +284,28 @@ class AIChatService:
                 break
 
             # 有 tool_use：执行 + 拼回 messages
+            #
+            # ⚠️ **V0.120.3 修的真缺陷**（用户报「对话给出的格式 不方便阅读」的根因）
+            # Anthropic 协议要求 ``assistant(tool_use) → user(tool_result)`` **配对**。
+            # 原实现只 append 了 ``user(tool_result)``，**assistant 的 tool_use 回合
+            # 从未回传** ⇒ 上游收到畸形会话（连续两条 user 消息，且 tool_result
+            # 找不到配对的 tool_use）⇒ miniMax 退化成本地 tool-call 协议、当正文吐出，
+            # 用户看到的是 `]<]minimax[>[<tool_call> {"name":…}` 这类垃圾。
+            # 实测 A/B（直连上游）：缺 assistant 回合 ⇒ HTTP 400；
+            # 补上 ⇒ HTTP 200 + 完整 Markdown 答案。
+            assistant_blocks: list[dict[str, Any]] = []
+            if response.text:
+                assistant_blocks.append({"type": "text", "text": response.text})
+            for tc in response.tool_calls:
+                assistant_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc.id,
+                        "name": tc.name,
+                        "input": tc.input or {},
+                    }
+                )
+            tool_result_blocks: list[dict[str, Any]] = []
             for tc in response.tool_calls:
                 result = await self._tools.execute(tc, user_id=user_id)
                 # 持久化 tool 消息
@@ -263,19 +319,18 @@ class AIChatService:
                     tool_call_id=tc.id,
                 )
                 all_msgs.append(tool_msg)
-                # 拼回 Claude 格式 messages
-                messages.append(
+                tool_result_blocks.append(
                     {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tc.id,
-                                "content": result.content,
-                            }
-                        ],
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": result.content,
                     }
                 )
+            # 拼回 Claude 格式 messages：assistant(tool_use) → user(tool_result)
+            # ⚠️ 同一回合的多个 tool_result 必须放在**同一条** user 消息里 ——
+            #   拆成多条 user 消息同样是畸形会话。
+            messages.append({"role": "assistant", "content": assistant_blocks})
+            messages.append({"role": "user", "content": tool_result_blocks})
             # 续下一轮
         else:
             # 走完 max_tool_rounds 仍没拿到 end_turn —— 强结（防失控）
@@ -284,6 +339,42 @@ class AIChatService:
                 conversation_id,
                 self._max_tool_rounds,
             )
+
+        # 4.5 安全网：整轮**没有正文** ⇒ 用户看到空白回复（V0.120.3 实测线上成因）
+        #   补一次「不带工具」的调用，让模型基于已有工具数据必须给出结论。
+        #   失败不抛 —— 宁可正文为空也不要整轮 500。
+        if not has_text:
+            logger.warning("conversation %s produced no text; final-answer retry", conversation_id)
+            try:
+                final = await self._llm.ask(
+                    system=system,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": self._final_answer_prompt(
+                                user_msg=user_msg, all_msgs=all_msgs
+                            ),
+                        }
+                    ],
+                    tools=None,
+                )
+            except LLMError as exc:
+                logger.warning("final-answer retry failed for conv=%s: %s", conversation_id, exc)
+            else:
+                if final.text:
+                    total_in_tok += final.input_tokens
+                    total_out_tok += final.output_tokens
+                    asst_msg = await self._msg.insert(
+                        msg_id=str(uuid.uuid4()),
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        role=ROLE_ASSISTANT,
+                        content=final.text,
+                        input_tokens=final.input_tokens,
+                        output_tokens=final.output_tokens,
+                        latency_ms=int((datetime.utcnow() - start_ts).total_seconds() * 1000),
+                    )
+                    all_msgs.append(asst_msg)
 
         # 5. 更新会话统计
         await self._conv.bump_stats(
@@ -365,6 +456,10 @@ class AIChatService:
         start_ts = datetime.utcnow()
         final_text = ""
         final_tool_calls: list[dict[str, Any]] = []
+        # 本轮是否出现过正文（用来判断要不要走「安全网」补一段结论）
+        has_text = False
+        # 本轮是否已经因上游错误而中止（中止了就不该再调一次 —— 白等一轮）
+        llm_failed = False
 
         for round_idx in range(self._max_tool_rounds):
             tools = self._tools.schemas()
@@ -438,6 +533,7 @@ class AIChatService:
                     except LLMError as exc2:
                         if not _is_tool_result_id_mismatch(exc2):
                             yield {"event": "error", "code": "llm_failed", "msg": str(exc2)[:200]}
+                            llm_failed = True
                             break
                         # L3：只发 user 原问题
                         logger.warning(
@@ -465,9 +561,11 @@ class AIChatService:
                                     )
                         except LLMError as exc3:
                             yield {"event": "error", "code": "llm_failed", "msg": str(exc3)[:200]}
+                            llm_failed = True
                             break
                 else:
                     yield {"event": "error", "code": "llm_failed", "msg": str(exc)[:200]}
+                    llm_failed = True
                     break
 
             # 累积 tool_use 的最终 input（拼 partial_json）
@@ -494,19 +592,35 @@ class AIChatService:
             )
             all_msgs.append(asst_msg)
 
+            has_text = has_text or bool(final_text)
+
             if not final_tool_calls:
                 # 终态：end_turn，无 tool
                 break
 
             # 有 tool_use：执行 + 拼回 messages
-            tool_results: list[tuple[Any, Any]] = []  # (tc, ToolResult)
+            #
+            # ⚠️ **V0.120.3**：与同步路径同一个真缺陷 —— 必须先回传 **assistant 的
+            # tool_use 回合**，否则上游拿到畸形会话（见 ``send_message`` 里的详述）。
+            assistant_blocks: list[dict[str, Any]] = []
+            if final_text:
+                assistant_blocks.append({"type": "text", "text": final_text})
+            for tc in final_tool_calls:
+                assistant_blocks.append(
+                    {
+                        "type": "tool_use",
+                        "id": tc["id"],
+                        "name": tc["name"],
+                        "input": tc.get("input") or {},
+                    }
+                )
+            tool_result_blocks: list[dict[str, Any]] = []
             for tc in final_tool_calls:
                 # 构造 ToolCall 给 tool dispatcher
                 from app.services.llm.tools import ToolCall
 
                 tool_call = ToolCall(id=tc["id"], name=tc["name"], input=tc.get("input", {}))
                 result = await self._tools.execute(tool_call, user_id=user_id)
-                tool_results.append((tool_call, result))
                 # 持久化 tool 消息
                 tool_msg = await self._msg.insert(
                     msg_id=str(uuid.uuid4()),
@@ -524,19 +638,16 @@ class AIChatService:
                     "name": result.name,
                     "content": result.content[:200],  # 流式预览截断
                 }
-                # 拼回 Claude 格式 messages
-                messages.append(
+                tool_result_blocks.append(
                     {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tc["id"],
-                                "content": result.content,
-                            }
-                        ],
+                        "type": "tool_result",
+                        "tool_use_id": tc["id"],
+                        "content": result.content,
                     }
                 )
+            # 拼回 Claude 格式 messages：assistant(tool_use) → user(tool_result)
+            messages.append({"role": "assistant", "content": assistant_blocks})
+            messages.append({"role": "user", "content": tool_result_blocks})
 
             # 重置 per-round 累加器，进入下一轮
             final_text = ""
@@ -547,6 +658,55 @@ class AIChatService:
                 conversation_id,
                 self._max_tool_rounds,
             )
+
+        # 安全网：整轮**没有正文** ⇒ 用户看到空白回复（V0.120.3 实测线上成因）
+        #   补一次「不带工具」的流式调用，让模型基于已有工具数据必须给出结论。
+        if not has_text and not llm_failed:
+            logger.warning(
+                "stream: conversation %s produced no text; final-answer retry", conversation_id
+            )
+            retry_text = ""
+            try:
+                events = self._llm.ask_stream(
+                    system=system,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": self._final_answer_prompt(
+                                user_msg=user_msg, all_msgs=all_msgs
+                            ),
+                        }
+                    ],
+                    tools=None,
+                )
+                async for ev in events:
+                    if hasattr(ev, "text"):
+                        retry_text += ev.text
+                        yield {"event": "text_delta", "delta": ev.text}
+                    elif ev.__class__.__name__ == "StreamMessageStart":
+                        total_in_tok = ev.input_tokens
+                    elif ev.__class__.__name__ == "StreamMessageDelta":
+                        total_out_tok = ev.output_tokens
+                    elif ev.__class__.__name__ == "StreamError":
+                        raise LLMError(
+                            f"sse final error: type={ev.err_type} msg={ev.message[:200]}"
+                        )
+            except LLMError as exc:
+                logger.warning(
+                    "stream: final-answer retry failed for conv=%s: %s", conversation_id, exc
+                )
+            else:
+                # 落库：否则刷新页面后这段结论就丢了（前端只拿到流里的文本）
+                if retry_text:
+                    asst_msg = await self._msg.insert(
+                        msg_id=str(uuid.uuid4()),
+                        conversation_id=conversation_id,
+                        user_id=user_id,
+                        role=ROLE_ASSISTANT,
+                        content=retry_text,
+                        latency_ms=int((datetime.utcnow() - start_ts).total_seconds() * 1000),
+                    )
+                    all_msgs.append(asst_msg)
 
         # 终态 message_stop
         yield {

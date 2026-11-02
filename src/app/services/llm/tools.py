@@ -26,8 +26,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
+
+from app.utils.market_clock import cn_today
 
 logger = logging.getLogger(__name__)
 
@@ -49,17 +51,24 @@ SCHEMAS: list[dict[str, Any]] = [
     {
         "name": "get_scoring_summary",
         "description": (
-            "取指定日期范围（from/to 必填）的打分汇总，含 4 horizon (t0/t1/t3/t5) "
-            "命中率 + 月度聚合 + 最近 30 天 / MoM / 最佳 horizon 摘要。回答「近期"
-            "命中率怎么样」/「哪个月预测最准」时必调。"
+            "取指定日期范围（from/to 可选，缺省=近 30 天）的打分汇总，含 4 horizon "
+            "(t0/t1/t3/t5) 命中率 + 月度聚合 + 最近 30 天 / MoM / 最佳 horizon 摘要。"
+            "回答「近期命中率怎么样」/「哪个月预测最准」时必调。"
         ),
         "input_schema": {
             "type": "object",
             "properties": {
-                "from": {"type": "string", "format": "date", "description": "起始日期 YYYY-MM-DD"},
-                "to": {"type": "string", "format": "date", "description": "结束日期 YYYY-MM-DD"},
+                "from": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "起始日期 YYYY-MM-DD（缺省=今天往前 30 天）",
+                },
+                "to": {
+                    "type": "string",
+                    "format": "date",
+                    "description": "结束日期 YYYY-MM-DD（缺省=今天）",
+                },
             },
-            "required": ["from", "to"],
         },
     },
     {
@@ -142,12 +151,16 @@ class ToolDispatcher:
         trend_service: Any,
         scoring_service: Any,
         position_service: Any,
+        portfolio_service: Any,
         freshness_service: Any,
         market_data_repository: Any,
     ) -> None:
         self._trend = trend_service
         self._scoring = scoring_service
         self._position = position_service
+        # ⚠️ V0.120.3：``equity_curve`` / ``performance`` 在 **PortfolioAnalyticsService**
+        # 上，不在 PositionService 上 —— 两者混用会让 get_user_portfolio 线上 100% 报错。
+        self._portfolio = portfolio_service
         self._freshness = freshness_service
         self._market = market_data_repository
 
@@ -196,11 +209,21 @@ class ToolDispatcher:
         return ToolResult(call.id, call.name, _truncate(payload))
 
     async def _exec_scoring(self, call: ToolCall) -> ToolResult:
-        """get_scoring_summary: 4 horizon 命中 + 30d 摘要。"""
+        """get_scoring_summary: 4 horizon 命中 + 30d 摘要。
+
+        ⚠️ **V0.120.3 修的真缺陷**：模型经常**漏掉** from/to ⇒ 原实现直接返
+        ``{"error": "from/to required"}`` ⇒ 模型拿到错误就反复重试同一个工具 ⇒
+        工具轮次（max_tool_rounds=3）耗尽 ⇒ **最终正文为空**。
+        现在缺省取「近 30 天」（与本 tool 的 mini_card「最近 30 天」口径一致），
+        并在返回体里报告**实际使用的区间** ⇒ 不产生假数据，模型也能拿到真数字。
+        """
         from_str = call.input.get("from")
         to_str = call.input.get("to")
-        if not from_str or not to_str:
-            return _err(call.id, call.name, "from/to required")
+        today = cn_today()
+        if not to_str:
+            to_str = today.isoformat()
+        if not from_str:
+            from_str = (today - timedelta(days=30)).isoformat()
         try:
             start = date.fromisoformat(from_str)
             end = date.fromisoformat(to_str)
@@ -238,11 +261,48 @@ class ToolDispatcher:
         return ToolResult(call.id, call.name, _truncate(payload))
 
     async def _exec_portfolio(self, call: ToolCall, *, user_id: int) -> ToolResult:
-        """get_user_portfolio: 业绩 + 90 日权益曲线。"""
-        equity = await self._position.equity_curve(days=90, account_id=None)
-        perf = await self._position.performance(account_id=None)
+        """get_user_portfolio: 持仓 + 业绩 + 90 日权益曲线。
+
+        ⚠️ **V0.120.3 修的真缺陷（线上 100% 报错）**：
+        原实现调 ``self._position.equity_curve(...)`` / ``self._position.performance(...)``，
+        但生产 wiring 注入的是 **PositionService** —— 它**根本没有这两个方法**
+        （``PositionService`` 只有 ``summary`` / ``list_positions`` / 持仓生命周期方法；
+        ``equity_curve`` / ``performance`` 在 **PortfolioAnalyticsService** 上）。
+        ⇒ 结果是 ``{"error": "AttributeError: 'PositionService' object has no attribute
+        'equity_curve'"}`` ⇒ 模型拿到错误就反复重试工具 ⇒ 工具轮次耗尽 ⇒
+        **最终正文为空**（用户看到的是空白回复，不是格式问题）。
+
+        ⚠ 这正是「桩藏住被替换的调用方」：测试里的 ``_FakePosition`` **自己实现了**
+        那两个方法 ⇒ 5 条 tool 测试全绿，线上却是坏的。
+        """
+        summary = await self._position.summary(account_id=None)
+        positions = await self._position.list_positions(account_id=None)
+        perf = await self._portfolio.performance(account_id=None)
+        equity = await self._portfolio.equity_curve(days=90, account_id=None)
         payload = {
-            "summary": {
+            "position_summary": {
+                "has_position": summary.has_position,
+                "quantity": summary.quantity,
+                "avg_cost": summary.avg_cost,
+                "pnl": summary.pnl,
+                "pnl_pct": summary.pnl_pct,
+                "position_ratio": summary.position_ratio,
+                "grams_held": summary.grams_held,
+            },
+            "positions": [
+                {
+                    "symbol": p.symbol,
+                    "name": p.name,
+                    "quantity": p.quantity,
+                    "avg_cost": p.avg_cost,
+                    "market_price": p.market_price,
+                    "market_value": p.market_value,
+                    "pnl": p.pnl,
+                    "pnl_pct": p.pnl_pct,
+                }
+                for p in positions
+            ],
+            "performance": {
                 "open_positions": perf.open_positions,
                 "closed_positions": perf.closed_positions,
                 "total_cost": perf.total_cost,
@@ -253,14 +313,24 @@ class ToolDispatcher:
                 "total_return_pct": perf.total_return_pct,
                 "win_rate": perf.win_rate,
                 "avg_holding_days": perf.avg_holding_days,
+                "best_trade_pnl": perf.best_trade_pnl,
+                "worst_trade_pnl": perf.worst_trade_pnl,
             },
             "equity_curve": [
                 {
                     "date": p.date if isinstance(p.date, str) else p.date.isoformat(),
-                    "value": getattr(p, "value", getattr(p, "market_value", 0)),
+                    "market_value": p.market_value,
+                    "total_pnl": p.total_pnl,
                 }
                 for p in equity.points[-30:]
             ],
+            "equity_summary": {
+                "latest_market_value": equity.summary.latest_market_value,
+                "latest_return_pct": equity.summary.latest_return_pct,
+                "max_drawdown_pct": equity.summary.max_drawdown_pct,
+                "total_invested": equity.summary.total_invested,
+                "total_pnl": equity.summary.total_pnl,
+            },
             "summary_text": perf.summary,
         }
         return ToolResult(call.id, call.name, _truncate(payload))

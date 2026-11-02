@@ -24,6 +24,8 @@ from typing import Any
 
 import httpx
 
+from app.utils.protocol_strip import ProtocolStripper, strip_protocol_markup
+
 # ────────────── 异常 ──────────────
 
 
@@ -178,7 +180,9 @@ class ClaudeClient:
 
         usage = payload.get("usage") or {}
         return ClaudeResponse(
-            text="\n".join(p for p in text_parts if p),
+            # ⚠️ V0.120.3：剥离 miniMax 原生 tool-call 协议残留。
+            # 上游会话畸形时会把自己的协议当正文吐出来（见 protocol_strip 模块说明）。
+            text=strip_protocol_markup("\n".join(p for p in text_parts if p)),
             tool_calls=tool_calls,
             input_tokens=int(usage.get("input_tokens") or 0),
             output_tokens=int(usage.get("output_tokens") or 0),
@@ -280,6 +284,9 @@ class ClaudeClient:
         current_event: str = ""
         current_data: list[str] = []
         tool_block_ids: dict[int, str] = {}  # index → tool_use_id
+        # ⚠️ V0.120.3：流式剥离 miniMax 原生 tool-call 协议残留。
+        # 标记可能跨 delta 断裂 ⇒ 必须用增量清洗器；末尾那段要靠 flush() 收尾。
+        stripper = ProtocolStripper()
         async for raw_line in resp.aiter_lines():
             if not raw_line:
                 # 空行 = 一个 SSE 事件结束
@@ -293,7 +300,9 @@ class ClaudeClient:
                     ev_type = payload.get("type", current_event or "unknown")
                     yielded = _parse_sse_event(ev_type, payload, tool_block_ids)
                     if yielded is not None:
-                        yield yielded
+                        cleaned = _strip_stream_event(yielded, stripper)
+                        if cleaned is not None:
+                            yield cleaned
                 current_event, current_data = "", []
                 continue
             if raw_line.startswith(":"):
@@ -310,9 +319,28 @@ class ClaudeClient:
                 ev_type = payload.get("type", current_event or "unknown")
                 yielded = _parse_sse_event(ev_type, payload, tool_block_ids)
                 if yielded is not None:
-                    yield yielded
+                    cleaned = _strip_stream_event(yielded, stripper)
+                    if cleaned is not None:
+                        yield cleaned
             except json.JSONDecodeError:
                 pass
+        # ⚠️ V0.120.3：清洗器尾部缓冲（可能不足一行）必须收尾，否则丢文本
+        tail = stripper.flush()
+        if tail:
+            yield StreamTextDelta(index=0, text=tail)
+
+
+def _strip_stream_event(ev, stripper: ProtocolStripper):
+    """流式事件的协议剥离（只处理 text_delta）。
+
+    返回 None = 剥完没内容了（不该 yield 空 delta 给前端）。
+    """
+    if isinstance(ev, StreamTextDelta):
+        text = stripper.feed(ev.text)
+        if not text:
+            return None
+        return StreamTextDelta(index=ev.index, text=text)
+    return ev
 
 
 def _parse_sse_event(

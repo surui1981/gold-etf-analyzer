@@ -145,6 +145,40 @@ def mock_llm_tool_use_with_args():
 
 
 @pytest.fixture
+def mock_llm_never_text():
+    """LLM 每一轮都只返 tool_use、**从不给正文**（V0.120.3 安全网用例）。
+
+    ⚠️ 这正是线上「空白回复」的成因：模型拿到工具错误就反复重试同一个工具，
+    ``max_tool_rounds`` 耗尽后正文为空 —— 用户只看到空白。
+    前 3 次 = 3 轮 tool_use（max_tool_rounds=3），第 4 次 = 安全网的「直接作答」调用。
+    """
+    fake = MagicMock()
+    tool_call = ToolCall(id="tc-loop", name="get_market_overview", input={})
+    fake.ask = AsyncMock(
+        side_effect=[
+            ClaudeResponse(
+                text="",
+                tool_calls=[tool_call],
+                input_tokens=100,
+                output_tokens=30,
+                stop_reason="tool_use",
+            )
+        ]
+        * 3
+        + [
+            ClaudeResponse(
+                text="综合结论：当前 NY 金 2400 美元，综合指数 65（偏多）。",
+                tool_calls=[],
+                input_tokens=200,
+                output_tokens=60,
+                stop_reason="end_turn",
+            )
+        ]
+    )
+    return fake
+
+
+@pytest.fixture
 def mock_tool_dispatcher():
     """假 tool dispatcher：get_market_overview 返固定 JSON。"""
     fake = MagicMock()
@@ -411,6 +445,48 @@ async def test_send_message_with_tool_use(
             assert data["responses"][1]["tool_call_id"] == "tc-001"
             assert data["responses"][2]["role"] == "assistant"
             assert "2400" in data["responses"][2]["content"]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_final_answer_safety_net_when_model_never_speaks(
+    as_ai_user,
+    mock_llm_never_text,
+    mock_tool_dispatcher,
+    mock_settings,
+) -> None:
+    """模型全程不给正文 ⇒ 「安全网」补一段结论（V0.120.3）。
+
+    ⚠️ 没有这条，用户看到的是**空白回复**（线上实测：工具连续报错 ⇒ 模型反复
+    重试 ⇒ max_tool_rounds 耗尽 ⇒ 正文为空）。
+    """
+    app.state.llm_client = mock_llm_never_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "现在金价多少？"},
+            )
+            assert r2.status_code == 200
+            responses = r2.json()["responses"]
+            # 3 轮 tool_use（assistant+tool 各 3 条）+ 安全网的 1 条 assistant 正文
+            assert len(responses) == 7, [x["role"] for x in responses]
+            last = responses[-1]
+            assert last["role"] == "assistant"
+            assert "综合结论" in last["content"]
+            # 安全网调用必须**不带工具**（否则模型又去调工具）
+            assert mock_llm_never_text.ask.await_args.kwargs["tools"] is None
     finally:
         app.state.llm_client = None
         app.state.tool_dispatcher = None
@@ -821,7 +897,14 @@ async def test_send_message_stream_error_event_yields_error(
         yield StreamError(err_type="invalid_request_error", message="upstream 502")
 
     mock_llm = MagicMock()
-    mock_llm.ask_stream = mock_ask_stream
+    calls = {"n": 0}
+
+    async def counting_ask_stream(*args, **kwargs):
+        calls["n"] += 1
+        async for ev in mock_ask_stream(*args, **kwargs):
+            yield ev
+
+    mock_llm.ask_stream = counting_ask_stream
 
     mock_tool = MagicMock()
     mock_tool.schemas = MagicMock(return_value=[])
@@ -860,6 +943,9 @@ async def test_send_message_stream_error_event_yields_error(
             assert "upstream 502" in err_ev.get("msg", "") or "upstream 502" in err_ev.get(
                 "data", ""
             )
+            # ⚠️ V0.120.3：上游已报错时**不该**再调一次「安全网」——
+            #   白等一轮（实测 429 配额耗尽时多等 15 秒还是同一个错）。
+            assert calls["n"] == 1, f"上游报错后不该再调上游，实际调了 {calls['n']} 次"
     finally:
         app.state.llm_client = None
         app.state.tool_dispatcher = None
@@ -961,6 +1047,272 @@ async def test_get_conversation_survives_corrupt_tool_input(
             assert r2.status_code == 200, r2.text
             corrupt = next(m for m in r2.json()["messages"] if m["id"] == "msg-corrupt-tool-input")
             assert corrupt["tool_input"] is None
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+# ────────────── V0.120.3 回归：对话格式可读性 ──────────────
+
+# 哨兵（生产库实测形态，纯 ASCII 12 字符）
+_SENTINEL = "]<]minimax[>["
+# miniMax 有时在标记中间插零宽字符
+_ZW = "​"
+
+
+@pytest.fixture
+def mock_llm_two_turns():
+    """LLM：第 1 轮 tool_use → 第 2 轮文本 → 第 3 轮（第 2 次提问）文本。"""
+    fake = MagicMock()
+    fake.ask = AsyncMock(
+        side_effect=[
+            ClaudeResponse(
+                text="",
+                tool_calls=[ToolCall(id="tc-101", name="get_market_overview", input={})],
+                input_tokens=100,
+                output_tokens=30,
+                stop_reason="tool_use",
+            ),
+            ClaudeResponse(
+                text="第一轮答案：2400。",
+                tool_calls=[],
+                input_tokens=200,
+                output_tokens=60,
+                stop_reason="end_turn",
+            ),
+            ClaudeResponse(
+                text="第二轮答案。",
+                tool_calls=[],
+                input_tokens=200,
+                output_tokens=60,
+                stop_reason="end_turn",
+            ),
+        ]
+    )
+    return fake
+
+
+@pytest.mark.asyncio
+async def test_tool_use_turn_is_echoed_back_to_llm(
+    as_ai_user,
+    mock_llm_tool_use,
+    mock_tool_dispatcher,
+    mock_settings,
+) -> None:
+    """⚠️ **V0.120.3 回归**：第 2 轮请求必须带 **assistant 的 tool_use 回合**。
+
+    Anthropic 协议要求 ``assistant(tool_use) → user(tool_result)`` **配对**。
+    原实现只回传了 ``user(tool_result)`` ⇒ 上游收到畸形会话
+    ⇒ miniMax 退化成把自己的本地 tool-call 协议当正文吐出
+    （用户报「对话给出的格式 不方便阅读」）。
+
+    断三件事：
+    1. 第 2 轮 messages 里有 assistant 回合，且含 ``tool_use`` 块
+    2. 该 tool_use 的 id 与紧邻的 tool_result 的 tool_use_id **一致**
+    3. **没有两条连续的 user 消息**（那正是畸形形状）
+    """
+    app.state.llm_client = mock_llm_tool_use
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "现在金价多少？"},
+            )
+            assert r2.status_code == 200, r2.text
+
+            assert mock_llm_tool_use.ask.call_count == 2, "应该调了 2 轮 LLM"
+            round2 = mock_llm_tool_use.ask.call_args_list[1].kwargs["messages"]
+
+            tool_use_ids = [
+                b["id"]
+                for m in round2
+                if m["role"] == "assistant" and isinstance(m.get("content"), list)
+                for b in m["content"]
+                if isinstance(b, dict) and b.get("type") == "tool_use"
+            ]
+            assert tool_use_ids == ["tc-001"], f"第 2 轮没回传 assistant 的 tool_use 回合: {round2}"
+
+            result_ids = [
+                b["tool_use_id"]
+                for m in round2
+                if m["role"] == "user" and isinstance(m.get("content"), list)
+                for b in m["content"]
+                if isinstance(b, dict) and b.get("type") == "tool_result"
+            ]
+            assert result_ids == ["tc-001"], f"tool_result 的 id 与 tool_use 不配对: {round2}"
+
+            roles = [m["role"] for m in round2]
+            assert not any(roles[i] == roles[i + 1] == "user" for i in range(len(roles) - 1)), (
+                f"出现连续两条 user 消息（畸形会话）: {roles}"
+            )
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_second_turn_history_carries_tool_data(
+    as_ai_user,
+    mock_llm_two_turns,
+    mock_tool_dispatcher,
+    mock_settings,
+) -> None:
+    """第 2 次提问时，历史里必须带上第 1 轮的**工具数据**。
+
+    ⚠️ 原实现的两个漏洞叠在一起：
+    - assistant 的 ``tool_use`` 块**从未重建**
+    - tool 消息**整条被跳过**
+    ⇒ 模型从第 2 轮起**看不到任何工具返回的数字**（只看到"我调用了工具"这句话）。
+    """
+    app.state.llm_client = mock_llm_two_turns
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "现在金价多少？"},
+            )
+            await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages",
+                json={"content": "那昨天呢？"},
+            )
+
+            assert mock_llm_two_turns.ask.call_count == 3
+            round3 = mock_llm_two_turns.ask.call_args_list[2].kwargs["messages"]
+
+            tool_results = [
+                b
+                for m in round3
+                if isinstance(m.get("content"), list)
+                for b in m["content"]
+                if isinstance(b, dict) and b.get("type") == "tool_result"
+            ]
+            assert tool_results, f"历史里没有 tool_result ⇒ 模型看不到工具数据: {round3}"
+            assert "2400" in tool_results[0]["content"], "工具数据内容丢了"
+
+            tool_uses = [
+                b
+                for m in round3
+                if m["role"] == "assistant" and isinstance(m.get("content"), list)
+                for b in m["content"]
+                if isinstance(b, dict) and b.get("type") == "tool_use"
+            ]
+            assert tool_uses, f"历史里没有 tool_use ⇒ 协议不配对: {round3}"
+            assert tool_uses[0]["id"] == tool_results[0]["tool_use_id"], (
+                "历史里 tool_use/tool_result 没配对"
+            )
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+@pytest.mark.asyncio
+async def test_protocol_markup_is_cleaned_on_read(
+    as_ai_user,
+    mock_llm_text,
+    mock_tool_dispatcher,
+    mock_settings,
+    db_session,
+) -> None:
+    """读对话时 ⇒ assistant 正文里的协议残留被清洗；**tool 消息的 JSON 不受影响**。
+
+    ⚠️ tool 消息正文**本身就是** JSON（含 ``name`` 键）——
+    清洗规则里有一条是「整行是 ``{"name": …}`` 就丢」，
+    若不加「只清洗 assistant」这道闸，**工具数据会被整段毁掉**。
+    """
+    from app.models.ai_chat import AIMessage
+
+    polluted = (
+        "我先查询今天的黄金行情。"
+        + _SENTINEL
+        + "<tool_call>\n"
+        + _SENTINEL
+        + "<tool_call>\n"
+        + '{"name":"get_market_data","arguments":{"query":"金价"}}\n'
+        + "</tool_call>"
+    )
+    # 带零宽字符的变体（miniMax 有时这么插）
+    polluted_zw = (
+        "先看结论。"
+        + _SENTINEL.replace("]<]", "]<]" + _ZW).replace("minimax", "minimax" + _ZW)
+        + "[>"
+        + "<tool_call>\n"
+        + '{"name":"x","arguments":{}}'
+    )
+    tool_payload = '{"name": "NY", "last_close": 2400.0, "index_score": 65}'
+
+    app.state.llm_client = mock_llm_text
+    app.state.tool_dispatcher = mock_tool_dispatcher
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+
+            db_session.add(
+                AIMessage(
+                    id="msg-polluted-1",
+                    conversation_id=cid,
+                    user_id=as_ai_user.id,
+                    role="assistant",
+                    content=polluted,
+                )
+            )
+            db_session.add(
+                AIMessage(
+                    id="msg-polluted-2",
+                    conversation_id=cid,
+                    user_id=as_ai_user.id,
+                    role="assistant",
+                    content=polluted_zw,
+                )
+            )
+            db_session.add(
+                AIMessage(
+                    id="msg-tool-payload",
+                    conversation_id=cid,
+                    user_id=as_ai_user.id,
+                    role="tool",
+                    content=tool_payload,
+                    tool_name="get_market_overview",
+                    tool_call_id="tc-001",
+                )
+            )
+            await db_session.commit()
+
+            r2 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            assert r2.status_code == 200, r2.text
+            msgs = {m["id"]: m for m in r2.json()["messages"]}
+
+            c1 = msgs["msg-polluted-1"]["content"]
+            assert "minimax" not in c1, f"协议残留没清掉: {c1!r}"
+            assert "tool_call" not in c1, f"协议标签没清掉: {c1!r}"
+            assert "我先查询今天的黄金行情。" in c1, "散文被误删了"
+
+            c2 = msgs["msg-polluted-2"]["content"]
+            assert "minimax" not in c2, f"零宽变体没清掉: {c2!r}"
+
+            # ⚠️ tool 消息的 JSON 必须**原样保留**
+            assert msgs["msg-tool-payload"]["content"] == tool_payload, "工具数据被清洗器毁掉了"
     finally:
         app.state.llm_client = None
         app.state.tool_dispatcher = None

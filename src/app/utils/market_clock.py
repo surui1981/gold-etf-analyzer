@@ -29,6 +29,23 @@ except Exception:  # pragma: no cover - 无 tzdata 时回退固定偏移（不�
     _CN = timezone(timedelta(hours=8), "CN")
 
 
+def cn_today(now: datetime | None = None) -> date:
+    """北京时间今天（V0.120.3）。
+
+    ⚠️ **可注入**：``now`` 传进来就能固定「今天」——
+    测试绝不能把「今天」写死在断言里（跨周末/跨月就是永久红，见
+    ``clock-drift-time-bomb``）。naive datetime 视为已是北京时间。
+
+    用途：AI 对话的 system prompt 要告诉模型今天是几号（否则它算不出日期区间），
+    ``get_scoring_summary`` 缺省区间也要用到。
+    """
+    if now is None:
+        return datetime.now(_CN).date()
+    if now.tzinfo is None:
+        return now.date()
+    return now.astimezone(_CN).date()
+
+
 class SessionState(StrEnum):
     """市场交易时段状态。"""
 

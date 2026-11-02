@@ -497,6 +497,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             from app.repositories.scoring_wide import ScoringWideRepository as _SWR
             from app.repositories.snapshot import SnapshotRepository as _SSR
             from app.services.freshness import FreshnessService
+            from app.services.portfolio import PortfolioAnalyticsService
             from app.services.position import PositionService
             from app.services.scoring_wide import ScoringWideService as _SWS
 
@@ -506,12 +507,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 news_repo=_NSR(tool_sess),
                 gold_repo=_GPR(tool_sess),
             )
-            position_svc = PositionService(_PR(tool_sess), market_repo)
+            # ⚠️ V0.120.3：``equity_curve`` / ``performance`` 在 **PortfolioAnalyticsService**
+            # 上，不在 PositionService 上 —— 之前 get_user_portfolio 调错了类，
+            # 线上 100% 报 AttributeError（模型反复重试工具 ⇒ 正文为空）。
+            pos_repo = _PR(tool_sess)
+            position_svc = PositionService(pos_repo, market_repo)
+            portfolio_svc = PortfolioAnalyticsService(pos_repo, market_repo)
             freshness_svc = FreshnessService(market_repo)
             tool_dispatcher = ToolDispatcher(
                 trend_service=trend_svc,
                 scoring_service=scoring_svc,
                 position_service=position_svc,
+                portfolio_service=portfolio_svc,
                 freshness_service=freshness_svc,
                 market_data_repository=market_repo,
             )
