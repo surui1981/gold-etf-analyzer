@@ -4,6 +4,7 @@
 // ⚠ 必须打 8888（主入口）。8889/gold/ 是备用入口且全站 /api/v1/* 404，
 //   在那里跑只会得到与本改动无关的假失败。见记忆 lan-only-deployment。
 import puppeteer from "puppeteer-core";
+import { readFileSync } from "node:fs";
 
 const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
 const CHROME =
@@ -49,15 +50,34 @@ ok("顶 nav 8 个场景项", nav.length === 8, `实际 ${nav.length}：${nav.map
 
 const labels = nav.map((n) => n.text);
 ok("数据健康不再是顶项", !labels.some((t) => t.includes("数据健康")), labels.join(" / "));
-ok("AI 智能分析仍是顶项", labels.some((t) => t.includes("AI 智能分析")));
-ok("AI 排在最后一项", (labels[labels.length - 1] || "").includes("AI 智能分析"), labels[labels.length - 1]);
 
-const EXPECTED = ["首页", "今日要闻", "决策", "持仓", "情报", "报告存档", "配置", "AI 智能分析"];
-const got = nav.map((n) => {
-  const e = EXPECTED.find((x) => n.text.includes(x));
-  return e || `?(${n.text})`;
+// ⚠ V0.120.4：这几条断言原先**按中文文案**认人（"AI 智能分析"），
+//   而顶栏的标签真正的来源是 i18n 字典（nav.ask = "智能分析"），
+//   topnav.js 里那个 "AI 智能分析" 只是**兜底 fb**。
+//   V0.120.4 修完 home.js 的 i18n 取值 bug 之后，顶栏终于真的走了字典 ——
+//   zh-CN 显示 "智能分析"（字典值）而不是 "AI 智能分析"（fb）。
+//   ⇒ 旧断言等于**把 bug 当成了期望**：它要求的正是「顶栏别翻译」。
+//   而且旧行为本身是自相矛盾的：实测 zh-CN 显示 fb「AI 智能分析」、
+//   en-US 显示字典值「Ask AI」—— 同一处顶栏两种语言两种文案。
+// ⇒ 改成按 **href** 认人（稳定契约），文案另与**字典值**比对
+//   （这样「顶栏回退到 fb」这种回归仍能被抓到）。
+const EXPECTED_HREFS = ["/home", "/headlines", "/scoring", "/portfolio", "/news", "/report-archive", "/weights", "/ask"];
+const gotHrefs = nav.map((n) => {
+  const h = (n.href || "").replace(BASE, "").replace(/\/$/, "") || (n.href || "");
+  return h;
 });
-ok("顺序与预期一致", JSON.stringify(got) === JSON.stringify(EXPECTED), got.join(" → "));
+ok("AI 智能分析仍是顶项", gotHrefs.some((h) => h.includes("/ask")), gotHrefs.join(" → "));
+ok("AI 排在最后一项", (gotHrefs[gotHrefs.length - 1] || "").includes("/ask"), gotHrefs[gotHrefs.length - 1]);
+ok("顺序与预期一致（按 href）", JSON.stringify(gotHrefs) === JSON.stringify(EXPECTED_HREFS),
+  gotHrefs.join(" → "));
+
+// 顶栏文案必须来自字典，而不是 topnav.js 的 fb
+const dictSrc = readFileSync(new URL("../static/i18n/zh-CN.js", import.meta.url), "utf8");
+const dictAsk = (dictSrc.match(/"nav\.ask"\s*:\s*"([^"]+)"/) || [])[1] || "";
+const aiLabel = (nav.find((n) => (n.href || "").includes("/ask")) || {}).text || "";
+ok("AI 顶项文案 = 字典值（不是 fb 兜底）",
+  !!dictAsk && aiLabel.includes(dictAsk),
+  `实际 "${aiLabel}" 字典 "${dictAsk}"`);
 
 // ─── 2. 配置的 subnav 含数据健康 ───
 console.log("\n【2】配置子页");

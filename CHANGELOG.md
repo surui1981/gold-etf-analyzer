@@ -30,6 +30,9 @@
   - ⚠ **同一个错名还污染 4 处**，一并修：`home.js` 等字典就绪的 `await`（⇒ 首页首屏从
     **~2.2s 降到 ~0.4s**，且非默认语言下不再落回中文）、`toast.js`（还叠加一个
     `return key` 应为 `return v` 的双重 bug）、`pwa.js`、`net-status.js`
+  - ⚠️ 修完 i18n ⇒ **顶栏文案变了**（zh-CN 从写死的 fb「AI 智能分析」变成字典值「智能分析」；
+    修之前同一处顶栏 zh-CN / en-US 两种语言两种文案）⇒ 暴露出一条**把 bug 当成期望**的门禁
+    （`_verify_nav_8.mjs` 断言顶栏出现 fb 文案）⇒ 改成**按 href 认人** + 文案与字典值比对
 - 🧪 **新门禁 `scripts/_verify_home_verdict.mjs`**（55 条断言）：
   版面位置 / 分数与 API **逐位相等** / 4 面分数条 + **权重用 face_weights（实际生效）** /
   pending 语义 / 明细 4 组 / 三语 / 390px 不溢出
