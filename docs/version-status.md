@@ -55,23 +55,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **74** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **49** 段 / 48 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **58** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **111** 个（本地 = 远端，已同步；含 `v0.120.3`） | 按版本 checkout 的锚点 |
+| git tag | **112** 个（本地 = 远端，已同步；含 `v0.120.4`） | 按版本 checkout 的锚点 |
 
 > **49 段 ≠ 48 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **111 个 tag 本地与远端一致**（2026-11-03 已全部推送，含 V0.120.3）：远端 111 = 本地 111，
+> **112 个 tag 本地与远端一致**（2026-11-04 已全部推送，含 V0.120.4）：远端 112 = 本地 112，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated **105** / lightweight **6**，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated **106** / lightweight **6**，两侧分布相同。
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
 > （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表），
 > 而 109 = 103 annotated + 6 lightweight。本版按 `git for-each-ref --format='%(objecttype)'`
 > **实测**改写。⇒ 这正是 §3.3 说的那类「内容腐化」：门禁只校验版本号，不校验计数。）
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
-> 必须把 `^{}` 行去掉再数，否则 111 个 tag 会数成 216 行（实测 `ls-remote --tags` 原始行数 = 216）。
+> 必须把 `^{}` 行去掉再数，否则 112 个 tag 会数成 218 行（实测 `ls-remote --tags` 原始行数 = 218）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -202,7 +202,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 |---|---|
 | 内容 | ✅ **首页 hero 右侧新增「综合评估」结论块** —— 用户报「首页没有显示综合评估指数和说明」：首页此前**一个评分都没有**（hero 只有金价/时效/AI 三个 chip，8 张场景卡是纯导航磁贴，贵金属三卡显示的是**价格涨跌幅**不是评分），而 hero **右半边（约 600px）一直空着**。⇒ hero 改两栏，右栏放结论块：大数字（综合趋势评估指数 0-100）+ 等级徽章 + 一句话说明（含加权公式）+ **4 面分数条**（技术/宏观/消息/资金流 + 生效权重 + 方向箭头）+ **各面因子明细**（默认折叠，每面按 \|contribution\| 取前 3）+ 脚注「口径：纽约金 COMEX · 快照 HH:MM」。⚡ **零新增网络请求**：`home.js` 早就在拉 `/api/v1/market/gold/trend`（只用了 `points[].close`），**`response.index` 整块已经在手只是没用**。🎯 口径钉死 `target=ny`（与趋势页「实时评估摘要」同源；趋势页 synthesis-card 用 `etf`，两个数字不打架）。🐛 顺带修 i18n 静默失效：`home.js` 的 `t()` 读 `window.PM_I18N.t`，但 `i18n.js` 导出的是 **`window.I18n`** ⇒ 首页 JS 拼的文案**一直回退中文**（en-US 下 `纽约金 XAU` 不翻译）⇒ 改读 `window.I18n.t` + 三卡抽函数 + `i18n:change` 重绘。🧪 新门禁 `_verify_home_verdict.mjs`（55 条断言）+ **4 组反向验证**（首轮反向验证抓出门禁自身的漏洞：公式权重没被断言到 ⇒ 已补）。详见 [releases/v0.120.4.md](releases/v0.120.4.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.4`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
-| git tag | ⏳ 待推送 `v0.120.4` |
+| git tag | ✅ `v0.120.4`（annotated；tag 对象 `96f929a3` → commit `3668f529`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
 ### 本轮：V0.120.3（2026-11-03 发版）
 
