@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.120.3** ｜ **最近更新**：2026-11-03 ｜ **状态**：一致，无漂移**
+> **基线：V0.120.4** ｜ **最近更新**：2026-11-04 ｜ **状态**：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.120.3**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.120.4**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.3` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.3` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.4` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.4` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.120.3
+GET /openapi.json  →  info.version = 0.120.4
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -195,6 +195,14 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 且间歇性发生）⇒ 3 个宏观自动源同时不可用 ⇒ 全部退回 2026-08-28 的常量，
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
+
+### 本轮：V0.120.4（2026-11-04 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **首页 hero 右侧新增「综合评估」结论块** —— 用户报「首页没有显示综合评估指数和说明」：首页此前**一个评分都没有**（hero 只有金价/时效/AI 三个 chip，8 张场景卡是纯导航磁贴，贵金属三卡显示的是**价格涨跌幅**不是评分），而 hero **右半边（约 600px）一直空着**。⇒ hero 改两栏，右栏放结论块：大数字（综合趋势评估指数 0-100）+ 等级徽章 + 一句话说明（含加权公式）+ **4 面分数条**（技术/宏观/消息/资金流 + 生效权重 + 方向箭头）+ **各面因子明细**（默认折叠，每面按 \|contribution\| 取前 3）+ 脚注「口径：纽约金 COMEX · 快照 HH:MM」。⚡ **零新增网络请求**：`home.js` 早就在拉 `/api/v1/market/gold/trend`（只用了 `points[].close`），**`response.index` 整块已经在手只是没用**。🎯 口径钉死 `target=ny`（与趋势页「实时评估摘要」同源；趋势页 synthesis-card 用 `etf`，两个数字不打架）。🐛 顺带修 i18n 静默失效：`home.js` 的 `t()` 读 `window.PM_I18N.t`，但 `i18n.js` 导出的是 **`window.I18n`** ⇒ 首页 JS 拼的文案**一直回退中文**（en-US 下 `纽约金 XAU` 不翻译）⇒ 改读 `window.I18n.t` + 三卡抽函数 + `i18n:change` 重绘。🧪 新门禁 `_verify_home_verdict.mjs`（55 条断言）+ **4 组反向验证**（首轮反向验证抓出门禁自身的漏洞：公式权重没被断言到 ⇒ 已补）。详见 [releases/v0.120.4.md](releases/v0.120.4.md) |
+| `__version__` | ✅ 已 bump 到 `0.120.4`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| git tag | ⏳ 待推送 `v0.120.4` |
 
 ### 本轮：V0.120.3（2026-11-03 发版）
 

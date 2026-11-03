@@ -42,12 +42,32 @@
   });
 
   // ── 2. 渲染所有 data-i18n 元素 ──
-  const t = (key, fallback) => {
+  // ⚠ V0.120.4 修：原先读的是 `window.PM_I18N.t` —— 但 i18n.js 导出的对象叫
+  //   **window.I18n**（`window.PM_I18N` 根本不存在，只有 `window.PM_I18N_ZH_CN`
+  //   这种「字典本体」是全局的）。⇒ 这个条件恒为假 ⇒ **首页 JS 拼的所有文案
+  //   一直回退到中文**：静态 markup 有 data-i18n（i18n.js 自己 apply，会翻译），
+  //   JS 拼的（徽章/备注/结论）不翻译 ⇒ 切到 en-US 时中英混排。
+  //   实测（V0.120.4 前置核查）：en-US 下 `.metal-title`="Gold Price"（已译）
+  //   但 metalPriceBadge="纽约金 XAU"（没译）。
+  // 修法：改读 window.I18n.t，并保留「字典里没这个 key → 用中文兜底」的语义
+  //   （i18n.t 找不到 key 时返回 **key 字面量**，不是空串 —— 直接透传会把
+  //   "home.metals_xau" 这种字面量渲染到页面上）。
+  const t = (key, fallback, params) => {
+    let s = null;
     try {
-      const v = window.PM_I18N && window.PM_I18N.t && window.PM_I18N.t(key);
-      if (v && typeof v === 'string') return v;
+      const i18n = window.I18n;
+      if (i18n && typeof i18n.t === 'function') {
+        const v = i18n.t(key, params);
+        // 字典里没这个 key ⇒ t() 返回 key 字面量 ⇒ 走中文兜底
+        if (v && typeof v === 'string' && v !== key) s = v;
+      }
     } catch (_) { /* fall through */ }
-    return fallback || key;
+    if (s == null) s = fallback || key;
+    // 兜底文案也要吃 params（否则 {score} 会原样留在页面上）
+    if (params && typeof s === 'string') {
+      s = s.replace(/\{(\w+)\}/g, (m, k) => (params[k] != null ? String(params[k]) : m));
+    }
+    return s;
   };
 
   document.querySelectorAll('[data-i18n]').forEach((el) => {
@@ -360,6 +380,12 @@
     if (el) el.textContent = text;
   };
 
+  // ══════════════════════════════════════════════════════════════
+  //  贵金属三卡 + 状态 chip
+  //  V0.120.4：抽成函数 —— 切换语言时要能整体重绘（i18n.js 的 apply 只管
+  //  data-i18n 元素，JS 拼的徽章/备注不会被它翻译）。
+  // ══════════════════════════════════════════════════════════════
+  const renderMetals = () => {
   // ── 卡 1：金价变化 ──
   // ⚠ 三个口径不能混：XAU 是美元/盎司，518880 是元/份，Au99.99 是元/克。
   //   /market/gold 与 /market/gold/gram-quote 的价格字段**都叫** price_usd
@@ -478,4 +504,298 @@
       if (okCount < cards.length) chip.classList.add('is-warn');
     }
   }
+  };  // ← renderMetals 结束
+
+  // ══════════════════════════════════════════════════════════════
+  //  V0.120.4 · 综合评估结论块（hero 右栏）
+  // ══════════════════════════════════════════════════════════════
+  //
+  // ⚠ **口径**：首页用 target=ny（纽约金 COMEX）⇒ 与 /static/trend.html 的
+  //   「实时评估摘要」同源（实测 38.7）；而趋势页那张 synthesis-card 用的是
+  //   target=etf（37.8，技术面口径不同）—— 两个数字别混，故卡片脚注写明口径。
+  // ⚠ **index.summary 是服务端直出中文** ⇒ 非中文界面下会露馅，这里按
+  //   components + face_weights 自己重算公式（照抄 synthesis-card.js 的 dimsFormula）。
+  // ⚠ **权重用 face_weights**（实际生效：不可用面已剔除、权重归一化给其余面），
+  //   face_weights_nominal 只用来标注「被剔除的那个面原本占多少」。
+  // ⚠ **index.composed_by 恒为 "weighted"**（后端漏传，trend.py:657-665），
+  //   真实值在顶层 tech_composed_by —— 别用 index.composed_by。
+  const FACE_KEYS = {
+    tech: 'trend.comp_tech',
+    macro: 'trend.comp_macro',
+    news: 'trend.comp_news',
+    flow: 'trend.comp_flow',
+  };
+  const FACE_ORDER = ['tech', 'macro', 'news', 'flow'];
+  const LEVEL_KEYS = {
+    strong_up: 'trend.level_strong_up',
+    up: 'trend.level_up',
+    sideways: 'trend.level_sideways',
+    down: 'trend.level_down',
+    strong_down: 'trend.level_strong_down',
+  };
+
+  /** 方向 → 颜色/箭头/文案。阈值 55/45 与后端等级阈值同源
+   *  （UP=55 / SIDEWAYS=45，见 src/app/schemas/thresholds.py），
+   *  与 synthesis-card.js 的 dirMeta 同一口径。 */
+  const dirMeta = (score) => {
+    if (score >= 55) {
+      return { color: 'var(--up)', arrow: '↑', text: t('home.idx_dir_bullish', '看多') };
+    }
+    if (score <= 45) {
+      return { color: 'var(--down)', arrow: '↓', text: t('home.idx_dir_bearish', '看空') };
+    }
+    return { color: 'var(--muted)', arrow: '→', text: t('home.idx_dir_neutral', '中性') };
+  };
+
+  /** 因子明细：按 |contribution| 取前 N 条（相同时按权重排）。
+   *  ⚠ 不能按后端返回的原始顺序取前 N —— 那个顺序不是「重要度」顺序。 */
+  const topFactors = (list, n) => (Array.isArray(list) ? list.slice() : [])
+    .sort((a, b) => {
+      const ca = Math.abs(typeof a.contribution === 'number' ? a.contribution : 0);
+      const cb = Math.abs(typeof b.contribution === 'number' ? b.contribution : 0);
+      if (ca !== cb) return cb - ca;
+      const wa = typeof a.weight === 'number' ? a.weight : 0;
+      const wb = typeof b.weight === 'number' ? b.weight : 0;
+      return wb - wa;
+    })
+    .slice(0, n);
+
+  const renderVerdict = () => {
+    const numEl = document.getElementById('hvNum');
+    const badgeEl = document.getElementById('hvBadge');
+    const sumEl = document.getElementById('hvSummary');
+    const facesEl = document.getElementById('hvFaces');
+    const factorsEl = document.getElementById('hvFactors');
+    const scopeEl = document.getElementById('hvScope');
+    const pendingEl = document.getElementById('hvPending');
+    const degradedEl = document.getElementById('hvDegraded');
+    if (!numEl || !facesEl) return;
+
+    const trend = goldTrend.status === 'fulfilled' ? goldTrend.value : null;
+    const idx = trend && trend.index ? trend.index : null;
+
+    // 取数失败：显示「—」+ 一句说明 ——
+    // ⚠ 绝不拿 0 或中性 50 冒充（V0.78.0 教训：没数据 ≠ 数据是 0/中性）
+    if (!idx) {
+      numEl.textContent = '—';
+      numEl.style.color = 'var(--muted)';
+      if (badgeEl) badgeEl.hidden = true;
+      if (pendingEl) pendingEl.hidden = true;
+      if (degradedEl) degradedEl.hidden = true;
+      if (sumEl) sumEl.textContent = t('home.idx_fail', '综合指数取数失败，暂不显示');
+      if (factorsEl) factorsEl.textContent = '';
+      if (scopeEl) scopeEl.textContent = '';
+      return;
+    }
+
+    const comps = idx.components || {};
+    const faceW = idx.face_weights || {};
+    const faceNominal = idx.face_weights_nominal || {};
+    const score = typeof idx.score === 'number' ? idx.score : null;
+    const dirColor = idx.direction === 'bullish' ? 'var(--up)'
+      : idx.direction === 'bearish' ? 'var(--down)' : 'var(--muted)';
+
+    // 大数字（score 可能是 null ⇒ 显示「—」，不显示 50）
+    numEl.textContent = score != null ? score.toFixed(1) : '—';
+    numEl.style.color = score != null ? dirColor : 'var(--muted)';
+
+    // 等级徽章（走 i18n key —— 不抄 trend.html:615 那张硬编码中文表）
+    if (badgeEl) {
+      const lvKey = LEVEL_KEYS[idx.level];
+      badgeEl.hidden = false;
+      badgeEl.textContent = lvKey ? t(lvKey, idx.level || '—') : (idx.level || '—');
+      badgeEl.style.background = dirColor;
+    }
+
+    // 消息面 pending（V0.100.0 同款）：未打分 ⇒ 整面剔除、权重归一化给其余面
+    const news = trend.news || {};
+    const newsScored = news.scored !== false;
+    if (pendingEl) {
+      if (!newsScored && score != null) {
+        const n = typeof faceNominal.news === 'number'
+          ? (faceNominal.news * 100).toFixed(0) : '—';
+        pendingEl.hidden = false;
+        pendingEl.textContent = t('trend.pending_chip', '消息面 pending');
+        pendingEl.title = t('trend.pending_tooltip',
+          '消息面尚未打分，综合指数按其余各面权重归一计算（暂未含消息面 {n}% 权重）', { n });
+      } else {
+        pendingEl.hidden = true;
+        pendingEl.title = '';
+      }
+    }
+
+    // 数据降级：琥珀 chip —— 用户可见路径上**不**显示红色失败框
+    if (degradedEl) {
+      degradedEl.hidden = trend.degraded !== true;
+      if (trend.degraded === true) {
+        degradedEl.textContent = t('home.idx_degraded', '部分数据降级');
+        degradedEl.title = t('home.idx_degraded_hint', '部分行情源用了兜底值，结论仅供参考');
+      }
+    }
+
+    // 说明：前端按 components + face_weights 重算公式（三语可用）
+    const present = FACE_ORDER.filter((k) => typeof comps[k] === 'number');
+    const formula = present
+      .map((k) => `${t(FACE_KEYS[k], k)} ${comps[k].toFixed(1)}×${((faceW[k] || 0) * 100).toFixed(0)}%`)
+      .join(' + ');
+    const levelTxt = LEVEL_KEYS[idx.level]
+      ? t(LEVEL_KEYS[idx.level], idx.level || '—') : (idx.level || '—');
+    if (sumEl) {
+      sumEl.textContent = t('home.idx_summary_fmt',
+        '综合趋势评估指数 {score}/100，等级【{level}】；= {formula}',
+        { score: score != null ? score.toFixed(1) : '—', level: levelTxt, formula: formula || '—' });
+    }
+
+    // 4 面分数条
+    facesEl.textContent = '';
+    FACE_ORDER.forEach((k) => {
+      const row = document.createElement('div');
+      row.className = 'hv-face';
+      const nameEl = document.createElement('span');
+      nameEl.className = 'hv-face-name';
+      nameEl.textContent = t(FACE_KEYS[k], k);
+
+      const bar = document.createElement('div');
+      bar.className = 'hv-bar';
+      const fill = document.createElement('i');
+      const v = typeof comps[k] === 'number' ? comps[k] : null;
+      const meta = v != null ? dirMeta(v) : null;
+      fill.style.width = (v != null ? Math.max(0, Math.min(100, v)) : 0) + '%';
+      fill.style.background = meta ? meta.color : 'var(--muted)';
+      bar.appendChild(fill);
+
+      const valEl = document.createElement('span');
+      valEl.className = 'hv-face-val';
+      if (v != null) {
+        const b = document.createElement('b');
+        b.textContent = v.toFixed(1);
+        valEl.appendChild(b);
+        valEl.appendChild(document.createTextNode(
+          ` ${meta.arrow} ${((faceW[k] || 0) * 100).toFixed(0)}%`));
+        row.title = `${t(FACE_KEYS[k], k)}：${v.toFixed(1)}/100 · ${meta.text}`
+          + ` · 权重 ${((faceW[k] || 0) * 100).toFixed(0)}%`;
+      } else {
+        // 被剔除的面：显示它的**配置权重**并标「未计入」
+        const nom = typeof faceNominal[k] === 'number' ? (faceNominal[k] * 100).toFixed(0) : '—';
+        valEl.textContent = `— ${nom}%`;
+        row.title = t('home.idx_face_excluded', '{face} 未计入（配置权重 {w}% 已剔除并归一化给其余面）',
+          { face: t(FACE_KEYS[k], k), w: nom });
+      }
+      row.appendChild(nameEl);
+      row.appendChild(bar);
+      row.appendChild(valEl);
+      facesEl.appendChild(row);
+    });
+
+    // 因子明细（4 面各取贡献最大的 3 条）
+    if (factorsEl) {
+      factorsEl.textContent = '';
+      const factorGroups = [
+        {
+          key: 'tech',
+          items: topFactors(trend.indicators, 3).map((i) => ({
+            name: i.name || '—',
+            value: i.value || i.detail || '—',
+            tier: null,
+          })),
+        },
+        {
+          key: 'macro',
+          items: topFactors(trend.macro && trend.macro.factors, 3).map((f) => ({
+            name: f.name || f.key || '—',
+            value: (f.value != null ? String(f.value) : '—') + (f.unit ? ` ${f.unit}` : ''),
+            tier: f.tier,
+          })),
+        },
+        {
+          key: 'news',
+          items: [],
+          note: newsScored
+            ? (news.note || t('home.idx_news_hint', '消息面来自你在「消息面评估」页的投行展望打分'))
+            // ⚠ 不用 trend.news_pending_hint —— 那句写的是「去**下方**『今日消息面打分』」，
+            //   「下方」是趋势页的说法；首页没有那个区块，会指错路。
+            : t('home.idx_news_pending',
+              '消息面未打分（{n}% 权重已剔除，不参与综合指数）',
+              { n: typeof faceNominal.news === 'number'
+                ? (faceNominal.news * 100).toFixed(0) : '—' }),
+          link: { href: '/news', text: t('home.idx_news_goto', '去消息面评估 →') },
+        },
+        {
+          key: 'flow',
+          items: topFactors(trend.flow && trend.flow.factors, 3).map((f) => ({
+            name: f.name || f.key || '—',
+            value: (f.value != null ? String(f.value) : '—') + (f.unit ? ` ${f.unit}` : ''),
+            tier: f.tier,
+          })),
+        },
+      ];
+      factorGroups.forEach((g) => {
+        const gEl = document.createElement('div');
+        gEl.className = 'hv-factor-group';
+        const head = document.createElement('div');
+        head.className = 'hv-factor-head';
+        const gs = typeof comps[g.key] === 'number' ? comps[g.key].toFixed(1) : '—';
+        head.textContent = `${t(FACE_KEYS[g.key], g.key)} · ${gs}`;
+        gEl.appendChild(head);
+        if (g.note) {
+          const noteEl = document.createElement('div');
+          noteEl.className = 'hv-factor';
+          noteEl.textContent = g.note;
+          gEl.appendChild(noteEl);
+        }
+        g.items.forEach((it) => {
+          const row = document.createElement('div');
+          row.className = 'hv-factor';
+          const nm = document.createElement('span');
+          nm.className = 'hv-factor-name';
+          nm.textContent = it.name;
+          nm.title = it.name;
+          const vl = document.createElement('span');
+          vl.className = 'hv-factor-val';
+          vl.textContent = it.value;
+          vl.title = it.value;
+          row.appendChild(nm);
+          row.appendChild(vl);
+          // tier ≠ live ⇒ 标「降级 / 静态兜底」（琥珀 chip，不标红）
+          if (it.tier && it.tier !== 'live') {
+            const chip = document.createElement('span');
+            chip.className = 'hv-chip hv-warn';
+            chip.textContent = it.tier === 'lkg'
+              ? t('home.idx_tier_lkg', '降级')
+              : t('home.idx_tier_static', '静态兜底');
+            row.appendChild(chip);
+          }
+          gEl.appendChild(row);
+        });
+        if (g.link) {
+          const a = document.createElement('a');
+          a.className = 'hv-factor-link';
+          a.href = g.link.href;
+          a.textContent = g.link.text;
+          gEl.appendChild(a);
+        }
+        factorsEl.appendChild(gEl);
+      });
+    }
+
+    // 脚注：口径 + 快照时间
+    if (scopeEl) {
+      const servedAt = trend.served_at ? new Date(trend.served_at) : null;
+      const pad = (n) => String(n).padStart(2, '0');
+      const hhmm = servedAt && !isNaN(servedAt.getTime())
+        ? `${pad(servedAt.getHours())}:${pad(servedAt.getMinutes())}` : '—';
+      scopeEl.textContent = `${t('home.idx_scope_target', '纽约金 COMEX')} · ${t('home.idx_snapshot', '快照')} ${hhmm}`;
+      scopeEl.title = t('home.idx_scope_hint',
+        '口径：纽约金 COMEX 日线，综合指数与「趋势追踪」页同一算法与权重');
+    }
+  };
+
+  renderMetals();
+  renderVerdict();
+
+  // 切换语言 ⇒ 重绘 JS 拼的内容（i18n.js 的 apply 只管 data-i18n 元素）
+  document.addEventListener('i18n:change', () => {
+    renderMetals();
+    renderVerdict();
+  });
 })();
