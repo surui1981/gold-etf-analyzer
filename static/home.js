@@ -29,8 +29,12 @@
   // ── 1. 等待 i18n 初始化 ──
   await new Promise((resolve) => {
     try {
-      if (window.PM_I18N && typeof window.PM_I18N.ready?.then === 'function') {
-        window.PM_I18N.ready.then(resolve).catch(resolve);
+      // ⚠ V0.120.4 修：i18n.js 导出的是 **window.I18n**（含 ready / t / setLang），
+      //   window.PM_I18N 不存在 ⇒ 这个 await 恒不成立 ⇒ 每次加载都白等 2 秒兜底，
+      //   且**字典还没到**就渲染（非默认语言下 JS 拼的文案会落回中文）。
+      const i18n = window.I18n;
+      if (i18n && typeof i18n.ready?.then === 'function') {
+        i18n.ready.then(resolve).catch(resolve);
         return;
       }
     } catch (_) { /* fall through */ }

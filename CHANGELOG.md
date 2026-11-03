@@ -27,6 +27,9 @@
   **首页 JS 拼的文案一直回退中文**（en-US 下 `纽约金 XAU` / `COMEX 库存` 不翻译）。
   改读 `window.I18n.t`（保留「key 不存在 ⇒ 中文兜底」语义）+ 贵金属三卡抽成 `renderMetals()`
   + 加 `i18n:change` 重绘 ⇒ **切换语言时整体重绘**
+  - ⚠ **同一个错名还污染 4 处**，一并修：`home.js` 等字典就绪的 `await`（⇒ 首页首屏从
+    **~2.2s 降到 ~0.4s**，且非默认语言下不再落回中文）、`toast.js`（还叠加一个
+    `return key` 应为 `return v` 的双重 bug）、`pwa.js`、`net-status.js`
 - 🧪 **新门禁 `scripts/_verify_home_verdict.mjs`**（55 条断言）：
   版面位置 / 分数与 API **逐位相等** / 4 面分数条 + **权重用 face_weights（实际生效）** /
   pending 语义 / 明细 4 组 / 三语 / 390px 不溢出

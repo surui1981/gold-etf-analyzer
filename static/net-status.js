@@ -55,11 +55,13 @@
   }
 
   function t(key, fallback) {
-    if (key && typeof window.PM_I18N !== "undefined"
-        && window.PM_I18N
-        && typeof window.PM_I18N.t === "function") {
+    // ⚠ V0.120.4 修：全局对象名错了 —— i18n.js 导出的是 **window.I18n**，
+    //   window.PM_I18N 根本不存在 ⇒ 这段 i18n 分支从来没进过。
+    if (key && typeof window.I18n !== "undefined"
+        && window.I18n
+        && typeof window.I18n.t === "function") {
       try {
-        const v = window.PM_I18N.t(key);
+        const v = window.I18n.t(key);
         if (v && v !== key) return v;
       } catch (_) { /* 静默 */ }
     }
