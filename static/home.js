@@ -205,7 +205,7 @@
         favBtn.type = 'button';
         favBtn.className = 'home-news-fav';
         favBtn.textContent = '☆';
-        favBtn.title = '收藏';
+        favBtn.title = t('headlines.fav_add', '收藏');
         // ⚠ V0.114.0：多源后 external_id 不再全局唯一，必须连 source 一起用。
         // data-ext 保持字符串 —— 金十 id 是 20 位（≈2e19），超出 JS 安全整数
         // 范围 2249 倍，后端为此把它序列化成字符串，这里**不能** parseInt。
@@ -233,18 +233,18 @@
             if (resp.ok) {
               favBtn.classList.add('archived');
               favBtn.textContent = '★';
-              if (window.PM_Toast) window.PM_Toast.show('已收藏', 'success');
+              if (window.PM_Toast) window.PM_Toast.show(t('favorites.toast_archived', '已收藏'), 'success');
             } else if (resp.status === 409) {
               favBtn.classList.add('archived');
               favBtn.textContent = '★';
-              if (window.PM_Toast) window.PM_Toast.show('已收藏', 'success');
+              if (window.PM_Toast) window.PM_Toast.show(t('favorites.toast_archived', '已收藏'), 'success');
             } else {
               const err = await resp.text().catch(() => '');
-              if (window.PM_Toast) window.PM_Toast.show('收藏失败: HTTP ' + resp.status, 'error');
+              if (window.PM_Toast) window.PM_Toast.show(t('favorites.toast_load_failed', '收藏失败') + ': HTTP ' + resp.status, 'error');
               console.warn('fav failed', err);
             }
           } catch (err) {
-            if (window.PM_Toast) window.PM_Toast.show('收藏失败: ' + err.message, 'error');
+            if (window.PM_Toast) window.PM_Toast.show(t('favorites.toast_load_failed', '收藏失败') + ': ' + err.message, 'error');
           } finally {
             favBtn.disabled = false;
           }
@@ -797,5 +797,13 @@
   document.addEventListener('i18n:change', () => {
     renderMetals();
     renderVerdict();
+    // 要闻列表**不整体重渲染** —— 那会重新触发 20 次 favorites/exists 请求；
+    // 只换掉 JS 拼的 tooltip 文案。
+    document.querySelectorAll('.home-news-title-nourl').forEach((el) => {
+      el.title = t('headlines.no_url_title', '该来源未提供原文链接');
+    });
+    document.querySelectorAll('.home-news-fav').forEach((el) => {
+      el.title = t('headlines.fav_add', '收藏');
+    });
   });
 })();
