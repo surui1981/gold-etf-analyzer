@@ -210,7 +210,73 @@
   .metal-card.is-empty { opacity: .72; border-color: #f5d77a; }
   [data-theme="dark"] .metal-card.is-empty { border-color: #8a6d1f; }
 
+  /* V0.120.4 · 综合评估结论块（hero 右栏）
+     hero 原本右半边是死区（文案全靠左对齐），把它变成「结论先行」：
+     大分数 + 等级徽章 + 一句话说明 + 4 面分数条 + 折叠的因子明细。
+     口径 = 纽约金 COMEX（target=ny），与 /static/trend.html「实时评估摘要」同源。
+     因子明细默认折叠 —— 4 面 × 3 条展开会把 hero 撑高一倍多。 */
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+    gap: 22px; align-items: start; }
+  .hero-main { min-width: 0; }
+  .home-verdict { background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 13px 15px; min-width: 0; }
+  .hv-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .hv-title { font-size: 12.5px; font-weight: 600; color: var(--accent); }
+  .hv-badge { font-size: 11px; font-weight: 600; color: #fff;
+    padding: 2px 9px; border-radius: 999px; }
+  .hv-chip { font-size: 10px; padding: 2px 8px; border-radius: 10px;
+    background: rgba(0,0,0,0.04); border: 1px solid var(--border); color: var(--muted); }
+  [data-theme="dark"] .hv-chip { background: rgba(255,255,255,0.06); }
+  .hv-chip.hv-warn { background: #fff8e6; border-color: #f5d77a; color: #b35309; }
+  [data-theme="dark"] .hv-chip.hv-warn { background: #3a2f12; color: #f5d77a; }
+  .hv-score { display: flex; align-items: baseline; gap: 8px; margin: 7px 0 2px; }
+  .hv-num { font-size: 40px; font-weight: 700; line-height: 1;
+    font-variant-numeric: tabular-nums; }
+  .hv-lbl { font-size: 11px; color: var(--muted); }
+  .hv-summary { font-size: 11.5px; line-height: 1.65; color: var(--muted); margin-top: 5px; }
+  .hv-faces { margin-top: 8px; display: flex; flex-direction: column; gap: 5px; }
+  .hv-face { display: grid; grid-template-columns: 52px minmax(0, 1fr) 62px;
+    align-items: center; gap: 7px; font-size: 11.5px; }
+  .hv-face-name { color: var(--muted); white-space: nowrap; overflow: hidden;
+    text-overflow: ellipsis; }
+  .hv-bar { height: 6px; background: #eef0f3; border-radius: 999px; overflow: hidden; }
+  .hv-bar > i { display: block; height: 100%; border-radius: 999px; }
+  [data-theme="dark"] .hv-bar { background: rgba(255,255,255,0.10); }
+  .hv-face-val { text-align: right; font-variant-numeric: tabular-nums;
+    color: var(--muted); white-space: nowrap; }
+  .hv-face-val b { color: var(--text); font-weight: 600; }
+  /* 因子明细（折叠）—— 复用 <details> 原生 disclosure */
+  .hv-detail { margin-top: 9px; font-size: 11.5px; }
+  .hv-detail > summary { cursor: pointer; color: var(--accent); list-style: none;
+    padding: 2px 0; }
+  .hv-detail > summary::-webkit-details-marker { display: none; }
+  .hv-detail > summary::before { content: "▸ "; }
+  .hv-detail[open] > summary::before { content: "▾ "; }
+  .hv-detail > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hv-factors { margin-top: 5px; display: flex; flex-direction: column; gap: 7px; }
+  .hv-factor-group { border-top: 1px dashed var(--border); padding-top: 5px; }
+  .hv-factor-group:first-child { border-top: none; padding-top: 0; }
+  .hv-factor-head { font-weight: 600; color: var(--text); margin-bottom: 2px; }
+  .hv-factor { display: flex; gap: 6px; align-items: baseline; padding: 1px 0;
+    color: var(--muted); }
+  .hv-factor-name { flex: 1 1 auto; min-width: 0; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; }
+  .hv-factor-val { flex: 0 1 auto; max-width: 62%; font-variant-numeric: tabular-nums;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hv-factor-link { color: var(--accent); text-decoration: none; font-size: 11px;
+    padding-top: 2px; display: inline-block; }
+  .hv-factor-link:hover { text-decoration: underline; }
+  .hv-foot { display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; margin-top: 9px; padding-top: 7px;
+    border-top: 1px dashed var(--border); font-size: 10.5px; color: var(--muted); }
+  .hv-link { color: var(--accent); font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .hv-link:hover { text-decoration: underline; }
+
   /* 移动端 */
+  @media (max-width: 980px) {
+    /* 结论块窄屏落到文案下方（单栏），不横向挤压 hero 文案 */
+    .hero { grid-template-columns: 1fr; gap: 14px; }
+  }
   @media (max-width: 768px) {
     .home-scenes { grid-template-columns: 1fr; gap: 12px; }
     .home-scene.scene-ai { flex-direction: column; align-items: flex-start; }
@@ -218,6 +284,8 @@
     .metal-grid { grid-template-columns: 1fr; }
     /* 1352px 下横排，窄屏塌单列；走势图保持固定高度不塌陷 */
     .metal-spark { height: 36px; }
+    /* 结论块窄屏：分数条加宽、名字不截断 */
+    .hv-face { grid-template-columns: 60px minmax(0, 1fr) 62px; }
   }
 </style>
 </head>
@@ -228,18 +296,47 @@
 
 <div class="wrap">
   <section class="hero">
-    <h1 data-i18n="home.title">黄金 ETF 投资辅助</h1>
-    <div class="tagline" data-i18n="home.subtitle">决策 · 持仓 · 情报 · 一屏掌控</div>
-    <div class="intro" data-i18n="home.intro">
-      三市场对照（纽约金 / 上海金 / 黄金 ETF）+ 综合趋势评估指数（技术 / 宏观 / 消息面），
-      一站完成 ETF 购买决策、持仓跟踪、复盘优化。
+    <div class="hero-main">
+      <h1 data-i18n="home.title">黄金 ETF 投资辅助</h1>
+      <div class="tagline" data-i18n="home.subtitle">决策 · 持仓 · 情报 · 一屏掌控</div>
+      <div class="intro" data-i18n="home.intro">
+        三市场对照（纽约金 / 上海金 / 黄金 ETF）+ 综合趋势评估指数（技术 / 宏观 / 消息面），
+        一站完成 ETF 购买决策、持仓跟踪、复盘优化。
+      </div>
+      <div class="notice" data-i18n="home.notice">仅供研究参考，不构成投资建议</div>
+      <div class="home-hero-chips" aria-label="状态">
+        <span class="home-chip is-loading" id="homeGoldPrice" data-i18n="home.chip_gold_loading">金价 --</span>
+        <span class="home-chip is-loading" id="homeFreshness" data-i18n="home.chip_fresh_loading">时效 --</span>
+        <span class="home-chip is-loading" id="homeQuota" data-i18n="home.chip_quota_loading">AI --</span>
+      </div>
     </div>
-    <div class="notice" data-i18n="home.notice">仅供研究参考，不构成投资建议</div>
-    <div class="home-hero-chips" aria-label="状态">
-      <span class="home-chip is-loading" id="homeGoldPrice" data-i18n="home.chip_gold_loading">金价 --</span>
-      <span class="home-chip is-loading" id="homeFreshness" data-i18n="home.chip_fresh_loading">时效 --</span>
-      <span class="home-chip is-loading" id="homeQuota" data-i18n="home.chip_quota_loading">AI --</span>
-    </div>
+
+    <!-- V0.120.4：综合评估结论块（hero 右栏）——
+         口径 = 纽约金 COMEX（target=ny），与 /static/trend.html「实时评估摘要」同源；
+         数据来自 home.js 已在拉的 /api/v1/market/gold/trend（零新增请求）。
+         ⚠ 只在 <details> 里放因子明细：4 面 × 3 条展开才不撑高 hero。 -->
+    <aside class="home-verdict" id="homeVerdict" aria-label="综合趋势评估指数">
+      <div class="hv-head">
+        <span class="hv-title" data-i18n="trend.index_panel_title">综合趋势评估指数</span>
+        <span class="hv-badge" id="hvBadge" hidden></span>
+        <span class="hv-chip" id="hvPending" hidden></span>
+        <span class="hv-chip hv-warn" id="hvDegraded" hidden></span>
+      </div>
+      <div class="hv-score">
+        <span class="hv-num" id="hvNum">—</span>
+        <span class="hv-lbl" data-i18n="trend.idx_label">趋势评估指数 (0-100)</span>
+      </div>
+      <div class="hv-summary" id="hvSummary">—</div>
+      <div class="hv-faces" id="hvFaces"></div>
+      <details class="hv-detail" id="hvDetail">
+        <summary data-i18n="home.idx_detail_toggle">各面因子明细</summary>
+        <div class="hv-factors" id="hvFactors"></div>
+      </details>
+      <div class="hv-foot">
+        <span class="hv-scope" id="hvScope">—</span>
+        <a class="hv-link" href="/static/trend.html" data-i18n="home.idx_goto">看趋势详情 →</a>
+      </div>
+    </aside>
   </section>
 
   <section class="home-scenes">

@@ -1,7 +1,7 @@
 /* V0.98 C3：全局 toast 系统（window.PM_Toast）
  * ─────────────────────────────────────────────────────
  * 模式：IIFE + window.PM_Toast 命名空间
- * 依赖：无（vanilla JS）；可选联动 window.PM_I18N.t(key) 与 window.PM_I18N.lang
+ * 依赖：无（vanilla JS）；可选联动 window.I18n.t(key) 与 window.I18n.lang
  *
  * 设计要点：
  *  - 顶部居中 stacked（toast-container z-index 99999，与 banner 99998 共存）
@@ -10,7 +10,7 @@
  *  - ARIA role=alert/status + aria-live；键盘可达（Tab 在 action → close → 下一 toast）
  *  - Esc 关闭最顶部 toast
  *  - 点 toast 任何位置 / 点 ✕ 关闭
- *  - i18n：优先 window.PM_I18N.t(opts.i18n) ；缺 i18n / 缺函数 → 用 msg 字面量
+ *  - i18n：优先 window.I18n.t(opts.i18n) ；缺 i18n / 缺函数 → 用 msg 字面量
  *  - 防御性：所有外部依赖 typeof 检查；不抛错
  */
 (function () {
@@ -44,13 +44,18 @@
   const active = []; // 存 toastId
 
   function t(key, fallback) {
-    if (key && typeof window.PM_I18N !== "undefined"
-        && window.PM_I18N
-        && typeof window.PM_I18N.t === "function") {
+    // ⚠ V0.120.4 修两处：
+    //   ① 全局对象名错了 —— i18n.js 导出的是 **window.I18n**，
+    //      window.PM_I18N 根本不存在（只有字典本体 PM_I18N_ZH_CN 是全局的），
+    //      ⇒ 这段 i18n 分支**从来没进过**，toast 一律显示字面量。
+    //   ② 命中分支写的是 `return key` —— 把 key 字面量当译文返回了（应是 v）。
+    if (key && typeof window.I18n !== "undefined"
+        && window.I18n
+        && typeof window.I18n.t === "function") {
       try {
-        const v = window.PM_I18N.t(key);
-        // PM_I18N.t 找不到 key 时返回 key 字符串；这时退回 fallback
-        if (v && v !== key) return key;
+        const v = window.I18n.t(key);
+        // t() 找不到 key 时返回 key 字符串；这时退回 fallback
+        if (v && v !== key) return v;
       } catch (_) { /* 静默 */ }
     }
     return fallback;
