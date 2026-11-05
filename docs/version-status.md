@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.120.5** ｜ **最近更新**：2026-11-05 ｜ **状态**：一致，无漂移**
+> **基线：V0.121.0** ｜ **最近更新**：2026-11-06 ｜ **状态**：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.120.5**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.121.0**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.5` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.5` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.5` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.5` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.120.5
+GET /openapi.json  →  info.version = 0.121.0
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -52,26 +52,33 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **74** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **49** 段 / 48 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **58** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **113** 个（本地 = 远端，已同步；含 `v0.120.5`） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **78** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **53** 段 / 52 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **114** 个（本地 = 远端，已同步；含 `v0.121.0`） | 按版本 checkout 的锚点 |
 
-> **49 段 ≠ 48 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
+> 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
+> （实测 bump 史 78 而非 74、CHANGELOG 53 段而非 49、releases 已合并为 7 份而非 58 份）。
+> ⇒ 这正是 §3.3 说的那类「**内容腐化**」：**门禁只校验版本号，不校验计数**，
+> 所以计数腐化不会报红，只能靠人工复核 —— 本轮顺手订正。
+>
+> **53 段 ≠ 52 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **113 个 tag 本地与远端一致**（2026-11-05 已全部推送，含 V0.120.5）：远端 113 = 本地 113，
+> **114 个 tag = 113 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> 但确实是真实存在的发布锚点）。**tag 本地与远端一致**：
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated **107** / lightweight **6**，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated **108** / lightweight **6**，两侧分布相同。
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
-> （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表），
-> 而 109 = 103 annotated + 6 lightweight。本版按 `git for-each-ref --format='%(objecttype)'`
-> **实测**改写。⇒ 这正是 §3.3 说的那类「内容腐化」：门禁只校验版本号，不校验计数。）
+> （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表）。
+> 本版按 `git for-each-ref --format='%(objecttype)'` **实测**改写。）
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
-> 必须把 `^{}` 行去掉再数，否则 113 个 tag 会数成 220 行（实测 `ls-remote --tags` 原始行数 = 220）。
+> 必须把 `^{}` 行去掉再数，否则 114 个 tag 会数成 222 行左右（实测 `ls-remote --tags` 原始行数
+> = 220 + 2 = 222）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -81,11 +88,16 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 ### 已知且**故意**保留的缺口
 
+> ⚠️ 下表是 **V0.121.0 逐项实测重算**的（脚本对比「tag 集合 / CHANGELOG 段集合 /
+> `__version__` bump 史集合」三个集合的两两差集），
+> 口径随 V0.120.5 的文档收敛而变过：**逐版 release notes 已移出仓库**（改由 git tag 承载），
+> 所以「有没有 release notes」不再是可查的仓库内事实 —— 缺口改用**可查的三集合**来表述。
+
 | 缺口 | 数量 | 为什么保留 |
 |---|---|---|
-| 有 release notes 但 CHANGELOG 无段 | 21 | V0.79.0~V0.91.0（18 个）早期版本只出了 notes 没进 CHANGELOG；V0.98.0 / V0.97.2-hotfix 同理；V0.117.0 尚未发版（见下）。**老版本不追溯补录**，以 release notes 为准 |
-| 有 CHANGELOG 段但无 release notes | 11 | V0.92.1 / V0.93.0 / V0.94.0 / V0.95.1 / V0.101.0 / V0.102.0 / V0.103.1 / V0.106.1 / V0.106.2 / V0.111.1 / V0.112.0。段已写清内容，缺的是「独立成篇的 notes」 |
-| 有 `__version__` bump 但无 release notes | 18 | V0.74.0~V0.78.2（13 个，notes 体系建立之前）+ V0.103.1 / V0.106.1 / V0.106.2 / V0.111.1 / V0.112.0（5 个 hotfix，段写在 CHANGELOG 里） |
+| 有 tag 但 CHANGELOG 无段 | 63 | V0.10.0~V0.98.0 的早期版本只打了 tag，没进 CHANGELOG（CHANGELOG 体系本身是后建的）。**老版本不追溯补录**，以 git 历史为准 |
+| 有 CHANGELOG 段但无 tag | 2 | V0.101.0 / V0.102.0 —— 这两个是**从未 bump 过版本号**的功能批次标签（代码已随 V0.103.0 上线），刻意不占版本号 |
+| 有 `__version__` bump 但 CHANGELOG 无段 | 32 | V0.74.0~V0.98.0 的中段版本（bump 了版本号但没写 CHANGELOG 段）。同上，**不追溯补录** |
 
 > **V0.117.0 的 release notes 存在但无 CHANGELOG 段 / 无 `__version__` bump / 无 tag ——
 > 这是正确的**。它是**规划文档**，还没发版。三者都缺席 = 状态自洽。
@@ -196,7 +208,22 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.120.5（2026-11-05 发版）
+### 本轮：V0.121.0（2026-11-06 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **门禁自愈批次**（「把显示假的逐条修回来」三批计划的**第 1 批**）。① `scripts/check_v084.mjs` 从 **0/27 全红**修成 **27/27** —— 根因是断言查的 `#freshnessInline` 已被 V0.85.0 换成 `#healthSummary`；修法是断言**当前真实结构** + 加一条**反向断言**（旧 mount 点不得复活）。② `scripts/_verify_sw_update.mjs` 从 **0 条断言**（永远绿）修成 **8 条** —— 补「SW 已接管 / 版本一致 / **缓存里没有陈旧副本**（逐字节比对）/ activate 后旧缓存已清 / 首页要闻卡骨架屏已消失」。踩中两个坑：Service Worker 只在**安全上下文**可用（LAN IP 下 `navigator.serviceWorker` 是 `undefined`，脚本直接崩 ⇒ 加显式守卫 + 退出码 1）；puppeteer 默认每次都是**全新临时 profile** ⇒ SW 每次重新 install ⇒「缓存正文 == 网络正文」**永远成立** ⇒ 陈旧检测**结构性失效** ⇒ 改用**持久化 `userDataDir`**。③ `scripts/_verify_mobile.mjs` 的关闭后可见性断言从「等固定 350ms」改成**轮询到 `visibility === "hidden"`**。④ **G3/G4 的 roadmap 记录是过期的** —— 聚焦断言早已由 V0.116.3 修好、跨 event loop 早已由 `tests/conftest.py::_reset_sse_app_status` 修好 ⇒ 只做**记录订正**，不假装又修一遍。⑤ 新建**第 7 份里程碑文档 M6 · 可信度修复（V0.121）**。**零业务逻辑改动**（只动 `scripts/` 下 3 个门禁） |
+| `__version__` | ✅ 已 bump 到 `0.121.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| git tag | ✅ `v0.121.0`（annotated；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
+
+> **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）：
+> G1 把 `static/trend.html` 的 `id="healthSummary"` 改名 ⇒ **3/27 变红**（正好是 trend × 3 语）
+> ⇒ 恢复；
+> G2 往 `static/home.js` 追加一行 ⇒ **7 passed / 1 failed**，
+> 报 `陈旧条目：shell:/static/home.js` ⇒ 恢复。
+> 详见 [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md)。
+
+### 上一轮：V0.120.5（2026-11-05 发版）
 
 | 项 | 状态 |
 |---|---|
@@ -496,7 +523,7 @@ git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 co
 | 应用版本 | `src/app/__init__.py` 的 `__version__` | `pyproject.toml` + `uv.lock`（`uv lock`）+ `static/sw.js` |
 | 发版记录 | `CHANGELOG.md` 加一段 | 段要**严格降序**（门禁会查） |
 | **还没发版的变更** | `CHANGELOG.md` 的 `## [Unreleased]` 段 | 放在文件头；**不要**新起版本号（应用代码没变就别 bump） |
-| 版本细节 | `docs/releases/vX.Y.Z.md` | 在 `docs/releases/index.md` 登记（`check_links.py` 会查） |
+| 版本细节 | `docs/releases/milestones/m<N>-*.md` | **V0.120.5 起**：逐版 notes 合并进里程碑文档（逐版原文在 git 历史：`git show vX.Y.Z:docs/releases/vX.Y.Z.md`）；在 `docs/releases/index.md` 登记 |
 | **当前版本是哪个** | 本文档 | 基线版本要跟着改（门禁会查） |
 
 **唯一真源是 `src/app/__init__.py`** —— 其余 3 处是它的副本，
@@ -512,8 +539,7 @@ git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 co
 
 ## 相关文档
 
-- [roadmap.md](roadmap.md) — 应用整体改进路径（V0.117.0 起）
-- [roadmap.md](roadmap.md) — 当前推进计划（缺陷清单）
+- [roadmap.md](roadmap.md) — **当前推进计划**（唯一活跃路线，逐条带实测判据）
 - [releases/index.md](releases/index.md) — 能力全景索引
-- [roadmap.md](roadmap.md) — ⚠️ 已归档（基线停在 V0.100.0）
+- [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) — 当前里程碑（V0.121 可信度修复线）
 - [CHANGELOG.md](../CHANGELOG.md) — 发版史

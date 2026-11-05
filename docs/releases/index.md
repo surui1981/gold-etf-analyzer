@@ -1,13 +1,14 @@
 # 能力 × 版本对照表
 
-> **目标读者**：用户 + 开发者（能力全景）｜ **状态**：活跃 ｜ **最近更新**：2026-11-05
+> **目标读者**：用户 + 开发者（能力全景）｜ **状态**：活跃 ｜ **最近更新**：2026-11-06
 >
 > **本表用途**：回答"哪个能力在哪个版本落地"，是 [docs/overview.md](../overview.md) §2 的完整版（原表随 overview.md 聚类重组被分离至此）。
 >
 > **维护原则**：发版时只改本表 + [CHANGELOG.md](../../CHANGELOG.md) + 对应**里程碑文档**的「版本一览」三处；其它文档（如 overview.md "当前产品能力"）不带版本号，不随之变化。
 >
-> **V0.120.5 起**：60 份逐版 release notes 已合并为 6 份**里程碑文档**（见 [milestones/](milestones/)）——
+> **V0.120.5 起**：60 份逐版 release notes 已合并为**里程碑文档**（见 [milestones/](milestones/)）——
 > 本表的「详情」列现在指向**该能力所属里程碑**；逐版原始全文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
+> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**。
 
 ## §1 能力全景（按能力所属类别组织）
 
@@ -205,6 +206,7 @@
 | **宏观面 8 → 11 因子**（+美/中/欧政府债务/GDP，组权重 12%）+ 低频因子 `cadence`/`max_lag_days` + 后端 `rolling_factors` 清单 | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **资金流观测网格「今天」可注入**（`_collect_etf` / `_collect_us_liquidity` / `_collect_cn_margin` 接受可选 `today`，生产路径不传 ⇒ 行为不变）—— 拆掉 2 个已在 10-31 变红、2 个将在 11-01 变红的时间炸弹测试 | **V0.120.1** | [v0.120.1.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | 门禁 `scripts/_verify_macro_debt.mjs`（3 个新因子的 API / 权重页 / 趋势页 + **2 处反向验证**：删掉 mock 的 `max_lag_days` 后必须亮滞后红灯；把 mock 的 `rolling_factors` 砍到 3 个后角标必须显示「3 个可滚动因子」） | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
+| **门禁自愈批次**：`check_v084.mjs` 0/27 → **27/27**（过期断言对齐 V0.85 后的真实结构 + 反向断言）· `_verify_sw_update.mjs` 0 条 → **8 条**（含「缓存无陈旧副本」+ 持久化 profile）· `_verify_mobile.mjs` 聚焦断言改确定性轮询 | **V0.121.0** | [v0.121.0.md](milestones/m6-truthful-signals-v0.121.md) |
 | Python 3.13 迁移收口 | **V0.101**（in progress） | — |
 
 ---
@@ -214,7 +216,7 @@
 - **能力全景**（本表）回答"项目有什么、什么时候加的"
 - **[CHANGELOG.md](../../CHANGELOG.md)** 回答"发版节点"（发行时刻 + 类型分类）
 - **[docs/version-status.md](../version-status.md)** 回答"**现在到底是哪个版本**"（4 处版本号一致性 / 各来源覆盖矩阵 / 已知缺口 / 怎么自己查）
-- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（6 份里程碑文档，覆盖 V0.11 → 当前）
+- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（7 份里程碑文档，覆盖 V0.11 → 当前）
 - **[docs/roadmap.md](../roadmap.md)** 回答"**现在要做什么**"（唯一活跃路线，逐条带实测判据）
 - **[docs/releases/milestones/](milestones/)** 里程碑文档回答"该阶段的实现细节（根因 / 修法 / 验证 / 教训）"
 

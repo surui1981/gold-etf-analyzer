@@ -46,7 +46,7 @@ docs/
 │
 ├── releases/
 │   ├── index.md                 能力 × 版本对照表（哪个能力哪个版本加的）
-│   └── milestones/              6 份里程碑文档（V0.11 → 当前，演进脉络）
+│   └── milestones/              7 份里程碑文档（V0.11 → 当前，演进脉络）
 │
 ├── parameter-evaluation/        参数调优的专项报告（逐份带日期与 commit）
 └── reports/                     决策链存档（历史评估汇总 + 时点快照）
@@ -60,7 +60,7 @@ docs/
    `feature-alignment`），合并成**一份** [roadmap.md](roadmap.md)。
 2. **`releases/` 与 `parameter-evaluation/` 只增不改。**
    V0.120.5 起 `releases/` 下**不再有逐版 release notes** ——
-   60 份小版本合并为 6 份**里程碑文档**；逐版原始全文在 **git 历史**里
+   60 份小版本合并为**里程碑文档**（V0.121.0 起共 7 份）；逐版原始全文在 **git 历史**里
    （tag 与原文件名同名：`git show v0.118.0:docs/releases/v0.118.0.md`）。
 3. **`reports/` 是「决策链存档」**，记述性内容允许写出当时错误或已废弃的实体名 ——
    这是它被排除在 `check_docs_claims.py` 扫描范围之外的原因（见该脚本 `SKIP_FILES`）。
@@ -71,8 +71,8 @@ docs/
 
 | 文档 | 状态 | 备注 |
 |------|------|------|
-| `roadmap.md` | 活跃 | V0.120.5 重写：合并 6 份旧规划文档，并对**每一条待办做了实测复核**（基线 V0.120.4） |
-| `releases/milestones/` | 归档 | 6 份里程碑文档，覆盖 V0.11 → V0.120.4 |
+| `roadmap.md` | 活跃 | V0.120.5 重写：合并 6 份旧规划文档并逐条实测复核；V0.121.0 更新为 3 批发版编排（基线 V0.121.0） |
+| `releases/milestones/` | 归档 | 7 份里程碑文档，覆盖 V0.11 → 当前（M0–M5 + **M6 可信度修复 V0.121**） |
 | `releases/index.md` | 活跃 | 「详情」列现在指向**该能力所属里程碑**（不再是逐版文件） |
 | `parameter-evaluation.md` | 活跃 | 参数清单完整；建议值章节的基线是 V0.77.2，重估时需按当前代码复核 |
 | `version-status.md` | 活跃 | **发版必更**（`check_version_sync.py` 校验它声明的基线 == 应用版本） |

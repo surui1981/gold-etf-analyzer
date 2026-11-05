@@ -4,6 +4,46 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.121.0] · 2026-11-06
+
+`门禁自愈批次：3 个浏览器门禁从「坏了 / 假绿」修成「能判红」` — chore · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)
+
+> 本版是「把显示假的逐条修回来」三批计划里的**第 1 批（批次 0 · 门禁自愈）**。
+> 选它打头的原因：**门禁坏着的时候，后面每个修复都没有地方验证** ——
+> 这正是本轮的教训（`check_v084` 全红 27/27、`_verify_sw_update` 一条断言都没有，
+> 两者都「报绿」）。
+> 本版**零业务逻辑改动** —— 只动 `scripts/` 下的 3 个门禁脚本。
+
+- 🔧 **`scripts/check_v084.mjs` 从 0/27 全红修成 27/27**
+  - 根因：断言查的是 `#statusPanel` 内的 `#freshnessInline`，
+    但 V0.85.0「数据时效迁移到 /data-health.html」已把它换成 `#healthSummary`
+    ⇒ **9 页 × 3 语 = 27 个组合全部失败**
+  - 修法：断言**当前真实结构**（`summary #healthSummary`），
+    并加一条**反向断言**（`#freshnessInline` 不得复活）
+  - ⚠ 典型「崩的门禁不是门禁」：它让人以为 V0.84 的行为还在被守着
+- 🔧 **`scripts/_verify_sw_update.mjs` 从 0 条断言修成 8 条**
+  - 现状：脚本只有 `console.log` 诊断，退出码恒为 0 ⇒ **永远绿、永远不能判红**
+  - 新断言 5 组：① SW 已注册且接管页面 ② 浏览器装的 SW 版本 == 服务端 `sw.js` 版本
+    ③ 缓存里的静态资源正文与网络**逐字节一致**（抓「改了 static 却忘了 bump VERSION」）
+    ④ activate 后旧版本缓存已清空 ⑤ 首页要闻卡骨架屏已消失（骨架屏本身就是 5 个 li）
+  - ⚠ **两个坑**：(a) Service Worker 只在**安全上下文**可用 ⇒ LAN IP 下
+    `navigator.serviceWorker` 是 `undefined`，脚本直接崩 ⇒ 加显式守卫 + 退出码 1；
+    (b) puppeteer 默认每次都是**全新临时 profile** ⇒ SW 每次重新 install ⇒
+    「缓存正文 == 网络正文」**永远成立** ⇒ 陈旧检测**结构性失效（假绿）**
+    ⇒ 改用**持久化 `userDataDir`**
+- 🔧 **`scripts/_verify_mobile.mjs` 的聚焦断言改成确定性轮询**
+  - 原写法是「关闭后等固定 350ms 再读 `visibility`」⇒ 与 CSS 过渡赛跑
+  - 改成**轮询到 `visibility === "hidden"` 为止**（上限 2s）⇒ 不依赖时间常数
+- ✅ **`tests/test_api/` 355 passed / 0 failed**（G4「跨 event loop」那条早已是绿的）
+  - 该缺陷已由 `tests/conftest.py::_reset_sse_app_status` 修掉
+    ⇒ **roadmap 里那条记录是过期的**，本次只做**记录订正**，没改测试
+- 📉 **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）
+  - G1：把 `static/trend.html` 的 `id="healthSummary"` 改名 ⇒ **3/27 变红**（正好是 trend × 3 语）⇒ 恢复
+  - G2：往 `static/home.js` 追加一行 ⇒ **7 passed / 1 failed**，
+    报 `陈旧条目：shell:/static/home.js` ⇒ 恢复 ⇒ 8/8
+- 📌 **本次没改 `static/*.html` / `static/*.js` 业务逻辑**
+  ⇒ 但 `sw.js` VERSION 仍随版本号换代（顺带清掉反向验证期间留下的陈旧缓存）
+
 ## [V0.120.5] · 2026-11-05
 
 `文档收敛：60 份逐版 release notes → 6 份里程碑文档；6 份重叠规划文档 → 1 份 roadmap.md；5 份分析报告 → 1 份评估汇总` — docs · 详见 [M5 里程碑文档](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
