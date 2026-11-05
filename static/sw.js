@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.120.4";  // V0.120.4 · 首页 hero 右侧新增「综合评估」结论块（综合趋势评估指数 + 4 面分数条 + 因子明细）+ 修 home.js 取值用错 window.PM_I18N（首页 JS 文案从来没被翻译过）；本次改 static/ 逻辑，必须 bump 以清旧缓存
+const VERSION = "v0.120.5";  // V0.120.5 · 文档收敛：60 份逐版 release notes → 6 份里程碑文档；6 份重叠规划文档 → 1 份 roadmap.md；5 份分析报告 → 1 份评估汇总；本次未改 static/ 逻辑，随版本号换代以清旧缓存
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
