@@ -265,8 +265,18 @@ const opened = await page.evaluate(async () => {
   }
   const vis = getComputedStyle(pal).visibility;
   window.PM_CmdPalette.close();
-  await new Promise((r) => setTimeout(r, 350));
-  return { vis, focusable, closedVis: getComputedStyle(pal).visibility };
+  // ⚠ V0.121.0：这里原是**固定 350ms 等待**（等关闭过渡跑完再读 visibility）。
+  // 现状 transition 是 `visibility .14s ease` ⇒ 350ms 有 2.5x 余量，**暂时不 flaky**
+  // （实测连跑 3 次均 35/35 绿）—— 但它仍是「靠运气阈值」的一类断言：
+  // 哪天有人把关闭过渡调到 400ms+，这条就会**假红**（实现没坏）。
+  // 改成**轮询到 hidden / 到截止**：过渡一结束就立刻绿，过渡没结束就实打实红到截止。
+  const closeDeadline = performance.now() + 2000;
+  let closedVis = getComputedStyle(pal).visibility;
+  while (closedVis !== "hidden" && performance.now() < closeDeadline) {
+    await new Promise((r) => setTimeout(r, 25));
+    closedVis = getComputedStyle(pal).visibility;
+  }
+  return { vis, focusable, closedVis };
 });
 ok("打开时面板可见", opened.vis === "visible", opened.vis);
 ok("打开时搜索框自动聚焦", opened.focusable === true);

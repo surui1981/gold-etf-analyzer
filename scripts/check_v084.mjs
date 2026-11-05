@@ -75,9 +75,19 @@ async function checkOne(pageCfg, lang) {
       const oldMeta = document.querySelector(".topnav .topnav-meta");
       if (oldMeta) { out.ok = false; out.errors.push("topnav-meta 仍残留"); }
 
-      // 4) summary 包含 #freshnessInline
-      const fresh = panel.querySelector("#freshnessInline");
-      if (!fresh) { out.ok = false; out.errors.push("summary 内 #freshnessInline 缺失"); }
+      // 4) summary 包含**时效摘要 chip**（V0.85.0 起）
+      //    ⚠ V0.121.0 修：原断言查的是 `#freshnessInline`，
+      //    但 V0.85.0「数据时效迁移到 /data-health.html」已把它换成
+      //    `<a id="healthSummary" class="hs-chip-link">`（data-health 页是
+      //    `<span id="healthSummary" class="hs-panel">`）⇒ **本门禁 27 组合全红**
+      //    （实测 PASS: 0 / 27，唯一的失败项就是这一条）——
+      //    「崩的门禁不是门禁」：它让人以为 V0.84 的行为还在被守着。
+      //    现在断言当前**真实**结构，并加一条反向断言防止旧 mount 点复活。
+      const health = panel.querySelector("summary #healthSummary");
+      if (!health) { out.ok = false; out.errors.push("summary 内 #healthSummary 缺失（时效摘要 chip 未 mount）"); }
+      if (document.getElementById("freshnessInline")) {
+        out.ok = false; out.errors.push("#freshnessInline 仍存在（V0.85.0 起已并入 #healthSummary）");
+      }
 
       // 5) summary 包含 status-warn-pill + data-warn-count
       const pill = panel.querySelector(".status-warn-pill");
@@ -155,6 +165,10 @@ await browser.close();
 
 console.log(`\n========================================`);
 console.log(`PASS: ${pass} / ${pass + fail}`);
+// ⚠ 必须真的输出「结果：N passed」—— 门禁崩掉却报全绿 = 没有门禁
+// （记忆「崩的门禁不是门禁」）。上面的 PASS 行是给人看的，这一行是给
+// 「跑门禁只看这一行」的自动化用的。
+console.log(`结果：${pass} passed / ${fail} failed`);
 if (fail > 0) {
   console.log(`FAIL: ${fail}`);
   console.log(JSON.stringify(fails, null, 2));
