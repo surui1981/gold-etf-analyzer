@@ -24,9 +24,13 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 
 import check_links  # noqa: E402
 
-# GitHub 权威锚点（2026-10-05 由
-# https://github.com/surui1981/gold-etf-analyzer/blob/main/docs/improvement-path.md
-# 的 HTML 中 `id="user-content-..."` 实测取得，去掉 user-content- 前缀）
+# GitHub 权威锚点（2026-10-05 由 GitHub 渲染后的 HTML 中
+# `id="user-content-..."` 实测取得，去掉 user-content- 前缀）。
+#
+# ⚠ V0.120.5：原实现拿 `docs/improvement-path.md` 当夹具（该文件已随文档整理删除）。
+#   门禁测的是**锚点归一化函数**，不是某一份文档 ⇒ 改用 tmp_path 现场造一份
+#   带同样标题的 markdown —— 夹具不再依赖任何具体文档是否还存在。
+GOLDEN_HEADING = "## 三·五、下一阶段路线（V0.67.0 → V0.72.0）· 工程化补齐 → 业务深度 → 产品化"
 GOLDEN_ANCHOR = "三五下一阶段路线v0670--v0720-工程化补齐--业务深度--产品化"
 
 # V0.78.0 修复前的写法（错两处：全角括号被删后不留分隔符却多写一个连字符；
@@ -34,15 +38,19 @@ GOLDEN_ANCHOR = "三五下一阶段路线v0670--v0720-工程化补齐--业务深
 STALE_ANCHOR = "三五下一阶段路线-v0670--v0720--工程化补齐--业务深度--产品化"
 
 
-def test_golden_anchor_is_recognized() -> None:
+def test_golden_anchor_is_recognized(tmp_path: Path) -> None:
     """权威 href 必须能被识别 —— 否则有效链接会被误报为失效。"""
-    anchors = check_links.anchors_of(REPO_ROOT / "docs" / "improvement-path.md")
+    doc = tmp_path / "fixture.md"
+    doc.write_text(GOLDEN_HEADING + "\n", encoding="utf-8")
+    anchors = check_links.anchors_of(doc)
     assert GOLDEN_ANCHOR in anchors
 
 
-def test_stale_anchor_is_rejected() -> None:
+def test_stale_anchor_is_rejected(tmp_path: Path) -> None:
     """修复前的错误写法必须被拒绝 —— 这是门禁的存在意义。"""
-    anchors = check_links.anchors_of(REPO_ROOT / "docs" / "improvement-path.md")
+    doc = tmp_path / "fixture.md"
+    doc.write_text(GOLDEN_HEADING + "\n", encoding="utf-8")
+    anchors = check_links.anchors_of(doc)
     assert STALE_ANCHOR not in anchors
 
 

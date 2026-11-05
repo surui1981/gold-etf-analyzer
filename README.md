@@ -24,10 +24,10 @@
 > - [docs/roadmap.md](docs/roadmap.md) — **活跃路线图**（V0.78 → V0.100 历史里程碑 + V0.101+ 推进主线 + 维护线 + 风险）
 > - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（"哪个能力在哪个版本落地"的单源）
 > - [CHANGELOG.md](CHANGELOG.md) — Keep-a-Changelog 发版条目（发行节点）
-> - [docs/ux-roadmap.md](docs/ux-roadmap.md) — **已归档**（V0.68-V0.77 UX 全部已交付）
-> - [docs/improvement-path.md](docs/improvement-path.md) — **已归档**（V0.50-V0.72 改进路径全部已交付）
+> - [roadmap.md](docs/roadmap.md) — **已归档**（V0.68-V0.77 UX 全部已交付）
+> - [roadmap.md](docs/roadmap.md) — **已归档**（V0.50-V0.72 改进路径全部已交付）
 > - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 11 项参数评估（K 项 = V0.102 唯一未交付项，**活跃**）
-> - [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
+> - [roadmap.md](docs/roadmap.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
 
 ---
 
@@ -309,7 +309,7 @@ python scripts/check_deps.py                             # 依赖声明门禁（
 
 ## 功能拓展路径（V0.78.0 → V0.79.0）
 
-> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [docs/ux-roadmap.md](docs/ux-roadmap.md)（范围 **V0.68.0 → V0.78.0**）同步维护，**冲突时以路线图为准**；**V0.76.1 为 README 展望，尚未纳入路线图**。
+> 标注规则：**✅ 已落地**（代码 + 测试齐备）/ **🟡 部分落地**（主体验收项已合，子项有遗留）/ **📋 规划中**（路线已定，待排期）。本节与 [roadmap.md](docs/roadmap.md)（范围 **V0.68.0 → V0.78.0**）同步维护，**冲突时以路线图为准**；**V0.76.1 为 README 展望，尚未纳入路线图**。
 
 ### V0.74.0 · 仪表盘自定义 + 通知偏好（**🟡 部分落地**，N+11~N+18）
 
@@ -454,10 +454,10 @@ python scripts/check_deps.py                             # 依赖声明门禁（
   - [docs/roadmap.md](docs/roadmap.md) — **活跃路线图**（V0.78 → V0.100 历史 + V0.101+ 推进主线）
   - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（单源）
   - [CHANGELOG.md](CHANGELOG.md) — 发版条目
-  - [docs/ux-roadmap.md](docs/ux-roadmap.md) — **已归档**（V0.68-V0.77）
-  - [docs/improvement-path.md](docs/improvement-path.md) — **已归档**（V0.50-V0.72）
+  - [roadmap.md](docs/roadmap.md) — **已归档**（V0.68-V0.77）
+  - [roadmap.md](docs/roadmap.md) — **已归档**（V0.50-V0.72）
   - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 11 项参数评估（K 项 V0.102 唯一未交付）
-  - [docs/feature-alignment.md](docs/feature-alignment.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
+  - [roadmap.md](docs/roadmap.md) — README ↔ 代码 ↔ 文档三方对账（**开发者**）
 
 ## 许可
 

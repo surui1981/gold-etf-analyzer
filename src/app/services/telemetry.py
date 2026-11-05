@@ -22,7 +22,8 @@ from app.utils.logger import get_logger
 logger = get_logger(__name__)
 
 # V0.68.0 事件白名单（前端常量同源）；未列入直接拒收（不入 DB，避免被恶意填充垃圾类型）
-# 命名与 docs/ux-roadmap.md 附录 C「自身可观测性埋点事件」对齐
+# 命名与 V0.68.0 的「自身可观测性埋点事件」清单对齐（该文档已随 V0.120.5 文档整理归档，
+# 原始全文见 git 历史：git show <tag>:docs/ux-roadmap.md）
 ALLOWED_EVENT_TYPES: frozenset[str] = frozenset(
     {
         # 浏览 + 操作

@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.120.4** ｜ **最近更新**：2026-11-04 ｜ **状态**：一致，无漂移**
+> **基线：V0.120.5** ｜ **最近更新**：2026-11-05 ｜ **状态**：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.120.4**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.120.5**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.4` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.4` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.120.5` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.120.5` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.120.5` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.120.5` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.120.4
+GET /openapi.json  →  info.version = 0.120.5
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -89,7 +89,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 > **V0.117.0 的 release notes 存在但无 CHANGELOG 段 / 无 `__version__` bump / 无 tag ——
 > 这是正确的**。它是**规划文档**，还没发版。三者都缺席 = 状态自洽。
-> 详见 [releases/v0.117.0.md](releases/v0.117.0.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
 ---
 
@@ -97,9 +97,9 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 方向文档 | ✅ [releases/v0.117.0.md](releases/v0.117.0.md)（标 `planning · 未实施`） |
-| 完整推理 | ✅ [app-improvement-path.md](app-improvement-path.md) |
-| 缺陷清单 | ✅ [next-steps.md](next-steps.md) |
+| 方向文档 | ✅ [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)（标 `planning · 未实施`） |
+| 完整推理 | ✅ [roadmap.md](roadmap.md) |
+| 缺陷清单 | ✅ [roadmap.md](roadmap.md) |
 | **代码** | ❌ 一行都没有 |
 | `__version__` | ❌ 仍是 `0.118.0`（V0.117.0 是方向文档，不 bump） |
 | CHANGELOG 段 | ❌ 无（未发版） |
@@ -134,12 +134,12 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 > 触发条件同样是**改了 `static/*.html`**（`ask.html` / `admin/users.html`）
 > ⇒ 按 V0.100.1 必须 bump `sw.js` ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.116.2.md](releases/v0.116.2.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 >
 > 📌 **这轮还留了一件没做的事**：生产库 `users` 表缺 `role` 列
 > ⇒ `GET /api/v1/admin/users` / `POST .../reset-password` / `GET /api/v1/auth/me` 三个端点返 500。
 > 修它要**改生产 SQLite 库** ⇒ 留给用户决定，本轮只报告不改。
-> 详见 [releases/v0.116.2.md §5](releases/v0.116.2.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md §5](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
 ### 更早一轮：V0.116.3（2026-10-25）
 
@@ -151,7 +151,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 > 触发条件同样是**改了 `static/*.js`**（`command-palette.js`）
 > ⇒ 按 V0.100.1 必须 bump `sw.js` ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.116.3.md](releases/v0.116.3.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 >
 > 📌 **这轮的一条元教训**：判据本身也会骗人 —— 我第一版判据用
 > `transition-duration` 拉长过渡，回退实现后门禁**连报两次「全绿」**；
@@ -172,7 +172,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 >
 > 触发条件是**改了 `static/*.js`**（`command-palette.js` + `scoring.js`）
 > ⇒ 按 V0.100.1 必须 bump `sw.js` ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.116.4.md](releases/v0.116.4.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 >
 > 📌 **这轮的一条教训**：同一个入口（进「决策」）在实现上有 **4 条独立路径**
 > —— 顶栏 / 场景卡 / 抽屉 / 面板。前三条共用 `SCENES.path`（同源，不会漂移），
@@ -194,13 +194,21 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 实测触发条件是**本机 DNS 解析不了境外域名**（路由器只解析国内域名，
 > 且间歇性发生）⇒ 3 个宏观自动源同时不可用 ⇒ 全部退回 2026-08-28 的常量，
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
-> 详见 [releases/v0.118.1.md](releases/v0.118.1.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
+
+### 本轮：V0.120.5（2026-11-05 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **文档收敛** —— 用户要求「把这些小版本合并成几个关键的里程碑版本，去掉测试和说明性的重复文档」。① **60 份逐版 release notes → 6 份里程碑文档**（`docs/releases/milestones/m0`–`m5`，按能力主题切分；逐版原文留在 git 历史，tag 与原文件名同名）；② **6 份互相重叠、基线落后 16–43 个版本的规划文档 → 1 份 `docs/roadmap.md`**，且**逐条实测复核**每一条在 V0.120.4 上的真实状态（已修的挪进「已完成」，不再当待办 —— 复核发现 6 条 P0 仍然存在：`days` 参数完全失效 / 上涨日数恒 0 / 64% 历史行带伪造消息面 50 分 / `time.hour_ago` 字面量外泄 / 权重滑块是装饰 / AI token 统计失真）；③ **5 份分析报告（基线 V0.74–V0.77）→ 1 份 `docs/reports/历史评估汇总-202609.md`**（补「当时的建议 → 实际落地版本」对照表）；④ **门禁契约跟着改**：`check_version_sync.py` 从「`docs/releases/v<版本>.md` 存在」改成「当前版本号出现在某份里程碑文档里」且该里程碑须在 `releases/index.md` 登记；⑤ 锚点测试夹具从「真实文档」改成 `tmp_path` 现场造。**规模**：文档 87 → 24 份、链接 413 → 355 条、声明 352 → 224 处 |
+| `__version__` | ✅ 已 bump 到 `0.120.5`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| git tag | ⏳ 待推送 `v0.120.5` |
 
 ### 本轮：V0.120.4（2026-11-04 发版）
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ **首页 hero 右侧新增「综合评估」结论块** —— 用户报「首页没有显示综合评估指数和说明」：首页此前**一个评分都没有**（hero 只有金价/时效/AI 三个 chip，8 张场景卡是纯导航磁贴，贵金属三卡显示的是**价格涨跌幅**不是评分），而 hero **右半边（约 600px）一直空着**。⇒ hero 改两栏，右栏放结论块：大数字（综合趋势评估指数 0-100）+ 等级徽章 + 一句话说明（含加权公式）+ **4 面分数条**（技术/宏观/消息/资金流 + 生效权重 + 方向箭头）+ **各面因子明细**（默认折叠，每面按 \|contribution\| 取前 3）+ 脚注「口径：纽约金 COMEX · 快照 HH:MM」。⚡ **零新增网络请求**：`home.js` 早就在拉 `/api/v1/market/gold/trend`（只用了 `points[].close`），**`response.index` 整块已经在手只是没用**。🎯 口径钉死 `target=ny`（与趋势页「实时评估摘要」同源；趋势页 synthesis-card 用 `etf`，两个数字不打架）。🐛 顺带修 i18n 静默失效：`home.js` 的 `t()` 读 `window.PM_I18N.t`，但 `i18n.js` 导出的是 **`window.I18n`** ⇒ 首页 JS 拼的文案**一直回退中文**（en-US 下 `纽约金 XAU` 不翻译）⇒ 改读 `window.I18n.t` + 三卡抽函数 + `i18n:change` 重绘。🧪 新门禁 `_verify_home_verdict.mjs`（55 条断言）+ **4 组反向验证**（首轮反向验证抓出门禁自身的漏洞：公式权重没被断言到 ⇒ 已补）。详见 [releases/v0.120.4.md](releases/v0.120.4.md) |
+| 内容 | ✅ **首页 hero 右侧新增「综合评估」结论块** —— 用户报「首页没有显示综合评估指数和说明」：首页此前**一个评分都没有**（hero 只有金价/时效/AI 三个 chip，8 张场景卡是纯导航磁贴，贵金属三卡显示的是**价格涨跌幅**不是评分），而 hero **右半边（约 600px）一直空着**。⇒ hero 改两栏，右栏放结论块：大数字（综合趋势评估指数 0-100）+ 等级徽章 + 一句话说明（含加权公式）+ **4 面分数条**（技术/宏观/消息/资金流 + 生效权重 + 方向箭头）+ **各面因子明细**（默认折叠，每面按 \|contribution\| 取前 3）+ 脚注「口径：纽约金 COMEX · 快照 HH:MM」。⚡ **零新增网络请求**：`home.js` 早就在拉 `/api/v1/market/gold/trend`（只用了 `points[].close`），**`response.index` 整块已经在手只是没用**。🎯 口径钉死 `target=ny`（与趋势页「实时评估摘要」同源；趋势页 synthesis-card 用 `etf`，两个数字不打架）。🐛 顺带修 i18n 静默失效：`home.js` 的 `t()` 读 `window.PM_I18N.t`，但 `i18n.js` 导出的是 **`window.I18n`** ⇒ 首页 JS 拼的文案**一直回退中文**（en-US 下 `纽约金 XAU` 不翻译）⇒ 改读 `window.I18n.t` + 三卡抽函数 + `i18n:change` 重绘。🧪 新门禁 `_verify_home_verdict.mjs`（55 条断言）+ **4 组反向验证**（首轮反向验证抓出门禁自身的漏洞：公式权重没被断言到 ⇒ 已补）。详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.4`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | git tag | ✅ `v0.120.4`（annotated；tag 对象 `bc71b643` → commit `8317136e`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
@@ -208,7 +216,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ **修 `/ask` 回复不可读** —— 用户报「对话给出的格式 不方便阅读」，原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`：**这不是排版丑，是上游把原生 tool-call 协议当正文吐了出来**。4 层根因：①**请求侧缺 assistant(tool_use) 回合**（Anthropic 协议要求配对；原实现只 append 了 `user(tool_result)` ⇒ 上游收到畸形会话；**直连 A/B：缺 ⇒ HTTP 400，补 ⇒ HTTP 200 + 完整 Markdown**；同步 + SSE 两处都补，多个 tool_result 必须在**同一条** user 消息里）；②**库里已有 10 条污染行** ⇒ 读时清洗（新 `src/app/utils/protocol_strip.py`；历史 + 新行同时生效、**不写生产库不用迁移**；⚠️ 只清洗 assistant —— tool 消息正文本身就是 JSON，清洗会毁掉工具数据）；③**工具层真缺陷**（`get_user_portfolio` 调错类：`equity_curve`/`performance` 在 `PortfolioAnalyticsService` 上不在 `PositionService` 上 ⇒ 线上 100% 报错；`get_scoring_summary` 强制要 from/to ⇒ 模型漏参就报错 ⇒ 改缺省「近 30 天」+ 报告实际区间；system prompt 加规则 9「今天是几号」）；④**正文为空无兜底** ⇒ 加安全网（整轮无正文 ⇒ 补一次不带工具的调用强制作答，纯文本传递零协议风险）。**历史回放同样修**（`_to_claude_messages` 按回合重建 tool_use/tool_result，1:1 用原生块、多 tool 退化成纯文本）。**教训**：「桩藏住被替换的调用方」第 3 次踩 ⇒ 通用解法：用 `ast` 把「代码调的方法」与「**真实类**的方法集」对账，不依赖桩。详见 [releases/v0.120.3.md](releases/v0.120.3.md) |
+| 内容 | ✅ **修 `/ask` 回复不可读** —— 用户报「对话给出的格式 不方便阅读」，原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`：**这不是排版丑，是上游把原生 tool-call 协议当正文吐了出来**。4 层根因：①**请求侧缺 assistant(tool_use) 回合**（Anthropic 协议要求配对；原实现只 append 了 `user(tool_result)` ⇒ 上游收到畸形会话；**直连 A/B：缺 ⇒ HTTP 400，补 ⇒ HTTP 200 + 完整 Markdown**；同步 + SSE 两处都补，多个 tool_result 必须在**同一条** user 消息里）；②**库里已有 10 条污染行** ⇒ 读时清洗（新 `src/app/utils/protocol_strip.py`；历史 + 新行同时生效、**不写生产库不用迁移**；⚠️ 只清洗 assistant —— tool 消息正文本身就是 JSON，清洗会毁掉工具数据）；③**工具层真缺陷**（`get_user_portfolio` 调错类：`equity_curve`/`performance` 在 `PortfolioAnalyticsService` 上不在 `PositionService` 上 ⇒ 线上 100% 报错；`get_scoring_summary` 强制要 from/to ⇒ 模型漏参就报错 ⇒ 改缺省「近 30 天」+ 报告实际区间；system prompt 加规则 9「今天是几号」）；④**正文为空无兜底** ⇒ 加安全网（整轮无正文 ⇒ 补一次不带工具的调用强制作答，纯文本传递零协议风险）。**历史回放同样修**（`_to_claude_messages` 按回合重建 tool_use/tool_result，1:1 用原生块、多 tool 退化成纯文本）。**教训**：「桩藏住被替换的调用方」第 3 次踩 ⇒ 通用解法：用 `ast` 把「代码调的方法」与「**真实类**的方法集」对账，不依赖桩。详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.3`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | git tag | ✅ `v0.120.3`（annotated；tag 对象 `fea0084c` → commit `8626e8e4`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
@@ -216,7 +224,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ **修 `/ask` 页「加载对话失败：Internal Server Error」** —— `ai_messages.tool_input` 列存的是 **JSON 字符串**（`json.dumps(...)`），而 `AIMessageOut.tool_input` 对外声明是 **dict**；`from_attributes=True` 把原始字符串直接喂给 dict 校验 ⇒ `ValidationError` ⇒ **整个对话 500**（对话详情一次性返回全部消息，**一条坏消息 = 整个对话打不开**）。修法：在 schema 边界加 `mode="before"` 解码器（**落库侧是对的，错的是接口边界没解码** —— 与 `SnapshotOut.macro_detail` 完全同类，照抄它）；损坏 JSON ⇒ 置 `None` + log warning，**不兜底为 `{}`**。受影响两条路径：`GET /conversations/{id}` + 同步 `POST /messages`（前端 SSE 降级时的回退路径）；SSE 流式路径不受影响。**此前 2007 条测试全绿的原因**：mock 的 tool_use 入参是**空 dict `{}`** ⇒ `if tool_input else None` 判成 falsy ⇒ 落库 NULL ⇒ 校验不炸 —— **空入参把真缺陷藏住了**。详见 [releases/v0.120.2.md](releases/v0.120.2.md) |
+| 内容 | ✅ **修 `/ask` 页「加载对话失败：Internal Server Error」** —— `ai_messages.tool_input` 列存的是 **JSON 字符串**（`json.dumps(...)`），而 `AIMessageOut.tool_input` 对外声明是 **dict**；`from_attributes=True` 把原始字符串直接喂给 dict 校验 ⇒ `ValidationError` ⇒ **整个对话 500**（对话详情一次性返回全部消息，**一条坏消息 = 整个对话打不开**）。修法：在 schema 边界加 `mode="before"` 解码器（**落库侧是对的，错的是接口边界没解码** —— 与 `SnapshotOut.macro_detail` 完全同类，照抄它）；损坏 JSON ⇒ 置 `None` + log warning，**不兜底为 `{}`**。受影响两条路径：`GET /conversations/{id}` + 同步 `POST /messages`（前端 SSE 降级时的回退路径）；SSE 流式路径不受影响。**此前 2007 条测试全绿的原因**：mock 的 tool_use 入参是**空 dict `{}`** ⇒ `if tool_input else None` 判成 falsy ⇒ 落库 NULL ⇒ 校验不炸 —— **空入参把真缺陷藏住了**。详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | git tag | ✅ `v0.120.2`（annotated；tag 对象 `3f8420b1` → commit `23c7bda3`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
@@ -224,7 +232,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 内容 | ✅ **拆掉资金流观测网格测试的时间炸弹** —— `_collect_etf` / `_collect_us_liquidity` / `_collect_cn_margin` 接受可选 `today` 并透传给 `week_end_days` / `fetch_us_net_liquidity_monthly`；**生产路径全部不传 ⇒ `None` → 系统日期，行为与修复前逐字相同**。测试加 `FIXED_TODAY = date(2026,10,28)` 并显式传参。起因：V0.120.0 的两个用例把「今天是 10-28」只写进注释，时钟到 10-31（周六）起锚点从 10-23 跳到 10-30 ⇒ **永久变红**（CI 在 10-29 是绿的），另有 2 条月频用例将在 11-01 变红。详见 [releases/v0.120.1.md](releases/v0.120.1.md) |
+| 内容 | ✅ **拆掉资金流观测网格测试的时间炸弹** —— `_collect_etf` / `_collect_us_liquidity` / `_collect_cn_margin` 接受可选 `today` 并透传给 `week_end_days` / `fetch_us_net_liquidity_monthly`；**生产路径全部不传 ⇒ `None` → 系统日期，行为与修复前逐字相同**。测试加 `FIXED_TODAY = date(2026,10,28)` 并显式传参。起因：V0.120.0 的两个用例把「今天是 10-28」只写进注释，时钟到 10-31（周六）起锚点从 10-23 跳到 10-30 ⇒ **永久变红**（CI 在 10-29 是绿的），另有 2 条月频用例将在 11-01 变红。详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | `__version__` | ✅ 已 bump 到 `0.120.1`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | git tag | ✅ `v0.120.1`（annotated；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
@@ -270,7 +278,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > ⚠️ `us_liq_net` 还多一层：它的值本身是「**4 周变化**」⇒ 按周采样时相邻两次观测
 > **重叠 3/4** ⇒ 名义 60 个月的位置里塞了 260 行高度重叠的样本，**有效样本只剩 1/4**
 > ⇒ `min_samples` 达标是**假象**（样本数骗了自己）。改锚到月末后回到 60 行。
-> 详见 [releases/v0.120.0.md §4.4](releases/v0.120.0.md)；
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md §4.4](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)；
 > ⑧ **非默认语言下结论卡锁死在简体**（浏览器门禁抓出）：结论卡是 `innerHTML` 拼的
 > （**无 `data-i18n` 标记** ⇒ `i18n.js` 的 `apply()` 扫不到），
 > 而非默认语言的字典是**动态 `<script>` 异步加载**，
@@ -292,7 +300,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > `silver.html` / `silver.js` / `help.js` / `i18n.js` / `synthesis-card.js` /
 > `news-score-widget.js` / 3 个 i18n 字典文件）⇒ 按 V0.100.1 必须 bump `sw.js`
 > ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.120.0.md](releases/v0.120.0.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
 ### 上一轮：V0.119.0（2026-10-27）
 
@@ -312,7 +320,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 触发条件是**改了 `static/*.html` + `static/*.js`**（`weights.html` / `trend.html` /
 > `silver.js` / `help.js` / 3 个 i18n 文件）⇒ 按 V0.100.1 必须 bump `sw.js`
 > ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.119.0.md](releases/v0.119.0.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
 ### 再再上一轮：V0.118.0（2026-10-25）
 
@@ -328,10 +336,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 触发条件是**改了 `static/*.html` + `static/*.js`**
 > （`weights.html` / `backtest.html` / `help.js` / 3 个 i18n 文件）
 > ⇒ 按 V0.100.1 必须 bump `sw.js` ⇒ 应用代码变了 ⇒ 不能留在 `[Unreleased]`。
-> 详见 [releases/v0.118.0.md](releases/v0.118.0.md)。
+> 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 >
 > ⚠️ **版本号从 0.116.4 直接跳到 0.118.0**：`V0.117.0` 是**规划文档**
-> （`planning · 未实施`，见 [releases/v0.117.0.md](releases/v0.117.0.md)），
+> （`planning · 未实施`，见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)），
 > 一行代码都没有 ⇒ 不是一次发版 ⇒ 版本号不占用。
 
 ---
@@ -504,8 +512,8 @@ git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 co
 
 ## 相关文档
 
-- [app-improvement-path.md](app-improvement-path.md) — 应用整体改进路径（V0.117.0 起）
-- [next-steps.md](next-steps.md) — 当前推进计划（缺陷清单）
+- [roadmap.md](roadmap.md) — 应用整体改进路径（V0.117.0 起）
+- [roadmap.md](roadmap.md) — 当前推进计划（缺陷清单）
 - [releases/index.md](releases/index.md) — 能力全景索引
 - [roadmap.md](roadmap.md) — ⚠️ 已归档（基线停在 V0.100.0）
 - [CHANGELOG.md](../CHANGELOG.md) — 发版史

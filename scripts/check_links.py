@@ -7,7 +7,8 @@ r"""校验 markdown 文档内部链接有效（第 6 道门禁 · 死链 / 锚�
 链接失效**不会**让任何既有门禁变红：`check_docs_claims.py` 只校验文档里**声明**的实体名
 （表 / 端点 / 页面 / localStorage key）存在，**完全不看链接**；`check_static_js.py` 只管前端。
 
-2026-10-05 实测到的实例：`docs/ux-roadmap.md:5` 指向 `improvement-path.md` 的锚点失效
+2026-10-05 实测到的实例：当时的 `docs/ux-roadmap.md:5` 指向 `improvement-path.md` 的锚点失效
+（该文档 V0.120.5 已归档，原文见 git 历史）
 （旧链接把「全角括号被删后不留分隔符」与「中点只产生一个连字符」两处都写错了），
 它自 `867b579` 起存在了多个版本而无人发现。
 

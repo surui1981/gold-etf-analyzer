@@ -6,7 +6,7 @@
 2026-09-27 的版本差距对账中发现，文档里出现过「凭空捏造的数据表名」
 （`portfolios` / `snapshot_overrides`）、「写错的 localStorage key」
 （`pm_dash_layout`）、「不存在的端点 / 页面」等问题。这些错误能长期存活，
-根因是 `docs/feature-alignment.md` 的对账**是人工事后补记的**，没有任何机制拦住它。
+根因是当年的对账报告（`docs/feature-alignment.md`，V0.120.5 已随文档整理删除）**是人工事后补记的**，没有任何机制拦住它。
 
 本脚本把对账升级为**机制门禁**：扫描 `README.md` 与 `docs/*.md`，对其中出现的
 
@@ -25,7 +25,7 @@
 
 豁免与登记
 ----------
-- `docs/feature-alignment.md` 是对账报告，天然会**引用错误值**用于记述，故整体跳过。
+- 当年的 `docs/feature-alignment.md` 是对账报告，天然会**引用错误值**用于记述，故整体跳过（V0.120.5 起该文件已删除，机制保留）。
 - 规划中尚未落地的名称（如 V0.75.0 规划新建的 `audit_log` 表）请登记到 `ALLOW`。
 """
 
@@ -65,8 +65,11 @@ ALLOW: dict[str, set[str]] = {
     },
 }
 
-# 对账报告天然引用错误值，跳过校验
-SKIP_FILES = {"feature-alignment.md"}
+# 对账报告天然引用错误值，跳过校验。
+# ⚠ V0.120.5：原为 ``{"feature-alignment.md"}`` —— 那份对账报告已随文档整理删除
+#   （它的用途已由本门禁本身接管：文档里的表名/key/页面/端点每次都被核对）。
+#   机制保留：将来若再出现「纯记述、但必须放在 docs/ 根」的文档，加进这里即可。
+SKIP_FILES: set[str] = set()
 
 # 扫描范围 = 权威文档（README + docs/ 直接子文件）。
 # ⚠ ``glob("*.md")`` 是**非递归**的 —— ``docs/reports/`` 下的历史分析报告**刻意不纳入**扫描，
@@ -74,7 +77,7 @@ SKIP_FILES = {"feature-alignment.md"}
 # 实体名**（实测把 docs/reports/ 的报告放到 docs/ 根会新增 8 处失败：捏造的表 `portfolios` /
 # `snapshot_overrides`、被当成表的 JSON key `alert_rules`、写错的 `pm_dash_layout`、
 # 不存在的页面 `central-bank.html` 与端点 `/api/v1/push/unsubscribe`、`/api/v1/market`）。
-# 这与下列 ``SKIP_FILES`` 的 ``feature-alignment.md`` 是同一条原则：**历史记录应如实保留错误，
+# 这与 ``SKIP_FILES`` 机制是同一条原则：**历史记录应如实保留错误，
 # 而不是为了过门禁去篡改记录**。
 # 若某份报告将来要承担权威声明职责，正确做法是**移入 docs/ 根并修正其中失效的声明**，
 # 而不是把 docs/reports/ 加进扫描范围。详见 docs/reports/README.md。

@@ -4,9 +4,37 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.120.5] · 2026-11-05
+
+`文档收敛：60 份逐版 release notes → 6 份里程碑文档；6 份重叠规划文档 → 1 份 roadmap.md；5 份分析报告 → 1 份评估汇总` — docs · 详见 [M5 里程碑文档](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
+
+> 用户要求：「应用的文档需要汇总和清理，把这些小版本合并成几个关键的里程碑版本，去掉测试和说明性的重复文档。」
+> 处置前逐条实测复核了每个待办的真实状态，**没有沿用旧文档的结论**。
+
+- 📦 **60 份逐版 release notes → 6 份里程碑文档**（`docs/releases/milestones/m0`–`m5`）
+  - M0 立项与工程化底座（V0.11–V0.78）· M1 评估底座与工程化（V0.79–V0.92）·
+    M2 AI 与多市场（V0.96–V0.99）· M3 今日要闻与消息面（V0.100–V0.110）·
+    M4 存档·移动端·新闻容灾（V0.111–V0.115）· M5 四面评估与 AI 可用性（V0.116–V0.120）
+  - 逐版原文**留在 git 历史**（tag 与原文件名同名）：`git show v0.118.0:docs/releases/v0.118.0.md`
+- 🗑 **6 份互相重叠、基线落后 16–43 个版本的规划文档 → 1 份 `docs/roadmap.md`**
+  - 删除：`improvement-path`（571）`ux-roadmap`（412）`roadmap`（779）`next-steps`（261）
+    `app-improvement-path`（757）`feature-alignment`（287）
+  - 新 roadmap **逐条实测复核**每一条在 V0.120.4 上的真实状态（已修的挪进「已完成」）
+  - ⚠ 复核发现 **6 条 P0 仍然存在**（`days` 参数完全失效 / 上涨日数恒 0 /
+    64% 历史行带伪造消息面 50 分 / `time.hour_ago` 字面量外泄 / 权重滑块是装饰 /
+    AI token 统计失真）—— 详见 roadmap
+- 🗑 **5 份分析报告（基线 V0.74–V0.77，1,653 行）→ 1 份 `docs/reports/历史评估汇总-202609.md`**
+  - 补「**当时的建议 → 实际落地版本**」对照表；三条致命模式（失败伪装成正常 /
+    缺数据伪装成有效值 / 丢失伪装成成功）的落地状态逐条标注
+- 🔧 **门禁契约跟着改**：`check_version_sync.py` 从「`docs/releases/v<版本>.md` 存在」
+  改成「**当前版本号出现在某份里程碑文档里**」，且该里程碑必须在 `releases/index.md` 登记
+- 🔧 **`tests/test_scripts_check_links.py` 的锚点夹具**从「真实文档」改成 `tmp_path` 现场造
+  （原来依赖已删除的 `improvement-path.md`）
+- 📉 **规模**：文档 87 → 24 份；链接 413 → 355 条；`check_docs_claims` 声明 352 → 224 处
+
 ## [V0.120.4] · 2026-11-04
 
-`首页 hero 右侧新增「综合评估」结论块（综合趋势评估指数 + 4 面分数条 + 各面因子明细）` — feat · 详见 [v0.120.4.md](docs/releases/v0.120.4.md)
+`首页 hero 右侧新增「综合评估」结论块（综合趋势评估指数 + 4 面分数条 + 各面因子明细）` — feat · 详见 [v0.120.4.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户报：「首页没有显示综合评估指数和说明，构思一下结构，让首页有版面可以显示综合评估指数。」
 > 首页此前**一个评分都没有** —— hero 只有金价/时效/AI 三个 chip，8 张场景卡是纯导航磁贴，
@@ -42,7 +70,7 @@
 
 ## [V0.120.3] · 2026-11-03
 
-`修 /ask 回复不可读 —— 上游原生 tool-call 协议被当正文吐出 + 工具层真缺陷 + 正文为空无兜底` — bugfix · 详见 [v0.120.3.md](docs/releases/v0.120.3.md)
+`修 /ask 回复不可读 —— 上游原生 tool-call 协议被当正文吐出 + 工具层真缺陷 + 正文为空无兜底` — bugfix · 详见 [v0.120.3.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户报：「对话给出的格式 不方便阅读」，贴出的原文含 `]<]minimax[>[<invoke` 与 `{"name":"get_market_data",…}`。
 > **这不是排版丑，是上游把它的原生调用协议当成正文吐出来了。**
@@ -73,7 +101,7 @@
 
 ## [V0.120.2] · 2026-11-02
 
-`修 /ask 页「加载对话失败：Internal Server Error」—— tool_input 落库是 JSON 字符串，接口边界没解码` — bugfix · 详见 [v0.120.2.md](docs/releases/v0.120.2.md)
+`修 /ask 页「加载对话失败：Internal Server Error」—— tool_input 落库是 JSON 字符串，接口边界没解码` — bugfix · 详见 [v0.120.2.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户报：「在应用智能分析页面使用对话功能，对话出现加载对话失败：Internal Server Error」。
 
@@ -98,7 +126,7 @@
 
 ## [V0.120.1] · 2026-10-31
 
-`拆掉资金流观测网格测试的时间炸弹 —— 「今天」改为可注入，不再随系统时钟漂移` — bugfix · 详见 [v0.120.1.md](docs/releases/v0.120.1.md)
+`拆掉资金流观测网格测试的时间炸弹 —— 「今天」改为可注入，不再随系统时钟漂移` — bugfix · 详见 [v0.120.1.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 触发场景：本地同步到 V0.120.0 后跑全量回归，10-31（周六）当天出现 2 个失败，
 > 而远程 CI 在 10-29 是绿的 —— **同一份代码、同一个测试，仅因时钟前进两天就从绿变红**。
@@ -122,7 +150,7 @@
 
 ## [V0.120.0] · 2026-10-29
 
-`新增第 4 个评分面「资金流面」—— 按资金流向各种市场判断（周 3 因子 / 月 3 因子）` — feature · 详见 [v0.120.0.md](docs/releases/v0.120.0.md)
+`新增第 4 个评分面「资金流面」—— 按资金流向各种市场判断（周 3 因子 / 月 3 因子）` — feature · 详见 [v0.120.0.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户：「制定计划，按照资金流动走向各种市场来判断，作为一个资金流面，什么建议」
 > 追加：「我们关注的是近期的资金数据，进行周 和月的关键因子。」
@@ -288,13 +316,13 @@
 - ✅ **全量验证**：`pytest tests/` **2007 passed / 0 failed**（基线 1921 @V0.119.0，**+86**，37m37s）；
   浏览器门禁 **194 passed / 0 failed**（冷缓存实跑）；`check_cluster_render.mjs` **461 passed / 0 failed**；
   `check_routes` 20 条路由全对；`ruff check` + `ruff format --check` 干净；
-  静态门禁 7 个全绿（i18n 严格覆盖 492 键 / 0 missing）⇒ 见 [v0.120.0.md](docs/releases/v0.120.0.md) §验证
+  静态门禁 7 个全绿（i18n 严格覆盖 492 键 / 0 missing）⇒ 见 [v0.120.0.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) §验证
   > ⚠️ 该全量跑之后只追加了「复盘页价格回填」同一处修法（`review.py`）+ 1 条护栏用例，
   > 以**文件级**复跑验证（46 + 17 passed），**未再跑全量**（用户要求减少不必要的测试）
 
 ## [V0.119.0] · 2026-10-27
 
-`宏观面 8 → 11 因子（+美国/中国/欧洲 政府债务/GDP）+ 低频因子 cadence/max_lag_days` — feature · 详见 [v0.119.0.md](docs/releases/v0.119.0.md)
+`宏观面 8 → 11 因子（+美国/中国/欧洲 政府债务/GDP）+ 低频因子 cadence/max_lag_days` — feature · 详见 [v0.119.0.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户：「我们需要再宏观因子添加 美国 欧洲 和中国政府这些经济体的政府债务，添加到宏观因子，先制定计划，我们分析它的权重。」
 
@@ -351,7 +379,7 @@
 
 ## [V0.118.1] · 2026-10-26
 
-`宏观因子「末次落库」兜底层 + 手动校准页降级可见` — bugfix · 详见 [v0.118.1.md](docs/releases/v0.118.1.md)
+`宏观因子「末次落库」兜底层 + 手动校准页降级可见` — bugfix · 详见 [v0.118.1.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户：「宏观因子手动校准的数值没有跟踪关键参数更新来更新，修复这个 BUG」
 
@@ -382,7 +410,7 @@
 
 ## [V0.118.0] · 2026-10-25
 
-`宏观面 5 因子 → 8 因子（+2Y / +10Y-2Y 利差 / +10Y 实际利率）+ dxy/vix 接实时源 + 滚动分位回填` — feature · 详见 [v0.118.0.md](docs/releases/v0.118.0.md)
+`宏观面 5 因子 → 8 因子（+2Y / +10Y-2Y 利差 / +10Y 实际利率）+ dxy/vix 接实时源 + 滚动分位回填` — feature · 详见 [v0.118.0.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户：「宏观面的选定参数需要进行调整，添加 2Y 的美国国债收益率，再考虑添加一下其他的决定因子或者调整」
 
@@ -451,7 +479,7 @@
 
 ## [V0.116.4] · 2026-10-25
 
-`命令面板「输入决策」落到趋势追踪 —— 场景落地页被第一个子页顶掉了` — 详见 [v0.116.4.md](docs/releases/v0.116.4.md)
+`命令面板「输入决策」落到趋势追踪 —— 场景落地页被第一个子页顶掉了` — 详见 [v0.116.4.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 起因：用户反馈「点击决策的时候看到的页面是趋势追踪」。
 > 但**顶栏、首页场景卡、手机抽屉三处「决策」一直都指向 `/scoring`（打分汇总）**，
@@ -520,7 +548,7 @@
 
 ## [V0.116.3] · 2026-10-25
 
-`命令面板自动聚焦被 V0.113.0 的无障碍修复顺手打没了` — 详见 [v0.116.3.md](docs/releases/v0.116.3.md)
+`命令面板自动聚焦被 V0.113.0 的无障碍修复顺手打没了` — 详见 [v0.116.3.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 起因：移动端门禁里那条「打开时搜索框自动聚焦」时绿时红（33/0、32/1、33/0）。
 > 红不红和实现对不对无关 —— 它红是因为**等待时间是个运气阈值**。
@@ -573,11 +601,11 @@
 
 承 V0.116.2 §5，3 条仍未修：生产 `users` 表缺 `role` 列（admin 2 端点 500）、
 `GET /api/v1/auth/me` 500、单用户模式 `require_owner` 认证边界错。
-详见 [v0.116.2.md §5](docs/releases/v0.116.2.md)。
+详见 [v0.116.2.md §5](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
 ## [V0.116.2] · 2026-10-25
 
-`3 处静默失效的前端缺陷` + `2 处「绿着但什么都没保护」的门禁缺陷` — 详见 [v0.116.2.md](docs/releases/v0.116.2.md)
+`3 处静默失效的前端缺陷` + `2 处「绿着但什么都没保护」的门禁缺陷` — 详见 [v0.116.2.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 起因：V0.116.1 把 CI 修绿之后，继续深挖前端，发现 **3 处「不报错、不红屏、就是少一块东西」** 的缺陷。
 > 它们的共同点是**没有任何机制会告诉你坏了** ——
@@ -641,7 +669,7 @@
 
 ## [V0.116.1] · 2026-10-24
 
-`CI 修绿（ruff lint / ruff format / pytest 三步预存红）` + `版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 详见 [v0.116.1.md](docs/releases/v0.116.1.md)
+`CI 修绿（ruff lint / ruff format / pytest 三步预存红）` + `版本状态整合（发版史对账 + 单一真源文档 + 版本同步门禁）` — 详见 [v0.116.1.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 起因：CI 从 V0.108.0 起**每一次 push 都是红的**，且失败步骤始终是同 3 步 ——
 > `ruff lint`（290 errors）/ `ruff format --check`（79 个文件要重排）/ `pytest`（10 failed）。
@@ -766,7 +794,7 @@
 
 ## [V0.116.0] · 2026-10-22
 
-`AI 对话文本格式重做（清洗器 / 移动端裁切 / 排版）` — fix · 详见 [v0.116.0.md](docs/releases/v0.116.0.md)
+`AI 对话文本格式重做（清洗器 / 移动端裁切 / 排版）` — fix · 详见 [v0.116.0.md](docs/releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)
 
 > 用户：「当前应用在 AI 对话中对文本格式支持不够完善，能不能进行很好的改进。」
 
@@ -791,7 +819,7 @@
 
 ## [V0.115.0] · 2026-10-22
 
-`首页贵金属走势区（金价 / 黄金库存 / 央行购金）` — feature · 详见 [v0.115.0.md](docs/releases/v0.115.0.md)
+`首页贵金属走势区（金价 / 黄金库存 / 央行购金）` — feature · 详见 [v0.115.0.md](docs/releases/milestones/m4-archive-mobile-news-failover-v0.111-v0.115.md)
 
 > 用户：「我们在主页页面内容缺少贵金属走势的页面，包括 金价变化、黄金库存变化、央行购金变化，
 > 卡片放在今日要闻前面。」
@@ -821,7 +849,7 @@
 
 ## [V0.114.2] · 2026-10-22
 
-`修点上传没有文件对话框` — hotfix · 1 处 CSS · 详见 [v0.114.2.md](docs/releases/v0.114.2.md)
+`修点上传没有文件对话框` — hotfix · 1 处 CSS · 详见 [v0.114.2.md](docs/releases/milestones/m4-archive-mobile-news-failover-v0.111-v0.115.md)
 
 > 用户报「点击报告上传，浏览器中没有文件上传的对话框」并附「我用的是 Firefox」。
 > **Firefox 是对的线索，但不是原因** —— Chrome 实跑同样不弹。
@@ -851,7 +879,7 @@
 
 ## [V0.114.1] · 2026-10-22
 
-`修全站 favicon 404` — hotfix · 无新资源 · 详见 [v0.114.1.md](docs/releases/v0.114.1.md)
+`修全站 favicon 404` — hotfix · 无新资源 · 详见 [v0.114.1.md](docs/releases/milestones/m4-archive-mobile-news-failover-v0.111-v0.115.md)
 
 > V0.114.0 的 puppeteer 实跑里，`/favicon.ico` 的 404 一直躺在「豁免清单」里，
 > 当时的判断是「全站性既存项、纯装饰、不在本轮范围」。**豁免存在过本身就是它坏了
@@ -876,7 +904,7 @@
 
 ## [V0.114.0] · 2026-10-22
 
-`新闻多源容灾` — 4 源链式 failover + 修「收藏无反馈」三层缺陷 · 详见 [v0.114.0.md](docs/releases/v0.114.0.md)
+`新闻多源容灾` — 4 源链式 failover + 修「收藏无反馈」三层缺陷 · 详见 [v0.114.0.md](docs/releases/milestones/m4-archive-mobile-news-failover-v0.111-v0.115.md)
 
 > 今日要闻原本**只有 readhub 一个源**，而这轮实测中 readhub 直接超时了一次 ——
 > 单点无冗余不是理论风险，是已经发生过的事。
@@ -924,7 +952,7 @@
 
 ## [V0.113.0] · 2026-10-22
 
-`移动端可用性` — UI + 门禁 · 无后端改动 · 详见 [v0.113.0.md](docs/releases/v0.113.0.md)
+`移动端可用性` — UI + 门禁 · 无后端改动 · 详见 [v0.113.0.md](docs/releases/milestones/m4-archive-mobile-news-failover-v0.111-v0.115.md)
 
 > 本项目第一次**在 390px 真实视口下逐页实测**。此前所有「响应式」都是桌面浏览器
 > 缩窄窗口看出来的，没量过触控手指够不够得着。三类缺陷，而且**全都不报错**。
@@ -1208,7 +1236,7 @@
   - 📈 **`roadmap.md` 补 9 个版本**：§1 里程碑表在 V0.100.0 后断了 V0.102–V0.109.2；
     §2 从「V0.101 迁移收口 in progress」（早已完成）改写为
     V0.110.0 已落 + V0.111.0 阈值可覆盖 + K 项多市场独立校准
-  - 🏷️ 3 份规划文档补 `状态：` 抬头（`roadmap.md` / `improvement-path.md` / `ux-roadmap.md`）
+  - 🏷️ 3 份规划文档补 `状态：` 抬头（`roadmap.md` / `roadmap.md` / `roadmap.md`）
   - 📑 `releases/index.md` 新增 §1.4.1「今日要闻」逐版本登记表
 - ✅ **测试**：+21（API 7 / 宏观服务 7 / 设置服务 4 / 门禁 3）；相关回归 **157 passed**；
   UI 实跑 `_verify_macro_override.mjs` **15 passed / 0 failed**
@@ -1352,7 +1380,7 @@
 
 ### Why hotfix 不开 docs 单条
 
-V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetcher 弃入「其他」），无新功能模块；纳入 V0.107 综合 release notes 统一记录，并在 `docs/releases/v0.107.1.md` 留独立 summary。
+V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetcher 弃入「其他」），无新功能模块；纳入 V0.107 综合 release notes 统一记录，并在 `docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md` 留独立 summary。
 
 ---
 
@@ -1400,7 +1428,7 @@ V0.107.1 是 V0.107.0 release 后的数据质量 hotfix（关键词字典 + fetc
 - 端点 17 → 18（+2 daily，-0 移除），仓储 16 → 20 测试
 - 静态 JS 49 个全部通过（check_static_js.py）
 
-[详情](docs/releases/v0.107.0.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 >
 > 能力 × 版本对照（"哪个能力在哪个版本落地"）见 [docs/releases/index.md](docs/releases/index.md)
@@ -1576,7 +1604,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 时区偏移符号约定：JS `getTimezoneOffset()` 返回 WEST，反转后东八区 = +480；2 个测试用例固化
 - 改 static HTML/JS → bump SW VERSION v0.103.2 → v0.104.0（按 V0.100.1 沉淀教训）
 
-[详情](docs/releases/v0.104.0.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 ---
 
@@ -1613,7 +1641,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
   - 🔗 `/headlines` 与 `/home` 每条新闻加 `⭐ 收藏` 按钮（POST → toast；409 = 幂等；初次渲染 GET /exists/{ext} 并发检查）
   - 🧪 仓储 18 例 + API 22 例 + 单用户回退端到端 1 例（`test_favorites_endpoint_works_in_single_user_mode`）+ 4 门禁同步（`check_routes` 17→18 alias，`check_pwa_assets` SHELL_ASSETS +3 条，`check_i18n_keys` V083_KEY_PREFIXES + `favorites.`，`test_main_app` ROOT_ALIASES 16→17）
 
-[详情](docs/releases/v0.103.0.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 ---
 
@@ -1666,7 +1694,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
   - 改动：`static/home.js` `limit=5` → `limit=20`、`slice(0, 5)` → `slice(0, 20)`；`static/home.html` 3 骨架 → 5 骨架（视觉占位）
   - 4 处版本同步 bump 到 `v0.100.2`（按 V0.100.1 沉淀的「改 static 必须 bump」教训，参见 memory `v01001-sw-bump-on-static-change`）
 
-[详情](docs/releases/v0.100.2.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 ---
 
@@ -1681,7 +1709,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
   - 根因：`static/sw.js` VERSION 卡在 `v0.100.0`，但 home.html / home.js 已在 bfeb39f 改 readhub 流；activate 阶段按 cache name `gold-shell-v0.100.0` / `gold-runtime-v0.100.0` 不清旧 cache，浏览器持续回放 stale 入口（cache-first 命中 `RUNTIME_CACHE` 旧 `/home` 307 + 旧 `/static/home.html`）
   - 修复：`__version__` / `pyproject.toml` / `sw.js VERSION` 同步 bump `v0.100.1`（4 处版本同步门禁，参照 V0.100.0 release notes 第 105-111 行清单）；activate 阶段新增 `/home` + `/static/home.html` 的 `RUNTIME_CACHE` stale 清理（套 V0.92.0 `/scoring` 同模式）；新增 `pwa_assets` 门禁必跑
 
-[详情](docs/releases/v0.100.1.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 ---
 
@@ -1715,7 +1743,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 既有 `combined is None` 防御分支仍保留（unreachable 兜底）
 - `#idxMethod` 运算方法描述**不变**（×30% + ×40% + ×30% 公式维持口径；pending 仅 chip + summary 披露）
 
-[详情](docs/releases/v0.100.0.md)
+[详情](docs/releases/milestones/m3-headlines-and-news-face-v0.100-v0.110.md)
 
 ---
 
@@ -1748,7 +1776,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 🐛 renderMain 漏传 market 参数导致切 SGE 抛 `ReferenceError: market is not defined` — **C5 修**
 - 🐛 SGE klines 无 ma5/ma20/ma40 字段 → hasMA 守卫只画 1 条收盘价 — **C5 修**
 
-[详情](docs/releases/v0.99.0.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1781,7 +1809,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 🐛 home topnav CSS 缺失（字体/链接与其他业务页对齐） — **C4 hotfix `7434cda`**
 - 🐛 nav-drawer.js:117 `insertBefore` 抛 NotFoundError（pre-existing，`.links` 是 `.topnav-row` 子节点） — **C7 顺手修**
 
-[详情](docs/releases/v0.98.0.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1797,7 +1825,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 新增测试 `test_tool_result_fallback_l1_also_2013_falls_to_l3_fresh_only`（mock 4 次 LLM 调用）
 - 不 bump 版本号，按 `sw-version-sync-gate` 不需要 SW 缓存重建
 
-[详情](docs/releases/v0.97.2-hotfix.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1810,10 +1838,10 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - Welcome 卡片（5 个示例 chip：市场概览 / 持仓 / 命中率 / 风险 / 资金流）替换旧 `empty_state` 文案
 - 输入栏微优化：textarea `title="Enter 发送 · Shift+Enter 换行"`、`max-height: 120px`、字数提示 `N / 8000`（>2000 显示，>8000 变红）
 - i18n `ai.*` 新增 12 keys × 3 语（empty_title / empty_desc / example_market / _q 等）
-- 4 处版本同步：pyproject / `__init__.py` / `sw.js` / `docs/releases/v0.97.2.md`
+- 4 处版本同步：pyproject / `__init__.py` / `sw.js` / `docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md`
 - 设计纪律：不引依赖、不动后端、不动 DB schema、SHELL_ASSETS 35 条不变
 
-[详情](docs/releases/v0.97.2.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1830,7 +1858,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 4 处版本同步：pyproject / `__init__.py` / sw.js（v0.97.1 + SHELL_ASSETS 加 ask.js）/ docs
 - 门禁：check_pwa_assets 33→35 SHELL_ASSETS / check_routes 14→15 alias（/ask）
 
-[详情](docs/releases/v0.97.1.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1847,7 +1875,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - **i18n**：新增 `ai.*` 36 keys + `nav.ask` × 3 语（zh-CN / en-US / zh-TW）
 - **测试**：22 例（service 5 + LLM 6 + endpoint 11）；4 处版本同步清单 + check_pwa_assets / check_routes 门禁
 
-[详情](docs/releases/v0.97.0.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1865,7 +1893,7 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 4 处版本同步：pyproject / `__init__.py` / sw.js（v0.96.0）/ docs
 - 旧 `GET /hit-stats?horizon=tN` 单 horizon 端点保留向后兼容
 
-[详情](docs/releases/v0.96.0.md)
+[详情](docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md)
 
 ---
 
@@ -1938,15 +1966,15 @@ V0.106.1 是 V0.106.0 release 当天的 home 页面布局补全（顶 nav 8 scen
 - 业务页 9 → 10（+ /scoring），RESTful alias 12 → 13
 - 端点 28 → 33（+ 5 端点），维护线覆盖率 90%+
 
-[详情](docs/releases/v0.92.0.md)
+[详情](docs/releases/milestones/m1-foundation-and-tooling-v0.79-v0.92.md)
 
 ---
 
-[V0.99.0]: docs/releases/v0.99.0.md
-[V0.98.0]: docs/releases/v0.98.0.md
-[V0.97.2 hotfix]: docs/releases/v0.97.2-hotfix.md
-[V0.97.2]: docs/releases/v0.97.2.md
-[V0.97.1]: docs/releases/v0.97.1.md
-[V0.97.0]: docs/releases/v0.97.0.md
-[V0.96.0]: docs/releases/v0.96.0.md
-[V0.92.0]: docs/releases/v0.92.0.md
+[V0.99.0]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.98.0]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.97.2 hotfix]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.97.2]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.97.1]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.97.0]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.96.0]: docs/releases/milestones/m2-ai-and-multi-market-v0.96-v0.99.md
+[V0.92.0]: docs/releases/milestones/m1-foundation-and-tooling-v0.79-v0.92.md

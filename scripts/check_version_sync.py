@@ -189,21 +189,39 @@ def main(argv: list[str]) -> int:
             "；".join(offenders[:5]),
         )
 
-    # ── 4) 当前版本必须有 release notes ──
-    note = RELEASES / f"v{app_version}.md"
-    r.check(f"当前版本有 release notes（docs/releases/v{app_version}.md）", note.is_file())
+    # ── 4) 当前版本必须有发布记录 ──
+    # ⚠ V0.120.5：60 份逐版 release notes 已合并为 6 份**里程碑文档**
+    #   （docs/releases/milestones/m*.md），逐版原文改由 git tag 承载。
+    #   ⇒ 契约从「docs/releases/v<版本>.md 存在」改成
+    #     「**当前版本的版本号出现在某份里程碑文档里**」。
+    #   判据用 `V<版本>` 全串（含前缀）而不是裸版本号 ——
+    #   裸 "0.120.5" 会被文档里随便一处数字命中，那是假绿。
+    #   ⚠ 用**带边界的正则**而不是裸子串：裸 "V0.120.5" 会被 "V0.120.50" 命中
+    #   （反向验证实测：把里程碑里的版本写成 "V0.120.5-REMOVED"，裸子串检查照样绿）。
+    milestone_dir = RELEASES / "milestones"
+    version_re = re.compile(rf"V{re.escape(app_version)}(?![0-9])")
+    covering: list[Path] = []
+    if milestone_dir.is_dir():
+        for m in sorted(milestone_dir.glob("m*.md")):
+            if version_re.search(m.read_text(encoding="utf-8")):
+                covering.append(m)
+    r.check(
+        f"当前版本有发布记录（docs/releases/milestones/ 里有 V{app_version}）",
+        bool(covering),
+        f"没有任何里程碑文档提到 V{app_version}",
+    )
 
-    # ── 5) 当前版本必须在 index.md 登记 ──
+    # ── 5) 当前版本所属的里程碑必须在 index.md 登记 ──
     if INDEX_MD.is_file():
         idx = INDEX_MD.read_text(encoding="utf-8")
         # 匹配**链接目标**而不是裸子串：裸子串会让 `v0.116.0.md.x` 里的
         # `v0.116.0.md` 也算命中 —— 反向验证实测：把 index.md 里的
         # `v0.116.0.md` 改成 `v0.116.0.md.x`，裸子串检查仍然全绿（假绿）。
-        link_re = re.compile(rf"\(\s*v{re.escape(app_version)}\.md\s*\)")
+        registered = bool(covering) and f"milestones/{covering[0].name}" in idx
         r.check(
-            "当前版本在 docs/releases/index.md 登记",
-            bool(link_re.search(idx)),
-            f"index.md 里找不到指向 v{app_version}.md 的 markdown 链接目标",
+            "当前版本的里程碑在 docs/releases/index.md 登记",
+            registered,
+            f"index.md 里找不到指向 milestones/{covering[0].name if covering else '?'} 的链接",
         )
 
     # ── 6) version-status.md 声明的基线版本必须等于应用版本 ──
