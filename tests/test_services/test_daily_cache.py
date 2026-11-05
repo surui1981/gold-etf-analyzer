@@ -125,6 +125,43 @@ def test_served_cache_date_lookup() -> None:
     assert served_cache.get_served("ny", on_date=yesterday) is r
 
 
+def test_v01211_served_cache_days_isolation() -> None:
+    """V0.121.1（P0-1）：``days`` 必须进缓存 key —— 不同窗口的结果不可互相命中。
+
+    **反向验证**：把 ``cache._key`` 里的 days 维度去掉 ⇒ 本用例必然变红
+    （``get_served("ny", days=60)`` 会命中 days=30 那条）。
+    """
+    served_cache.invalidate()
+    r30 = _sample_result(30.0)
+    r60 = _sample_result(60.0)
+    served_cache.set_served("ny", r30, days=30)
+    served_cache.set_served("ny", r60, days=60)
+
+    assert served_cache.get_served("ny", days=30) is r30
+    assert served_cache.get_served("ny", days=60) is r60
+    # 未写入过的窗口 ⇒ 未命中（而不是回退到某个"最近"的窗口）
+    assert served_cache.get_served("ny", days=120) is None
+    assert served_cache.cache_size() == 2
+
+
+def test_v01211_invalidate_clears_all_days_variants() -> None:
+    """失效必须覆盖同一 (target, interval) 下的**所有** days 变体。
+
+    只清一个窗口 ⇒ 用户改了参数后仍看到旧窗口的结果（「保存没生效」的观感）。
+    """
+    served_cache.invalidate()
+    served_cache.set_served("ny", _sample_result(31.0), days=30)
+    served_cache.set_served("ny", _sample_result(61.0), days=60)
+    served_cache.set_served("ny", _sample_result(91.0), days=120)
+    assert served_cache.cache_size() == 3
+
+    n = served_cache.invalidate("ny")
+    assert n == 3
+    assert served_cache.get_served("ny", days=30) is None
+    assert served_cache.get_served("ny", days=60) is None
+    assert served_cache.get_served("ny", days=120) is None
+
+
 # ---------------- scheduler ----------------
 
 

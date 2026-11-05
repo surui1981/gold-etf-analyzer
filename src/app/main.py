@@ -246,7 +246,9 @@ async def _warm_cache() -> None:
             result = await trend.analyze(days=60, target=GUIDE_TARGET)
             # V0.79.0 Step E：warm threshold cache 让首屏不空跑 percentile
             await threshold_calc.warm_cache("default")
-        set_served(GUIDE_TARGET, result)
+        # ⚠ V0.121.1：days 必须与 analyze 时一致 —— 缓存 key 含 days 维度，
+        # 写错 days ⇒ 这个条目永远命中不到（首屏退化成每次全量重算）。
+        set_served(GUIDE_TARGET, result, days=60)
         logger.info(
             "served cache warmup done (index=%.1f, macro_dynamic=%s)",
             result.index.score,

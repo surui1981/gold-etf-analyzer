@@ -402,17 +402,22 @@ class TrendService:
 
         # 命中当日缓存：直接返回，避免重复 K 线/宏观/合成
         # V0.60.0：按 settings.served_cache_ttl_seconds 派生日内 TTL；
-        # V0.64.0：缓存 key 扩展为 (target, interval, date)，W/M 独立缓存。
+        # V0.64.0：缓存 key 扩展为 (target, interval, date)，W/M 独立缓存；
+        # V0.121.1（P0-1）：key 再扩展为 (target, interval, date, days) ——
+        #   days 决定 K 线窗口，不同窗口的趋势指数不是同一个结果，
+        #   不进 key ⇒ ?days=30/60/120 返回完全相同的结果（参数彻底失效）。
         from app.config import get_settings
 
         ttl = get_settings().served_cache_ttl_seconds
-        cached = served_cache.get_served(target, max_age_seconds=ttl, interval=interval)
+        cached = served_cache.get_served(
+            target, max_age_seconds=ttl, interval=interval, days=days
+        )
         if cached is not None:
-            logger.debug("Trend cache hit: target=%s interval=%s", target, interval)
+            logger.debug("Trend cache hit: target=%s interval=%s days=%s", target, interval, days)
             return cached
 
         result = await self._analyze_uncached(days=days, target=target, interval=interval)
-        served_cache.set_served(target, result, interval=interval)
+        served_cache.set_served(target, result, interval=interval, days=days)
         return result
 
     async def fetch_price_bars(

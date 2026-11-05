@@ -209,7 +209,8 @@ async def _capture_and_warm(snapshot_svc: DailySnapshotService, trend_svc: Trend
     # 显式预热 served cache：覆盖缓存（无论快照是否成功）
     try:
         result = await trend_svc.analyze(days=60, target=GUIDE_TARGET)
-        set_served(GUIDE_TARGET, result)
+        # ⚠ V0.121.1：days 必须与 analyze 时一致（缓存 key 含 days 维度）
+        set_served(GUIDE_TARGET, result, days=60)
         logger.info(
             "Served cache warmup: %s (index=%.1f)",
             "after snapshot" if snap_ok else "fallback (snapshot failed)",
@@ -359,7 +360,8 @@ async def intraday_warm_once(
     """
     try:
         result = await trend_svc.analyze(days=60, target=GUIDE_TARGET)
-        set_served(GUIDE_TARGET, result)
+        # ⚠ V0.121.1：days 必须与 analyze 时一致（缓存 key 含 days 维度）
+        set_served(GUIDE_TARGET, result, days=60)
         logger.info("Intraday warmup done (index=%.1f)", result.index.score)
     except Exception as exc:
         logger.error("Intraday warmup failed: %s", exc)

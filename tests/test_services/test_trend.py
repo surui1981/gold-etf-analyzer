@@ -259,6 +259,46 @@ async def test_multi_target_symbols() -> None:
     assert etf.symbol == "518880"
 
 
+# ───────────────────── V0.121.1 · days 进缓存 key（P0-1）─────────────────────
+
+
+class FakeRepoSliced(FakeRepo):
+    """按 ``days`` 截断 K 线 —— 模拟真实仓储：``days`` 决定 K 线窗口长度。"""
+
+    async def get_us_gold_history(self, days: int = 60) -> list[GoldKline]:
+        return self._k[-days:]
+
+
+async def test_v01211_analyze_days_not_served_from_other_window() -> None:
+    """V0.121.1（P0-1）：``analyze(days=30)`` 与 ``analyze(days=60)`` 不能互相命中缓存。
+
+    此前 ``served_cache`` 的 key 只有 ``(target, interval, date)`` ⇒ 先算的窗口
+    被后来所有窗口复用 ⇒ ``?days=30/60/120`` 返回**完全相同**的结果。
+
+    **反向验证**：把 ``cache._key`` 的 days 维度去掉 ⇒ 第二次调用命中第一次的缓存 ⇒
+    ``trading_days`` 仍是 30 ⇒ 本用例变红。
+    """
+    from app.services import cache as served_cache
+
+    served_cache.invalidate()
+    closes = [round(1 + i * 0.01, 3) for i in range(120)]
+    service = TrendService(
+        FakeRepoSliced(_mk_klines(closes)), macro=FakeMacro(), news=None, flow=FakeFlow()
+    )
+
+    r30 = await service.analyze(days=30, target="ny")
+    assert r30.metrics.trading_days == 30
+
+    r60 = await service.analyze(days=60, target="ny")
+    assert r60.metrics.trading_days == 60, "days=60 命中了 days=30 的缓存（P0-1 未修）"
+
+    r120 = await service.analyze(days=120, target="ny")
+    assert r120.metrics.trading_days == 120
+
+    # 三个窗口各自独立缓存 ⇒ 3 条记录
+    assert served_cache.cache_size() == 3
+
+
 # ───────────────────── V0.64.0 多时间框架（周/月线聚合）─────────────────────
 
 
