@@ -55,23 +55,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **74** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **49** 段 / 48 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **58** 份 release notes | 单个版本的实现细节（commit 链 / 验证 / 风险） |
-| git tag | **112** 个（本地 = 远端，已同步；含 `v0.120.4`） | 按版本 checkout 的锚点 |
+| git tag | **113** 个（本地 = 远端，已同步；含 `v0.120.5`） | 按版本 checkout 的锚点 |
 
 > **49 段 ≠ 48 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **112 个 tag 本地与远端一致**（2026-11-04 已全部推送，含 V0.120.4）：远端 112 = 本地 112，
+> **113 个 tag 本地与远端一致**（2026-11-05 已全部推送，含 V0.120.5）：远端 113 = 本地 113，
 > 逐个比对 `git rev-parse <tag>^{commit}` 与 `git ls-remote --tags` 的 `^{}` 行，
-> **指向不一致的 0 个**。其中 annotated **106** / lightweight **6**，两侧分布相同。
+> **指向不一致的 0 个**。其中 annotated **107** / lightweight **6**，两侧分布相同。
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
 > （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表），
 > 而 109 = 103 annotated + 6 lightweight。本版按 `git for-each-ref --format='%(objecttype)'`
 > **实测**改写。⇒ 这正是 §3.3 说的那类「内容腐化」：门禁只校验版本号，不校验计数。）
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
-> 必须把 `^{}` 行去掉再数，否则 112 个 tag 会数成 218 行（实测 `ls-remote --tags` 原始行数 = 218）。
+> 必须把 `^{}` 行去掉再数，否则 113 个 tag 会数成 220 行（实测 `ls-remote --tags` 原始行数 = 220）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -202,7 +202,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 |---|---|
 | 内容 | ✅ **文档收敛** —— 用户要求「把这些小版本合并成几个关键的里程碑版本，去掉测试和说明性的重复文档」。① **60 份逐版 release notes → 6 份里程碑文档**（`docs/releases/milestones/m0`–`m5`，按能力主题切分；逐版原文留在 git 历史，tag 与原文件名同名）；② **6 份互相重叠、基线落后 16–43 个版本的规划文档 → 1 份 `docs/roadmap.md`**，且**逐条实测复核**每一条在 V0.120.4 上的真实状态（已修的挪进「已完成」，不再当待办 —— 复核发现 6 条 P0 仍然存在：`days` 参数完全失效 / 上涨日数恒 0 / 64% 历史行带伪造消息面 50 分 / `time.hour_ago` 字面量外泄 / 权重滑块是装饰 / AI token 统计失真）；③ **5 份分析报告（基线 V0.74–V0.77）→ 1 份 `docs/reports/历史评估汇总-202609.md`**（补「当时的建议 → 实际落地版本」对照表）；④ **门禁契约跟着改**：`check_version_sync.py` 从「`docs/releases/v<版本>.md` 存在」改成「当前版本号出现在某份里程碑文档里」且该里程碑须在 `releases/index.md` 登记；⑤ 锚点测试夹具从「真实文档」改成 `tmp_path` 现场造。**规模**：文档 87 → 24 份、链接 413 → 355 条、声明 352 → 224 处 |
 | `__version__` | ✅ 已 bump 到 `0.120.5`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
-| git tag | ⏳ 待推送 `v0.120.5` |
+| git tag | ✅ `v0.120.5`（annotated；tag 对象 `baa3727` → commit `1885041`；已推送，`ls-remote` 两行分别是 tag 对象与 commit） |
 
 ### 本轮：V0.120.4（2026-11-04 发版）
 
