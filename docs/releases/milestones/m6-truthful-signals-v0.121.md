@@ -320,6 +320,11 @@ trend.news.score = None（今天没打分）
 | 3 个 i18n key 改回 `time.min_ago/hour_ago/day_ago` | ✗ 4 条红；`#valLastRefresh` 复现出 **`time.hour_ago`** |
 | 全部恢复 | **13 passed / 0 failed** |
 
+⚠️ **推送状态（如实记录）**：本地已提交 `a3153db`、打好 annotated tag `v0.121.1`，
+但**发版时本机 DNS 解析不了境外域名** ⇒ `git push` 连不上 GitHub
+⇒ **远端此刻仍缺 V0.121.1**（远端 tag 114 / 本地 115）。
+网络恢复后补推 `main` + `v0.121.1` 即可，代码与数据本身不受影响。
+
 **教训**：
 
 1. **一个列可以有两套词表 —— 而这在类型层面完全合法。**
