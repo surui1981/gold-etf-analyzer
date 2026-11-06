@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.121.0** ｜ **最近更新**：2026-11-06 ｜ **状态**：一致，无漂移**
+> **基线：V0.121.1** ｜ **最近更新**：2026-11-06 ｜ **状态**：一致，无漂移**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.121.0**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.121.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,15 +18,15 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.1` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.1` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.121.0
+GET /openapi.json  →  info.version = 0.121.1
 GET /              →  307 → /static/trend.html → 200
 ```
 
@@ -208,7 +208,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.121.0（2026-11-06 发版）
+### 本轮：V0.121.1（2026-11-06 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **可信度 P0 批次**（「把显示假的逐条修回来」三批计划的**第 2 批**）。① **`?days=` 参数此前完全失效** —— `served_cache` 的 key 是 `(target, interval, on_date)`，**没有 `days`** ⇒ `?days=30/60/120` 返回完全相同的结果（趋势页 52W 按钮画的是 12 周）⇒ key 加 `days` 维度，`invalidate` 仍按 `(target, interval)` 匹配以覆盖所有 days 变体。② **命中分析「上涨天数」恒为 0** —— 治本（新增 `price_direction VARCHAR(8)` 列 + 迁移 `t2u3v4w5x6y` + 停掉消息面方向对 `direction` 列的覆写 + 聚合新增 `known_days`）；唯一可信的源是 `gold_price_daily.change_pct` 的符号，**不用快照 close 兜底**（实测两源方向只有 44% 一致且快照 close 滞后一天 ⇒ 系统性错位比留空更坏）。③ **64% 历史行带伪造消息面 50 分** —— 治源头（`daily_snapshots.news_index` 改可空、`services/snapshot.py` 不再兜底 50、宽表 ETL 不再继承快照的 `news_index`、消费侧 `news_w > 0` 且为 NULL 时**跳过该日**）+ 幂等回填 `scripts/backfill_news_truth.py`（**清掉 26 个伪造命中**、29 行被消息面方向污染的 `direction`，8 行用户真打的 50 分全部保留）。④ **`/headlines` 渲染 i18n key 字面量** —— 字典里的 key 是复数（`time.minutes_ago` 等）而代码写的是单数（`time.min_ago` 等）⇒ 三语字典里都没有 ⇒ `I18n.t()` 返回 key 字面量；顺带修掉「`(I18n.t(key)) || "分钟前"` 永远不触发」的兜底写法；门禁严格清单纳入 `"time."` 并**默认输出清单外缺失数 + 位置**。详见 [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) |
+| `__version__` | ✅ 已 bump 到 `0.121.1`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ `t2u3v4w5x6y`（`scoring_daily_wide` 增 `price_direction` + `daily_snapshots.news_index` 改可空）—— 先在副本库上验过 upgrade / downgrade / 往返，再上生产 |
+| 生产库回填 | ✅ 快照 **49 行**修正（32 → NULL / 17 → 当日聚合值）+ 宽表 ETL 重跑 **61/61 天**；幂等自查二次规划 **0 行** |
+
+> **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）：
+> P0-1 monkeypatch 把 `_key` 换回 3 元组 ⇒ **3/3 变红** ⇒ 恢复；
+> P0-2 让 `price_direction` 回退到 `direction` ⇒ **3 个测试变红** ⇒ 恢复；
+> P0-2 恢复消息面方向覆写 ⇒ **1 个测试变红**（`direction` 又出现 bullish/bearish/neutral）⇒ 恢复；
+> P0-3 把 `snapshot.py` 改回 `else 50.0` ⇒ **1 个测试变红**（「未打分的消息面被写成了 50.0」）⇒ 恢复；
+> P0-4 把 3 个 i18n key 改回错的 ⇒ **门禁 9 missing / 499 in-scope** ⇒ 恢复 ⇒ **0 missing**。
+
+### 上一轮：V0.121.0（2026-11-06 发版）
 
 | 项 | 状态 |
 |---|---|

@@ -409,9 +409,7 @@ class TrendService:
         from app.config import get_settings
 
         ttl = get_settings().served_cache_ttl_seconds
-        cached = served_cache.get_served(
-            target, max_age_seconds=ttl, interval=interval, days=days
-        )
+        cached = served_cache.get_served(target, max_age_seconds=ttl, interval=interval, days=days)
         if cached is not None:
             logger.debug("Trend cache hit: target=%s interval=%s days=%s", target, interval, days)
             return cached

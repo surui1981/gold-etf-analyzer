@@ -207,6 +207,7 @@
 | **资金流观测网格「今天」可注入**（`_collect_etf` / `_collect_us_liquidity` / `_collect_cn_margin` 接受可选 `today`，生产路径不传 ⇒ 行为不变）—— 拆掉 2 个已在 10-31 变红、2 个将在 11-01 变红的时间炸弹测试 | **V0.120.1** | [v0.120.1.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | 门禁 `scripts/_verify_macro_debt.mjs`（3 个新因子的 API / 权重页 / 趋势页 + **2 处反向验证**：删掉 mock 的 `max_lag_days` 后必须亮滞后红灯；把 mock 的 `rolling_factors` 砍到 3 个后角标必须显示「3 个可滚动因子」） | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **门禁自愈批次**：`check_v084.mjs` 0/27 → **27/27**（过期断言对齐 V0.85 后的真实结构 + 反向断言）· `_verify_sw_update.mjs` 0 条 → **8 条**（含「缓存无陈旧副本」+ 持久化 profile）· `_verify_mobile.mjs` 聚焦断言改确定性轮询 | **V0.121.0** | [v0.121.0.md](milestones/m6-truthful-signals-v0.121.md) |
+| **可信度 P0 批次**：`?days=` 进 served cache key（此前完全失效）· 新增 `price_direction` 列 + 迁移 `t2u3v4w5x6y`（上涨天数 0 → 11，方向已知天数可见）· 伪造消息面 50 分治源头 + 幂等回填（清掉 26 个伪造命中、29 行被消息面方向污染的 `direction`）· `/headlines` 相对时间 i18n key 字面量修好 + 门禁纳入 `time.` 命名空间 | **V0.121.1** | [v0.121.1.md](milestones/m6-truthful-signals-v0.121.md) |
 | Python 3.13 迁移收口 | **V0.101**（in progress） | — |
 
 ---

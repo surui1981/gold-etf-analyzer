@@ -48,7 +48,18 @@ class DailySnapshot(Base):
     # 评估值
     tech_index: Mapped[float] = mapped_column(Float, comment="技术面指数")
     macro_index: Mapped[float] = mapped_column(Float, comment="宏观参考指数")
-    news_index: Mapped[float] = mapped_column(Float, default=50.0, comment="消息面指数（客户评估）")
+    # ⚠ V0.121.1（P0-3）：消息面指数改**可空** —— 当天没打分就是 NULL（未知），
+    # **不再兜底 50**。
+    # 旧口径（NOT NULL + default 50.0）把「没打分」写成「中性 50」，实测污染 64% 历史行
+    # （31/60 宽表行 ``news_slot_count=0`` 却带 ``news_index=50``），
+    # 并顺带伪造出 14 个 hit_t1 / 12 个 hit_t5
+    # （``direction_of(50.0)`` = NEUTRAL，不是 None！⇒ 判定照样跑）。
+    # ⇒ 消费方读到 None 必须**显式跳过该日**，不是「按 50 处理」。
+    news_index: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="消息面指数 0-100（NULL=当天未打分，未知；V0.121.1 P0-3）",
+    )
     trend_index: Mapped[float] = mapped_column(Float, comment="综合趋势评估指数")
     index_level: Mapped[str] = mapped_column(String(16), comment="指数等级")
 

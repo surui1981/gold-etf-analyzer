@@ -125,14 +125,19 @@ async def test_v063_list_snapshots_days_max(client: AsyncClient) -> None:
 
 
 async def test_v063_snapshot_includes_news_index(client: AsyncClient) -> None:
-    """V0.63.0：响应 schema 包含 news_index 字段（消息面曲线的数据来源）。"""
+    """V0.63.0：响应 schema 包含 news_index 字段（消息面曲线的数据来源）。
+
+    ⚠ V0.121.1（P0-3）：该值**可以是 None**（= 今天没打分，未知）——
+    旧断言「必须是数字」正是本轮要消灭的伪造（「没打分」被写成中性 50）。
+    真打了分时才是 0-100 的数字。
+    """
     resp = await client.get("/api/v1/snapshots?days=1")
     assert resp.status_code == 200
     snap = resp.json()["snapshots"][0]
     assert "news_index" in snap
-    assert isinstance(snap["news_index"], (int, float))
-    # 未打分的 fallback 是 50.0（中性）
-    assert 0 <= snap["news_index"] <= 100
+    if snap["news_index"] is not None:
+        assert isinstance(snap["news_index"], (int, float))
+        assert 0 <= snap["news_index"] <= 100
 
 
 async def test_v063_days_query_validation(client: AsyncClient) -> None:

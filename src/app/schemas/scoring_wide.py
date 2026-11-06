@@ -43,6 +43,9 @@ class ScoringWideOut(BaseModel):
     close: float | None = None
     change_pct: float | None = None
     direction: str | None = None
+    # V0.121.1（P0-2）：当日涨跌方向 up/down/flat（NULL=当日无价格行，未知）。
+    # ⚠ 与 ``direction``（趋势方向）**不是**一回事 —— 别混用。
+    price_direction: str | None = None
     data_source: str | None = None
     # V0.95.0：NY 金（COMEX）美元/盎司收盘价 —— 4 指数时序表替换「横盘日数」用。
     gold_ny_close: float | None = None
@@ -129,6 +132,9 @@ class ScoringSummaryBucket(BaseModel):
     hit_rate_t5: float | None = None
     up_days: int = 0
     down_days: int = 0
+    # ⚠ V0.121.1（P0-2）：方向**已知**的天数（当日有 gold_price_daily 行）。
+    # 没有它，「上涨 0 · 下跌 0」分不清是「真没涨没跌」还是「压根没数据」。
+    known_days: int = 0
     # V0.95.0：「横盘日数」列替换为「NY金美元/盎司收盘价」（取桶内最后一日收盘）。
     # day 桶 → 当日收盘；week/month 桶 → period-end snapshot。
     gold_ny_close: float | None = None

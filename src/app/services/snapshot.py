@@ -129,9 +129,14 @@ class DailySnapshotService:
             direction=m.direction.value,
             tech_index=tech_index,
             macro_index=macro.score,
-            # V0.100：消息面未打分时 trend.news.score=None；快照表 NOT NULL 兜底为 50.0，
-            # 配合 scored 字段（落 macro_detail JSON）让客户事后可知当日未打分
-            news_index=trend.news.score if trend.news.score is not None else 50.0,
+            # ⚠ V0.121.1（P0-3）：消息面未打分时 ``trend.news.score is None``
+            #   ⇒ 这里就**存 NULL**（未知），不再兜底 50.0。
+            # 旧口径（None → 50.0）把「没打分」写成「中性 50」，实测污染 64% 历史行，
+            # 并伪造出 14 个 hit_t1 / 12 个 hit_t5（``direction_of(50.0)`` = NEUTRAL，
+            # 判定照样跑）。消费方读到 NULL 必须**显式跳过该日**。
+            # ⚠ 旧注释说「配合 scored 字段（落 macro_detail JSON）」——**那是错的**：
+            #   实测 ``macro_detail`` 只装宏观因子，``scored`` 根本没落库。
+            news_index=trend.news.score,
             trend_index=trend.index.score,
             index_level=trend.index.level.value,
             macro_detail=macro_detail,

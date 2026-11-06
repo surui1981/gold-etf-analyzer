@@ -344,6 +344,10 @@
     html += `<th>${T('scoring.hit_rate_t5', 'T+5 命中率')}</th>`;
     html += `<th>${T('scoring.up_days', '涨')}</th>`;
     html += `<th>${T('scoring.down_days', '跌')}</th>`;
+    // V0.121.1（P0-2）：「方向已知」列 —— 有当日涨跌方向的天数 / 桶内总天数。
+    //   没有这一列，「上涨 0 · 下跌 0」分不清是「真没涨没跌」还是「压根没数据」
+    //   （而后者恰恰是修复前的常态：price_direction 之前根本没这一列）。
+    html += `<th title="${T('scoring.known_days_desc', '有当日涨跌方向的天数 / 桶内总天数（方向未知的天数不计入上涨/下跌）')}">${T('scoring.known_days', '方向已知')}</th>`;
     // V0.95.0：横盘日数列替换为 NY 金美元/盎司收盘价（period-end snapshot）
     html += `<th>${T('scoring.gold_ny_close', 'NY金美元/盎司收盘')}</th>`;
     html += '</tr></thead><tbody>';
@@ -368,6 +372,10 @@
       html += `<td class="num">${fmtPct(b.hit_rate_t5)}</td>`;
       html += `<td class="num">${b.up_days}</td>`;
       html += `<td class="num">${b.down_days}</td>`;
+      // V0.121.1（P0-2）：分母也摊开 —— 「3 / 30」= 30 天里只有 3 天方向已知。
+      // 后端老版本不返回 known_days ⇒ 退回 "—"，不显示误导性的 "0 / 30"。
+      const kd = (b.known_days == null) ? '—' : `${b.known_days} / ${b.days}`;
+      html += `<td class="num">${kd}</td>`;
       // V0.95.0：NY 金美元/盎司收盘价 —— 2 位小数 + 千分位；缺数据显示 "—"
       html += `<td class="num">${b.gold_ny_close != null ? fmt2(b.gold_ny_close) : '—'}</td>`;
       html += '</tr>';

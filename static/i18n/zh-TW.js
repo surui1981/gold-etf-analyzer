@@ -1120,6 +1120,8 @@ window.PM_I18N_zh_TW = {
   "scoring.up_days": "上漲日數",
   "scoring.down_days": "下跌日數",
   "scoring.gold_ny_close": "NY金美元/盎司收盤",
+  "scoring.known_days": "方向已知",
+  "scoring.known_days_desc": "有當日漲跌方向的天數 / 桶內總天數（方向未知的天數不計入上漲/下跌）",
   "scoring.data_missing": "資料缺（假日）",
   "scoring.strong_bullish": "強多",
   "scoring.bullish": "偏多",

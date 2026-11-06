@@ -94,11 +94,23 @@
   // 那 2 处在 catch 块内，异常无人接管 → 变成未处理拒绝，**收藏成功/409 两条
   // 路径都不弹 toast**（用户点了收藏屏幕毫无反应）。已改成 tr()。
   // 教训：加翻译助手前先 grep 本文件有没有同名调用方，别默认「惯例是 t()」。
-  function tr(key, fallback) {
+  function tr(key, fallback, params) {
     try {
-      const v = window.I18n && window.I18n.t && window.I18n.t(key);
-      if (v && typeof v === "string") return v;
+      if (window.I18n && window.I18n.t) {
+        const v = window.I18n.t(key, params);
+        // ⚠ V0.121.1（P0-4）：字典缺失时 `I18n.t()` 返回的是 **key 字面量**
+        // （不是空串）⇒ 原来的 `if (v && ...)` 判定永远为真 ⇒ 兜底永不触发，
+        // 页面直接显示 "time.min_ago" 这种内部 key。
+        // 正确写法与 freshness.js:132-138 一致：**值等于 key 就是没命中**。
+        if (v && typeof v === "string" && v !== key) return v;
+      }
     } catch (_) { /* fall through */ }
+    // 兜底也要支持 {n} 占位（否则降级路径会显示字面量 "{n} 分钟前"）
+    if (fallback && params) {
+      return fallback.replace(/\{(\w+)\}/g, (m, k) =>
+        params[k] != null ? String(params[k]) : m
+      );
+    }
     return fallback || key;
   }
 
@@ -136,12 +148,16 @@
     if (isNaN(t.getTime())) return "--";
     const diffMs = Date.now() - t.getTime();
     const min = Math.round(diffMs / 60000);
-    if (min < 1) return (window.I18n && I18n.t("time.just_now")) || "刚刚";
-    if (min < 60) return min + " " + ((window.I18n && I18n.t("time.min_ago")) || "分钟前");
+    // ⚠ V0.121.1（P0-4）：字典里的 key 是**复数**且带 {n} 模板
+    // （time.minutes_ago / time.hours_ago / time.days_ago），
+    // 原来的 time.min_ago / time.hour_ago / time.day_ago **三语字典里都没有**
+    // ⇒ I18n.t() 返回 key 字面量 ⇒ 页面正文直接显示 "time.hour_ago"。
+    if (min < 1) return tr("time.just_now", "刚刚");
+    if (min < 60) return tr("time.minutes_ago", "{n} 分钟前", { n: min });
     const hr = Math.round(min / 60);
-    if (hr < 24) return hr + " " + ((window.I18n && I18n.t("time.hour_ago")) || "小时前");
+    if (hr < 24) return tr("time.hours_ago", "{n} 小时前", { n: hr });
     const day = Math.round(hr / 24);
-    return day + " " + ((window.I18n && I18n.t("time.day_ago")) || "天前");
+    return tr("time.days_ago", "{n} 天前", { n: day });
   }
 
   function renderStatus(status) {

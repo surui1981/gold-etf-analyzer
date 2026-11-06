@@ -88,6 +88,13 @@ V083_KEY_PREFIXES = (
     "nsw.",  # 消息面打分器（news-score-widget.js）
     "scoring.",  # 打分汇总页（scoring.js）
     "decision.",  # 决策拆解（decision-explainer.js，tr() 形式，V0.86 起就有）
+    # V0.121.1（P0-4）：时间相对显示。
+    #   此前**完全不在门禁视野内** —— headlines.js 写的是
+    #   `I18n.t("time.min_ago")`，而三语字典里的 key 是**复数**
+    #   （time.minutes_ago / time.hours_ago / time.days_ago）⇒ 字典查不到
+    #   ⇒ I18n.t() 返回 **key 字面量** ⇒ 页面正文直接显示 "time.hour_ago"。
+    #   门禁此前看不见，因为 `time.` 不在严格清单里。
+    "time.",
 )
 
 
@@ -117,12 +124,16 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
             content = f.read()
         for m in ATTR_RE.finditer(content):
             raw = m.group(1).strip()
+            lineno = content.count("\n", 0, m.start()) + 1
             for k in raw.split("|"):
                 k = k.strip()
                 if not k or k.startswith("{{"):
                     continue
                 all_keys.add(k)
-                usage[k].add(rel)
+                # V0.121.1：带上**行号** —— 清单外的 gap 报告要让人一眼看出
+                # 「这是注释里的示例，不是真引用」（静态/headlines.js:84 的
+                # tr("key","fb")、static/i18n.js:8 的 I18n.t('key.path')）。
+                usage[k].add(f"{rel}:{lineno}")
     # 2) JS 模板字面量（仅 static/*.js，避开 i18n/ 自身）
     js_attr_re = re.compile(r'i18n:\s*["\']([A-Za-z0-9_.\-]+)["\']')
     # V0.112.0：补 I18n.t('key') 形式。此前只扫 `i18n: "key"`（topnav.js 的 SCENES
@@ -159,7 +170,7 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
                 if not k:
                     continue
                 all_keys.add(k)
-                usage[k].add(rel)
+                usage[k].add(f"{rel}:{content.count(chr(10), 0, m.start()) + 1}")
     return all_keys, usage
 
 
@@ -266,13 +277,28 @@ def main() -> int:
     # 1b) 字典文件是否真的被页面加载（V0.113.0 新增）
     fail += check_dict_loaded()
 
-    # 2) --all 模式额外报告 V0.83 namespace 之外的 gap（不失败）
-    if args.all:
-        out_of_scope = sorted(used - scope)
-        if out_of_scope:
-            print(
-                f"\n  [INFO] V0.83 命名空间外 {len(out_of_scope)} 个 key（预存 gap，独立 ticket 跟踪）"
-            )
+    # 2) 清单外的 gap —— **默认也报**（只报告，不失败）。
+    #    V0.121.1（P0-4）：此前只有 --all 模式才看得到「清单外有多少 key」，
+    #    却**看不到其中有多少是真的缺 key** —— 404 个里藏着一批真缺失
+    #    （`time.min_ago` / `time.hour_ago` / `time.day_ago` 就藏在里面，
+    #    页面正文直接显示 key 字面量，却一路绿灯）。
+    #    现在默认打印「清单外缺失数 + 逐条位置」：位置能让人一眼分出
+    #    「注释里的示例」与「代码里的真引用」，缺口可见 ⇒ 可逐步收敛。
+    out_of_scope = sorted(used - scope)
+    out_missing: dict[str, list[str]] = defaultdict(list)
+    for k in out_of_scope:
+        for lang in LANGS:
+            if k not in defined[lang]:
+                out_missing[lang].append(k)
+    n_out_missing = sum(len(v) for v in out_missing.values())
+    if out_of_scope:
+        print(
+            f"\n  [INFO] V0.83 命名空间外 {len(out_of_scope)} 个 key"
+            f"（其中 {n_out_missing} 条存在缺失，未纳入严格清单 —— 待收敛）"
+        )
+        for lang in LANGS:
+            for k in out_missing.get(lang, []):
+                print(f"         - {lang}.js 缺 '{k}' :: {', '.join(sorted(usage[k]))}")
 
     # 3) 未使用 key 软提示（不失败）
     unused = set()

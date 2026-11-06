@@ -1216,6 +1216,8 @@ window.PM_I18N_en_US = {
   "scoring.up_days": "Up Days",
   "scoring.down_days": "Down Days",
   "scoring.gold_ny_close": "NY Gold USD/oz Close",
+  "scoring.known_days": "Direction Known",
+  "scoring.known_days_desc": "Days with a known up/down direction / total days in the bucket (unknown-direction days are excluded from Up/Down)",
   "scoring.data_missing": "No data (holiday)",
   "scoring.strong_bullish": "Strong Bull",
   "scoring.bullish": "Bull",

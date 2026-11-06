@@ -8,6 +8,7 @@ from app.repositories.market_data import GoldKline
 from app.repositories.snapshot import SnapshotRepository
 from app.schemas.common import DirectionSignal
 from app.schemas.market import MacroIndexOut
+from app.schemas.news import NewsScoreOut
 from app.services.snapshot import DailySnapshotService
 from app.services.trend import TrendService
 
@@ -37,6 +38,22 @@ class FakeMacro:
         )
 
 
+class FakeNews:
+    """假消息面：固定一个分值（V0.121.1 P0-3 —— 用于验证「真打了分就原样落库」）。"""
+
+    def __init__(self, score: float) -> None:
+        self._score = score
+
+    async def get_today(self) -> NewsScoreOut:
+        return NewsScoreOut(
+            score_date=date.today(),
+            score=self._score,
+            direction=DirectionSignal.BULLISH if self._score > 55 else DirectionSignal.BEARISH,
+            notes="测试",
+            scored=True,
+        )
+
+
 def _mk_klines() -> list[GoldKline]:
     closes = [round(1 + i * 0.01, 3) for i in range(60)]
     base = date(2026, 6, 1)
@@ -46,8 +63,9 @@ def _mk_klines() -> list[GoldKline]:
     ]
 
 
-def _service(db: AsyncSession) -> DailySnapshotService:
-    trend = TrendService(FakeRepo(_mk_klines()), macro=FakeMacro())
+def _service(db: AsyncSession, news_score: float | None = None) -> DailySnapshotService:
+    news = FakeNews(news_score) if news_score is not None else None
+    trend = TrendService(FakeRepo(_mk_klines()), macro=FakeMacro(), news=news)
     return DailySnapshotService(SnapshotRepository(db), trend)
 
 
@@ -73,6 +91,36 @@ async def test_capture_is_upsert_by_date(db_session: AsyncSession) -> None:
     assert len(snaps) == 1
 
 
+async def test_v01211_capture_news_index_null_when_not_scored(db_session: AsyncSession) -> None:
+    """V0.121.1（P0-3）：**未打分的消息面必须存 NULL**，不能存 50.0。
+
+    这是本轮「伪造消息面 50 分」的**源头修复点**（``services/snapshot.py``）：
+    旧口径 ``news_index=trend.news.score if ... else 50.0`` 把「没打分」
+    写成「中性 50」⇒ 实测污染 64% 历史行，并伪造出 14 个 hit_t1 / 12 个 hit_t5
+    （``direction_of(50.0)`` = NEUTRAL，判定照样跑）。
+
+    ⚠ 本断言是**源头级**的：只要有人把 ``else 50.0`` 加回来，它必须立刻变红。
+    """
+    svc = _service(db_session)  # 未注入 news 服务 ⇒ 消息面未打分
+    await svc.capture_today()
+
+    snaps = await SnapshotRepository(db_session).list_recent(10)
+    assert len(snaps) == 1
+    assert snaps[0].news_index is None, (
+        f"未打分的消息面被写成了 {snaps[0].news_index}（应为 NULL = 未知）"
+    )
+
+
+async def test_v01211_capture_news_index_keeps_real_score(db_session: AsyncSession) -> None:
+    """V0.121.1（P0-3）：**真的打了分**时，分值必须原样落库（不能被改成 NULL）。"""
+    svc = _service(db_session, news_score=72.0)
+    await svc.capture_today()
+
+    snaps = await SnapshotRepository(db_session).list_recent(10)
+    assert len(snaps) == 1
+    assert snaps[0].news_index == 72.0
+
+
 async def test_list_history_lazy_capture(db_session: AsyncSession) -> None:
     svc = _service(db_session)
     result = await svc.list_history(days=10)
@@ -82,15 +130,22 @@ async def test_list_history_lazy_capture(db_session: AsyncSession) -> None:
 
 
 async def test_v063_list_history_news_index_present(db_session: AsyncSession) -> None:
-    """V0.63.0：list_history 返回的每条快照都含 news_index 字段（消息面曲线数据来源）。"""
+    """V0.63.0：list_history 返回的每条快照都含 news_index 字段（消息面曲线数据来源）。
+
+    ⚠ V0.121.1（P0-3）：未打分时该字段是 **None**（未知），**不是 50.0** ——
+    旧断言「未打分场景下默认 50.0」正是本轮要消灭的伪造
+    （污染 64% 历史行 + 伪造 14 个 hit_t1 / 12 个 hit_t5）。
+    """
     svc = _service(db_session)
     result = await svc.list_history(days=7)
 
     assert result.total >= 1
     for snap in result.snapshots:
         assert hasattr(snap, "news_index")
+        if snap.news_index is None:
+            continue  # 当天没打分 ⇒ 未知（不是中性 50）
         assert isinstance(snap.news_index, (int, float))
-        assert 0 <= snap.news_index <= 100  # 未打分场景下默认 50.0
+        assert 0 <= snap.news_index <= 100
 
 
 async def test_v063_list_history_no_duplicate_dates(db_session: AsyncSession) -> None:

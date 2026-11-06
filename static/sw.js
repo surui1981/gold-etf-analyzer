@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.121.0";  // V0.121.0 · 门禁自愈批次：check_v084（断言对齐 V0.85 后的真实结构）/_verify_sw_update（补 8 条可判红断言 + 持久化 profile）/ _verify_mobile（聚焦断言改确定性轮询）；本次未改 static/ 业务逻辑，随版本号换代以清旧缓存
+const VERSION = "v0.121.1";  // V0.121.1 · 可信度 P0 批次：① days 进 served cache key（?days= 参数此前完全失效）② 新增 price_direction 列 + 迁移 t2u3v4w5x6y（上涨天数此前恒为 0）③ 消息面未打分的伪造 50 分改存 NULL（治源头 + 幂等回填清掉 26 个伪造命中）④ /headlines 相对时间 i18n key 字面量修好；本次改 static/scoring.js + static/headlines.js + 3 语字典 ⇒ 必须换代以清旧缓存
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";
@@ -198,6 +198,17 @@ self.addEventListener("activate", (event) => {
                     "/static/i18n/en-US.js",
                     "/static/silver.js",
                     "/static/help.js",
+                    // V0.121.1（P0-2 / P0-4）：改了 scoring.js（新增「方向已知」列）
+                    // 与 headlines.js（相对时间 i18n key 字面量）——
+                    // 两者**都不在 SHELL_ASSETS**（只有它们的 .html 在），
+                    // ⇒ 旧副本会永久留在 RUNTIME_CACHE 里被 cache-first 回放。
+                    // 按 V0.92.0 同模式在这里清掉。
+                    "/static/scoring.js",
+                    "/static/headlines.js",
+                    // V0.121.1：trend.html 的快照图 tooltip 改成 null-safe
+                    // （消息面未打分时 news_index 现在是真的 null，不是假 50）
+                    // ⇒ 旧副本里的 `c.parsed.y.toFixed(1)` 会在悬停到空点时崩。
+                    "/static/trend.html",
                 ];
                 for (const url of stale) {
                     const hit = await rt.match(url);

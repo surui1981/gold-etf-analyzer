@@ -37,6 +37,8 @@ class ScoringDailyWide(Base):
         tech_index/macro_index/news_index/trend_index: 4 指数（可空）。
         index_level: ``strong_bullish`` / ``bullish`` / ``neutral`` / ``bearish`` / ``strong_bearish``。
         close/change_pct/direction: 价格参数（来自 snapshot）。
+        price_direction: 当日涨跌方向 up/down/flat（来自 gold_price_daily.change_pct；
+            NULL=当日无价格行；V0.121.1 P0-2）。
         data_source: 行情来源（V0.79.0 #163；历史 NULL=未标记）。
         news_slot_count: 当日有效打分次数（0/1/2/3）。
         news_basis_tags: 依据标签 JSON 数组（去重，跨 slot 合并）。
@@ -75,7 +77,26 @@ class ScoringDailyWide(Base):
     close: Mapped[float | None] = mapped_column(Float, nullable=True, comment="当日收盘价")
     change_pct: Mapped[float | None] = mapped_column(Float, nullable=True, comment="当日涨跌幅 %")
     direction: Mapped[str | None] = mapped_column(
-        String(12), nullable=True, comment="up/down/sideways"
+        String(12),
+        nullable=True,
+        comment=(
+            "**趋势**方向 up/down/sideways（收盘价 vs MA20 + MA20 斜率，60 日窗口口径）。"
+            "⚠ V0.121.1 起本列**不再**承载消息面方向（bullish/bearish/neutral）——"
+            "历史行里两种词表混存，读时按「历史脏数据」处理"
+        ),
+    )
+    # V0.121.1（P0-2）：**当日涨跌**方向 —— 与上面的 ``direction`` 不是一回事。
+    #   - ``direction``      = 趋势方向（60 日窗口），词表 up/down/sideways
+    #   - ``price_direction`` = 当日涨跌方向（相对前一交易日），词表 up/down/flat
+    #   来源唯一可信口径是 ``gold_price_daily.change_pct``（模型注释明写
+    #   「相对前一交易日的涨跌幅 %」）。
+    # ⚠ **可空是刻意的**：当日没有价格行 ⇒ NULL（未知），**不兜底**
+    #   （沿用 V0.78.0 Step D「数据不足 ≠ 中性」）。
+    #   旧的 ``direction`` 曾被消息面方向覆写 ⇒ 「上涨天数」恒为 0。
+    price_direction: Mapped[str | None] = mapped_column(
+        String(8),
+        nullable=True,
+        comment="当日涨跌方向 up/down/flat（NULL=当日无价格行，未知；V0.121.1 P0-2）",
     )
     data_source: Mapped[str | None] = mapped_column(
         String(16), nullable=True, comment="行情来源 live/stale/mock（V0.79.0 #163）"

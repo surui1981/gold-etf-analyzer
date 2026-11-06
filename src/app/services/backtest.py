@@ -650,7 +650,21 @@ class BacktestService:
                     continue
             else:
                 macro_score = float(snap.macro_index)
-            score = tech_score * tech_w + macro_score * macro_w + float(snap.news_index) * news_w
+            # ── 消息面：V0.121.1（P0-3）news_index 已改可空 ──
+            # 「当天没打分」⇒ 该列是 NULL（未知），**不是** 0、也不是中性 50。
+            # 该组合真的用到消息面（news_w > 0）却没有分 ⇒ 这根快照**不可用**
+            # ⇒ 跳过该日（与 tech_detail / macro_detail 分支同型纪律：
+            # 数据不足 ≠ 中性，V0.78.0 Step D）。
+            # ⚠ 旧写法 ``float(snap.news_index)`` 在 NULL 时直接 TypeError
+            #   （列变可空后这行必崩）—— 而不跳过更坏：会算出一个基于假 50 的结论。
+            if news_w > 0:
+                if snap.news_index is None:
+                    continue
+                news_part = float(snap.news_index) * news_w
+            else:
+                # 这组权重压根不用消息面 ⇒ NULL 不影响该日（也别去 float(None)）
+                news_part = 0.0
+            score = tech_score * tech_w + macro_score * macro_w + news_part
             direction = _direction_from_score(score, bullish_threshold, bearish_threshold)
             ret = next_returns.get(snap.snapshot_date, 0.0)
             hit, _ = judge_hit(direction, ret)

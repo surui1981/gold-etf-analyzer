@@ -4,6 +4,114 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.121.1] · 2026-11-06
+
+`可信度 P0 批次：days 参数此前完全失效 · 上涨天数恒为 0 · 64% 历史行带伪造消息面 50 分` — fix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)
+
+> 本版是「把显示假的逐条修回来」三批计划里的**第 2 批（批次 1 · 可信度 P0）**。
+> 批次 0（V0.121.0）先把门禁修成「能判红」，本批的每一条修复都有地方验证了。
+> 涉及 **1 个 alembic 迁移**（`t2u3v4w5x6y`）+ **1 次生产库回填**（幂等）。
+
+- 🐛 **`?days=` 参数此前完全失效** —— 趋势页 52W / 24M 按钮画的是 12 周 / 4 个月
+  - 根因：`served_cache` 的 key 是 `(target, interval, on_date)` —— **没有 `days`**
+    ⇒ `?days=30` 先算完进缓存，后面 `?days=60/120` **直接命中同一份缓存**
+  - 修法：`_key()` 增加 `days` 维度；`invalidate` 仍按 `(target, interval)` 匹配
+    ⇒ 覆盖该 target 的**所有** days 变体（否则留下读不到也删不掉的孤儿缓存）
+  - 📉 反向验证：monkeypatch 把 `_key` 换回 3 元组 ⇒ **3/3 变红** ⇒ 恢复 ⇒ 3/3 绿
+- 🐛 **命中分析「上涨天数」恒为 0** —— 治本：新增 `price_direction` 列 + 迁移
+  - 三重根因叠在一起：
+    ① 口径根本不是「当日涨跌」—— `daily_snapshots.direction` = 「收盘价 vs MA20 + MA20 斜率」
+       （60 日窗口**趋势**方向），实测 60 行里 `up` **0** 行；
+    ② `change_pct` 也是 60 日区间涨跌幅，不是当日涨跌；
+    ③ 宽表 `direction` 列被**消息面方向**覆写（`bullish`/`bearish`/`neutral`）
+       ⇒ 一个列两套词表，`up = sum(... == "up")` 永远加不上
+  - 唯一可信的「当日涨跌」源是 `gold_price_daily.change_pct` 的符号
+    ⇒ 新增 `price_direction VARCHAR(8)`（可空）+ ETL 只从该源取值（无价格行 ⇒ NULL，**不兜底**）
+  - ⚠ **不用快照 close 兜底**：实测两源同时有数时方向只有 12/27 天一致（44%），
+    且快照 close 多数是**滞后一天**的价格 ⇒ 兜底会系统性错位一天，比留空更坏
+  - 聚合新增 `known_days`（方向**已知**的天数），前端显示「方向已知 N / M」
+    ⇒ 分母摊开，避免「上涨 0 · 下跌 0」分不清是真没涨跌还是压根没数据
+  - 📉 反向验证：让 `price_direction` 回退到 `direction` ⇒ **3 个测试变红** ⇒ 恢复 ⇒ 绿
+- 🐛 **64% 历史行带伪造消息面 50 分** —— 治源头 + 连带清掉 26 个伪造命中
+  - 污染链：`trend.news.score = None` → `snapshot.py` 兜底成 `50.0`
+    → `direction_of(50.0)` = **NEUTRAL**（不是 None！）→ 判定照样跑
+    ⇒ 伪造出 **14 个 hit_t1 / 12 个 hit_t5**
+  - 修法（4 步）：
+    ① 改源头：`daily_snapshots.news_index` 改 **可空**（模型 / schema / ETL / 补列 SQL 四处一致），
+       `services/snapshot.py` 直接存 `trend.news.score`（None 就是 None，不再兜底 50）；
+    ② 宽表 ETL 不再从快照继承 `news_index` ⇒ 「当天有没有 `news_scores` 记录」说了算；
+    ③ 顺带拆分 `_set_outcome`：`actual_change_pct_t*` 是**事实**（照写），
+       `hit_t*` 是**判定**（没有方向就没有判定）⇒ 未打分的日子仍看得到真实涨跌，但不被算成命中；
+    ④ 消费侧 null-safe：`backtest.py` 里 `news_w > 0` 且 `news_index IS NULL` ⇒ **跳过该日**
+       （不是记 0、不是记中性 50）
+  - **生产库回填**（`scripts/backfill_news_truth.py`，幂等）：快照 **49 行**修正
+    （32 行置 NULL + 17 行写当日聚合值）；宽表 ETL 重跑 **61/61 天**
+    ⇒ 实测前后对比：
+    | 项 | 回填前 | 回填后 |
+    |---|---|---|
+    | 快照 `news_index` = 50 | **57** | **8**（真实分，全部保留） |
+    | 宽表 slot=0 组 `news_index` 非 NULL | **32** | **0** |
+    | 宽表 slot=0 组 hit_t0/t1/t5 非 NULL | **14 / 14 / 12** | **0 / 0 / 0** |
+    | 宽表 `direction` 取值 | bullish 7 / bearish 14 / neutral 8 / down 30 / sideways 2 | **down 55 / sideways 6** |
+    | 宽表 `price_direction` | 全 NULL（列刚加） | **down 17 / up 11 / NULL 33** |
+    - 幂等自查：二次规划 **0 行**待修正
+    - ⚠ **判据是「当天有没有 `news_scores` 记录」，不是「值是不是 50」** ——
+      宽表 `news_slot_count >= 1` 的 29 行里有 **8 行恰好 = 50**（用户真实打了 50）⇒ 一律不动
+  - 📉 反向验证：把 `snapshot.py` 改回 `else 50.0` ⇒ **新测试变红**
+    （「未打分的消息面被写成了 50.0」）；恢复 ⇒ 13 passed
+- 🐛 **`/headlines` 渲染 i18n key 字面量** —— 用户直接看见 `time.hour_ago`
+  - 根因：字典里的 key 是**复数**（`time.minutes_ago` / `time.hours_ago` / `time.days_ago`，
+    模板 `{n} 分钟前`），而 `headlines.js` 写的是 `time.min_ago` / `time.hour_ago` / `time.day_ago`
+    ⇒ 三语字典里**都没有** ⇒ `I18n.t()` 返回 **key 字面量**
+  - 附带一个更隐蔽的坑：原来的兜底写法 `(I18n.t(key)) || "分钟前"` **永远不会触发**
+    —— key 字面量是 truthy ⇒ 改用 `freshness.js:132-138` 的正确形式（`v !== key` 才算命中）
+  - 门禁扩容：`check_i18n_keys.py` 的严格清单加进 `"time."` 前缀；
+    并让门禁**默认**输出「清单外缺失数 + 逐条位置」
+    ⇒ 实测 404 个清单外 key 里藏着这 3 个真缺失，现在**可见**了
+  - 📉 反向验证：把 3 个 key 改回错的 ⇒ **门禁 9 missing / 499 in-scope** ⇒ 恢复 ⇒ **0 missing**
+- 📦 **迁移 `t2u3v4w5x6y`**（`scoring_daily_wide` 增 `price_direction` + `daily_snapshots.news_index` 改可空）
+  - SQLite 不能 `ALTER TABLE ... DROP NOT NULL` ⇒ 用 `op.batch_alter_table(recreate="always")`
+  - 先在**副本库**上验过 upgrade / downgrade / 往返（索引与 61 行数据都保住），再上生产
+- 🧪 **新增/改写的测试**（只加必要的）
+  - `test_scoring_wide.py`：`price_direction` 取值来源正确、无价格行时为 NULL、
+    **停掉覆写后 `direction` 不再出现 bullish/bearish/neutral**、`up/down/known_days` 统计正确
+  - `test_snapshot_service.py`：**未打分 ⇒ `news_index` 必须是 NULL**（源头级断言）、
+    真打了分 ⇒ 原样落库
+  - `test_backtest_service.py`：`news_index IS NULL` 且 `news_w > 0` ⇒ **跳过该日**；
+    `news_w == 0` ⇒ 该日照常参与
+  - `test_trend.py` / `test_daily_cache.py`：`days` 维度进缓存 key 后的隔离性与失效行为
+  - 📉 反向验证：`price_direction` 回退 ⇒ 3 个测试红；消息面覆写恢复 ⇒ 1 个测试红；
+    `else 50.0` 恢复 ⇒ 1 个测试红
+- 📌 **改 `static/` ⇒ 立即 bump `sw.js` VERSION**（V0.100.1 铁律）
+  - 本次改了 `static/scoring.js` + `static/headlines.js` + 3 语字典
+    ⇒ `sw.js` VERSION → `v0.121.1`，并按 V0.92.0 模式把
+    `/static/scoring.js` / `/static/headlines.js` 加进 activate 的 RUNTIME_CACHE 清理清单
+- ✅ **线上实测**（`192.168.0.204:8888`，服务重启后实测，输出见下）
+  - `/openapi.json` → `info.version = 0.121.1`
+  - **P0-1**：`/api/v1/market/gold/ny-trend?days=30/60/120` → 分别返回 **30 / 60 / 120** 个点
+    （修复前三次返回**完全相同**的结果）
+  - **P0-2**：`/api/v1/scoring/summary?group_by=day` → 61 个桶，`up_days` 合计 **11**、
+    `down_days` **17**、`known_days` **28**；`direction` 只剩 `down 55 / sideways 6`
+    （消息面词表 bullish/bearish/neutral 已消失）；`price_direction` = `down 17 / up 11 / NULL 33`
+  - **P0-3**：`/api/v1/scoring` → `news_slot_count=0` 的 **32 行**里 `news_index` 非 NULL **0 行**、
+    `hit_t1` 非 NULL **0 行**（伪造的 14 个 hit_t1 / 12 个 hit_t5 已清）
+  - **P0-4**：`/headlines` 的「上次刷新」显示 **"8 小时前"**（修复前显示 `time.hour_ago`）
+- 🚪 **新增浏览器门禁 `scripts/_verify_v0121_truth.mjs`**（13 条断言，可判红）
+  - 覆盖 P0-2（页面上的「方向已知」列 / 上涨天数非 0 / 分母摊开 / `up+down==known`）与
+    P0-4（`#valLastRefresh` 必须是真实相对时间、整页正文不得出现 `time.*` key 字面量）
+  - 📉 反向验证：
+    ① 删掉「方向已知」列 ⇒ 门禁变红；
+    ② 把 3 个 i18n key 改回 `time.min_ago/hour_ago/day_ago` ⇒ 门禁变红，
+       `#valLastRefresh` 复现出 `time.hour_ago` ⇒ 恢复 ⇒ **13 passed / 0 failed**
+  - ⚠ **写这个门禁时自己踩了一次「空转恒真」的坑**（记录下来）：
+    ① 表头按 `head === "涨"` 精确匹配 —— 而表头文案来自 i18n 字典（zh-CN 是**「上涨日数」**，
+       JS 兜底串才是「涨」）⇒ 匹配不到 ⇒ 索引 `-1` ⇒ `r[-1]` 是 `undefined`
+       ⇒ 求和**结构性恒为 0** ⇒ 门禁报「上涨天数非 0」失败，而页面其实是对的；
+    ② 按 `.time-ago` / `[class*=ago]` 泛扫相对时间元素 ⇒ 扫到 **0 个**
+       ⇒ 「不含 key 字面量」这条断言**空转恒真**。
+    ⇒ 两条都改成**指名道姓**：表头用 `/涨|Up/i` 正则定位（并断言三列都定位到了），
+       相对时间直接取 `#valLastRefresh`。**教训：门禁自己要先证明「它能测到东西」。**
+
 ## [V0.121.0] · 2026-11-06
 
 `门禁自愈批次：3 个浏览器门禁从「坏了 / 假绿」修成「能判红」` — chore · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)

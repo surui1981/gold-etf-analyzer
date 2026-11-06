@@ -47,7 +47,9 @@ _LOCK = Lock()
 DEFAULT_DAYS = 60
 
 
-def _key(target: str, interval: str, on_date: date, days: int = DEFAULT_DAYS) -> tuple[str, str, date, int]:
+def _key(
+    target: str, interval: str, on_date: date, days: int = DEFAULT_DAYS
+) -> tuple[str, str, date, int]:
     """统一构造缓存 key。
 
     - ``interval`` 归一化为大写单字母（D/W/M）；

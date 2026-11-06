@@ -15,7 +15,11 @@ logger = get_logger(__name__)
 # 表名 -> [(列名, SQLite 类型, 默认值)]
 COLUMN_MIGRATIONS: dict[str, list[tuple[str, str, str]]] = {
     "daily_snapshots": [
-        ("news_index", "FLOAT", "50"),
+        # ⚠ V0.121.1（P0-3）：默认值由 ``50`` 改为 ``NULL``。
+        # 老库补列时若塞 50，等于把「没打分」直接写成「中性 50」——
+        # 那正是本轮要消灭的伪造（污染 64% 历史行 + 伪造 14 个 hit_t1 / 12 个 hit_t5）。
+        # ⇒ 补出来的列必须是 NULL（未知），由消费方显式跳过。
+        ("news_index", "FLOAT", "NULL"),
         # V0.79.0 任务 #162：技术面 5 维度明细 JSON（trend_5 网格回测的前置）。
         # ⚠ 历史 24 行**保持 NULL 不回填** —— 上游 K 线只覆盖其中 16-17 天，
         # 回填不可能完整；缺失日期绝不用邻近日期顶替（那是伪造历史）。

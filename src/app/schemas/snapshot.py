@@ -28,7 +28,11 @@ class SnapshotOut(BaseModel):
     direction: str
     tech_index: float
     macro_index: float
-    news_index: float = 50.0
+    # ⚠ V0.121.1（P0-3）：消息面指数**可空** —— NULL = 当天未打分（未知）。
+    # 旧口径 `news_index: float = 50.0` 把「没打分」渲染成「中性 50」，
+    # 而 schema 层的默认值**根本不校验**来源（快照里存的是 50 还是 None
+    # 都直接接受）⇒ 契约与事实脱节。
+    news_index: float | None = None
     trend_index: float
     index_level: str
     # V0.79.0 任务 #162：技术面 5 维度明细 JSON。

@@ -92,9 +92,10 @@ async def _insert_gold(
     price_date: date,
     close: float,
     target: str = "ny",
+    change_pct: float = 0.0,
 ) -> GoldPriceDaily:
     row = GoldPriceDaily(
-        target=target, price_date=price_date, close=close, change_pct=0.0, source="test"
+        target=target, price_date=price_date, close=close, change_pct=change_pct, source="test"
     )
     session.add(row)
     await session.commit()
@@ -252,6 +253,9 @@ class TestByDate:
     async def test_returns_row_after_rebuild(self, db_session: AsyncSession) -> None:
         target = date(2026, 10, 10)
         await _insert_snapshot(db_session, target)
+        # ⚠ V0.121.1（P0-3）：宽表的消息面事实源是 ``news_scores`` 表，
+        # 只有「当天有 news_scores 记录」才有分 ⇒ 判定必须有这条记录。
+        await _insert_news(db_session, target, slot=1, score=60)
         await _insert_gold(db_session, target, close=2000.0)
         await _insert_gold(db_session, target + timedelta(days=1), close=2010.0)
         await _service(db_session).rebuild(target)
@@ -323,6 +327,8 @@ class TestHitStatsAllHorizons:
         """
         target = date(2026, 10, 10)
         await _insert_snapshot(db_session, target, news_index=60.0)
+        # ⚠ V0.121.1（P0-3）：宽表消息面以 ``news_scores`` 为唯一事实源
+        await _insert_news(db_session, target, slot=1, score=60)
         # 6 根 bar：target-1 (t0) + target + target+1..+5 (t1/t3/t5)
         # _set_outcome 要求 future_bars 长度 >= horizon：t5 需要 5 根 future bar
         await _insert_gold(db_session, target - timedelta(days=1), close=1990.0)
@@ -354,6 +360,8 @@ class TestHitStatsAllHorizons:
         # 1 个 bullish 行 → 所有 4 horizon 都 hit
         target = date(2026, 10, 10)
         await _insert_snapshot(db_session, target, news_index=60.0)
+        # ⚠ V0.121.1（P0-3）：宽表消息面以 ``news_scores`` 为唯一事实源
+        await _insert_news(db_session, target, slot=1, score=60)
         await _insert_gold(db_session, target - timedelta(days=1), close=1990.0)
         await _insert_gold(db_session, target, close=2000.0)
         await _insert_gold(db_session, target + timedelta(days=1), close=2010.0)
@@ -428,3 +436,152 @@ class TestHitStatsAllHorizons:
         # 2 桶，降序：2026-10 在前，2026-09 在后
         t1_buckets = out.by_horizon["t1"].by_month
         assert [b.period for b in t1_buckets] == ["2026-10", "2026-09"]
+
+
+# ──────────── V0.121.1 · P0-2 / P0-3 · 宽表只写真实事实 ────────────
+
+
+class TestV01211PriceDirection:
+    """P0-2：「上涨天数」恒为 0 的治本 —— 新增 ``price_direction`` 列。
+
+    旧实现用 ``direction`` 列统计上涨天数，而该列被**消息面方向**覆写
+    （bullish/bearish/neutral），且本身是「60 日趋势方向」而非当日涨跌
+    ⇒ ``r.direction == "up"`` 永远加不上。
+    """
+
+    async def test_up_from_gold_change_pct(self, db_session: AsyncSession) -> None:
+        """当日涨 ⇒ price_direction='up'（唯一口径：gold_price_daily.change_pct）。"""
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target)
+        await _insert_news(db_session, target, slot=1, score=60)
+        await _insert_gold(db_session, target, close=2000.0, change_pct=1.5)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.price_direction == "up"
+
+    async def test_down_from_gold_change_pct(self, db_session: AsyncSession) -> None:
+        """当日跌 ⇒ price_direction='down'。"""
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target)
+        await _insert_news(db_session, target, slot=1, score=60)
+        await _insert_gold(db_session, target, close=2000.0, change_pct=-0.8)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.price_direction == "down"
+
+    async def test_null_when_no_price_row(self, db_session: AsyncSession) -> None:
+        """当日没有价格行 ⇒ price_direction 是 NULL（未知），**不兜底**。
+
+        ⚠ 不能拿快照 close 兜底：实测两源方向只有 12/27 天一致（44%），
+        且快照 close 多数是滞后一天的价格 ⇒ 兜底会系统性错位一天。
+        """
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target)
+        await _insert_news(db_session, target, slot=1, score=60)
+        # 故意不插 gold_price_daily 行
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.price_direction is None
+
+    async def test_direction_not_overwritten_by_news_direction(
+        self, db_session: AsyncSession
+    ) -> None:
+        """消息面方向**不再**覆写价格方向列 —— ``direction`` 保持趋势口径。
+
+        旧口径：``row.direction = direction_of(effective).value`` ⇒
+        宽表 60 行里出现 bullish 7 / bearish 14 / neutral 8（价格列混入消息面词表）。
+        """
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target, direction="up")
+        await _insert_news(db_session, target, slot=1, score=60)  # bullish
+        await _insert_gold(db_session, target, close=2000.0, change_pct=1.0)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.direction == "up", "direction 被消息面方向覆写了（bullish/bearish/neutral）"
+        assert out.direction not in ("bullish", "bearish", "neutral")
+
+
+class TestV01211NewsTruth:
+    """P0-3：消息面「没打分」必须落 NULL，不能伪造 50 分。"""
+
+    async def test_news_index_null_when_no_news_records(self, db_session: AsyncSession) -> None:
+        """当天没有 news_scores 记录 ⇒ 宽表 news_index 是 NULL（即使快照里写着 50）。"""
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target, news_index=50.0)  # 旧库的伪造值
+        await _insert_gold(db_session, target, close=2000.0, change_pct=1.0)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.news_index is None, "继承了快照里的伪造 50 分"
+        assert out.news_slot_count == 0
+
+    async def test_news_index_from_aggregate_when_news_exists(
+        self, db_session: AsyncSession
+    ) -> None:
+        """当天有 news_scores ⇒ 宽表取当日聚合值（与 ETL 实时聚合同口径）。"""
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target, news_index=50.0)
+        await _insert_news(db_session, target, slot=1, score=60)
+        await _insert_gold(db_session, target, close=2000.0, change_pct=1.0)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.news_index == 60.0
+        assert out.news_slot_count == 1
+
+    async def test_no_hit_without_direction_but_change_kept(self, db_session: AsyncSession) -> None:
+        """没有方向 ⇒ hit 留 NULL；但**实际涨跌是事实，照写**。
+
+        ⚠ 旧口径把两者绑在一起 ⇒「没打分」的日子连真实涨跌也一起丢。
+        """
+        target = date(2026, 10, 10)
+        await _insert_snapshot(db_session, target, news_index=50.0)
+        await _insert_gold(db_session, target, close=2000.0, change_pct=1.0)
+        await _insert_gold(db_session, target + timedelta(days=1), close=2010.0)
+        await _service(db_session).rebuild(target)
+
+        out = await _service(db_session).get_by_date(target)
+        assert out is not None
+        assert out.hit_t1 is None, "没有方向却出了命中判定"
+        assert out.actual_change_pct_t1 == 0.5, "真实涨跌被一起丢了"
+
+
+class TestV01211SummaryKnownDays:
+    """P0-2 收尾：summary 桶的上涨/下跌天数改用 price_direction，并新增 known_days。"""
+
+    async def test_up_down_known_days(self, db_session: AsyncSession) -> None:
+        """3 个已知方向 + 1 个未知（无价格行）⇒ up=1 down=1 known=3。"""
+        for d, chg in [
+            (date(2026, 10, 10), 1.0),
+            (date(2026, 10, 11), -0.5),
+            (date(2026, 10, 12), 0.0),
+        ]:
+            await _insert_snapshot(db_session, d)
+            await _insert_news(db_session, d, slot=1, score=60)
+            await _insert_gold(db_session, d, close=2000.0, change_pct=chg)
+            await _service(db_session).rebuild(d)
+        # 第 4 天：没有价格行 ⇒ price_direction=NULL（未知）
+        d4 = date(2026, 10, 13)
+        await _insert_snapshot(db_session, d4)
+        await _insert_news(db_session, d4, slot=1, score=60)
+        await _service(db_session).rebuild(d4)
+
+        out = await _service(db_session).summary(
+            start=date(2026, 10, 1), end=date(2026, 10, 31), group_by="month"
+        )
+        assert len(out.buckets) == 1
+        b = out.buckets[0]
+        assert b.days == 4
+        assert b.up_days == 1
+        assert b.down_days == 1
+        assert b.known_days == 3, "known_days 未反映「方向已知的天数」"

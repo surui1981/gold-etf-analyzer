@@ -52,6 +52,26 @@ from app.utils.user_scope import resolve_user_id
 logger = get_logger(__name__)
 
 
+def _price_direction_of(change_pct: float) -> str:
+    """由「相对前一交易日的涨跌幅 %」推出当日涨跌方向。
+
+    ⚠ 词表是 ``up`` / ``down`` / ``flat`` —— **不是**趋势方向的
+    ``up`` / ``down`` / ``sideways``，两者语义不同（见
+    ``models/scoring_wide.py`` 里 ``direction`` 与 ``price_direction`` 的注释）。
+
+    Args:
+        change_pct: 相对前一交易日的涨跌幅 %（``gold_price_daily.change_pct``）。
+
+    Returns:
+        ``"up"`` / ``"down"`` / ``"flat"``。
+    """
+    if change_pct > 0:
+        return "up"
+    if change_pct < 0:
+        return "down"
+    return "flat"
+
+
 class ScoringWideService:
     """打分数据宽表服务：ETL + 4 聚合查询。"""
 
@@ -120,17 +140,27 @@ class ScoringWideService:
             row.snapshot_id = snap.id
             row.tech_index = snap.tech_index
             row.macro_index = snap.macro_index
-            row.news_index = snap.news_index
             row.trend_index = snap.trend_index
             row.index_level = snap.index_level
             row.close = snap.close
             row.change_pct = snap.change_pct
             row.direction = snap.direction
             row.data_source = snap.data_source
+        # ⚠ V0.121.1（P0-3）：``news_index`` **不在这里**从快照继承。
+        # 快照的 ``news_index`` 在旧库里可能是**伪造的 50**（当天根本没打分）。
+        # 真正的事实源是 ``news_scores`` 表 —— 下面按「当天有没有 news_records」
+        # 决定写不写、分是多少（口径与 ETL 实时聚合完全一致）。
         # V0.95.0：NY 金（COMEX）美元/盎司收盘价 —— ``gold_base`` 已是
         # ``DEFAULT_REVIEW_TARGET='ny'`` 标的，无新查询；落宽表供 4 指数时序表用。
         if gold_base is not None and gold_base.close > 0:
             row.gold_ny_close = gold_base.close
+        # V0.121.1（P0-2）：**当日涨跌方向** —— 唯一可信口径是
+        # ``gold_price_daily.change_pct``（模型注释明写「相对前一交易日的涨跌幅 %」）。
+        # 当日无价格行 ⇒ NULL（未知），**不兜底**（V0.78.0 Step D 纪律）。
+        # ⚠ 不用快照 close 兜底：实测两源同时有数时方向只有 12/27 天一致（44%），
+        #   且快照 close 多数是**滞后一天**的价格 ⇒ 兜底会系统性错位一天，比留空更坏。
+        if gold_base is not None and gold_base.change_pct is not None:
+            row.price_direction = _price_direction_of(gold_base.change_pct)
 
         # ── 消息面聚合 ──
         if news_records:
@@ -150,8 +180,12 @@ class ScoringWideService:
                 # 只保留在 BASIS_TAGS 白名单内的标签（防 schema 漂移脏数据）
                 tags = [t for t in tags if t in BASIS_TAGS]
             row.news_basis_tags = json.dumps(tags, ensure_ascii=False) if tags else None
-            row.direction = direction_of(effective).value  # 覆盖 snap.direction
         else:
+            # ⚠ V0.121.1（P0-3）：当天**没有** news_scores 记录 ⇒ 消息面是「未知」。
+            # 旧口径从快照继承了伪造的 50 ⇒ ``direction_of(50.0)`` = NEUTRAL
+            # （不是 None！）⇒ judge_hit 照样跑 ⇒ 伪造出 14 个 hit_t1 / 12 个 hit_t5。
+            # ⇒ 这里必须是 None（没有方向 ⇒ 没有判定；见 ``_set_outcome``）。
+            row.news_index = None
             row.news_slot_count = 0
             row.news_backfilled_count = 0
             row.news_basis_tags = None
@@ -188,10 +222,12 @@ class ScoringWideService:
             gold_prev = await self._gold.latest_before(DEFAULT_REVIEW_TARGET, target_date)
             if gold_prev is not None and gold_prev.close > 0:
                 change_pct = (gold_base.close - gold_prev.close) / gold_prev.close * 100
+                # V0.121.1（P0-3）：实际涨跌是**事实** ⇒ 照写；
+                # 命中是**判定** ⇒ 需要方向才写（无方向 ⇒ hit_t0 留 NULL）。
+                row.actual_change_pct_t0 = round(change_pct, 2)
                 news_dir = direction_of(row.news_index) if row.news_index is not None else None
                 if news_dir is not None:
                     hit, _label = judge_hit(news_dir, change_pct)
-                    row.actual_change_pct_t0 = round(change_pct, 2)
                     row.hit_t0 = hit
 
         return row
@@ -204,18 +240,33 @@ class ScoringWideService:
         news_dir: DirectionSignal | None,
         future_date: date,
     ) -> None:
-        """写入 T+horizon 的 actual_change_pct + hit 判定。"""
-        if news_dir is None:
-            return  # 无消息面方向 → outcomes 留 NULL（**不**兜底）
-        hit, _label = judge_hit(news_dir, change_pct)
+        """写入 T+horizon 的 actual_change_pct + hit 判定。
+
+        ⚠ **V0.121.1（P0-3）拆分两种语义**：
+
+        - ``actual_change_pct_t*`` 是**事实**（当日到 T+N 的真实涨跌幅）
+          ⇒ 照写，**与有没有消息面方向无关**
+          ⇒ 未打分的日子仍然能看到真实涨跌；
+        - ``hit_t*`` 是**判定**（按当日消息面方向对照真实涨跌）
+          ⇒ 需要方向才写 ⇒ 没有方向就没有判定（NULL）。
+
+        旧口径把两者绑在一起（``news_dir is None`` ⇒ 整行留 NULL），
+        后果是「没打分」的日子连**事实**也一起丢了。
+        """
         if horizon == 1:
             row.actual_change_pct_t1 = round(change_pct, 2)
-            row.hit_t1 = hit
         elif horizon == 3:
             row.actual_change_pct_t3 = round(change_pct, 2)
-            row.hit_t3 = hit
         elif horizon == 5:
             row.actual_change_pct_t5 = round(change_pct, 2)
+        if news_dir is None:
+            return  # 无消息面方向 ⇒ hit 留 NULL（**不**兜底）
+        hit, _label = judge_hit(news_dir, change_pct)
+        if horizon == 1:
+            row.hit_t1 = hit
+        elif horizon == 3:
+            row.hit_t3 = hit
+        elif horizon == 5:
             row.hit_t5 = hit
 
     # ──────────── 读端点：by-date ────────────
@@ -289,8 +340,13 @@ class ScoringWideService:
             hit_t1 = [r.hit_t1 for r in grp if r.hit_t1 is not None]
             hit_t3 = [r.hit_t3 for r in grp if r.hit_t3 is not None]
             hit_t5 = [r.hit_t5 for r in grp if r.hit_t5 is not None]
-            up = sum(1 for r in grp if r.direction == "up")
-            down = sum(1 for r in grp if r.direction == "down")
+            up = sum(1 for r in grp if r.price_direction == "up")
+            down = sum(1 for r in grp if r.price_direction == "down")
+            # ⚠ V0.121.1（P0-2）：``known_days`` = 方向**已知**的天数
+            # （当日有 gold_price_daily 行 ⇒ price_direction 非 NULL）。
+            # 没有它，用户看到「上涨 0 · 下跌 0」却不知道是「真没涨没跌」
+            # 还是「压根没数据」—— 后者曾让「上涨天数恒为 0」看起来像结论。
+            known = sum(1 for r in grp if r.price_direction is not None)
             # V0.95.0：桶内最后一日的 NY 金美元/盎司收盘价（period-end snapshot）。
             # day 桶内 1 行 → 当日收盘；week/month 桶 → 桶内最末日收盘。
             # 任一行缺数据 → None（前端显示 "—"）。
@@ -315,6 +371,7 @@ class ScoringWideService:
                     hit_rate_t5=round(sum(hit_t5) / len(hit_t5), 3) if hit_t5 else None,
                     up_days=up,
                     down_days=down,
+                    known_days=known,
                     gold_ny_close=gold_ny_close,
                     hit=bucket_hit,
                 )

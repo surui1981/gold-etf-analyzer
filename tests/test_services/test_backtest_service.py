@@ -514,6 +514,67 @@ def test_evaluate_grid_falls_back_to_flat_when_weights_none() -> None:
     assert row.tech_dim_weights is None
 
 
+# ─────────────── V0.121.1 · P0-3 · news_index 可空的消费侧 ───────────────
+
+
+def test_evaluate_grid_skips_day_when_news_index_null() -> None:
+    """V0.121.1（P0-3）：``news_w > 0`` 且 ``news_index IS NULL`` ⇒ 跳过该日。
+
+    ⚠ 旧写法 ``float(snap.news_index)`` 在 NULL 时直接 TypeError；
+       而「按 50 兜底」更坏 —— 会算出一个基于伪造中性分的结论。
+    ⇒ 与 tech_detail / macro_detail 分支同型：数据不足 ≠ 中性，跳过。
+    """
+    snap = _make_snapshot_with_details(
+        date(2026, 1, 1),
+        tech_index=80.0,
+        macro_index=50.0,
+        news_index=None,  # 当天没打分
+    )
+    svc = BacktestService(
+        session=None,  # type: ignore[arg-type]
+        gold=None,  # type: ignore[arg-type]
+        weights=None,  # type: ignore[arg-type]
+    )
+    row = svc._evaluate_grid(
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.3,
+        news_w=0.2,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
+    )
+    assert row.samples == 0, "news_index=NULL 却仍参与计算"
+
+
+def test_evaluate_grid_keeps_day_when_news_weight_zero() -> None:
+    """``news_w == 0``（组合里根本不用消息面）⇒ NULL 不该影响该日。
+
+    消息面没分但这组权重压根不用消息面 ⇒ 这根快照**可用**。
+    """
+    snap = _make_snapshot_with_details(
+        date(2026, 1, 1),
+        tech_index=80.0,
+        macro_index=50.0,
+        news_index=None,
+    )
+    svc = BacktestService(
+        session=None,  # type: ignore[arg-type]
+        gold=None,  # type: ignore[arg-type]
+        weights=None,  # type: ignore[arg-type]
+    )
+    row = svc._evaluate_grid(
+        snapshots=[snap],
+        next_returns={},
+        tech_w=0.5,
+        macro_w=0.5,
+        news_w=0.0,
+        bullish_threshold=70.0,
+        bearish_threshold=30.0,
+    )
+    assert row.samples == 1
+
+
 # ─────────────── 校准 5 桶 ───────────────
 
 
@@ -532,7 +593,7 @@ def _make_snapshot_with_details(
     *,
     tech_index: float,
     macro_index: float,
-    news_index: float,
+    news_index: float | None,
     tech_detail: dict | None = None,
     macro_detail: dict | None = None,
 ):
@@ -540,9 +601,12 @@ def _make_snapshot_with_details(
 
     ⚠ 直接 new() 而非经 DB session —— ``_evaluate_grid`` 只读字段值，不
     触碰 lazy-loaded relationship，回测服务层从不主动 flush 任何 ORM 状态。
+
+    ⚠ V0.121.1（P0-3）：``news_index`` 允许为 None（当天没打分）。
     """
     from app.models.snapshot import DailySnapshot
 
+    trend_index = tech_index * 0.5 + macro_index * 0.3 + (news_index or 0.0) * 0.2
     snap = DailySnapshot(
         snapshot_date=d,
         symbol="518880",
@@ -557,7 +621,7 @@ def _make_snapshot_with_details(
         tech_index=tech_index,
         macro_index=macro_index,
         news_index=news_index,
-        trend_index=tech_index * 0.5 + macro_index * 0.3 + news_index * 0.2,
+        trend_index=trend_index,
         index_level="up",
         macro_detail=json.dumps(macro_detail, ensure_ascii=False) if macro_detail else "{}",
         tech_detail=json.dumps(tech_detail, ensure_ascii=False) if tech_detail else None,
