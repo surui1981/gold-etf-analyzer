@@ -306,7 +306,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 值 |
 |---|---|
-| 本地 commit | **`fc74580`** = `HEAD` ✅（发版 commit = `e431f80`，其后补了一个纯文档 commit `fc74580`） |
+| 本地 commit | ✅ 已提交（自查 `git rev-parse HEAD`）；**发版 commit = `e431f80`**，其后还有纯文档 commit |
 | 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
 | 远端 `refs/heads/main` | **仍是 `41df7c8`**（V0.121.3 的文档订正提交）⇒ **本轮未推送** |
 | 远端 tag 数 | **117**（本地 118）⇒ 差 `v0.121.4` 这一个 |
@@ -337,7 +337,8 @@ git -c credential.helper='!gh auth git-credential' push origin v0.121.4
 unset GH_TOKEN
 # 成功判据（不是「命令没报错」）：
 git -c credential.helper='!gh auth git-credential' ls-remote origin refs/heads/main refs/tags/v0.121.4
-#   ⇒ refs/heads/main 应 == fc74580（当前 HEAD）
+#   ⇒ refs/heads/main 应 == `git rev-parse HEAD` 的值（当前 HEAD ——
+#     ⚠ 不是发版 commit e431f80：其后还排着纯文档 commit，写死 SHA 会把「推送成功」误判成失败）
 #   ⇒ refs/tags/v0.121.4 的 ^{} 行应 == e431f80（tag 指向发版 commit，文档 commit 在其后）
 ```
 

@@ -84,7 +84,7 @@
   ⇒ 手工补丁不再压过 WGC，正是本次修复的效果）
 
 - 📌 **推送状态（如实记录）：⚠ 本轮未推送 —— 被凭据挡住**
-  - 代码 / 生产库 / 服务 / 门禁 / 文档 / commit（`e431f80`）/ tag（`v0.121.4`）**全部就绪**，
+  - 代码 / 生产库 / 服务 / 门禁 / 文档 / commit（发版 `e431f80` + 其后纯文档 commit）/ tag（`v0.121.4`）**全部就绪**，
     只有「推到 GitHub」这一步没做成
   - **不是网络问题**（`getent hosts github.com` → 正常、`https://github.com` → 200、
     SSH 22/443 都通），**是权限问题**：gh keyring 里只有一枚 **fine-grained PAT**
@@ -101,9 +101,10 @@
     git -c credential.helper='!gh auth git-credential' push origin v0.121.4
     unset GH_TOKEN
     ```
-    成功判据 = `git ls-remote origin refs/heads/main` 读回 **`fc74580`**（= 当前 HEAD；
-    tag `v0.121.4` 的 `^{}` 行读回 `e431f80` = 发版 commit —— tag 指向发版 commit、
-    纯文档 commit 排在 tag 之后，与 `v0.121.3` 的先例一致）
+    成功判据 = `git ls-remote origin refs/heads/main` 读回的值 == `git rev-parse HEAD`
+    （⚠ 用 HEAD 而不是发版 commit —— 发版 commit 之后还排着纯文档 commit，
+    否则会把「推送成功」误判成失败）；tag `v0.121.4` 的 `^{}` 行读回 `e431f80`
+    （tag 指向发版 commit，文档 commit 排在 tag 之后，与 `v0.121.3` 的先例一致）
 
 ## [V0.121.3] · 2026-11-07
 

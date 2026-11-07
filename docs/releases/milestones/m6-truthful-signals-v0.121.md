@@ -858,7 +858,7 @@ GET /api/v1/central-bank/purchases
 
 | 项 | 值 |
 |---|---|
-| 本地 commit | **`fc74580`** = `HEAD` ✅（发版 commit = `e431f80`，其后补了一个纯文档 commit `fc74580`） |
+| 本地 commit | ✅ 已提交（自查 `git rev-parse HEAD`）；**发版 commit = `e431f80`**，其后还有纯文档 commit |
 | 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
 | 远端 `refs/heads/main` | 仍是 `41df7c8` ⇒ **未推送** |
 | 远端 tag 数 | **117**（本地 118） |
