@@ -7,6 +7,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.central_bank import CentralBankPurchase
+from app.repositories.central_bank_data import AGGREGATE_ISO
 
 
 class CentralBankPurchaseRepository:
@@ -111,6 +112,12 @@ class CentralBankPurchaseRepository:
     async def t12m_total(self) -> tuple[float, str, str] | None:
         """T12M（最近 4 季度合计）净购金吨数 + 窗口（如 "2025Q3–2026Q2"）。
 
+        ⚠️ 口径：**全球合计行（WGC_AGGR）优先**，绝不与各国行相加。
+        「合计 + 明细」相加 = 重复计数（V0.121.4 实测旧口径：
+        窗口 2025Q3–2026Q2 报 **842.6** 吨，同一窗口的合计行真值是 **790.2** 吨
+        —— 226.3 + 209.9 + 57.7 + 296.3）。
+        库里没有任何合计行时，才退回各国行之和（此时是「已上报」口径）。
+
         Returns:
             (total_tonnes, window_label, latest_quarter) 或 None（库为空）。
         """
@@ -126,11 +133,18 @@ class CentralBankPurchaseRepository:
             quarters.append(_previous_quarter(quarters[-1]))
         quarters.reverse()  # 从旧到新
 
-        stmt = select(CentralBankPurchase.tonnes_net).where(
-            CentralBankPurchase.quarter.in_(quarters)
-        )
+        stmt = select(
+            CentralBankPurchase.country_iso,
+            CentralBankPurchase.tonnes_net,
+        ).where(CentralBankPurchase.quarter.in_(quarters))
         result = await self._session.execute(stmt)
-        total = sum(result.scalars().all())
+        rows = result.all()
+
+        agg_total = sum(float(t) for iso, t in rows if iso == AGGREGATE_ISO)
+        has_agg = any(iso == AGGREGATE_ISO for iso, _ in rows)
+        # ⚠ 「合计行」与「各国行」**不可相加** —— 有合计行就只取合计行。
+        total = agg_total if has_agg else sum(float(t) for iso, t in rows if iso != AGGREGATE_ISO)
+
         window = f"{quarters[0]}–{quarters[-1]}"
         return round(float(total), 1), window, latest
 

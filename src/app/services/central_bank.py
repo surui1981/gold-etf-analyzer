@@ -1,7 +1,7 @@
 """世界央行黄金购买 业务服务：摘要 + Top 排序 + 明细查询。"""
 
 from app.repositories.central_bank import CentralBankPurchaseRepository
-from app.repositories.central_bank_data import COUNTRY_NAMES
+from app.repositories.central_bank_data import AGGREGATE_ISO, COUNTRY_NAMES
 from app.schemas.central_bank import (
     CentralBankListOut,
     CentralBankPurchaseOut,
@@ -50,10 +50,20 @@ class CentralBankService:
         t12m_total, t12m_window, latest_q = t12m if t12m else (0.0, "-", items[0].quarter)
 
         # 当前季度合计（latest_q）
-        current_total = sum(float(it.tonnes_net) for it in items if it.quarter == latest_q)
+        # ⚠️ 全球合计行（WGC_AGGR）与各国行**不可相加** —— 相加即「合计 + 明细」
+        #    的重复计数（V0.121.4 实测：2026Q2 全表求和 336.7 = 合计 288.9 + 各国 47.8）。
+        #    优先取全球合计行；没有该行时才退回各国行之和（口径不同，但好过没有数）。
+        quarter_rows = [it for it in items if it.quarter == latest_q]
+        agg_row = next((it for it in quarter_rows if it.country_iso == AGGREGATE_ISO), None)
+        if agg_row is not None:
+            current_total = float(agg_row.tonnes_net)
+        else:
+            current_total = sum(
+                float(it.tonnes_net) for it in quarter_rows if it.country_iso != AGGREGATE_ISO
+            )
 
-        # 参与国家数（distinct country_iso）
-        country_count = len({it.country_iso for it in items})
+        # 参与国家数（distinct country_iso，**不含**全球合计行 —— 它不是国家）
+        country_count = len({it.country_iso for it in items if it.country_iso != AGGREGATE_ISO})
 
         # 最后刷新
         last_refresh = await self._repo.latest_refresh()
@@ -69,7 +79,11 @@ class CentralBankService:
         )
 
     async def top_buyers(self, year: int, limit: int = 10) -> list[CentralBankTopBuyer]:
-        """某年度 Top N 买家（按当年累计净购金降序）。"""
+        """某年度 Top N 买家（按当年累计净购金降序）。
+
+        ⚠️ **不含全球合计行**（WGC_AGGR）—— 它是合计口径，不是「买家」；
+        混进排名会把真正的小买家挤出 Top N，还会让人误以为「全球合计」是个国家。
+        """
         items = await self._repo.list_by_range(
             from_quarter=f"{year}Q1",
             to_quarter=f"{year}Q4",
@@ -77,6 +91,8 @@ class CentralBankService:
         # 按国家聚合
         country_total: dict[str, tuple[str, float]] = {}  # iso → (name, total)
         for it in items:
+            if it.country_iso == AGGREGATE_ISO:
+                continue
             iso, name, tonnes = it.country_iso, it.country_name, float(it.tonnes_net)
             if iso in country_total:
                 country_total[iso] = (country_total[iso][0], country_total[iso][1] + tonnes)
@@ -116,7 +132,7 @@ class CentralBankService:
         )
 
     async def _top_buyers_t12m(self, limit: int = 10) -> list[CentralBankTopBuyer]:
-        """按 T12M 窗口聚合的 Top 买家。"""
+        """按 T12M 窗口聚合的 Top 买家（**不含全球合计行**，理由同 :meth:`top_buyers`）。"""
         t12m = await self._repo.t12m_total()
         if t12m is None:
             return []
@@ -135,6 +151,8 @@ class CentralBankService:
         )
         agg: dict[str, tuple[str, float]] = {}
         for it in items:
+            if it.country_iso == AGGREGATE_ISO:
+                continue
             iso, name, tonnes = it.country_iso, it.country_name, float(it.tonnes_net)
             if iso in agg:
                 agg[iso] = (agg[iso][0], agg[iso][1] + tonnes)

@@ -486,8 +486,11 @@
       setText('metalCbT12m', `${(sum.t12m_total || 0).toFixed(1)} 吨`);
       setText('metalCbCountries', `${sum.country_count || 0}`);
       setText('metalCbBadge', latest.quarter);
+      // V0.121.4：注明数据来源 —— 这个数是 WGC 的**全球合计**口径
+      //   （含未披露国家的估算），与下方「覆盖国家」的已上报明细不是一个口径。
       setText('metalCbNote',
-        `${t('home.metals_as_of', '数据截止')} ${sum.latest_data_quarter || latest.quarter}`);
+        `${t('home.metals_as_of', '数据截止')} ${sum.latest_data_quarter || latest.quarter}`
+        + ` · ${t('home.metals_cb_source', '来源：世界黄金协会 GDT 全球合计')}`);
       // 倒序 → 画图要升序（折返线看着像暴跌又暴涨）
       const series = agg.slice(0, 12).reverse().map((i) => i.tonnes_net);
       drawSpark(document.getElementById('metalCbSpark'), series);

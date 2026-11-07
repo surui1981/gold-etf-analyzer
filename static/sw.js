@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.121.3";  // V0.121.2 · 诚实性与数据链批次：① 价格日历改**增量补齐**（此前「区间内有数据就整段跳过」⇒ 永远追不到今天）② group_combine 的 5 个维度滑块此前是**装饰**（真正生效的是模块常量 GROUP_WEIGHTS）⇒ 置灰 + 新增可编辑的组权重（trend/overbought/risk）并真正接进计算链 ③ portfolio/trades/settings 三页删掉误导性的 freshness 调用（引了脚本没有容器 / 调了不存在的对象）④ /ask 的 token 栏此前**永远不显示**（客户端从不读 message_stop 的 usage；且 userMsg 作用域缺陷让整条 SSE 流当场死掉、静默降级到同步端点 ⇒ 流式此前从未真正生效）；本次改 static/weights.html + static/ask.js + static/portfolio.html + static/trades.html + static/settings.html + 3 语字典 ⇒ 必须换代以清旧缓存。V0.121.3 hotfix：宽表桶聚合散落三处、hit_stats 两处漏填「上涨/下跌/方向已知」⇒ API 返回 0（0 与 null 语义不同）⇒ 统一走 _bucket_direction_stats；本版只改 static/sw.js 自身 VERSION，未改任何静态资源内容
+const VERSION = "v0.121.4";  // V0.121.4 · 央行购金口径治本：① 央行季度合计此前是**把「合计行」和「各国明细行」相加**的重复计数（288.9 + 47.8 = 336.7）⇒ 改为 WGC 官方**全球合计行**（2026Q3 = 321.2 t）单独一行（伪 ISO WGC_AGGR），各国明细与合计**永不相加**；滚动 12 月合计同步从 842.6 更正为 885.1（2025Q4 209.9 / Q1 57.7 / Q2 296.3 / Q3 321.2）② 报告版本探测：Q3/Q2/Q1 逐版回退 + 按**图表结构**（而非标题文字）识别合计图/国家图，Q3 报告只有区域图 ⇒ **不伪造** Q3 国家明细 ③ 手工补丁此前会**覆盖** WGC 自己的国家值（UZB）⇒ 改为「合计 → 手工补丁 → 国家明细」的写入顺序，WGC 胜出 ④ 首页贵金属卡改标「来源：世界黄金协会 GDT 全球合计」；本次改 static/home.js + static/central_bank.html + 3 语字典 ⇒ 必须换代以清旧缓存
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

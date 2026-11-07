@@ -7,7 +7,7 @@
 - ``_fetch_report_charts`` 网络失败降级
 - ``_find_country_chart`` 关键字匹配
 - ``_iso_for_country`` WGC 别名映射（含 Q3 2025 + Q2 2026 两套别名）
-- ``fetch_global_quarterly_aggregate`` / ``fetch_h1_2026_by_country`` 完整 mock
+- ``fetch_global_quarterly_aggregate`` / ``fetch_2026_by_country`` 完整 mock
 - ``load_manual_overrides`` 含文件缺失 / 非法 JSON / 非法条目
 - ``build_full_dataset`` 编排三源数据
 
@@ -351,6 +351,170 @@ class TestIsoForCountry:
         assert cbd._iso_for_country("Azerbaijan (SOFAZ)") == "AZE"
 
 
+# ──────────────── 报告版本探测 + 图表结构签名（V0.121.4） ────────────────
+
+
+class TestReportCandidates:
+    """``_report_candidates`` 版本探测顺序。"""
+
+    def test_order_newest_first(self) -> None:
+        """候选按「新 → 旧」排列：今年 q3 → q2 → q1 → 去年 q3 …。"""
+        cands = cbd._report_candidates(today=date(2026, 11, 7))
+        assert cands[:3] == [(2026, "q3"), (2026, "q2"), (2026, "q1")]
+        assert cands[3] == (2025, "q3")
+        assert len(cands) == 6
+
+    def test_today_is_injectable(self) -> None:
+        """「今天」可注入 ⇒ 候选年份随注入值变（不写死日期）。"""
+        assert cbd._report_candidates(today=date(2027, 1, 1))[0] == (2027, "q3")
+        assert cbd._report_candidates(today=date(2025, 6, 1))[0] == (2025, "q3")
+
+    def test_no_q4_candidate(self) -> None:
+        """Q4 没有独立报告页（URL 404）⇒ 候选里不含 q4。"""
+        assert all(q != "q4" for _, q in cbd._report_candidates(today=date(2026, 11, 7)))
+
+
+class TestChartStructuralSignature:
+    """按**结构**（而非标题）识别 chart —— 取错图只会静默换口径。"""
+
+    _AGG_JS = (
+        '{"series":[{"name":"Q1","data":[118.8,103.1]},'
+        '{"name":"Q2","data":[169.6,141.4]},'
+        '{"name":"Q3","data":[176.9,172.4]},'
+        '{"name":"Q4","data":[135.7,162.7]}],'
+        '"xAxis":{"categories":[2014,2015]}}'
+    )
+
+    #: Q3 2026 Chart 11 的真实形态：**按区域**（series 是 China / Rest of Asia …）
+    _REGIONAL_JS = (
+        '{"series":[{"name":"China","data":[103.3]},'
+        '{"name":"Rest of Asia","data":[91.7]},'
+        '{"name":"Poland","data":[122.7]}],'
+        '"xAxis":{"categories":["y-t-d 2026"]}}'
+    )
+
+    _COUNTRY_JS = (
+        '{"series":[{"name":"Net purchases","data":[82.2,41.4]},'
+        '{"name":"Net sales","data":[0,-83.1]}],'
+        '"xAxis":{"categories":["Poland","Turkey"]}}'
+    )
+
+    def test_aggregate_signature(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """series 名是 Q1..Q4 且类目是年份 ⇒ 合计图。"""
+        monkeypatch.setattr(cbd, "_fetch_chart_js", lambda lib: self._AGG_JS)
+        assert cbd._is_aggregate_chart({"title": "t", "lib": "/x"}) is True
+
+    def test_regional_chart_is_not_aggregate(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """区域图（series 是国家/地区名）**不是**合计图 ⇒ 排除。"""
+        monkeypatch.setattr(cbd, "_fetch_chart_js", lambda lib: self._REGIONAL_JS)
+        assert cbd._is_aggregate_chart({"title": "t", "lib": "/x"}) is False
+
+    def test_country_signature(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """series 含 Net purchases / Net sales 且类目不是年份 ⇒ 国别图。"""
+        monkeypatch.setattr(cbd, "_fetch_chart_js", lambda lib: self._COUNTRY_JS)
+        assert cbd._is_country_level_chart({"title": "t", "lib": "/x"}) is True
+
+    def test_regional_chart_is_not_country_level(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """⚠️ 关键回归：Q3 2026 Chart 11 标题写着 "reported central bank purchases"，
+        但它是**按区域**的 ⇒ 结构签名必须把它排除，否则会拿区域值当国别值。"""
+        monkeypatch.setattr(cbd, "_fetch_chart_js", lambda lib: self._REGIONAL_JS)
+        assert cbd._is_country_level_chart({"title": "t", "lib": "/x"}) is False
+
+    def test_find_country_level_rejects_regional(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """``_find_country_level_chart``：标题命中但结构不符 ⇒ 不返回它。"""
+        monkeypatch.setattr(cbd, "_fetch_chart_js", lambda lib: self._REGIONAL_JS)
+        charts = [
+            {"title": "Chart 11: Reported central bank purchases by region", "lib": "/r"},
+        ]
+        assert cbd._find_country_level_chart(charts) is None
+
+
+class TestAggregateReportFallback:
+    """最新报告版本没有合计图 ⇒ 回退到旧版本（而不是空手而归）。"""
+
+    _Q3_HTML = (
+        "<html><body><article>"
+        "<h3>Chart 11: Reported central bank purchases by region</h3>"
+        '<div data-chart-data-lib="https://fsapi.gold.org/api/v12/charts/js/gdt-q3-2026-x/3431">'
+        "</div></article></body></html>"
+    )
+
+    _Q2_HTML = (
+        "<html><body><article>"
+        "<h3>Chart 8: Central bank buying rebounded sharply in Q2</h3>"
+        '<div data-chart-data-lib="https://fsapi.gold.org/api/v12/charts/js/gdt-q2-2026-x/3431">'
+        "</div></article></body></html>"
+    )
+
+    _CHART_JS = (
+        '{"series":[{"name":"Q1","data":[57.7]},'
+        '{"name":"Q2","data":[296.3]},'
+        '{"name":"Q3","data":[321.2]}],'
+        '"xAxis":{"categories":[2026]}}'
+    )
+
+    def test_falls_back_to_older_edition(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Q3 版只有区域图 ⇒ 回退到 Q2 版拿合计。"""
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q3", year=2026): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._Q2_HTML,
+                # Q3 版那张区域图（结构判定会把它排除）
+                cbd._WGC_CHART_API + "/gdt-q3-2026-x/3431": (
+                    '{"series":[{"name":"China","data":[103.3]}],'
+                    '"xAxis":{"categories":["y-t-d 2026"]}}'
+                ),
+                cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_JS,
+            },
+        )
+        rows = cbd.fetch_global_quarterly_aggregate(today=date(2026, 11, 7))
+        assert rows, "应回退到 Q2 版取到合计"
+        assert {r.quarter for r in rows} == {"2026Q1", "2026Q2", "2026Q3"}
+        # source 标注的是**实际取到的那一版**
+        assert all(r.source == "WGC GDT Q2 2026 合计行" for r in rows)
+
+    def test_newest_edition_preferred(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Q3 版有合计图 ⇒ 用 Q3 版（最新版会回溯修订历史值）。"""
+        q3_html = (
+            "<html><body><article>"
+            "<h3>Chart 10: Quarterly central bank buying exceeded expectations</h3>"
+            '<div data-chart-data-lib="https://fsapi.gold.org/api/v12/charts/js/gdt-q3-2026-x/3431">'
+            "</div></article></body></html>"
+        )
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q3", year=2026): q3_html,
+                cbd._WGC_CHART_API + "/gdt-q3-2026-x/3431": self._CHART_JS,
+            },
+        )
+        rows = cbd.fetch_global_quarterly_aggregate(today=date(2026, 11, 7))
+        assert rows
+        assert all(r.source == "WGC GDT Q3 2026 合计行" for r in rows)
+
+    def test_no_aggregate_chart_anywhere_returns_empty(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """所有版本都没有合计图 ⇒ 返回 []（不抛异常、不返回半截数据）。"""
+        _patch_http(
+            monkeypatch,
+            {
+                cbd._WGC_REPORT_URL.format(quarter="q3", year=2026): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2026): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q1", year=2026): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q3", year=2025): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q2", year=2025): self._Q3_HTML,
+                cbd._WGC_REPORT_URL.format(quarter="q1", year=2025): self._Q3_HTML,
+                cbd._WGC_CHART_API + "/gdt-q3-2026-x/3431": (
+                    '{"series":[{"name":"China","data":[103.3]}],'
+                    '"xAxis":{"categories":["y-t-d 2026"]}}'
+                ),
+            },
+        )
+        assert cbd.fetch_global_quarterly_aggregate(today=date(2026, 11, 7)) == []
+
+
 # ──────────────── 拉取全球合计（Chart 8） ────────────────
 
 
@@ -421,8 +585,8 @@ class TestFetchGlobalQuarterlyAggregate:
 # ──────────────── 拉取 H1 2026 按国家（Chart 9） ────────────────
 
 
-class TestFetchH1ByCountry:
-    """``fetch_h1_2026_by_country`` 端到端 mock + Q1/Q2 拆分。"""
+class TestFetchByCountry:
+    """``fetch_2026_by_country`` 端到端 mock + Q1/Q2 拆分。"""
 
     _REPORT_HTML = """
     <html><body>
@@ -461,7 +625,7 @@ class TestFetchH1ByCountry:
                 cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
             },
         )
-        rows = cbd.fetch_h1_2026_by_country()
+        rows = cbd.fetch_2026_by_country()
         assert len(rows) > 0
         # 至少出现 2 个国家
         isos = {r.country_iso for r in rows}
@@ -493,7 +657,7 @@ class TestFetchH1ByCountry:
                 cbd._WGC_CHART_API + "/gdt-q2-2026-x/3432": self._CHART_9_JS,
             },
         )
-        rows = cbd.fetch_h1_2026_by_country()
+        rows = cbd.fetch_2026_by_country()
         # 即使无 aggregate，0.5/0.5 等分也能产出 Q1+Q2 行
         quarters = {r.quarter for r in rows}
         assert "2026Q1" in quarters
@@ -516,7 +680,7 @@ class TestFetchH1ByCountry:
                 cbd._WGC_CHART_API + "/gdt-q2-2026-x/3431": self._CHART_8_JS,
             },
         )
-        assert cbd.fetch_h1_2026_by_country() == []
+        assert cbd.fetch_2026_by_country() == []
 
 
 # ──────────────── 手工补丁 ────────────────

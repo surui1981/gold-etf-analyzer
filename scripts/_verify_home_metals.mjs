@@ -112,6 +112,52 @@ ok("央行卡标注了数据截止季度",
   /2026Q|2025Q|数据截止/.test(cards[2].note + cards[2].badge),
   `note="${cards[2].note}" badge="${cards[2].badge}"`);
 
+// ─── 2.5 央行购金卡的口径（V0.121.4：合计行不得与各国明细相加）──
+console.log("【2.5】央行购金卡取的是「全球合计」口径");
+const num = (s) => Number(String(s || "").replace(/[^\d.\-]/g, ""));
+const cbCmp = await page.evaluate(async () => {
+  const data = await (await fetch("/api/v1/central-bank/purchases")).json();
+  const items = data.items || [];
+  const curQ = data.summary?.current_quarter;
+  const num = (s) => Number(String(s || "").replace(/[^\d.\-]/g, ""));
+  // 「既有合计行又有各国明细」的季度 = 重复计数的风险现场
+  let overcount = null;
+  for (const q of [...new Set(items.map((i) => i.quarter))].sort()) {
+    const a = items.find((i) => i.country_iso === "WGC_AGGR" && i.quarter === q);
+    const cs = items.filter((i) => i.country_iso !== "WGC_AGGR" && i.quarter === q);
+    if (!a || cs.length === 0) continue;
+    const csum = cs.reduce((s, i) => s + Number(i.tonnes_net || 0), 0);
+    if (Math.abs(csum) > 0.05) {
+      overcount = { q, agg: Number(a.tonnes_net), csum: Math.round(csum * 10) / 10 };
+      break;
+    }
+  }
+  return {
+    card: document.getElementById("metalCbValue")?.textContent.trim() || "",
+    badge: document.getElementById("metalCbBadge")?.textContent.trim() || "",
+    t12m: document.getElementById("metalCbT12m")?.textContent.trim() || "",
+    countries: document.getElementById("metalCbCountries")?.textContent.trim() || "",
+    curQ,
+    summaryCurrent: Number(data.summary?.current_quarter_total),
+    summaryT12m: Number(data.summary?.t12m_total),
+    countryCount: Number(data.summary?.country_count),
+    overcount,
+  };
+});
+ok("央行卡主值 == API 的合计口径",
+  Math.abs(num(cbCmp.card) - cbCmp.summaryCurrent) < 0.05,
+  `card="${cbCmp.card}" summary=${cbCmp.summaryCurrent}`);
+ok("央行卡角标 == 最新季度", cbCmp.badge === cbCmp.curQ,
+  `badge="${cbCmp.badge}" curQ=${cbCmp.curQ}`);
+ok("央行卡 T12M == API 的滚动 12 月合计",
+  Math.abs(num(cbCmp.t12m) - cbCmp.summaryT12m) < 0.05,
+  `card="${cbCmp.t12m}" summary=${cbCmp.summaryT12m}`);
+ok("央行卡国家数 == API 的国家数（不含全球合计行）",
+  num(cbCmp.countries) === cbCmp.countryCount,
+  `card="${cbCmp.countries}" summary=${cbCmp.countryCount}`);
+ok("存在「既有合计行又有各国明细」的季度（重复计数的风险现场）",
+  cbCmp.overcount !== null, JSON.stringify(cbCmp.overcount));
+
 // ─── 3. hero 两个 chip 的字段名回归 ───
 console.log("【3】hero 金价 / 时效 chip（V0.115.0 修的静默失效）");
 const hero = await page.evaluate(() => ({

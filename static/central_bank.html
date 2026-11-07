@@ -347,10 +347,25 @@
     },
   };
 
+  // V0.121.4：来源徽章按**真实来源**分类，不再一律显示「WGC 手工」
+  //   （合计行 / 报告明细 / 手工补丁是三回事；旧的「WGC 手工」会把
+  //     WGC 官方合计行说成手工估读）。
+  function i18nOr(key, fallback) {
+    if (window.I18n && typeof window.I18n.t === "function") {
+      const v = window.I18n.t(key);
+      if (v && v !== key) return v;
+    }
+    return fallback;
+  }
+
   function srcBadge(source) {
     if (!source) return "";
     if (source.includes("IMF")) return `<span class="src-badge src-imf">IMF IRFCL</span>`;
-    return `<span class="src-badge src-wgc">WGC 手工</span>`;
+    const wgc = (key, fallback) =>
+      `<span class="src-badge src-wgc">${escapeHtml(i18nOr(key, fallback))}</span>`;
+    if (source.includes("合计行")) return wgc("central_bank.src_aggr", "WGC 合计");
+    if (source.includes("月报估读")) return wgc("central_bank.src_manual", "WGC 手工");
+    return wgc("central_bank.src_report", "WGC 报告");
   }
 
   // V0.73.0 N+9：HTML escape helper（country name 走 i18n 字典或后端字段；防止 XSS）
@@ -404,16 +419,20 @@
         <td><b>${escapeHtml(displayName)}</b></td>
         <td>${t.country_iso}</td>
         <td class="num ${cls}">${fmt.numSign(t.tonnes_net)}</td>
-        <td>${srcBadge(t.country_iso === "UZB" || t.country_iso === "IRN" ? "WGC 手工" : "IMF IRFCL")}</td>
+        <td><span class="src-badge src-wgc">WGC GDT</span></td>
       </tr>`;
     }).join("");
   }
 
   function renderStackedChart(items) {
     // 按 quarter × country 聚合（Top 10 + Other）
+    // ⚠️ V0.121.4：**剔除全球合计行（WGC_AGGR）** —— 它是合计口径，不是国家；
+    //    混进堆叠就是「合计 + 明细」的重复计数（2026Q2：336.7 = 288.9 + 47.8）。
+    //    全球合计在上面的 KPI（截至当季 / T12M）里已经给了。
     const byQuarter = {};
     const countryTotals = {};
     for (const it of items) {
+      if (it.country_iso === "WGC_AGGR") continue;
       const q = it.quarter;
       byQuarter[q] = byQuarter[q] || {};
       byQuarter[q][it.country_iso] = (byQuarter[q][it.country_iso] || 0) + it.tonnes_net;

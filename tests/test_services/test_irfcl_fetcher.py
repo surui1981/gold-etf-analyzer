@@ -233,7 +233,11 @@ def test_global_quarterly_aggregate_with_mock(monkeypatch) -> None:
     # 2014Q1 应该是 118.8
     r2014q1 = next(r for r in rows if r.quarter == "2014Q1")
     assert r2014q1.tonnes_net == 118.8
-    assert r2014q1.source == "WGC GDT Q2 2026 合计行"
+    # source 标注的是**实际取到的那一版报告**（版本探测结果随日期变，
+    # 所以这里跟着 _report_candidates() 算，不能写死 Q2/Q3 ——
+    # 见 MEMORY「注释里的日期不是代码」）
+    _y0, _q0 = cb_data._report_candidates()[0]
+    assert r2014q1.source == f"WGC GDT {_q0.upper()} {_y0} 合计行"
     assert r2014q1.data_date == date(2014, 3, 31)
     # 2018Q4 = 178.1
     r2018q4 = next(r for r in rows if r.quarter == "2018Q4")
@@ -263,7 +267,7 @@ def test_h1_2026_by_country_with_mock(monkeypatch) -> None:
     monkeypatch.setattr(
         cb_data,
         "fetch_global_quarterly_aggregate",
-        lambda: [
+        lambda today=None: [
             QuarterlyPurchase(
                 country_iso="WGC_AGGR",
                 country_name="全球合计",
@@ -283,7 +287,7 @@ def test_h1_2026_by_country_with_mock(monkeypatch) -> None:
         ],
     )
 
-    rows = cb_data.fetch_h1_2026_by_country()
+    rows = cb_data.fetch_2026_by_country()
     # Poland: H1=82.2 → 拆分比例 120/(120+180)=0.4, 180/300=0.6
     #   Q1 = 82.2*0.4 = 32.9, Q2 = 82.2*0.6 = 49.3
     pol = [r for r in rows if r.country_iso == "POL"]

@@ -216,5 +216,129 @@ async def test_list_purchases_summary_and_top_included(db_session: AsyncSession)
     assert out.top_buyers[0].country_iso == "POL"  # 51 > 33
 
 
+# ──────────────── 全球合计行（WGC_AGGR）不得重复计数（V0.121.4） ────────────────
+
+
+def _agg_row(quarter: str, tonnes: float) -> dict:
+    return {
+        "country_iso": "WGC_AGGR",
+        "country_name": "全球合计",
+        "quarter": quarter,
+        "tonnes_net": tonnes,
+        "source": "WGC GDT Q3 2026 合计行",
+        "data_date": date(2026, 9, 30),
+    }
+
+
+async def test_summary_prefers_aggregate_over_country_sum(db_session: AsyncSession) -> None:
+    """⚠️ 核心回归：合计行与各国行**不可相加**。
+
+    实测旧口径（2026Q2）：全表求和 336.7 = 合计 288.9 + 各国 47.8 ⇒ 重复计数。
+    现在 current_quarter_total 必须取**合计行**，不是相加。
+    """
+    rows = [
+        _agg_row("2026Q2", 288.9),
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 40.0,
+            "source": "WGC GDT Q2 2026 H1",
+            "data_date": date(2026, 6, 30),
+        },
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2026Q2",
+            "tonnes_net": 7.8,
+            "source": "WGC GDT Q2 2026 H1",
+            "data_date": date(2026, 6, 30),
+        },
+    ]
+    await _seed(db_session, rows)
+
+    out = await _svc(db_session).summary()
+    # 288.9，而不是 288.9 + 40.0 + 7.8 = 336.7
+    assert out.current_quarter_total == pytest.approx(288.9)
+    # 合计行**不是国家** ⇒ country_count 不含它
+    assert out.country_count == 2
+
+
+async def test_t12m_total_prefers_aggregate(db_session: AsyncSession) -> None:
+    """T12M 合计取「合计行之和」，不取「合计 + 各国」。"""
+    rows = [
+        _agg_row("2025Q4", 209.9),
+        _agg_row("2026Q1", 57.7),
+        _agg_row("2026Q2", 296.3),
+        _agg_row("2026Q3", 321.2),
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 40.0,
+            "source": "WGC GDT Q2 2026 H1",
+            "data_date": date(2026, 6, 30),
+        },
+    ]
+    await _seed(db_session, rows)
+
+    out = await _svc(db_session).summary()
+    # 209.9 + 57.7 + 296.3 + 321.2 = 885.1（不含 CHN 的 40）
+    assert out.t12m_total == pytest.approx(885.1)
+    assert out.t12m_window == "2025Q4–2026Q3"
+    assert out.current_quarter == "2026Q3"
+    assert out.current_quarter_total == pytest.approx(321.2)
+
+
+async def test_top_buyers_excludes_aggregate_row(db_session: AsyncSession) -> None:
+    """合计行不进 Top 排名（它是合计口径，不是「买家」）。"""
+    rows = [
+        _agg_row("2026Q1", 57.7),
+        _agg_row("2026Q2", 296.3),
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2026Q2",
+            "tonnes_net": 7.8,
+            "source": "WGC GDT Q2 2026 H1",
+            "data_date": date(2026, 6, 30),
+        },
+    ]
+    await _seed(db_session, rows)
+
+    top = await _svc(db_session).top_buyers(year=2026, limit=10)
+    assert [t.country_iso for t in top] == ["POL"]
+    assert top[0].tonnes_net == pytest.approx(7.8)
+
+
+async def test_summary_falls_back_to_country_sum_without_aggregate(
+    db_session: AsyncSession,
+) -> None:
+    """没有合计行时退回各国之和（口径不同，但好过没有数）。"""
+    rows = [
+        {
+            "country_iso": "CHN",
+            "country_name": "中国",
+            "quarter": "2026Q2",
+            "tonnes_net": 33.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
+        {
+            "country_iso": "POL",
+            "country_name": "波兰",
+            "quarter": "2026Q2",
+            "tonnes_net": 51.0,
+            "source": "IMF IRFCL",
+            "data_date": date(2026, 6, 30),
+        },
+    ]
+    await _seed(db_session, rows)
+
+    out = await _svc(db_session).summary()
+    assert out.current_quarter_total == pytest.approx(84.0)
+    assert out.country_count == 2
+
+
 # 延迟导入 pytest 避免 collect 阶段命名冲突
 import pytest  # noqa: E402

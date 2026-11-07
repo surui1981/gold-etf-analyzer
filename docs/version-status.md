@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.121.3** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.121.3`）**
+> **基线：V0.121.4** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.121.4`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,8 +9,8 @@
 
 ## 一句话结论
 
-**当前版本 = 0.121.3**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.121.3`**
-（已用 systemd 重启 ⇒ 这是 V0.121.x 三批里第一次「代码 = 服务」）。
+**当前版本 = 0.121.4**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.121.4`**
+（已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.3` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.3` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.4` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.4` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.121.3   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.121.4   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 10:12 重启加载 V0.121.3）。这台机器上 8888 本来就是 systemd 托管的，
+> 16:00 重启加载 V0.121.4）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **81** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **56** 段 / 55 个唯一版本号 | 发版史的**人读**记录 |
+| `__version__` bump 史 | **82** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **57** 段 / 56 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **117** 个（**本地 117 / 远端 117** —— 一致 ✅；`v0.121.3` 已于 2026-11-07 推送） | 按版本 checkout 的锚点 |
+| git tag | **118** 个（**本地 118 / 远端 118** —— 一致 ✅；`v0.121.4` 于 2026-11-07 推送） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -84,14 +84,15 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > ⇒ 这正是 §3.3 说的那类「**内容腐化**」：**门禁只校验版本号，不校验计数**，
 > 所以计数腐化不会报红，只能靠人工复核 —— 本轮顺手订正。
 > （V0.121.2 只加了 1 段 CHANGELOG / 1 次 bump / 1 个 tag ⇒ 79→80、54 段→55 段、115→116；
-> V0.121.3 同理 ⇒ 80→81、55 段→56 段、116→117。）
+> V0.121.3 同理 ⇒ 80→81、55 段→56 段、116→117；
+> V0.121.4 同理 ⇒ 81→82、56 段→57 段、117→118。）
 >
-> **56 段 ≠ 55 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **57 段 ≠ 56 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **117 个 tag = 116 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> **118 个 tag = 117 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
 > 但确实是真实存在的发布锚点）。其中 annotated **111** / lightweight **6**。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
 > `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致；
@@ -269,7 +270,36 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.121.3（2026-11-07 发版）
+### 本轮：V0.121.4（2026-11-07 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **央行购金口径治本** —— 起因是用户诉求「世界黄金协会央行三季度购金 321 吨，写到主页」；核对时发现首页那个数（以及 `/central-bank` 的 KPI、宏观因子 `cb_gold`）**是重复计数算出来的**。根因：`central_bank_purchases` 表里同时住着**两类语义不同的行** —— **WGC 全球合计行**（含未披露国家的估算）与**各国明细行**（仅已披露国家）；旧代码算「季度合计」用的是**全表按季度求和** ⇒ **合计 + 明细** ⇒ 重复计数（2026Q2 实测：**336.7 = 合计 288.9 + 各国 47.8**）。且**从未有人质疑过它**，因为它看起来完全合理。修法：全球合计行用**独立伪 ISO `WGC_AGGR`** 标记，仓储 / 服务层一律「**有合计行就只取合计行，没有才退回各国之和**」，两者**永不相加**；`country_count` 与 `top_buyers()` **排除**合计行；前端堆叠图剔除合计行（明细表仍可见） |
+| 取数链 | ✅ **报告版本逐版回退**（WGC 每年只发 q1/q2/q3，Q4 无独立报告页 ⇒ URL 404）：`q3 → q2 → q1 → 去年 q3 …`；**图表按结构签名识别**（合计图 = series 名 `Q1..Q4` 且类目轴是年份；国别图 = series 含 `Net purchases`/`Net sales` 且类目轴不是年份）⇒ 因为同一版报告里标题都含 "central bank" 的图有好几张，**只靠标题取图不会报错、只会静默换口径**。⚠ **Q3 2026 的 Chart 11 标题写着 "reported central bank purchases" 但它是按区域** ⇒ 结构签名把它正确排除；📌 **不伪造 Q3 国别明细**（Q3 报告只有区域图 ⇒ 最新国别仍是 Q2 2026 的 H1，23 国） |
+| 🐛 **同批第二个缺陷** | ✅ **手工补丁覆盖了 WGC 自己的国别值** —— upsert 是「同键后写覆盖」，手工补丁排在最后 ⇒ 盖掉 WGC 数据。实测 UZB 2026 H1：WGC = **41.4 吨**，手工估读 = **4 吨**（差 10 倍）。修法：写入顺序改为「**全球合计 → 手工补丁 → 国别明细**」⇒ WGC 有数时以 WGC 为准 |
+| 数值更正 | ✅ **2026Q3 = 321.2 吨**（WGC GDT Q3 2026 合计行）｜滚动 12 月 **842.6 → 885.1**（旧窗口 2025Q3–2026Q2，同窗口真值 **790.2**；新窗口 2025Q4–2026Q3 = 209.9 + 57.7 + 296.3 + 321.2）｜国家数 **25 → 24**（旧口径把「全球合计」当成一个国家）｜宏观因子 `cb_gold` 取 `t12m_total` ⇒ 随本次修正；`STATIC_REF` 兜底常量 **1019.0 → 885.1**（它此前也在撒谎） |
+| `__version__` | ✅ 已 bump 到 `0.121.4`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移**（只是多写一种 `country_iso` 的行）⇒ 回滚代价低 |
+| 静态资源 | ⚠ **改了 `static/home.js` + `static/central_bank.html` + 3 语字典** ⇒ 按 V0.100.1 **必须** bump `sw.js` 的 `VERSION` 到 `v0.121.4`（已做） |
+| 生产库写入 | ✅ **写前已备份**：`data/backups/gold_etf.v0121.4.20261107_155450.db`；ETL 导入 **149 行**（合计行 51 + 国别 H1 46 + 月报估读 52；其中 **2 行 UZB 被 WGC 覆盖** ⇒ 手工补丁不再压过 WGC，正是本次修复的效果） |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `0.121.4` |
+| 线上实测 | ✅ `192.168.0.204:8888`（服务已加载 V0.121.4）：`/central-bank/purchases` → `current_quarter = 2026Q3`、`current_quarter_total = **321.2**`（旧 336.7）、`t12m_total = **885.1**`（旧 842.6，同窗口真值 790.2）、`country_count = **24**`（旧 25）、`top_buyers[0] = POL 82.2`（合计行不在排名里）；首页卡 3「央行购金变化」主值 **+321.2**，副标题「数据截止 2026Q3 · 来源：世界黄金协会 GDT 全球合计」 |
+| 测试 | ✅ `pytest tests/test_services/test_central_bank.py tests/test_repositories/test_central_bank_data.py tests/test_services/test_irfcl_fetcher.py` → **102 passed**；`check_pwa_assets` / `check_i18n_keys` / `check_static_js` 全绿 |
+| 门禁 | ✅ 新增 `scripts/_verify_central_bank_aggregate.mjs`（**18 条**）；扩 `scripts/_verify_home_metals.mjs`（+6 条）⇒ 合计 **39 passed** / **18 passed** |
+| git tag | ⏳ `v0.121.4`（annotated）—— **本轮提交后推送**，推送状态见下方「推送状态（如实记录）」 |
+
+> **反向验证**（撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿），共 **6 处**：
+> 撤 `summary()` 的合计优先 ⇒ `test_summary_prefers_aggregate_over_country_sum` 变红；
+> 撤 `t12m_total()` 的合计优先 ⇒ `test_t12m_total_prefers_aggregate` 变红；
+> 撤 `top_buyers()` 的跳过 ⇒ `test_top_buyers_excludes_aggregate_row` 变红；
+> 放宽国别图结构签名 ⇒ `test_regional_chart_is_not_country_level` 变红；
+> 撤堆叠图剔除合计行 ⇒ `_verify_central_bank_aggregate.mjs` 退出码 1；
+> 撤首页卡读 `WGC_AGGR` ⇒ `_verify_home_metals.mjs` 退出码 1。
+> ⚠ **后两条必须重启服务**才测得到（浏览器门禁打的是**运行中的服务**）——
+> 第一次做反向验证时因为**没重启**而「假绿」，这本身又是一次
+> 「**门禁读到还没准备好的东西**」的复现。
+
+### 上一轮：V0.121.3（2026-11-07 发版）
 
 | 项 | 状态 |
 |---|---|
