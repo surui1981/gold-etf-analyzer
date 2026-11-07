@@ -17,6 +17,7 @@
 | 改代码、加功能 | [development.md](development.md) |
 | 理解模块划分与数据源 | [architecture.md](architecture.md) |
 | 查接口字段与返回结构 | [api-reference.md](api-reference.md) |
+| **弄懂综合趋势评估指数怎么算的** | [composite-trend-index.md](composite-trend-index.md) |
 | **调评估参数 / 加新参数** | [parameter-evaluation.md](parameter-evaluation.md) |
 | **调权重（前端可改的那部分）** | 应用内 `/weights` 页 → [api-reference.md](api-reference.md) 的 settings 段 |
 | **知道下一步要做什么** | [roadmap.md](roadmap.md) ← **唯一活跃路线** |
@@ -41,6 +42,7 @@ docs/
 │   ├── development.md           怎么开发
 │   ├── deployment.md            怎么部署
 │   ├── parameter-evaluation.md  评估参数清单与调参建议
+│   ├── composite-trend-index.md 综合趋势评估指数：计算方式与主要参考
 │   ├── version-status.md        应用版本状态（单一真源：现在到底是哪个版本）
 │   └── roadmap.md               路线图（唯一权威的「下一步」，逐条带实测判据）
 │
@@ -74,6 +76,7 @@ docs/
 | `roadmap.md` | 活跃 | V0.120.5 重写：合并 6 份旧规划文档并逐条实测复核；V0.121.0 更新为 3 批发版编排（基线 V0.121.0） |
 | `releases/milestones/` | 归档 | 7 份里程碑文档，覆盖 V0.11 → 当前（M0–M5 + **M6 可信度修复 V0.121**） |
 | `releases/index.md` | 活跃 | 「详情」列现在指向**该能力所属里程碑**（不再是逐版文件） |
+| `composite-trend-index.md` | 活跃 | 2026-11-08 新建：综合趋势评估指数的四面加权公式、5+11+6 个因子的打分公式、数据源总表、7 条口径纪律与完整算例 |
 | `parameter-evaluation.md` | 活跃 | 参数清单完整；建议值章节的基线是 V0.77.2，重估时需按当前代码复核 |
 | `version-status.md` | 活跃 | **发版必更**（`check_version_sync.py` 校验它声明的基线 == 应用版本） |
 
