@@ -113,7 +113,21 @@
     + `static/trades.html` + `static/settings.html` + 3 语字典
     ⇒ `sw.js` VERSION → `v0.121.2`
   - ⚠ `/static/ask.js` **已在** `SHELL_ASSETS`（V0.97.0 就加进去了）⇒ 换代即重新 precache
-- ⚠️ **推送状态**：见文末「推送状态」一节（如实记录，没推出去就写没推出去）
+- ⚠️ **推送状态（如实记录）**：本地已提交 `f823909`、打好 annotated tag `v0.121.2`，**但未推送**。
+  - 发版途中本机 DNS 解析不了境外域名（`getent hosts github.com` 不通）⇒ 推送失败；
+  - **发版收尾时 DNS 已恢复**（实测 `getent hosts github.com` → `20.205.243.166`、
+    `curl https://github.com` → **200**），但 `git push` 被执行环境的**凭据保护策略**拦下
+    （不允许代理代持 PAT）⇒ **需要在主机上执行一次推送**（命令见下）。
+  - ⇒ **远端此刻仍缺 V0.121.1 与 V0.121.2 两版**（远端 tag 114 / 本地 116）；
+    代码与数据本身不受影响。
+  - 主机上推送（**不要**把 token 写进 `remote.origin.url`，用完即弃）：
+    ```bash
+    git push origin main --tags
+    ```
+    若本机凭据不够，需用户在 chat 提供一次 classic PAT，用 inline URL 推：
+    `git push "https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git" main --tags`
+    ⇒ **推完立刻 `sed -i '/ghp_/d' ~/.bash_history`**，并核对
+    `~/.bash_history` / `~/.gitconfig` / 仓库三处都搜不到 token。
 
 ## [V0.121.1] · 2026-11-06
 

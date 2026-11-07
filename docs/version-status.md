@@ -95,11 +95,14 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 本版按 `git for-each-ref --format='%(objecttype)'` **实测**改写。）
 >
 > ⚠️ **V0.121.1 与 V0.121.2 的 tag 都尚未推送** —— 本地已有
-> （`v0.121.1`，annotated，指向 `a3153db`；`v0.121.2`，annotated，指向本轮发版 commit），
-> 但**远端仍只有 114 个**。原因是**本机 DNS 解析不了境外域名**
-> （路由器 `192.168.0.1` 只解析国内域名；`ping 8.8.8.8` 通、`getent hosts github.com` 不通）
-> ⇒ `git push` 根本连不上 GitHub。
-> ⇒ **本地与远端此刻不一致**，恢复网络后需补推 `main` + `v0.121.1` + `v0.121.2`。
+> （`v0.121.1`，annotated，指向 `a3153db`；`v0.121.2`，annotated，指向 `f823909`），
+> 但**远端仍只有 114 个**。
+> - 起因是**本机 DNS 解析不了境外域名**（路由器 `192.168.0.1` 只解析国内域名；
+>   `ping 8.8.8.8` 通、`getent hosts github.com` 不通）⇒ `git push` 连不上 GitHub；
+> - **2026-11-07 收尾时 DNS 已恢复**（实测 `getent hosts github.com` → `20.205.243.166`、
+>   `curl https://github.com` → **200**），但 `git push` 被执行环境的**凭据保护策略**拦下
+>   （不允许代理代持 PAT）⇒ **仍需用户在主机上执行一次推送**。
+> ⇒ **本地与远端此刻不一致**，需补推 `main` + `v0.121.1` + `v0.121.2`。
 > ⇒ 这不是「推送了但失败」，而是「**没发出去**」—— 按本仓库「诚实优先」的规矩，如实记录。
 >
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
@@ -245,7 +248,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` | ✅ 已 bump 到 `0.121.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | 迁移 | ✅ **零 schema 变更、零 alembic 迁移** ⇒ 回滚代价低 |
 | 生产库写入 | ⚠️ **本批未写生产库**（B1 的回填只发生在**跑回测时**按需触发，线上实测触发的是「新增行」，不改动既有行；P0-7 的组权重实测改过又**已还原**为 0.50/0.30/0.20） |
-| git tag | ⚠️ `v0.121.2`（annotated）**已在本地打好，但未推送** —— 本机 DNS 解析不了境外域名 ⇒ `git push` 连不上 GitHub（见 §二注）。**远端仍缺 V0.121.1 与 V0.121.2 两版** |
+| git tag | ⚠️ `v0.121.2`（annotated，指向 `f823909`）**已在本地打好，但未推送** —— 发版途中本机 DNS 解析不了境外域名；收尾时 DNS 已恢复，但 `git push` 被执行环境的**凭据保护策略**拦下（需用户在主机上推一次，见 §二注）。**远端仍缺 V0.121.1 与 V0.121.2 两版** |
 | 线上实测 | ⚠️ **8888 未重启**（本轮的重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`） |
 | 浏览器门禁 | ✅ 新增 `scripts/_verify_ask_tokens.mjs`（**6 条断言**，假 SSE 驱动 ⇒ 不调真模型、不花 token；`LIVE=1` 可打真实模型跑整条链）；新增 `scripts/_verify_weights_group.mjs`（组权重滑块态 + 组权重真的影响结果）；新增 `scripts/check_freshness_consistency.py`（P0-6 这类缺陷以后会自己变红） |
 | 测试 | ✅ 目标测试文件全绿（详见 milestone 文档的实测表）；`ruff check src tests scripts` → All checks passed |
