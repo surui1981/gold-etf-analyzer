@@ -4,6 +4,59 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.121.3] · 2026-11-07
+
+`宽表桶聚合三处各写一份 · 两处漏填「上涨/下跌/方向已知」⇒ API 返回 0` — hotfix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)
+
+> V0.121.2 发版后的**线上复测**发现：P0-2（命中分析「上涨天数」恒为 0）**没有完全修好**。
+> 本版是那一版的收尾。**零 schema 变更、零迁移** ⇒ 回滚代价低。
+
+- 🐛 **桶聚合散落三处，后两处漏填**（P0-2 收尾）
+  - 根因：`summary()` / `hit_stats()` / `hit_stats_all_horizons()` **各写了一份**桶聚合。
+    V0.121.1 只给 `summary()` 填了 `up_days` / `down_days` / `known_days`，
+    `hit_stats*` 两份**漏填** ⇒ 同一个 `ScoringSummaryBucket` schema
+    在 `/scoring/summary` 有值、在 `/scoring/hit-stats` 与 `/scoring/hit-stats-all` 恒为 **0**
+  - ⚠ **0 与 null 语义不同**：前端只对 `known_days == null` 兜底「—」，
+    0 会被如实渲染成「上涨 0 · 下跌 0」—— 正是 P0-2 要消灭的那种假结论
+  - 修法：抽出 `_bucket_direction_stats()`，三处统一走它（口径只剩一份）
+  - 📉 反向验证：分别撤 `hit_stats` 与 `hit_stats_all_horizons` 的三字段
+    ⇒ **各自对应的测试变红、另一条仍绿**（证明断言不是恒真）
+- 🗄️ **宽表按补齐后的价格日历重算**（数据回填，零代码改动）
+  - 起因：B1 把价格日历追到 2026-11-06 之后，但 10-15 之后的宽表行是
+    **日历补齐前**算的 ⇒ `price_direction` 为空；10-13/10-14 这类行连 T+1 结果都算不出
+  - 修法：`scripts/backfill_scoring_wide.py` 重跑 2026-09-07 ~ 2026-11-07（62 行，幂等）
+  - ✅ 效果（回填前 → 回填后，**用备份库逐项对拍**）：
+    | 指标 | 回填前 | 回填后 |
+    |---|---|---|
+    | `price_direction` 非空 | 28 | **45** |
+    | `hit_t1` 非空 | 13 | **22** |
+    | `hit_t5` 非空 | 11 | **21** |
+    | `gold_ny_close` 非空 | 28 | **45** |
+    | 总行数 | 62 | 62（未增删） |
+  - ✅ `price_direction` 剩余 17 行空值**全部是周六/周日**（无交易日 ⇒ 方向未知，正确留空）；
+    `hit_t1` 剩余空值只剩三类：**非交易日 / 无消息方向（不该判定）/ 未来未到**
+- ✅ **线上实测**（`192.168.0.204:8888`，服务已重启到 V0.121.3）：
+  | 端点 | 修复前 | 修复后 |
+  |---|---|---|
+  | `/scoring/hit-stats-all` t0·2026-10 | 涨 0 · 跌 0 · 已知 0 | **涨 4 · 跌 6 · 已知 10** |
+  | `/scoring/hit-stats` t1·2026-09 | 涨 0 · 跌 0 · 已知 0 | **涨 5 · 跌 6 · 已知 11** |
+  | `/scoring/summary` 2026-10 | 涨 9 · 跌 13 · 已知 22 | 同左（三处口径已一致） |
+- 📌 **本版只改了 `static/sw.js` 的 `VERSION`**，未改任何静态资源内容
+  ⇒ 无需清 SW 缓存内容，但仍按 V0.100.1 铁律换代
+- 📌 **服务已用 systemd 重启**（`gold-etf-analyzer.service`）⇒ 本版修复**已生效**，
+  这是 V0.121.x 三批里第一次「代码 = 服务」
+- ⚠️ **推送状态（如实记录）：本地已提交 + 打好 annotated tag `v0.121.3`，但尚未推送到 GitHub**
+  - 两个**独立**的阻塞点同时成立：
+    ① **网络层**：本机 DNS 解析不了 `github.com` / `pypi.org`（路由器 `192.168.0.1`
+       只解析国内域名，`baidu.com` 正常、`github.com` 超时）；**沙箱开/关表现一致**
+       ⇒ 是上游网络过滤，不是本地工具行为。裸 IP（`curl --resolve`）也只在极短窗口内
+       通过一次，随后 5 个 IP × 3 轮全部超时；SSH 22/443 均不通
+    ② **凭据层**：gh keyring 里只有 `github_pat_` **fine-grained** PAT —— 按已验证结论
+       它**无写权限**；上一轮那枚 classic PAT 已在 chat 里明文出现 ⇒ 已被要求轮换
+  - ⇒ **推送需用户侧完成**（恢复网络 + 提供 classic PAT），命令见
+    [docs/version-status.md §五](docs/version-status.md)
+  - 已备 `scripts/_push_retry.sh`（**不入版本库**）做 8 轮退避重试 ⇒ 仍未推上去
+
 ## [V0.121.2] · 2026-11-07
 
 `诚实性与数据链批次：价格日历不追最新 · 组权重滑块是装饰 · 三页误导性时效调用 · AI token 永远不显示` — fix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)

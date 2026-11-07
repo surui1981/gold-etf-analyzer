@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.121.2** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，服务未重启（见下）**
+> **基线：V0.121.3** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.121.3`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,9 +9,8 @@
 
 ## 一句话结论
 
-**当前版本 = 0.121.2**，代码里 4 处版本号完全一致。
-⚠ **运行中的服务仍报 `0.121.1`** —— 8888 的重启在本轮被环境策略拦下（不能杀不是本会话
-创建的进程）⇒ **代码已就位、服务未加载**。恢复办法见本文件 §三。
+**当前版本 = 0.121.3**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.121.3`**
+（已用 systemd 重启 ⇒ 这是 V0.121.x 三批里第一次「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -20,32 +19,37 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.2` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.2` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.3` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.3` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.121.1   ← ⚠ 服务还没重启，仍是上一版
+GET /openapi.json  →  info.version = 0.121.3   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
-> ⚠ **代码已 bump 到 `0.121.2`，但 8888 上跑的还是 `0.121.1`** ——
-> 本轮的重启命令被环境策略拦下（不能 `kill` 非本会话创建的进程），
-> **不是「重启了但失败」**。用户在主机上执行一次即可：
+> ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
+> 10:12 重启加载 V0.121.3）。这台机器上 8888 本来就是 systemd 托管的，
+> **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
-kill 26452                       # 停掉旧的 8888 uvicorn
-cd /home/surui/gold-etf-analyzer
-setsid env PYTHONPATH=src:. uvicorn app.main:app --host 0.0.0.0 --port 8888 \
-  > /tmp/gold-8888.log 2>&1 < /dev/null &
+sudo systemctl restart gold-etf-analyzer.service
 sleep 12 && curl -s http://192.168.0.204:8888/openapi.json | grep -o '"version":"[^"]*"'
 ```
 
-> ⚠ **必须 `setsid` 脱离会话**（否则会话结束进程就没了 ⇒ 用户报「加载失败」）；
-> **必须 `PYTHONPATH=src:.`**；**不要用 `pkill -f`**（会连别的进程一起杀）。
+> 📌 unit 文件：`/etc/systemd/system/gold-etf-analyzer.service`
+> （`WorkingDirectory=/home/surui/gold-etf-analyzer`、
+> `EnvironmentFile=…/.env.prod`、`Environment=PYTHONPATH=…/src`、
+> `ExecStart=…/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8888 --no-access-log`、
+> `Restart=on-failure`）。
+> ⚠ **用 systemd 而不是手动起进程**：手动起的实例不会跟着 systemd 走
+> （机器重启后就没了），而且会和 systemd 的实例**抢 8888 端口**。
+> ⚠ 旧的「`kill <pid>` + `setsid`」写法仍可用于**临时**实例，
+> 但**不要**用它替代 systemd（`setsid` 脱离会话是为了会话结束后进程不死 ——
+> 这在 systemd 托管下是多余的）。
 
 ### 为什么这 4 处必须一样
 
@@ -69,25 +73,26 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **80** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **55** 段 / 54 个唯一版本号 | 发版史的**人读**记录 |
+| `__version__` bump 史 | **81** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **56** 段 / 55 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **116** 个（**本地 == 远端**；含 `v0.121.1` / `v0.121.2`） | 按版本 checkout 的锚点 |
+| git tag | **117** 个（**本地 117 / 远端 116** —— 差 1 个是 `v0.121.3`，**尚未推送**） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
 > （实测 bump 史 78 而非 74、CHANGELOG 53 段而非 49、releases 已合并为 7 份而非 58 份）。
 > ⇒ 这正是 §3.3 说的那类「**内容腐化**」：**门禁只校验版本号，不校验计数**，
 > 所以计数腐化不会报红，只能靠人工复核 —— 本轮顺手订正。
-> （V0.121.2 只加了 1 段 CHANGELOG / 1 次 bump / 1 个 tag ⇒ 79→80、54 段→55 段、115→116。）
+> （V0.121.2 只加了 1 段 CHANGELOG / 1 次 bump / 1 个 tag ⇒ 79→80、54 段→55 段、115→116；
+> V0.121.3 同理 ⇒ 80→81、55 段→56 段、116→117。）
 >
-> **55 段 ≠ 54 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **56 段 ≠ 55 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **116 个 tag = 115 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
-> 但确实是真实存在的发布锚点）。其中 annotated **110** / lightweight **6**。
+> **117 个 tag = 116 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> 但确实是真实存在的发布锚点）。其中 annotated **111** / lightweight **6**。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
 > `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致；
 > 本轮新增的 2 个也已逐一比对：`v0.121.1` → `a3153db`、`v0.121.2` → `f823909`，**均一致**。）
@@ -106,11 +111,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 >   `refs/heads/main` = `eec4ddd` = 本地 HEAD。
 > - ⚠️ 本枚 PAT 在 chat 里明文出现过 ⇒ **建议用完即轮换**。
 >
+> ⚠️ **V0.121.3 尚未推送**（本地已 commit + 打 annotated tag `v0.121.3`，`tag` 与 `HEAD` 同指一个 commit）。
+> **两个独立的原因同时成立**，任何一个单独修好都不够：
+>
+> | # | 阻塞点 | 本轮实测证据 |
+> |---|---|---|
+> | ① | **网络到 GitHub 不可达**（不是 Claude Code 沙箱挡的） | 路由器 DNS `192.168.0.1` 解析 `baidu.com` **成功**、解析 `github.com` / `pypi.org` **超时**；沙箱开与关**表现一致**（⇒ 是上游网络过滤，与沙箱无关）。裸 IP 也不行：`curl --resolve github.com:443:20.205.243.166` 只有极短窗口内拿到过一次 **HTTP 200**，随后 5 个 IP × 3 轮全部超时；`git push` 报「连接被对方重置」；SSH 22 / 443 均不通 |
+> | ② | **没有 classic PAT** | gh keyring 里只有 `github_pat_` **fine-grained** PAT（`gh auth status` → `surui1981`）—— 按已验证的结论它**无写权限**（`repo.permissions` 字段会骗人），只有 classic PAT 能 push。上一轮那枚 classic PAT 已在 chat 里明文出现 ⇒ **已被要求轮换**，本轮没有新的一枚 |
+>
+> ⇒ **推送需用户侧完成**：恢复网络 + 提供一枚 classic PAT，命令见本文件 §五。
+> 本轮已备好 `scripts/_push_retry.sh`（**不入版本库**）做 8 轮退避重试，**仍未推上去**。
+>
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
 > 必须把 `^{}` 行去掉再数，否则 114 个 tag 会数成 222 行左右（实测 `ls-remote --tags` 原始行数
 > = 220 + 2 = 222）。**本地与远端的 116 个同理**（`v0.121.1` 与 `v0.121.2` 都是 annotated
 > ⇒ 原始行数已从 222 变成 **222 + 2 + 2 = 226**，实测 `ls-remote --tags` 原始行数 **226**，与推算一致）。
+> （`v0.121.3` 也是 annotated ⇒ 本地 `ls-remote --tags` 原始行数将为 **228**。）
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -240,7 +257,26 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.121.2（2026-11-07 发版）
+### 本轮：V0.121.3（2026-11-07 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **P0-2 收尾 hotfix** —— V0.121.2 发版后的**线上复测**发现「命中分析上涨天数」**没修干净**：`ScoringSummaryBucket` 这一个 schema 被**三个端点**共用（`/scoring/summary` / `/scoring/hit-stats` / `/scoring/hit-stats-all`），但桶聚合被**抄了三份**，V0.121.1 只改了 `summary()` 那一份 ⇒ 另外两份**漏填** `up_days` / `down_days` / `known_days` ⇒ Pydantic 用 schema 默认值 `0` 兜上 ⇒ **API 返回 0**。⚠ **0 与 null 语义不同**：前端只对 `known_days == null` 兜底「—」，`0` 会被**如实渲染**成「上涨 0 · 下跌 0」—— 正是 P0-2 要消灭的那种假结论。修法：抽出 `_bucket_direction_stats(rows) -> (up, down, known)`，**三处统一走它**（口径只剩一份，改一处即改三处）。**零 schema 变更、零迁移** |
+| 数据回填 | ✅ 宽表按**补齐后**的价格日历重算（`scripts/backfill_scoring_wide.py --from 2026-09-07 --to 2026-11-07`，62 行、幂等）：`price_direction` 非空 **28 → 45** / `hit_t1` 非空 **13 → 22** / `hit_t5` 非空 **11 → 21** / `gold_ny_close` 非空 **28 → 45** / 总行数 62（未增删）。**前后用备份库逐项对拍**（不是凭印象）。⚠ 回填前已备份：`data/backups/gold_etf.v0121.3.20261107_100741.db` |
+| 剩余空值 | ✅ **都是诚实的**：`price_direction` 剩余 17 行**全是周六/周日**（无交易日 ⇒ 方向未知）；`hit_t1` 剩余空值只剩三类 —— **非交易日 / 无消息方向（不该判定）/ 未来未到** |
+| `__version__` | ✅ 已 bump 到 `0.121.3`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 静态资源 | ⚠ **本版只改了 `static/sw.js` 的 `VERSION`**（未改任何 `static/*.html|js|css` 内容）⇒ 按 V0.100.1 仍换代，但**无需清 SW 缓存内容** |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `0.121.3`，**这是 V0.121.x 三批里第一次「代码 = 服务」** |
+| 线上实测 | ✅ `192.168.0.204:8888`（服务已加载 V0.121.3）：`/scoring/hit-stats-all` t0·2026-10 **涨 0 · 跌 0 · 已知 0 → 涨 4 · 跌 6 · 已知 10**；`/scoring/hit-stats` t1·2026-09 **涨 0 · 跌 0 · 已知 0 → 涨 5 · 跌 6 · 已知 11**；`/scoring/summary` 2026-10 涨 9 · 跌 13 · 已知 22（**三处口径已一致**） |
+| 测试 | ✅ `pytest tests/test_services/test_scoring_wide.py` → **26 passed**；`ruff check src tests scripts` → All checks passed |
+| git tag | ⚠ `v0.121.3`（annotated）**本地已打，尚未推送** —— 本轮会话没有可用的 classic PAT（gh 的 fine-grained PAT 无写权限）⇒ 推送需用户再提供一次 |
+
+> **反向验证**（撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿）：
+> 撤 `hit_stats()` 桶的三字段 ⇒ **2 条测试变红、另 1 条仍绿**（证明断言不是恒真）；
+> 撤 `hit_stats_all_horizons()` 桶的三字段 ⇒ **另 2 条测试变红**；
+> 恢复 ⇒ **26 passed**。
+
+### 上一轮：V0.121.2（2026-11-07 发版）
 
 | 项 | 状态 |
 |---|---|
@@ -250,10 +286,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 迁移 | ✅ **零 schema 变更、零 alembic 迁移** ⇒ 回滚代价低 |
 | 生产库写入 | ⚠️ **本批未写生产库**（B1 的回填只发生在**跑回测时**按需触发，线上实测触发的是「新增行」，不改动既有行；P0-7 的组权重实测改过又**已还原**为 0.50/0.30/0.20） |
 | git tag | ✅ `v0.121.2`（annotated，指向 `f823909`）**已推送**；`v0.121.1`（annotated，指向 `a3153db`）**已推送** —— 远端 tag 计数 **114 → 116**，与本地一致（`ls-remote` 去掉 `^{}` 行后实测） |
-| 线上实测 | ⚠️ **8888 未重启**（本轮的重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`） |
+| 线上实测 | ⚠️ **本批当时 8888 未重启**（重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`）。✅ **后续已在 V0.121.3 轮次用 systemd 重启 ⇒ 本批修复现已生效** |
 | 浏览器门禁 | ✅ 新增 `scripts/_verify_ask_tokens.mjs`（**6 条断言**，假 SSE 驱动 ⇒ 不调真模型、不花 token；`LIVE=1` 可打真实模型跑整条链）；新增 `scripts/_verify_weights_group.mjs`（组权重滑块态 + 组权重真的影响结果）；新增 `scripts/check_freshness_consistency.py`（P0-6 这类缺陷以后会自己变红） |
 | 测试 | ✅ 目标测试文件全绿（详见 milestone 文档的实测表）；`ruff check src tests scripts` → All checks passed |
-| ⚠️ **留给用户的 3 步** | ① **重启 8888**（命令见本文件 §一）—— 否则线上跑的还是 `0.121.1`；② `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；③ 归档本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」）—— 走 `DELETE /api/v1/ai/conversations/{id}` 是软删除，具体 4 个 id 见 [M6 里程碑文档](releases/milestones/m6-truthful-signals-v0.121.md) §V0.121.2 |
+| ⚠️ **留给用户的 3 步** | ① ~~**重启 8888**~~ ⇒ ✅ **已完成**（V0.121.3 轮次用 systemd 重启，服务已加载 `0.121.3`）；② `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；③ 归档本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」）—— 走 `DELETE /api/v1/ai/conversations/{id}` 是软删除，具体 4 个 id 见 [M6 里程碑文档](releases/milestones/m6-truthful-signals-v0.121.md) §V0.121.2 |
 
 > **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）：
 > B1 撤掉调用点的追平逻辑 ⇒ **新测试变红** ⇒ 恢复；
@@ -586,6 +622,31 @@ python3 scripts/_reverse_check_links_scope.py   # 7 个用例，含 2 个防误�
 git checkout v0.116.2        # tag 锚点（checkout 后记得 git checkout main 回来）
 git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
 ```
+
+### 推送（**V0.121.3 尚未推送，用户侧执行**）
+
+```bash
+cd /home/surui/gold-etf-analyzer
+
+# 前置条件（两个都要满足）：
+#   ① 网络能解析并连上 github.com：getent hosts github.com && curl -sI https://github.com | head -1
+#   ② 一枚 **classic PAT**（gh keyring 里那枚 fine-grained 的没有写权限）
+
+export GH_TOKEN='<classic PAT>'      # token 走环境变量 → 不进 argv、不落 remote URL
+git -c credential.helper='!gh auth git-credential' push origin main --tags
+unset GH_TOKEN
+
+# ✅ 必做：清掉可能被记进 history 的 token
+sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history
+grep -c 'ghp_' ~/.bash_history ~/.gitconfig   # 两个都应为 0
+
+# 推送后核对远端
+git ls-remote --tags origin | grep -v '\^{}' | wc -l   # 期望 117（去掉 ^{} 行）
+git ls-remote origin refs/heads/main                   # 期望 = 本地 git rev-parse HEAD
+```
+
+> ⚠️ `sed` 之前**不要** `cp ~/.bash_history /tmp/x.bak` —— 那会造出第二份 token 副本；
+> 要备份就 `shred -u` 掉。
 
 ---
 

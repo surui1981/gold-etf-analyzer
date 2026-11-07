@@ -72,6 +72,29 @@ def _price_direction_of(change_pct: float) -> str:
     return "flat"
 
 
+def _bucket_direction_stats(rows: list[ScoringDailyWide]) -> tuple[int, int, int]:
+    """统计桶内「上涨 / 下跌 / 方向已知」的天数。
+
+    ⚠ **V0.121.3**：桶聚合散落在**三处**（``summary`` / ``hit_stats`` /
+    ``hit_stats_all_horizons``），此前各写一份 —— 其中 ``hit_stats*`` 两份
+    **漏填**这三个字段 ⇒ API 返回 ``up_days=0`` / ``known_days=0``。
+    而 0 与 null **语义不同**：前端对 ``known_days == null`` 有「—」兜底，
+    0 会被如实渲染成「上涨 0 · 下跌 0」—— 正是 P0-2 要消灭的那种假结论。
+    ⇒ 三处统一走本函数，口径只有一份。
+
+    Args:
+        rows: 桶内的宽表行（同一 ``ScoringDailyWide`` 列表）。
+
+    Returns:
+        ``(up_days, down_days, known_days)``；``known_days`` = 方向已知的天数
+        （当日有 ``gold_price_daily`` 行 ⇒ ``price_direction`` 非 NULL）。
+    """
+    up = sum(1 for r in rows if r.price_direction == "up")
+    down = sum(1 for r in rows if r.price_direction == "down")
+    known = sum(1 for r in rows if r.price_direction is not None)
+    return up, down, known
+
+
 class ScoringWideService:
     """打分数据宽表服务：ETL + 4 聚合查询。"""
 
@@ -340,13 +363,8 @@ class ScoringWideService:
             hit_t1 = [r.hit_t1 for r in grp if r.hit_t1 is not None]
             hit_t3 = [r.hit_t3 for r in grp if r.hit_t3 is not None]
             hit_t5 = [r.hit_t5 for r in grp if r.hit_t5 is not None]
-            up = sum(1 for r in grp if r.price_direction == "up")
-            down = sum(1 for r in grp if r.price_direction == "down")
-            # ⚠ V0.121.1（P0-2）：``known_days`` = 方向**已知**的天数
-            # （当日有 gold_price_daily 行 ⇒ price_direction 非 NULL）。
-            # 没有它，用户看到「上涨 0 · 下跌 0」却不知道是「真没涨没跌」
-            # 还是「压根没数据」—— 后者曾让「上涨天数恒为 0」看起来像结论。
-            known = sum(1 for r in grp if r.price_direction is not None)
+            # ⚠ V0.121.3：口径统一走 _bucket_direction_stats（三处桶聚合共用一份）
+            up, down, known = _bucket_direction_stats(grp)
             # V0.95.0：桶内最后一日的 NY 金美元/盎司收盘价（period-end snapshot）。
             # day 桶内 1 行 → 当日收盘；week/month 桶 → 桶内最末日收盘。
             # 任一行缺数据 → None（前端显示 "—"）。
@@ -455,6 +473,9 @@ class ScoringWideService:
             grp = buckets_map[key]
             hits = [getattr(r, hit_col) for r in grp]
             rate = round(sum(hits) / len(hits), 3) if hits else None
+            # ⚠ V0.121.3：补上「上涨/下跌/方向已知」—— 本函数此前漏填，
+            # 同一个 ScoringSummaryBucket schema 在 /summary 有值、在 /hit-stats 是 0。
+            up_days, down_days, known_days = _bucket_direction_stats(grp)
             by_month.append(
                 ScoringSummaryBucket(
                     period=key,
@@ -464,6 +485,9 @@ class ScoringWideService:
                     hit_rate_t1=rate if horizon == "t1" else None,
                     hit_rate_t3=rate if horizon == "t3" else None,
                     hit_rate_t5=rate if horizon == "t5" else None,
+                    up_days=up_days,
+                    down_days=down_days,
+                    known_days=known_days,
                 )
             )
 
@@ -533,6 +557,8 @@ class ScoringWideService:
                 grp = buckets_map[key]
                 hits = [getattr(r, hit_col) for r in grp]
                 rate = round(sum(hits) / len(hits), 3) if hits else None
+                # ⚠ V0.121.3：同 _bucket_direction_stats（与 /summary、/hit-stats 同口径）
+                up_days, down_days, known_days = _bucket_direction_stats(grp)
                 by_month.append(
                     ScoringSummaryBucket(
                         period=key,
@@ -541,6 +567,9 @@ class ScoringWideService:
                         hit_rate_t1=rate if horizon == "t1" else None,
                         hit_rate_t3=rate if horizon == "t3" else None,
                         hit_rate_t5=rate if horizon == "t5" else None,
+                        up_days=up_days,
+                        down_days=down_days,
+                        known_days=known_days,
                     )
                 )
             by_horizon[horizon] = ScoringHitStatsAllHorizon(

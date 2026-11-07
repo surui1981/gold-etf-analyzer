@@ -585,3 +585,97 @@ class TestV01211SummaryKnownDays:
         assert b.up_days == 1
         assert b.down_days == 1
         assert b.known_days == 3, "known_days 未反映「方向已知的天数」"
+
+
+class TestV01213HitStatsDirectionDays:
+    """V0.121.3：``hit_stats`` / ``hit_stats_all_horizons`` 的桶补上上涨/下跌/已知天数。
+
+    根因：桶聚合散落**三处**（``summary`` / ``hit_stats`` /
+    ``hit_stats_all_horizons``），后两处**漏填**这三个字段 ⇒ 同一个
+    ``ScoringSummaryBucket`` schema 在 ``/scoring/summary`` 有值、在
+    ``/scoring/hit-stats`` 返回 0 —— 而 0 与 null **语义不同**：
+    前端只对 ``known_days == null`` 兜底「—」，0 会被如实渲染成
+    「上涨 0 · 下跌 0」，正是 P0-2 要消灭的那种假结论。
+    """
+
+    async def _seed(self, db_session: AsyncSession) -> None:
+        """铺 4 天：up / down / flat 各 1 天 + 1 天**没有价格行**（方向未知）。
+
+        gold 行：10-05(+1.0) / 10-06(-0.5) / 10-07(0.0) / 10-09(0.2)。
+        10-08 刻意**没有**价格行 ⇒ 它的 ``price_direction`` 为 NULL，
+        且没有基准价 ⇒ 算不出 T+1 ⇒ 不会进 ``hit_stats`` 的 ready 集合。
+        """
+        d1, d2, d3, d4 = (
+            date(2026, 10, 5),
+            date(2026, 10, 6),
+            date(2026, 10, 7),
+            date(2026, 10, 8),
+        )
+        await _insert_gold(db_session, d1, close=2000.0, change_pct=1.0)
+        await _insert_gold(db_session, d2, close=2010.0, change_pct=-0.5)
+        await _insert_gold(db_session, d3, close=2015.0, change_pct=0.0)
+        # 10-09 只作 d3 的 T+1 未来 bar（10-08 无价格行）
+        await _insert_gold(db_session, date(2026, 10, 9), close=2020.0, change_pct=0.2)
+        for d in (d1, d2, d3, d4):
+            await _insert_snapshot(db_session, d)
+            await _insert_news(db_session, d, slot=1, score=60)
+            await _service(db_session).rebuild(d)
+
+    async def test_hit_stats_bucket_has_direction_days(self, db_session: AsyncSession) -> None:
+        """``hit_stats`` 的 by_month 桶必须带上 up/down/known（此前恒为 0）。"""
+        await self._seed(db_session)
+
+        out = await _service(db_session).hit_stats(
+            start=date(2026, 10, 1), end=date(2026, 10, 31), horizon="t1"
+        )
+        assert len(out.by_month) == 1
+        b = out.by_month[0]
+        assert b.days == 3, "只有 3 天有 T+1 结果（10-08 无基准价 ⇒ 无判定）"
+        assert b.up_days == 1, "hit_stats 桶的上涨天数恒为 0 —— 与 /summary 不同口径"
+        assert b.down_days == 1, "hit_stats 桶的下跌天数恒为 0 —— 与 /summary 不同口径"
+        assert b.known_days == 3, "known_days 未反映「方向已知的天数」"
+
+    async def test_hit_stats_all_horizons_bucket_has_direction_days(
+        self, db_session: AsyncSession
+    ) -> None:
+        """``hit_stats_all_horizons``（命中分析 Tab 的数据源）同样必须带上。"""
+        await self._seed(db_session)
+
+        out = await _service(db_session).hit_stats_all_horizons(
+            start=date(2026, 10, 1), end=date(2026, 10, 31)
+        )
+        bucket = out.by_horizon["t1"].by_month[0]
+        assert bucket.up_days == 1, "命中分析 Tab 的上涨天数恒为 0"
+        assert bucket.down_days == 1, "命中分析 Tab 的下跌天数恒为 0"
+        assert bucket.known_days == 3, "命中分析 Tab 未反映「方向已知的天数」"
+
+    async def test_three_aggregations_share_one_caliber(self, db_session: AsyncSession) -> None:
+        """三处桶聚合口径必须一致：同一批行 ⇒ 同一组 up/down/known。"""
+        await self._seed(db_session)
+        svc = _service(db_session)
+
+        summary_b = (
+            await svc.summary(
+                start=date(2026, 10, 1), end=date(2026, 10, 31), group_by="month"
+            )
+        ).buckets[0]
+        stats_b = (
+            await svc.hit_stats(
+                start=date(2026, 10, 1), end=date(2026, 10, 31), horizon="t1"
+            )
+        ).by_month[0]
+        all_b = (
+            await svc.hit_stats_all_horizons(
+                start=date(2026, 10, 1), end=date(2026, 10, 31)
+            )
+        ).by_horizon["t1"].by_month[0]
+
+        # summary 含全部 4 行（不过滤 ready），另两处只含 3 行 ⇒ days 不同，
+        # 但**方向天数的口径**必须一致。
+        assert summary_b.days == 4
+        assert stats_b.days == 3
+        for b in (summary_b, stats_b, all_b):
+            assert b.up_days == 1
+            assert b.down_days == 1
+            assert b.known_days == 3
+
