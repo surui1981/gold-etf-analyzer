@@ -76,7 +76,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **81** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **56** 段 / 55 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **117** 个（**本地 117 / 远端 116** —— 差 1 个是 `v0.121.3`，**尚未推送**） | 按版本 checkout 的锚点 |
+| git tag | **117** 个（**本地 117 / 远端 117** —— 一致 ✅；`v0.121.3` 已于 2026-11-07 推送） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -111,16 +111,28 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 >   `refs/heads/main` = `eec4ddd` = 本地 HEAD。
 > - ⚠️ 本枚 PAT 在 chat 里明文出现过 ⇒ **建议用完即轮换**。
 >
-> ⚠️ **V0.121.3 尚未推送**（本地已 commit + 打 annotated tag `v0.121.3`，`tag` 与 `HEAD` 同指一个 commit）。
-> **两个独立的原因同时成立**，任何一个单独修好都不够：
+> ✅ **V0.121.3 已推送**（2026-11-07 11:01）—— 远端与本地**一致**。
 >
-> | # | 阻塞点 | 本轮实测证据 |
-> |---|---|---|
-> | ① | **网络到 GitHub 不可达**（不是 Claude Code 沙箱挡的） | 路由器 DNS `192.168.0.1` 解析 `baidu.com` **成功**、解析 `github.com` / `pypi.org` **超时**；沙箱开与关**表现一致**（⇒ 是上游网络过滤，与沙箱无关）。裸 IP 也不行：`curl --resolve github.com:443:20.205.243.166` 只有极短窗口内拿到过一次 **HTTP 200**，随后 5 个 IP × 3 轮全部超时；`git push` 报「连接被对方重置」；SSH 22 / 443 均不通 |
-> | ② | **没有 classic PAT** | gh keyring 里只有 `github_pat_` **fine-grained** PAT（`gh auth status` → `surui1981`）—— 按已验证的结论它**无写权限**（`repo.permissions` 字段会骗人），只有 classic PAT 能 push。上一轮那枚 classic PAT 已在 chat 里明文出现 ⇒ **已被要求轮换**，本轮没有新的一枚 |
+> | 项 | 值 |
+> |---|---|
+> | `refs/heads/main` | `1e41af5` = 本地 HEAD ✅ |
+> | `refs/tags/v0.121.3` | tag 对象 `ac170e8`；`^{}` 行 = `1e41af5` ✅ 与本地 `git rev-parse v0.121.3^{commit}` 一致 |
+> | 远端 tag 数（去掉 `^{}` 行） | **117** = 本地 117 ✅ |
 >
-> ⇒ **推送需用户侧完成**：恢复网络 + 提供一枚 classic PAT，命令见本文件 §五。
-> 本轮已备好 `scripts/_push_retry.sh`（**不入版本库**）做 8 轮退避重试，**仍未推上去**。
+> **这次推送是被网络逼出来的**：本机到 GitHub 的通道**绝大部分时间是断的** ——
+> 路由器 DNS `192.168.0.1` 解析 `baidu.com` 成功、解析 `github.com` / `pypi.org` 超时；
+> 12+ 个裸 IP（`curl --resolve`）绝大多数超时，SSH 22/443 不通；本机**没有 IPv6**。
+> ⇒ 走的是「**持续重试直到窗口打开**」的路子：
+> ① 先用 **DoH**（`dns.alidns.com` / `doh.pub`）绕开系统 DNS 拿到 GitHub IP；
+> ② 并行探测这些 IP，通了就用 **git 2.43 的 `http.curloptResolve`**（`host:port:address`，
+>    SNI 仍带 github.com）**完全绕开 DNS**；
+> ③ **不依赖 `git push` 管道末尾的 `tail`**（它的退出码恒为 0，会把失败伪装成成功）——
+>    必须取 `${PIPESTATUS[0]}` 或不接管道；
+> ④ 成功判据 = **`ls-remote` 读回的 `refs/heads/main` == 本地 HEAD**，不是「命令没报错」。
+>
+> ⚠️ **两个独立的前提**：网络窗口 + **classic PAT**（gh keyring 里那枚
+> `github_pat_` fine-grained 的**没有写权限**，只有 classic 能 push）。
+> 本枚 classic PAT 同样在 chat 里明文出现过 ⇒ **用完即轮换**。
 >
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
@@ -269,7 +281,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `0.121.3`，**这是 V0.121.x 三批里第一次「代码 = 服务」** |
 | 线上实测 | ✅ `192.168.0.204:8888`（服务已加载 V0.121.3）：`/scoring/hit-stats-all` t0·2026-10 **涨 0 · 跌 0 · 已知 0 → 涨 4 · 跌 6 · 已知 10**；`/scoring/hit-stats` t1·2026-09 **涨 0 · 跌 0 · 已知 0 → 涨 5 · 跌 6 · 已知 11**；`/scoring/summary` 2026-10 涨 9 · 跌 13 · 已知 22（**三处口径已一致**） |
 | 测试 | ✅ `pytest tests/test_services/test_scoring_wide.py` → **26 passed**；`ruff check src tests scripts` → All checks passed |
-| git tag | ⚠ `v0.121.3`（annotated）**本地已打，尚未推送** —— 本轮会话没有可用的 classic PAT（gh 的 fine-grained PAT 无写权限）⇒ 推送需用户再提供一次 |
+| git tag | ✅ `v0.121.3`（annotated）**已推送** —— 远端 `refs/tags/v0.121.3^{}` = `1e41af5` = 本地 `git rev-parse v0.121.3^{commit}`（远端 tag 对象 `ac170e8`）；远端 tag 数（去掉 `^{}` 行）**117** = 本地 117 |
 
 > **反向验证**（撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿）：
 > 撤 `hit_stats()` 桶的三字段 ⇒ **2 条测试变红、另 1 条仍绿**（证明断言不是恒真）；
@@ -623,7 +635,7 @@ git checkout v0.116.2        # tag 锚点（checkout 后记得 git checkout main
 git describe --tags           # → v0.116.2-<N>-g<sha>（N 是 tag 之后的 commit 数，每次提交 +1）
 ```
 
-### 推送（**V0.121.3 尚未推送，用户侧执行**）
+### 推送（**V0.121.3 已推送；下面是同类场景的备用命令**）
 
 ```bash
 cd /home/surui/gold-etf-analyzer

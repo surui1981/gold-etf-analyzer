@@ -704,18 +704,27 @@ B1 把价格日历追到了 2026-11-06，但 **10-15 之后的宽表行是日历
 
 #### 推送状态（如实记录）
 
-⚠️ **本地已提交 + 打好 annotated tag `v0.121.3`，但尚未推送到 GitHub。**
+✅ **已于 2026-11-07 11:01 推送到 GitHub。**
 
-两个**独立**的阻塞点同时成立，**修好其中一个还不够**：
+| 项 | 值 |
+|---|---|
+| `refs/heads/main` | `1e41af5` = 本地 HEAD ✅ |
+| `refs/tags/v0.121.3` | tag 对象 `ac170e8`；`^{}` 行 = `1e41af5` ✅ 与本地 `git rev-parse v0.121.3^{commit}` 一致 |
+| 远端 tag 数（去掉 `^{}` 行） | **117** = 本地 117 ✅ |
 
-| # | 阻塞点 | 实测证据 |
-|---|---|---|
-| ① | **网络层到 GitHub 不可达** | 路由器 DNS `192.168.0.1`：`baidu.com` 秒解析、`github.com` / `pypi.org` 超时；**沙箱开/关表现一致** ⇒ 上游网络过滤，非本地工具行为。裸 IP（`curl --resolve github.com:443:20.205.243.166`）只在极短窗口内拿到过一次 HTTP 200，随后 5 个 IP × 3 轮全部超时；`git push` 报「连接被对方重置」；SSH 22/443 均不通 |
-| ② | **没有 classic PAT** | gh keyring 里只有 `github_pat_` **fine-grained** PAT（`gh auth status` → `surui1981`）—— 按已验证结论它**无写权限**（`repo.permissions` 会骗人）；上一轮那枚 classic PAT 已在 chat 里明文出现 ⇒ 已被要求轮换，本轮没有新的一枚 |
+**这次推送是被网络逼出来的** —— 本机到 GitHub 的通道绝大部分时间是断的：
+路由器 DNS 只解析国内域名（`baidu.com` 成功、`github.com` / `pypi.org` 超时）、
+12+ 个裸 IP 绝大多数超时、本机**没有 IPv6** ⇒ 走的是「**持续重试直到窗口打开**」：
 
-⇒ **推送需用户侧完成**：恢复网络 + 提供 classic PAT，
-命令见 [version-status.md §五](../../version-status.md)。
-本轮已备 `scripts/_push_retry.sh`（**不入版本库**）做 8 轮退避重试 ⇒ 仍未推上去。
+1. 用 **DoH**（`dns.alidns.com` / `doh.pub`）绕开系统 DNS 拿到 GitHub IP；
+2. 并行探测这些 IP，通了就用 **git 2.43 的 `http.curloptResolve`**（`host:port:address`，
+   SNI 仍带 `github.com`）**完全绕开 DNS**；
+3. ⚠️ **不依赖 `git push` 管道末尾的 `tail`** —— 它的退出码恒为 0，
+   会把「推送失败」伪装成「推送成功」；必须取 `${PIPESTATUS[0]}`；
+4. **成功判据 = `ls-remote` 读回的 `refs/heads/main` == 本地 HEAD**，不是「命令没报错」。
+
+⚠️ 另一个前提是 **classic PAT** —— gh keyring 里那枚 `github_pat_` fine-grained 的
+**没有写权限**。本枚 classic PAT 同样在 chat 里明文出现过 ⇒ **用完即轮换**。
 
 ---
 

@@ -45,17 +45,21 @@
   ⇒ 无需清 SW 缓存内容，但仍按 V0.100.1 铁律换代
 - 📌 **服务已用 systemd 重启**（`gold-etf-analyzer.service`）⇒ 本版修复**已生效**，
   这是 V0.121.x 三批里第一次「代码 = 服务」
-- ⚠️ **推送状态（如实记录）：本地已提交 + 打好 annotated tag `v0.121.3`，但尚未推送到 GitHub**
-  - 两个**独立**的阻塞点同时成立：
-    ① **网络层**：本机 DNS 解析不了 `github.com` / `pypi.org`（路由器 `192.168.0.1`
-       只解析国内域名，`baidu.com` 正常、`github.com` 超时）；**沙箱开/关表现一致**
-       ⇒ 是上游网络过滤，不是本地工具行为。裸 IP（`curl --resolve`）也只在极短窗口内
-       通过一次，随后 5 个 IP × 3 轮全部超时；SSH 22/443 均不通
-    ② **凭据层**：gh keyring 里只有 `github_pat_` **fine-grained** PAT —— 按已验证结论
-       它**无写权限**；上一轮那枚 classic PAT 已在 chat 里明文出现 ⇒ 已被要求轮换
-  - ⇒ **推送需用户侧完成**（恢复网络 + 提供 classic PAT），命令见
-    [docs/version-status.md §五](docs/version-status.md)
-  - 已备 `scripts/_push_retry.sh`（**不入版本库**）做 8 轮退避重试 ⇒ 仍未推上去
+- ✅ **推送状态（如实记录）：已于 2026-11-07 11:01 推送到 GitHub**
+  | 项 | 值 |
+  |---|---|
+  | `refs/heads/main` | `1e41af5` = 本地 HEAD ✅ |
+  | `refs/tags/v0.121.3` | `^{}` 行 = `1e41af5` ✅ 与本地 `git rev-parse v0.121.3^{commit}` 一致 |
+  | 远端 tag 数（去掉 `^{}` 行） | **117** = 本地 117 ✅ |
+  - ⚠️ **这次推送是被网络逼出来的**：本机到 GitHub 的通道绝大部分时间是断的
+    （路由器 DNS 只解析国内域名、12+ 个裸 IP 超时、无 IPv6）
+    ⇒ 走的是「DoH 拿 IP → `http.curloptResolve` 绕开 DNS → 持续重试直到窗口打开」
+  - ⚠️ **两个坑**（下次推送直接照抄）：
+    ① `git push … | tail -10` 的退出码取自 `tail`（恒为 0）⇒ **失败会被伪装成成功**，
+       必须取 `${PIPESTATUS[0]}`；
+    ② 成功判据必须是 **`ls-remote` 读回的 `refs/heads/main` == 本地 HEAD**，
+       不是「命令没报错」
+  - ⚠️ 本枚 classic PAT 同样在 chat 里明文出现过 ⇒ **用完即轮换**
 
 ## [V0.121.2] · 2026-11-07
 
