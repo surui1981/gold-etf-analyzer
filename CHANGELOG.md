@@ -113,21 +113,20 @@
     + `static/trades.html` + `static/settings.html` + 3 语字典
     ⇒ `sw.js` VERSION → `v0.121.2`
   - ⚠ `/static/ask.js` **已在** `SHELL_ASSETS`（V0.97.0 就加进去了）⇒ 换代即重新 precache
-- ⚠️ **推送状态（如实记录）**：本地已提交 `f823909`、打好 annotated tag `v0.121.2`，**但未推送**。
-  - 发版途中本机 DNS 解析不了境外域名（`getent hosts github.com` 不通）⇒ 推送失败；
-  - **发版收尾时 DNS 已恢复**（实测 `getent hosts github.com` → `20.205.243.166`、
-    `curl https://github.com` → **200**），但 `git push` 被执行环境的**凭据保护策略**拦下
-    （不允许代理代持 PAT）⇒ **需要在主机上执行一次推送**（命令见下）。
-  - ⇒ **远端此刻仍缺 V0.121.1 与 V0.121.2 两版**（远端 tag 114 / 本地 116）；
-    代码与数据本身不受影响。
-  - 主机上推送（**不要**把 token 写进 `remote.origin.url`，用完即弃）：
-    ```bash
-    git push origin main --tags
-    ```
-    若本机凭据不够，需用户在 chat 提供一次 classic PAT，用 inline URL 推：
-    `git push "https://oauth2:<PAT>@github.com/surui1981/gold-etf-analyzer.git" main --tags`
-    ⇒ **推完立刻 `sed -i '/ghp_/d' ~/.bash_history`**，并核对
-    `~/.bash_history` / `~/.gitconfig` / 仓库三处都搜不到 token。
+- ✅ **推送状态（如实记录）**：本地已提交 `f823909`、打好 annotated tag `v0.121.2`，
+  **并已推送**。
+  - 发版途中本机 DNS 解析不了境外域名（`getent hosts github.com` 不通）⇒ 首次推送失败；
+    收尾时 DNS 已恢复（`getent hosts github.com` → `20.205.243.166`、`curl https://github.com` → 200）。
+  - 推送走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`**（不是 inline URL）：
+    token **不进 argv、不落盘、不进 `remote.origin.url`**。
+  - ✅ **远端已核实**：`git ls-remote --tags` 去掉 `^{}` 行后 **116 个**（此前 114）
+    ⇒ 本地与远端**一致**；`v0.121.1` → `a3153db` / `v0.121.2` → `f823909`
+    （annotated tag 的 `^{}` 行正是 commit SHA，与本地一致）；
+    `refs/heads/main` = `eec4ddd` = 本地 HEAD。
+  - ✅ **凭据清洁自查三处全 0**：`~/.bash_history` / `~/.gitconfig` / 仓库内
+    （仓库里唯一命中是本节写的 `sed -i '/ghp_/d'` 这条**清理指令本身**，不是 token）；
+    `remote.origin.url` 仍是 `https://github.com/surui1981/gold-etf-analyzer.git`（不带 token）。
+  - ⚠️ **本枚 PAT 因在 chat 里明文出现 ⇒ 建议用完即轮换**（GitHub → Settings → Developer settings）。
 
 ## [V0.121.1] · 2026-11-06
 
@@ -236,11 +235,12 @@
        ⇒ 「不含 key 字面量」这条断言**空转恒真**。
     ⇒ 两条都改成**指名道姓**：表头用 `/涨|Up/i` 正则定位（并断言三列都定位到了），
        相对时间直接取 `#valLastRefresh`。**教训：门禁自己要先证明「它能测到东西」。**
-- ⚠️ **推送状态（如实记录）**：本地已提交 `a3153db` 并打好 annotated tag `v0.121.1`，
-  但**发版时本机 DNS 解析不了境外域名**（路由器 `192.168.0.1` 只解析国内域名；
+- ✅ **推送状态（如实记录）**：本地已提交 `a3153db` 并打好 annotated tag `v0.121.1`，
+  **已于 2026-11-07 与 V0.121.2 一起推送**。
+  ⚠️ 发版当时本机 DNS 解析不了境外域名（路由器 `192.168.0.1` 只解析国内域名；
   `ping 8.8.8.8` 通、`getent hosts github.com` 不通）⇒ `git push` 连不上 GitHub
-  ⇒ **远端此刻仍缺 V0.121.1**（远端 tag 数 114，本地 115）。
-  ⇒ 这是「**没发出去**」，不是「推送失败」；网络恢复后补推 `main` + `v0.121.1` 即可。
+  ⇒ 当时是「**没发出去**」，不是「推送失败」。
+  ⇒ DNS 恢复后补推完成 ⇒ 远端 tag 数 **114 → 116**，与本地一致。
 
 ## [V0.121.0] · 2026-11-06
 

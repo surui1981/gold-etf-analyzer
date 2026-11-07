@@ -72,7 +72,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **80** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **55** 段 / 54 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **116** 个（**本地**；含 `v0.121.2`。⚠️ 远端仍是 114 —— 本机 DNS 解析不了境外域名，`push` 未执行，见 §二注） | 按版本 checkout 的锚点 |
+| git tag | **116** 个（**本地 == 远端**；含 `v0.121.1` / `v0.121.2`） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -89,27 +89,28 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > **116 个 tag = 115 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
 > 但确实是真实存在的发布锚点）。其中 annotated **110** / lightweight **6**。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
-> `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致。）
+> `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致；
+> 本轮新增的 2 个也已逐一比对：`v0.121.1` → `a3153db`、`v0.121.2` → `f823909`，**均一致**。）
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
 > （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表）。
 > 本版按 `git for-each-ref --format='%(objecttype)'` **实测**改写。）
 >
-> ⚠️ **V0.121.1 与 V0.121.2 的 tag 都尚未推送** —— 本地已有
-> （`v0.121.1`，annotated，指向 `a3153db`；`v0.121.2`，annotated，指向 `f823909`），
-> 但**远端仍只有 114 个**。
+> ✅ **V0.121.1 与 V0.121.2 都已推送**（2026-11-07）—— 远端与本地**一致**。
 > - 起因是**本机 DNS 解析不了境外域名**（路由器 `192.168.0.1` 只解析国内域名；
->   `ping 8.8.8.8` 通、`getent hosts github.com` 不通）⇒ `git push` 连不上 GitHub；
-> - **2026-11-07 收尾时 DNS 已恢复**（实测 `getent hosts github.com` → `20.205.243.166`、
->   `curl https://github.com` → **200**），但 `git push` 被执行环境的**凭据保护策略**拦下
->   （不允许代理代持 PAT）⇒ **仍需用户在主机上执行一次推送**。
-> ⇒ **本地与远端此刻不一致**，需补推 `main` + `v0.121.1` + `v0.121.2`。
-> ⇒ 这不是「推送了但失败」，而是「**没发出去**」—— 按本仓库「诚实优先」的规矩，如实记录。
+>   `ping 8.8.8.8` 通、`getent hosts github.com` 不通）⇒ 首次推送失败；
+>   收尾时 DNS 已恢复（`getent hosts github.com` → `20.205.243.166`、`curl https://github.com` → 200）。
+> - 推送走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`** ⇒ token **不进 argv、不落盘、
+>   不进 `remote.origin.url`**。
+> - ✅ **远端已核实**：`git ls-remote --tags` 去掉 `^{}` 行后 **116 个**（此前 114）
+>   ⇒ 本地与远端一致；`v0.121.1` → `a3153db`、`v0.121.2` → `f823909`；
+>   `refs/heads/main` = `eec4ddd` = 本地 HEAD。
+> - ⚠️ 本枚 PAT 在 chat 里明文出现过 ⇒ **建议用完即轮换**。
 >
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
 > 必须把 `^{}` 行去掉再数，否则 114 个 tag 会数成 222 行左右（实测 `ls-remote --tags` 原始行数
-> = 220 + 2 = 222）。**本地**的 116 个同理（`v0.121.1` 与 `v0.121.2` 都是 annotated ⇒
-> 远端补推后原始行数会从 222 变成 222 + 2 + 2 = 226）。
+> = 220 + 2 = 222）。**本地与远端的 116 个同理**（`v0.121.1` 与 `v0.121.2` 都是 annotated
+> ⇒ 原始行数已从 222 变成 **222 + 2 + 2 = 226**，实测 `ls-remote --tags` 原始行数 **226**，与推算一致）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -248,7 +249,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` | ✅ 已 bump 到 `0.121.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | 迁移 | ✅ **零 schema 变更、零 alembic 迁移** ⇒ 回滚代价低 |
 | 生产库写入 | ⚠️ **本批未写生产库**（B1 的回填只发生在**跑回测时**按需触发，线上实测触发的是「新增行」，不改动既有行；P0-7 的组权重实测改过又**已还原**为 0.50/0.30/0.20） |
-| git tag | ⚠️ `v0.121.2`（annotated，指向 `f823909`）**已在本地打好，但未推送** —— 发版途中本机 DNS 解析不了境外域名；收尾时 DNS 已恢复，但 `git push` 被执行环境的**凭据保护策略**拦下（需用户在主机上推一次，见 §二注）。**远端仍缺 V0.121.1 与 V0.121.2 两版** |
+| git tag | ✅ `v0.121.2`（annotated，指向 `f823909`）**已推送**；`v0.121.1`（annotated，指向 `a3153db`）**已推送** —— 远端 tag 计数 **114 → 116**，与本地一致（`ls-remote` 去掉 `^{}` 行后实测） |
 | 线上实测 | ⚠️ **8888 未重启**（本轮的重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`） |
 | 浏览器门禁 | ✅ 新增 `scripts/_verify_ask_tokens.mjs`（**6 条断言**，假 SSE 驱动 ⇒ 不调真模型、不花 token；`LIVE=1` 可打真实模型跑整条链）；新增 `scripts/_verify_weights_group.mjs`（组权重滑块态 + 组权重真的影响结果）；新增 `scripts/check_freshness_consistency.py`（P0-6 这类缺陷以后会自己变红） |
 | 测试 | ✅ 目标测试文件全绿（详见 milestone 文档的实测表）；`ruff check src tests scripts` → All checks passed |
@@ -268,7 +269,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` | ✅ 已 bump 到 `0.121.1`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
 | 迁移 | ✅ `t2u3v4w5x6y`（`scoring_daily_wide` 增 `price_direction` + `daily_snapshots.news_index` 改可空）—— 先在副本库上验过 upgrade / downgrade / 往返，再上生产 |
 | 生产库回填 | ✅ 快照 **49 行**修正（32 → NULL / 17 → 当日聚合值）+ 宽表 ETL 重跑 **61/61 天**；幂等自查二次规划 **0 行** |
-| git tag | ⚠️ `v0.121.1`（annotated，指向 `a3153db`）**已在本地打好，但未推送** —— 本机 DNS 解析不了境外域名 ⇒ `git push` 连不上 GitHub（见 §二注）。**远端仍缺这一版** |
+| git tag | ✅ `v0.121.1`（annotated，指向 `a3153db`）—— **已于 2026-11-07 与 V0.121.2 一起推送**（当时 DNS 解析不了境外域名 ⇒ 首次推送失败；DNS 恢复后补推）。远端 `^{}` 行 = `a3153db` ⇒ 指向一致 |
 | 线上实测 | ✅ `192.168.0.204:8888`：`/openapi.json` → `0.121.1`；`ny-trend?days=30/60/120` → **30 / 60 / 120** 个点（修复前三次返回完全相同）；`scoring/summary` 61 桶 `up 11 / down 17 / known 28`；`scoring` 里 `news_slot_count=0` 的 32 行 `news_index` / `hit_t1` 非 NULL 均为 **0**；`/headlines` 上次刷新显示 **「8 小时前」**（修复前显示 `time.hour_ago`） |
 | 浏览器门禁 | ✅ 新增 `scripts/_verify_v0121_truth.mjs`（**13 条断言**，可判红）—— 反向验证：删掉「方向已知」列 ⇒ 红；3 个 i18n key 改回单数 ⇒ 红（`#valLastRefresh` 复现出 `time.hour_ago`）⇒ 恢复 ⇒ **13 passed / 0 failed** |
 | 测试 | ✅ `pytest` 6 个目标文件 → **157 passed / 0 failed**；`ruff check src tests scripts` → All checks passed |

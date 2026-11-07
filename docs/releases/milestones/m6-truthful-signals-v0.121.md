@@ -326,11 +326,10 @@ trend.news.score = None（今天没打分）
 | 3 个 i18n key 改回 `time.min_ago/hour_ago/day_ago` | ✗ 4 条红；`#valLastRefresh` 复现出 **`time.hour_ago`** |
 | 全部恢复 | **13 passed / 0 failed** |
 
-⚠️ **推送状态（如实记录）**：本地已提交 `a3153db`、打好 annotated tag `v0.121.1`，
-但**发版时本机 DNS 解析不了境外域名** ⇒ `git push` 连不上 GitHub
-⇒ **远端此刻仍缺 V0.121.1**（远端 tag 114 / 本地 116）。
-⚠ 补推时**连 V0.121.2 一起推**（`git push origin main --tags`）——
-两版都还没发出去。代码与数据本身不受影响。
+✅ **推送状态（如实记录）**：本地已提交 `a3153db`、打好 annotated tag `v0.121.1`，
+**已于 2026-11-07 与 V0.121.2 一起推送**（发版当时 DNS 解析不了境外域名 ⇒ 首次推送失败；
+DNS 恢复后补推）。
+⇒ 远端 tag 计数 **114 → 116**，与本地一致；`v0.121.1` 的 `^{}` 行 = `a3153db` ⇒ 指向一致。
 
 **教训**：
 
@@ -549,13 +548,16 @@ message_stop.usage = {"input_tokens": null, "output_tokens": 1874}
 | **P0-7** | 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**；还原 ⇒ **回到 16.4**（生产设置已还原） |
 | **P0-5** | 真 SSE `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`；落库 `(NULL, 1874)` |
 
-⚠️ **推送状态（如实记录）**：本地已提交 `f823909`、打好 annotated tag `v0.121.2`，
-但**未推送** —— 发版途中本机 DNS 解析不了境外域名 ⇒ 推送失败；
-**收尾时 DNS 已恢复**（实测 `getent hosts github.com` → `20.205.243.166`、
-`curl https://github.com` → **200**），但 `git push` 被执行环境的**凭据保护策略**拦下
-（不允许代理代持 PAT）⇒ **需用户在主机上执行一次推送**。
-⇒ **远端此刻仍缺 V0.121.1 与 V0.121.2 两版**（远端 tag 114 / 本地 116）。
-代码与数据本身不受影响。
+✅ **推送状态（如实记录）**：本地已提交 `f823909`、打好 annotated tag `v0.121.2`，
+**并已推送**。
+- 发版途中本机 DNS 解析不了境外域名 ⇒ 首次推送失败；
+  收尾时 DNS 已恢复（`getent hosts github.com` → `20.205.243.166`、
+  `curl https://github.com` → **200**）。
+- 推送走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`** ⇒ token **不进 argv、
+  不落盘、不进 `remote.origin.url`**。
+- ✅ **远端已核实**：`ls-remote --tags` 去掉 `^{}` 行后 **116 个**（此前 114）；
+  `v0.121.1` → `a3153db`、`v0.121.2` → `f823909`；
+  `refs/heads/main` = `eec4ddd` = 本地 HEAD。
 
 ⚠️ **留给用户的 3 步**（本轮环境策略拦下，只能由用户在主机上执行）：
 
