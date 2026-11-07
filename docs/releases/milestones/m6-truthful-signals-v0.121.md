@@ -562,8 +562,20 @@ message_stop.usage = {"input_tokens": null, "output_tokens": 1874}
 1. **重启 8888**（命令见 [../../version-status.md](../../version-status.md) §一）——
    否则线上跑的还是 `0.121.1`，本批修复全部未生效；
 2. `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；
-3. 删掉本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」）——
-   生产库里，`DELETE` 被环境策略拦下。
+3. 归档本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」）——
+   生产库里，`DELETE` 被环境策略拦下。走 API 是**软删除**（`is_archived=True`）：
+
+   ```bash
+   for id in b2ea29fa-ba3f-4caa-9d8c-b050e096ecb5 \
+             7b429ee1-712b-4f45-8880-b1923eb6622e \
+             ff0d6630-a526-4873-b81c-7b7b7ae858f1 \
+             8a86a363-b9dc-4c66-82e1-9f6f331619c2; do
+     curl -s -o /dev/null -w "%{http_code} $id\n" -X DELETE \
+       "http://192.168.0.204:8888/api/v1/ai/conversations/$id"
+   done
+   ```
+
+   （本机 `AUTH_ENABLED=false` ⇒ 不需要带凭据；若生产开了认证，需先取 session cookie。）
 
 **教训**：
 

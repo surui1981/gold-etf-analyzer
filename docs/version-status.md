@@ -252,7 +252,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 线上实测 | ⚠️ **8888 未重启**（本轮的重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`） |
 | 浏览器门禁 | ✅ 新增 `scripts/_verify_ask_tokens.mjs`（**6 条断言**，假 SSE 驱动 ⇒ 不调真模型、不花 token；`LIVE=1` 可打真实模型跑整条链）；新增 `scripts/_verify_weights_group.mjs`（组权重滑块态 + 组权重真的影响结果）；新增 `scripts/check_freshness_consistency.py`（P0-6 这类缺陷以后会自己变红） |
 | 测试 | ✅ 目标测试文件全绿（详见 milestone 文档的实测表）；`ruff check src tests scripts` → All checks passed |
-| ⚠️ **留给用户的 3 步** | ① **重启 8888**（命令见本文件 §一）—— 否则线上跑的还是 `0.121.1`；② `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；③ 删掉本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」，生产库）—— 本轮 `DELETE` 被环境策略拦下 |
+| ⚠️ **留给用户的 3 步** | ① **重启 8888**（命令见本文件 §一）—— 否则线上跑的还是 `0.121.1`；② `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；③ 归档本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」）—— 走 `DELETE /api/v1/ai/conversations/{id}` 是软删除，具体 4 个 id 见 [M6 里程碑文档](releases/milestones/m6-truthful-signals-v0.121.md) §V0.121.2 |
 
 > **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）：
 > B1 撤掉调用点的追平逻辑 ⇒ **新测试变红** ⇒ 恢复；
