@@ -618,9 +618,10 @@
     load();
   }
 
-  if (window.FreshnessBar && typeof window.FreshnessBar.load === "function") {
-    window.FreshnessBar.load();
-  }
+  // ⚠ V0.121.2（P0-6）：原此处调 ``window.FreshnessBar.load()``，但**本页从没引入
+  //   freshness.js** ⇒ 该对象恒为 undefined ⇒ 守卫静默跳过 ⇒ 永远不执行。
+  //   读起来却像「本页有时效保护」⇒ 误导。已删除。
+  //   数据时效统一收敛到「数据健康」页（V0.85 起的 chip + panel 模式）。
 })();
 </script>
 

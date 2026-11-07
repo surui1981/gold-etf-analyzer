@@ -349,7 +349,11 @@
   <div id="notifStatsBody"><div class="notif-empty" data-i18n="common.loading">加载中…</div></div>
 </aside>
 
-<script src="/static/freshness.js"></script>
+<!-- ⚠ V0.121.2（P0-6）：本页原引入 freshness.js，但**页面里没有它的容器**
+     （#freshnessBar / #freshnessInline 都不存在）⇒ 脚本仍会自启动：
+     首次 fetch + 每 60 秒递归轮询一次 /api/v1/market/freshness，
+     拿到数据后渲染到一个不存在的节点 ⇒ **纯浪费**（还让用户以为本页有时效条）。
+     已移除。数据时效统一收敛到「数据健康」页（V0.85 起的 chip + panel 模式）。 -->
 <script src="/static/settings.js"></script>
 
 <script src="/static/toast.js" defer></script>

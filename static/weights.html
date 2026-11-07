@@ -55,6 +55,13 @@
   .w-row .pct { width: 52px; text-align: right; font-weight: 700; font-size: 13px; }
   .sum-line { font-size: 12px; color: var(--muted); text-align: right; margin-top: 8px; }
   .sum-line b { font-size: 13px; }
+  /* ⚠ V0.121.2（P0-7）：组内平均模式下 5 个维度滑块**不参与计算** ⇒ 置灰 + 说明。
+     ⚠ 不能只靠 disabled（那只是「不能拖」，用户不知道为什么）⇒ 配一条说明文案。 */
+  .mode-note { font-size: 12px; color: var(--muted); background: rgba(255,255,255,.04);
+               border-left: 3px solid var(--border); padding: 8px 12px; border-radius: 6px; margin-bottom: 10px; }
+  .mode-note[hidden] { display: none; }
+  .w-row.is-disabled { opacity: .45; }
+  .w-row.is-disabled .nm { text-decoration: line-through; text-decoration-color: var(--muted); }
   .sum-ok { color: var(--down); } .sum-bad { color: var(--up); }
   /* V0.110.0 · 宏观因子手动校准（macro override）—— dxy / vix 无自动源，
      长期停在 2026-08-28 内置常量，允许从行情终端手工录入当日读数顶替。 */
@@ -238,6 +245,9 @@
   <div class="card">
     <h2 data-i18n="weights.tech_title">📈 技术面权重（趋势 5 维度）</h2>
     <div class="desc" data-i18n="weights.tech_desc">综合指数 = 技术面 × 合成占比 + 宏观面 × 合成占比；技术面内部按以下权重分配</div>
+    <!-- ⚠ V0.121.2（P0-7）：组内平均模式下这 5 个滑块**不参与计算** ⇒ 置灰并说明。
+         此前它们照常可拖、照常显示「保存成功」，但对技术面指数零影响（装饰性参数）。 -->
+    <div id="trendModeNote" class="mode-note" data-i18n="weights.trend_dims_group_mode" hidden></div>
     <div id="trendRows"></div>
     <div class="sum-line" data-i18n-html="weights.sum_trend">技术面合计：<b id="trendSum" class="sum-ok">100%</b>（须为 100%）</div>
   </div>
@@ -308,19 +318,27 @@
     <h2 data-i18n="weights.tech_compose_title">🧮 技术面合成方式（V0.79.0 Step F）</h2>
     <div class="desc" data-i18n="weights.tech_compose_desc">5 个维度（结构/动量/支撑/动能/回撤）如何加权为单一技术面指数</div>
     <label class="radio-row" style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;margin-bottom:8px">
-      <input type="radio" name="group_combine" value="true" id="gcOn" checked style="margin-top:4px">
+      <input type="radio" name="group_combine" value="true" id="gcOn" checked style="margin-top:4px" onchange="applyGroupMode(); update()">
       <span style="flex:1">
         <b data-i18n="weights.group_combine_on">组内平均（推荐）</b>
         <div style="font-size:12px;color:var(--muted);margin-top:4px" data-i18n="weights.group_combine_on_hint">趋势组/超买组/风险组各自组内先平均，再按 0.50/0.30/0.20 加权；降低内部相关性</div>
       </span>
     </label>
     <label class="radio-row" style="display:flex;align-items:flex-start;gap:10px;padding:10px;border:1px solid var(--border);border-radius:8px;cursor:pointer">
-      <input type="radio" name="group_combine" value="false" id="gcOff" style="margin-top:4px">
+      <input type="radio" name="group_combine" value="false" id="gcOff" style="margin-top:4px" onchange="applyGroupMode(); update()">
       <span style="flex:1">
         <b data-i18n="weights.group_combine_off">单维度加权（历史）</b>
         <div style="font-size:12px;color:var(--muted);margin-top:4px" data-i18n="weights.group_combine_off_hint">5 维度独立按 TREND_WEIGHTS（0.30/0.20/0.20/0.15/0.15）加权</div>
       </span>
     </label>
+    <!-- ⚠ V0.121.2（P0-7）：组内平均模式下**真正生效**的是这 3 个组权重。
+         此前它们是服务端的模块级常量（GROUP_WEIGHTS），页面上压根没有入口 ⇒
+         用户只能去调那 5 个「不参与计算」的滑块。 -->
+    <div id="groupWeightBlock" style="margin-top:12px;padding-top:12px;border-top:1px dashed var(--border)">
+      <div class="desc" style="margin-bottom:8px" data-i18n="weights.group_weights_desc">组内平均模式下真正生效的是下面 3 个组权重（组内先平均，再按组权重合成）</div>
+      <div id="groupRows"></div>
+      <div class="sum-line" data-i18n-html="weights.sum_group">组权重合计：<b id="groupSum" class="sum-ok">100%</b>（须为 100%）</div>
+    </div>
   </div>
 
   <!-- 实时预览（拖动滑块即时可见调整后指数） -->
@@ -392,6 +410,14 @@ const MONEY_FLOW_DEFAULT_WEIGHTS = {
   cot_gold_net: 0.18, cot_gold_flow: 0.14, gold_etf_flow: 0.22,
   us_liq_net: 0.14, cn_margin_flow: 0.16, cn_money_gap: 0.16,
 };
+// ⚠ V0.121.2（P0-7）：技术面 3 组权重 —— 组内平均模式下**真正生效**的那套。
+// 与后端 schemas/settings.py::GroupWeightConfig 默认值 + services/trend.py::GROUP_WEIGHTS 逐字一致。
+const GROUP_FIELDS = [
+  ["trend", "趋势组（结构 + 动量）"],
+  ["overbought", "超买组（动能 RSI + 支撑乖离）"],
+  ["risk", "风险组（回撤）"],
+];
+const GROUP_DEFAULT_WEIGHTS = { trend: 0.50, overbought: 0.30, risk: 0.20 };
 
 let state = null;
 
@@ -430,6 +456,7 @@ function render() {
   const macro = state.macro || {};
   const combine = state.combine || {};
   const flow = state.flow || {};
+  const group = state.group_weights || {};
   const trendPcts = toIntPercents(TREND_FIELDS.map(([k]) => trend[k]));
   const macroPcts = toIntPercents(MACRO_FIELDS.map(([k]) => macro[k]));
   const combinePcts = toIntPercents(COMBINE_FIELDS.map(([k]) => combine[k]));
@@ -442,15 +469,53 @@ function render() {
   const flowPcts = toIntPercents(
     flowTotal > 0 ? flowRaw : MONEY_FLOW_FIELDS.map(([k]) => MONEY_FLOW_DEFAULT_WEIGHTS[k]),
   );
+  // ⚠ V0.121.2（P0-7）：3 个组权重。老后端没这个字段 ⇒ 退回内置默认
+  // （否则 3 个滑块全是 0%、合计标红，用户连保存都做不了）。
+  const groupRaw = GROUP_FIELDS.map(([k]) => (
+    typeof group[k] === "number" && isFinite(group[k]) && group[k] > 0 ? group[k] : 0
+  ));
+  const groupTotal = groupRaw.reduce((a, b) => a + b, 0);
+  const groupPcts = toIntPercents(
+    groupTotal > 0 ? groupRaw : GROUP_FIELDS.map(([k]) => GROUP_DEFAULT_WEIGHTS[k]),
+  );
   document.getElementById("trendRows").innerHTML = TREND_FIELDS.map(([k, l], i) => rowHtml("t_" + k, l, trendPcts[i])).join("");
   document.getElementById("macroRows").innerHTML = MACRO_FIELDS.map(([k, l], i) => rowHtml("m_" + k, l, macroPcts[i])).join("");
   document.getElementById("combineRows").innerHTML = COMBINE_FIELDS.map(([k, l], i) => rowHtml("c_" + k, l, combinePcts[i])).join("");
   document.getElementById("flowRows").innerHTML = MONEY_FLOW_FIELDS.map(([k, l], i) => rowHtml("f_" + k, l, flowPcts[i])).join("");
+  document.getElementById("groupRows").innerHTML = GROUP_FIELDS.map(([k, l], i) => rowHtml("g_" + k, l, groupPcts[i])).join("");
   // V0.79.0 Step F：技术面合成方式 radio 状态（缺字段向后兼容 → 默认勾选「组内平均」）
   const gc = state.group_combine !== false;
   document.getElementById("gcOn").checked = gc;
   document.getElementById("gcOff").checked = !gc;
+  applyGroupMode();
   update();
+}
+
+/* ⚠ V0.121.2（P0-7）：组内平均模式下，5 个维度滑块**不参与计算** ⇒ 置灰 + 说明。
+ *
+ * 背景：组内平均模式下技术面指数 = Σ(组权重 × 组内均值)，**单个维度的权重
+ * 完全没有作用**（同一组内两个维度无论权重如何，组均值都一样）。
+ * 但此前这 5 个滑块照常可拖、照常显示「保存成功」⇒ 用户以为调参生效了。
+ *
+ * ⇒ 组内平均模式：5 个滑块 disabled + 说明文案 + 3 个组权重可编辑；
+ *   单维度加权模式：5 个滑块解锁，3 个组权重隐藏（它们不参与计算）。
+ */
+function applyGroupMode() {
+  const gc = document.getElementById("gcOn").checked;
+  TREND_FIELDS.forEach(([k]) => {
+    const input = document.getElementById("t_" + k);
+    if (input) input.disabled = gc;
+    const row = input ? input.closest(".w-row") : null;
+    if (row) row.classList.toggle("is-disabled", gc);
+  });
+  const note = document.getElementById("trendModeNote");
+  if (note) note.hidden = !gc;
+  const block = document.getElementById("groupWeightBlock");
+  if (block) block.hidden = !gc;
+  GROUP_FIELDS.forEach(([k]) => {
+    const input = document.getElementById("g_" + k);
+    if (input) input.disabled = !gc;
+  });
 }
 
 function update() {
@@ -485,10 +550,12 @@ function update() {
   setSum("macroSum", sumOf("m_", MACRO_FIELDS));
   setSum("combineSum", sumOf("c_", COMBINE_FIELDS));
   setSum("flowSum", sumOf("f_", MONEY_FLOW_FIELDS));
+  setSum("groupSum", sumOf("g_", GROUP_FIELDS));
   TREND_FIELDS.forEach(([k]) => setPct("t_" + k + "-pct", val("t_" + k) + "%"));
   MACRO_FIELDS.forEach(([k]) => setPct("m_" + k + "-pct", val("m_" + k) + "%"));
   COMBINE_FIELDS.forEach(([k]) => setPct("c_" + k + "-pct", val("c_" + k) + "%"));
   MONEY_FLOW_FIELDS.forEach(([k]) => setPct("f_" + k + "-pct", val("f_" + k) + "%"));
+  GROUP_FIELDS.forEach(([k]) => setPct("g_" + k + "-pct", val("g_" + k) + "%"));
   renderPreview();  // 拖动实时预览
 }
 
@@ -651,6 +718,8 @@ function collect() {
     flow: pick("f_", MONEY_FLOW_FIELDS),
     combine: pick("c_", COMBINE_FIELDS),
     group_combine,
+    // ⚠ V0.121.2（P0-7）：3 个组权重（组内平均模式下真正生效的那套）
+    group_weights: pick("g_", GROUP_FIELDS),
   };
 }
 
@@ -662,6 +731,7 @@ async function save() {
     Object.values(body.macro).reduce((a, b) => a + b, 0),
     Object.values(body.flow).reduce((a, b) => a + b, 0),
     Object.values(body.combine).reduce((a, b) => a + b, 0),
+    Object.values(body.group_weights).reduce((a, b) => a + b, 0),
   ];
   if (sums.some(s => Math.abs(s - 1) > 0.001)) { msg.className = "msg err"; msg.textContent = "各组权重之和必须为 100%，请调整后再保存。"; return; }
   try {
@@ -722,6 +792,8 @@ async function resetAll() {
     flow: { cot_gold_net: .18, cot_gold_flow: .14, gold_etf_flow: .22, us_liq_net: .14, cn_margin_flow: .16, cn_money_gap: .16 },
     combine: { tech: .25, macro: .35, news: .25, flow: .15 },
     group_combine: true,
+    // ⚠ V0.121.2（P0-7）：组权重默认值（与后端 GroupWeightConfig 逐字一致）
+    group_weights: { trend: .50, overbought: .30, risk: .20 },
   };
   msg.className = "msg"; msg.textContent = "正在恢复默认权重…";
   try {

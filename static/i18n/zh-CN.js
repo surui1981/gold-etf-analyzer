@@ -353,6 +353,9 @@ window.PM_I18N_ZH_CN = {
   "weights.group_combine_on_hint": "趋势组/超买组/风险组各自组内先平均，再按 0.50/0.30/0.20 加权；降低内部相关性",
   "weights.group_combine_off": "单维度加权（历史）",
   "weights.group_combine_off_hint": "5 维度独立按 TREND_WEIGHTS（0.30/0.20/0.20/0.15/0.15）加权",
+  "weights.trend_dims_group_mode": "当前为「组内平均」模式：下面 5 个维度滑块不参与计算（同一组内先取平均，单个维度权重无效），已置灰。真正生效的是「技术面合成方式」卡片里的 3 个组权重。切到「单维度加权（历史）」可解锁这 5 个滑块。",
+  "weights.group_weights_desc": "组内平均模式下真正生效的是下面 3 个组权重（组内先平均，再按组权重合成）",
+  "weights.sum_group": "组权重合计：<b id=\"groupSum\" class=\"sum-ok\">{sum}</b>（须为 100%）",
   "weights.preview_loading": "正在获取最新评估数据…",
   "weights.footer": "gold-etf-analyzer · 权重修改仅影响本机评估计算 · 不构成投资建议",
 

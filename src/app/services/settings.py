@@ -138,10 +138,23 @@ class WeightService:
     async def group_combine(self) -> bool:
         """技术面 5 维度是否按组内平均合成（V0.79.0 Step F）。
 
-        True（默认）：trend / overbought / risk 3 组组内先平均，再按 GROUP_WEIGHTS 加权；
+        True（默认）：trend / overbought / risk 3 组组内先平均，再按 **组权重**加权；
         False：保持单维度加权（历史行为，向后兼容）。
         """
         return (await self.get_weights()).group_combine
+
+    async def group_weights(self) -> dict[str, float]:
+        """技术面 **3 组权重**（trend / overbought / risk）—— 组内平均模式下生效。
+
+        ⚠ **V0.121.2（P0-7）新增**。此前 ``combine_by_group`` 直接读
+        ``services/trend.py::GROUP_WEIGHTS`` 这个**模块级常量**
+        ⇒ 用户在权重页调 5 个维度滑块对技术面指数**零影响**，却显示「保存成功」
+        （装饰性参数）。现在组权重是**可编辑配置**，本方法返回**真实生效值**。
+
+        键必须与 ``GROUP_MAPPING`` 的取值域一致（trend / overbought / risk）。
+        """
+        w = (await self.get_weights()).group_weights
+        return {"trend": w.trend, "overbought": w.overbought, "risk": w.risk}
 
     # ── V0.110.0：宏观因子手动校准 ─────────────────────────────
 

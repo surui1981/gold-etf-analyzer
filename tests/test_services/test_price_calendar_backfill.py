@@ -11,7 +11,18 @@
 1. **只接受真实数据源** —— ``TrendService`` 取数失败会静默降级为 ``mock``，
    mock 收盘价入库 ⇒ 回测基于**编造的价格**给出看似正常的 Sharpe，比无数据更危险；
 2. **失败不抛异常** —— 回填是增强而非前置条件，失败只如实反映在 ``coverage`` 上；
-3. **不覆盖已有数据** —— ``force=False`` 时仅在区间完全无数据时才回填。
+3. **不无谓覆盖已有数据** —— ``force=False`` 时**只在确有缺口时**才回填。
+
+⚠ **V0.121.2（B1）改写了约束 3 的判据** —— 原文是「区间完全无数据才回填」
+（all-or-nothing），实测后果是**价格日历永远停在过去某天**：
+
+    | target | 行数 | 最早      | 最晚      | 落后 |
+    |--------|------|-----------|-----------|------|
+    | ny     | 80   | 2026-06-25 | 2026-10-14 | **23 天** |
+    | etf    | 73   | 2026-07-10 | 2026-10-28 | **9 天**  |
+
+⇒ 判据改为「**已覆盖回测窗口且已追到今天**」⇒ 增量补齐；
+且取数**按缺口大小**定量（缺口 N 天 ⇒ 只取 N 根），不是全量或全跳过。
 """
 
 from __future__ import annotations
@@ -27,6 +38,23 @@ from app.services.price_source import (
     TRUSTED_PRICE_SOURCES as _TRUSTED_PRICE_SOURCES,
 )
 from app.services.settings import WeightService
+
+# ⚠⚠ **固定的「今天」** —— 追平判据要拿「今天」和最新一行比。
+# 若把真实 ``date.today()`` 写进断言/数据，跨周末跨月就是**永久红**
+# （``clock-drift-time-bomb``）⇒ 一律用注入的 ``today``。
+TODAY = date(2026, 11, 6)  # 周五
+
+
+def _weekdays(start: date, end: date) -> list[date]:
+    """生成 ``[start, end]`` 内的所有工作日（周一至周五）—— 模拟稠密的价格日历。"""
+    out: list[date] = []
+    d = start
+    while d <= end:
+        if d.weekday() < 5:
+            out.append(d)
+        d += timedelta(days=1)
+    return out
+
 
 # ─────────────── 桩 ───────────────
 
@@ -71,22 +99,35 @@ class _FakeTrend:
     只取价格序列与来源标记，**不评估任何评分面**）。
     这里必须实现**新方法** —— 少一个就是 ``AttributeError`` 被
     ``except Exception`` 吞掉 ⇒ 回填静默变成「取数失败」（无异常的失效）。
+
+    ⚠ **V0.121.2（B1）**：``days_requested`` 记录**实际请求了几根 K 线** ——
+    增量补齐的核心断言就是「只取缺口那么多，不是全量」。
     """
 
-    def __init__(self, *, source: str = "live", n: int = 30, raise_exc: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        source: str = "live",
+        n: int = 30,
+        raise_exc: bool = False,
+        end_date: date = date(2026, 11, 6),
+    ) -> None:
         self.source = source
         self.n = n
         self.raise_exc = raise_exc
+        self.end_date = end_date
         self.calls = 0
         self.analyze_calls = 0
+        self.days_requested: list[int] = []
 
     async def fetch_price_bars(
         self, days: int = 60, target: str = "etf"
     ) -> tuple[list[tuple[date, float]], dict[str, str]]:
         self.calls += 1
+        self.days_requested.append(days)
         if self.raise_exc:
             raise RuntimeError("provider down")
-        last = date(2026, 10, 6)
+        last = self.end_date
         bars = [(last - timedelta(days=i), 10.0 + i * 0.1) for i in range(self.n)]
         return bars, {target: self.source}
 
@@ -96,7 +137,7 @@ class _FakeTrend:
         self.calls += 1
         if self.raise_exc:
             raise RuntimeError("provider down")
-        last = date(2026, 10, 6)
+        last = self.end_date
         pts = [_Pt(last - timedelta(days=i), 10.0 + i * 0.1) for i in range(self.n)]
         return _FakeTrendOut(points=pts, data_sources={target: self.source})
 
@@ -133,12 +174,19 @@ class _FakeSession:
         return _Result()
 
 
-def _svc(gold: _FakeGold, trend: _FakeTrend | None) -> BacktestService:
+def _svc(
+    gold: _FakeGold,
+    trend: _FakeTrend | None,
+    *,
+    today: date = TODAY,
+) -> BacktestService:
+    """⚠ **必须注入 ``today``** —— 追平判据依赖「今天」，写死真实日期会跨期变红。"""
     return BacktestService(
         session=_FakeSession(),  # type: ignore[arg-type]
         gold=gold,  # type: ignore[arg-type]
         weights=WeightService(None),  # type: ignore[arg-type]
         trend=trend,  # type: ignore[arg-type]
+        today=lambda: today,
     )
 
 
@@ -229,21 +277,92 @@ def test_empty_points_is_not_written() -> None:
     assert gold.upsert_calls == []
 
 
-# ─────────────── 约束 3：不覆盖已有数据 ───────────────
+# ─────────────── 约束 3：不无谓覆盖已有数据（V0.121.2 改为「增量补齐」）───────────────
 
 
-def test_existing_calendar_skips_backfill() -> None:
-    """★ 已有数据 ⇒ 跳过（不重复打数据源）。"""
-    gold = _FakeGold(existing=[(date(2026, 9, 1), 9.9)])
+def test_up_to_date_calendar_skips_backfill() -> None:
+    """★ **已覆盖窗口且已追到今天** ⇒ 跳过（不重复打数据源）。
+
+    ⚠ **V0.121.2（B1）改写了这条** —— 旧版判据是「表里有**任何一行**就跳过」，
+    于是价格日历永远停在过去某天（实测 ny 落后 23 天）而**无人察觉**。
+    """
+    gold = _FakeGold(existing=[(d, 10.0) for d in _weekdays(TODAY - timedelta(days=90), TODAY)])
     trend = _FakeTrend()
     svc = _svc(gold, trend)
 
     ok, why = asyncio.run(svc.ensure_price_calendar("etf"))
 
     assert ok is False
-    assert trend.calls == 0, "已有数据时不应调用趋势服务"
+    assert trend.calls == 0, "已追平时不应调用趋势服务"
     assert gold.upsert_calls == []
-    assert "已有数据" in why
+    assert "已追平" in why
+
+
+def test_stale_tail_triggers_incremental_backfill() -> None:
+    """★ **尾部滞后**（日历停在过去）⇒ 必须回填 —— 这正是 B1 要治的病。
+
+    旧判据下这里会「跳过」（表里有数据）⇒ 价格日历永远不追新。
+    """
+    gold = _FakeGold(
+        existing=[
+            (d, 10.0) for d in _weekdays(TODAY - timedelta(days=90), TODAY - timedelta(days=10))
+        ]
+    )
+    trend = _FakeTrend()
+    svc = _svc(gold, trend)
+
+    ok, why = asyncio.run(svc.ensure_price_calendar("etf"))
+
+    assert ok is True, why
+    assert trend.calls == 1, "日历落后于今天时必须补齐"
+    assert len(gold.upsert_calls) == 1
+
+
+def test_incremental_fetch_is_sized_to_the_gap() -> None:
+    """★ 增量补齐 ⇒ **只取缺口那么多根**，不是全窗口。
+
+    ⚠ 这是 B1 的核心收益：全量回填每次回测都拉 90 根，代价是外网请求。
+    """
+    gold = _FakeGold(
+        existing=[
+            (d, 10.0) for d in _weekdays(TODAY - timedelta(days=90), TODAY - timedelta(days=10))
+        ]
+    )
+    trend = _FakeTrend()
+    svc = _svc(gold, trend)
+
+    asyncio.run(svc.ensure_price_calendar("etf"))
+
+    assert trend.days_requested, "应记录请求的 K 线根数"
+    requested = trend.days_requested[0]
+    assert requested < 90, f"缺口只有 ~9 个交易日，却请求了 {requested} 根（应增量）"
+    assert requested >= 9, f"请求根数不足以补上 9 个交易日的缺口：{requested}"
+
+
+def test_empty_calendar_fetches_the_full_window() -> None:
+    """空表 ⇒ 按窗口全量拉（保持 V0.79.0 的行为）。"""
+    gold = _FakeGold()
+    trend = _FakeTrend()
+    svc = _svc(gold, trend)
+
+    ok, why = asyncio.run(svc.ensure_price_calendar("etf"))
+
+    assert ok is True, why
+    assert trend.days_requested == [90]
+
+
+def test_head_gap_triggers_at_least_window_sized_fetch() -> None:
+    """★ **头部不足**（日历没覆盖回测窗口起点）⇒ 至少按窗口大小取数。"""
+    gold = _FakeGold(existing=[(d, 10.0) for d in _weekdays(TODAY - timedelta(days=20), TODAY)])
+    trend = _FakeTrend()
+    svc = _svc(gold, trend)
+
+    asyncio.run(svc.ensure_price_calendar("etf"))
+
+    assert trend.days_requested, "头部有缺口时必须取数"
+    assert trend.days_requested[0] >= 90, (
+        f"头部缺口应按窗口大小取数，却只取了 {trend.days_requested[0]} 根"
+    )
 
 
 def test_force_backfills_despite_existing() -> None:
@@ -257,6 +376,61 @@ def test_force_backfills_despite_existing() -> None:
     assert ok is True
     assert trend.calls == 1
     assert len(gold.upsert_calls) == 1
+
+
+# ─────────────── 调用点：回测**每次**都尝试增量补齐（V0.121.2 B1）───────────────
+
+
+def test_run_attempts_calendar_catchup_even_when_coverage_is_usable() -> None:
+    """★ 调用点的判据必须是「**无条件尝试**」，不是「``cov.usable == False``」。
+
+    ⚠ **V0.121.2（B1）修的真缺陷在调用点，不只在 ``ensure_price_calendar`` 里**：
+    旧代码是 ``if not cov.usable:`` 才回填，而 ``usable = returns_ok > 0``
+    ⇒ 只要有**任意一条**收益数据就算「可用」⇒ 价格日历**永远不会被追到今天**
+    （实测 ny 落后 23 天）。只改 ``ensure_price_calendar`` 内部逻辑而保留这个
+    调用点 ⇒ 缺陷原样保留 ⇒ **必须一起改**。
+    """
+    from app.schemas.backtest import BacktestCoverageOut, BacktestRequestIn
+    from app.services import backtest_throttle as throttle
+
+    gold = _FakeGold()
+    svc = _svc(gold, _FakeTrend())
+
+    calls: list[tuple[str, int]] = []
+
+    async def _stub_ensure(target: str, *, days: int = 90, force: bool = False):
+        calls.append((target, days))
+        return False, "stub"
+
+    async def _stub_coverage(target: str = "etf", days: int = 90):
+        return BacktestCoverageOut(
+            target="etf",
+            start_date=None,
+            end_date=None,
+            available_days=0,
+            available_window_trading_days=0,
+            note="",
+            sample_warning=False,
+            price_calendar_days=0,
+            returns_available_days=0,
+            returns_missing_days=0,
+            usable=True,  # ★ 覆盖期「可用」—— 旧判据下这里不会回填
+        )
+
+    async def _stub_snapshots(target: str):
+        return []  # 少于 2 条 ⇒ run() 提前返回，不进网格展开
+
+    svc.ensure_price_calendar = _stub_ensure  # type: ignore[method-assign]
+    svc.coverage = _stub_coverage  # type: ignore[method-assign]
+    svc._load_snapshots = _stub_snapshots  # type: ignore[method-assign]
+
+    throttle.clear()
+    try:
+        asyncio.run(svc.run(BacktestRequestIn(days=90, target="etf")))
+    finally:
+        throttle.clear()
+
+    assert calls, "覆盖期已可用时也必须尝试增量补齐（否则价格日历永远不追新）"
 
 
 # ─────────────── 约束 4（V0.120.0 新增）：回填不得触发任何评分面 ───────────────
@@ -286,18 +460,21 @@ def test_backfill_does_not_evaluate_any_scoring_face() -> None:
 
 
 def test_backfill_is_idempotent_across_calls() -> None:
-    """连续两次：第一次写入，第二次因已有数据而跳过。"""
+    """连续两次：第一次写入，第二次因**已追平**而跳过。
+
+    ⚠ V0.121.2（B1）：跳过条件从「表里有任何一行」改成「**已覆盖窗口且已追到今天**」。
+    """
     gold = _FakeGold()
     svc = _svc(gold, _FakeTrend())
 
     first_ok, _ = asyncio.run(svc.ensure_price_calendar("etf"))
-    # 模拟首次写入已落库
-    gold._existing = [(date(2026, 9, 1), 9.9)]
+    # 模拟首次写入已落库（稠密且追到今天）
+    gold._existing = [(d, 10.0) for d in _weekdays(TODAY - timedelta(days=90), TODAY)]
     second_ok, second_why = asyncio.run(svc.ensure_price_calendar("etf"))
 
     assert first_ok is True
     assert second_ok is False
-    assert "已有数据" in second_why
+    assert "已追平" in second_why
 
 
 def test_existing_span_reports_bounds() -> None:

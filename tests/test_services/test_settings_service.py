@@ -163,6 +163,92 @@ async def test_group_combine_legacy_stored_json_without_field_defaults_true(
     assert await svc.group_combine() is True
 
 
+# ───────────────────── V0.121.2（P0-7）· 组内平均的 3 个组权重 ─────────────────────
+
+
+async def test_group_weights_default_matches_trend_constant(db_session: AsyncSession) -> None:
+    """未配置时组权重 = 0.50/0.30/0.20（与 ``trend.GROUP_WEIGHTS`` 逐字一致）。
+
+    ⚠ 不一致的话，升级后技术面指数会**无声地变** ⇒ 必须锁死。
+    """
+    from app.services.trend import GROUP_WEIGHTS
+
+    svc = _service(db_session)
+    gw = await svc.group_weights()
+    assert gw == dict(GROUP_WEIGHTS)
+    assert sum(gw.values()) == pytest.approx(1.0, abs=1e-9)
+    assert set(gw) == {"trend", "overbought", "risk"}
+
+
+async def test_group_weights_save_and_load_roundtrip(db_session: AsyncSession) -> None:
+    """保存自定义组权重 → 重新读取保持不变（真正可编辑、可持久化）。"""
+    svc = _service(db_session)
+    custom = WeightConfig(
+        trend={
+            "structure": 0.30,
+            "momentum": 0.20,
+            "support": 0.20,
+            "momentum_rsi": 0.15,
+            "drawdown": 0.15,
+        },
+        macro={
+            "dxy": 0.25,
+            "us2y": 0.05,
+            "us10y": 0.07,
+            "us30y": 0.08,
+            "curve_10y2y": 0.10,
+            "real10y": 0.20,
+            "vix": 0.10,
+            "cb_gold": 0.05,
+            "us_gov_debt": 0.05,
+            "cn_gov_debt": 0.03,
+            "eu_gov_debt": 0.02,
+        },
+        combine={"tech": 0.30, "macro": 0.40, "news": 0.30},
+        group_combine=True,
+        group_weights={"trend": 0.2, "overbought": 0.3, "risk": 0.5},
+    )
+    await svc.save_weights(custom)
+
+    assert await svc.group_weights() == {"trend": 0.2, "overbought": 0.3, "risk": 0.5}
+
+    fresh = _service(db_session)  # 模拟冷启动
+    assert await fresh.group_weights() == {"trend": 0.2, "overbought": 0.3, "risk": 0.5}
+
+
+async def test_group_weights_legacy_json_without_field_gets_defaults(
+    db_session: AsyncSession,
+) -> None:
+    """历史权重 JSON 缺 group_weights → 落默认（向后兼容，行为不变）。"""
+    repo = SettingRepository(db_session)
+    legacy_json = (
+        '{"trend":{"structure":0.3,"momentum":0.2,"support":0.2,'
+        '"momentum_rsi":0.15,"drawdown":0.15},'
+        '"macro":{"dxy":0.25,"us2y":0.05,"us10y":0.07,"us30y":0.08,'
+        '"curve_10y2y":0.10,"real10y":0.20,"vix":0.10,"cb_gold":0.05,'
+        '"us_gov_debt":0.05,"cn_gov_debt":0.03,"eu_gov_debt":0.02},'
+        '"combine":{"tech":0.3,"macro":0.4,"news":0.3},'
+        '"group_combine":true}'
+    )
+    await repo.set(WEIGHTS_KEY, legacy_json)
+
+    svc = _service(db_session)
+    gw = await svc.group_weights()
+    assert gw == {"trend": 0.50, "overbought": 0.30, "risk": 0.20}
+
+
+def test_group_weight_config_rejects_sum_not_one() -> None:
+    """组权重之和 ≠ 1 ⇒ 校验失败（与其它权重组同型）。"""
+    with pytest.raises(ValidationError):
+        WeightConfig(group_weights={"trend": 0.5, "overbought": 0.3, "risk": 0.3})
+
+
+def test_group_weight_config_rejects_out_of_range() -> None:
+    """单个组权重越界 ⇒ 校验失败。"""
+    with pytest.raises(ValidationError):
+        WeightConfig(group_weights={"trend": 1.4, "overbought": -0.2, "risk": -0.2})
+
+
 # ───────────────────── V0.119.0 · 宏观 8 因子 → 11 因子迁移 ─────────────────────
 
 #: V0.118.0 之前落库的宏观权重 JSON（5 因子，合计 = 1.0）

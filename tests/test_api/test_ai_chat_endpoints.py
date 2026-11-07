@@ -881,6 +881,157 @@ async def test_send_message_stream_happy_path(
         app.state.settings = None
 
 
+def _parse_sse(text: str) -> list[dict]:
+    """把 SSE 响应文本拆成 event payload 列表（``data: {...}`` 行）。"""
+    import contextlib
+    import json
+
+    events: list[dict] = []
+    for chunk in text.split("\n\n"):
+        for line in chunk.strip().split("\n"):
+            if not line.startswith("data:"):
+                continue
+            with contextlib.suppress(json.JSONDecodeError):
+                events.append(json.loads(line[5:].strip()))
+    return events
+
+
+async def test_stream_usage_is_reported_and_persisted(
+    as_ai_user,
+    mock_settings,
+) -> None:
+    """⚠️ **V0.121.2（P0-5）**：流式的 token 用量必须**既上报又落库**。
+
+    契约：
+    1. ``message_stop`` 事件里带 ``usage``（客户端就是靠它显示 token 的）
+    2. 落库的 assistant 消息带同样的数字（刷新页面后仍在）
+
+    原缺陷：服务端 ``message_stop`` 确实发了 usage，但客户端从不读
+    （``case 'message_stop'`` 里没有 ``payload.usage``）⇒ 页面上 token 一栏
+    永远不显示。
+    """
+    from app.services.llm.claude import (
+        StreamMessageDelta,
+        StreamMessageStart,
+        StreamMessageStop,
+        StreamTextDelta,
+    )
+
+    async def mock_ask_stream(*, system, messages, tools=None, **kwargs):
+        yield StreamMessageStart(input_tokens=10, model="claude-test")
+        yield StreamTextDelta(index=0, text="你好，")
+        yield StreamMessageDelta(stop_reason="end_turn", output_tokens=42)
+        yield StreamMessageStop()
+
+    mock_llm = MagicMock()
+    mock_llm.ask_stream = mock_ask_stream
+
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages/stream",
+                json={"content": "hi"},
+            )
+            assert r2.status_code == 200, r2.text
+
+            events = _parse_sse(r2.text)
+            stop = [e for e in events if e.get("event") == "message_stop"]
+            assert stop, f"missing message_stop: {events}"
+            usage = stop[-1].get("usage") or {}
+            assert usage.get("input_tokens") == 10, f"input_tokens 没上报: {usage}"
+            assert usage.get("output_tokens") == 42, f"output_tokens 没上报: {usage}"
+
+            # 落库：刷新页面后 token 仍在
+            r3 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            asst = [m for m in r3.json()["messages"] if m["role"] == "assistant"]
+            assert asst, "assistant 消息没落库"
+            assert asst[0]["input_tokens"] == 10, asst[0]
+            assert asst[0]["output_tokens"] == 42, asst[0]
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
+async def test_stream_without_usage_events_reports_unknown_not_zero(
+    as_ai_user,
+    mock_settings,
+) -> None:
+    """⚠️ **V0.121.2（P0-5）**：上游**没真数** token ⇒ 报「未知（NULL）」，不报 0。
+
+    实测成因（2026-11-07 线上 SSE 抓包）：miniMax 代理**照发** ``message_start``，
+    但 ``usage.input_tokens`` 要么**缺失**、要么**报 0** ——
+    而请求必带 system prompt + tools + 历史 ⇒ 真实输入 token **不可能为 0**
+    ⇒ 代理的 0 其实是「没数」，真相是「未知」。
+    写 0 等于谎称「这次用了 0 个 token」——这是 V0.78.0 Step D 的老规矩
+    （数据不足 ≠ 中性/零）。
+
+    反向验证：把服务端的 ``... if saw_input_usage else None`` 改回 ``total_in_tok``
+    ⇒ 本测试必须变红（拿到 0 而不是 None）。
+    """
+    from app.services.llm.claude import StreamMessageStart, StreamMessageStop, StreamTextDelta
+
+    async def mock_ask_stream(*, system, messages, tools=None, **kwargs):
+        # ⚠️ 复刻线上真实形态：message_start **发了**，但 input_tokens **报 0**
+        #   （代理没真数）⇒ 一律当「未知」
+        yield StreamMessageStart(input_tokens=0, model="claude-test")
+        # ⚠️ 也不发 StreamMessageDelta ⇒ 输出 token 同样未知
+        yield StreamTextDelta(index=0, text="你好。")
+        yield StreamMessageStop()
+
+    mock_llm = MagicMock()
+    mock_llm.ask_stream = mock_ask_stream
+
+    mock_tool = MagicMock()
+    mock_tool.schemas = MagicMock(return_value=[])
+
+    app.state.llm_client = mock_llm
+    app.state.tool_dispatcher = mock_tool
+    app.state.settings = mock_settings
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app),
+            base_url="http://test",
+        ) as ac:
+            r = await ac.post("/api/v1/ai/conversations", json={})
+            cid = r.json()["id"]
+            r2 = await ac.post(
+                f"/api/v1/ai/conversations/{cid}/messages/stream",
+                json={"content": "hi"},
+            )
+            assert r2.status_code == 200, r2.text
+
+            events = _parse_sse(r2.text)
+            stop = [e for e in events if e.get("event") == "message_stop"]
+            assert stop, f"missing message_stop: {events}"
+            usage = stop[-1].get("usage")
+            assert usage is not None, f"message_stop 必须带 usage 字段: {stop[-1]}"
+            assert usage.get("input_tokens") is None, f"未知必须是 None 而不是 0: {usage}"
+            assert usage.get("output_tokens") is None, f"未知必须是 None 而不是 0: {usage}"
+
+            # 落库同理：未知 ⇒ NULL（不是 0）
+            r3 = await ac.get(f"/api/v1/ai/conversations/{cid}")
+            asst = [m for m in r3.json()["messages"] if m["role"] == "assistant"]
+            assert asst, "assistant 消息没落库"
+            assert asst[0]["input_tokens"] is None, f"落库值应是 NULL 而不是 0: {asst[0]}"
+            assert asst[0]["output_tokens"] is None, f"落库值应是 NULL 而不是 0: {asst[0]}"
+    finally:
+        app.state.llm_client = None
+        app.state.tool_dispatcher = None
+        app.state.settings = None
+
+
 async def test_send_message_stream_error_event_yields_error(
     as_ai_user,
     mock_settings,

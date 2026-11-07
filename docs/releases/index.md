@@ -208,6 +208,7 @@
 | 门禁 `scripts/_verify_macro_debt.mjs`（3 个新因子的 API / 权重页 / 趋势页 + **2 处反向验证**：删掉 mock 的 `max_lag_days` 后必须亮滞后红灯；把 mock 的 `rolling_factors` 砍到 3 个后角标必须显示「3 个可滚动因子」） | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **门禁自愈批次**：`check_v084.mjs` 0/27 → **27/27**（过期断言对齐 V0.85 后的真实结构 + 反向断言）· `_verify_sw_update.mjs` 0 条 → **8 条**（含「缓存无陈旧副本」+ 持久化 profile）· `_verify_mobile.mjs` 聚焦断言改确定性轮询 | **V0.121.0** | [v0.121.0.md](milestones/m6-truthful-signals-v0.121.md) |
 | **可信度 P0 批次**：`?days=` 进 served cache key（此前完全失效）· 新增 `price_direction` 列 + 迁移 `t2u3v4w5x6y`（上涨天数 0 → 11，方向已知天数可见）· 伪造消息面 50 分治源头 + 幂等回填（清掉 26 个伪造命中、29 行被消息面方向污染的 `direction`）· `/headlines` 相对时间 i18n key 字面量修好 + 门禁纳入 `time.` 命名空间 | **V0.121.1** | [v0.121.1.md](milestones/m6-truthful-signals-v0.121.md) |
+| **诚实性与数据链批次**：价格日历**增量**补齐（`ny` 最新 2026-10-14 → **2026-11-06`，回测覆盖 15 → 22 天）· `group_combine` 的 5 个权重滑块**真正置灰** + 补 3 个**真的生效**的组权重滑块（技术面 16.4 → 4.7 → 还原 16.4）· 删掉 3 处**误导性**的数据时效调用 + 新增通用门禁 `check_freshness_consistency.py` · AI token 栏显示出来了（上游报 0 ⇒ 记 NULL 而不是 0）—— 并**顺带修好「/ask 的流式自 V0.98 起从未真正生效」**这个更大的缺陷 | **V0.121.2** | [v0.121.2.md](milestones/m6-truthful-signals-v0.121.md) |
 | Python 3.13 迁移收口 | **V0.101**（in progress） | — |
 
 ---

@@ -710,7 +710,12 @@
     autoResize();
 
     // 起流（SSE /messages/stream）；失败时降级到 /messages 同步端点
-    return sendMessageStream(text, placeholderAsst)
+    // ⚠️ V0.121.2（P0-5 顺带发现的新缺陷）：userMsg 必须**传进去**。
+    //    原实现里 `var userMsg` 在 sendMessage() 的作用域内，而 handleEvent()
+    //    在 sendMessageStream() 里 —— 两个不同的函数作用域 ⇒ `user_saved`
+    //    事件一进来就 ReferenceError ⇒ **整条流当场死掉** ⇒ 每次提问都静默
+    //    降级到同步端点（页面看起来「能用」，其实从来没流式过）。
+    return sendMessageStream(text, placeholderAsst, userMsg)
       .catch(function (err) {
         // SSE 端点不可用（404 / 405 / 网络层）→ 降级到同步端点
         console.warn('SSE stream failed, falling back to sync /messages', err);
@@ -744,7 +749,7 @@
   //  - 调 /api/v1/ai/conversations/{id}/messages/stream
   //  - 逐事件更新 placeholderAsst.content / tool_name / tool_input
   //  - 终态把 placeholder 替换为 [asst, tool?, asst?, ...] 整轮结果
-  function sendMessageStream(text, placeholderAsst) {
+  function sendMessageStream(text, placeholderAsst, userMsg) {
     var url = '/api/v1/ai/conversations/' + state.activeId + '/messages/stream';
     // 当前正在流式累积的「buffer」：一个临时 DOM 节点 + 一个 tool 列表
     var liveBubble = null;   // 当前 assistant 的 .bubble 元素（markdown 渲染目标）
@@ -857,7 +862,9 @@
       // 已确认的 round 列表（流式多轮 tool_use）
       var committedMsgs = [];
       // 当前 round 的临时缓冲
-      var currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: 0, outputTokens: 0 };
+      // ⚠️ V0.121.2（P0-5）：token 初始值必须是 **null（未知）而不是 0**。
+      //    0 的语义是「用了 0 个 token」；上游没报就应该是「不知道」。
+      var currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: null, outputTokens: null };
 
       function commitRoundToState() {
         // 把 currentRound 推到 placeholderAsst 之前（即 state.messages 的最后
@@ -869,8 +876,10 @@
           content: currentRound.text,
           tool_name: currentRound.toolName,
           tool_input: currentRound.toolInput,
-          input_tokens: currentRound.inputTokens || null,
-          output_tokens: currentRound.outputTokens || null,
+          // `?? null` 而不是 `|| null`：0 是合法值（真的没花 token），
+          // `||` 会把它也变成 null ⇒ 又一次「用假值冒充真值」。
+          input_tokens: currentRound.inputTokens ?? null,
+          output_tokens: currentRound.outputTokens ?? null,
           latency_ms: currentRound.latencyMs || null,
         };
         state.messages.splice(idx, 1, assistant);
@@ -880,7 +889,7 @@
           if (m.role === 'tool') state.messages.push(m);
         });
         committedMsgs = [];
-        currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: 0, outputTokens: 0 };
+        currentRound = { text: '', toolName: null, toolInput: null, toolInputJson: '', inputTokens: null, outputTokens: null };
         pendingText = '';
         pendingToolChips = [];
       }
@@ -949,8 +958,22 @@
             renderMessages();
             break;
           case 'message_stop':
+            // ⚠️ V0.121.2（P0-5）：**先**读 usage，**再** commit。
+            //    顺序反了 ⇒ commitRoundToState() 先把 token 写成 null（还没读到），
+            //    之后 usage 就再也挂不上 ⇒ 页面上 token 一栏永远不显示（原缺陷）。
+            if (payload.usage) {
+              if (typeof payload.usage.input_tokens === 'number') {
+                currentRound.inputTokens = payload.usage.input_tokens;
+              }
+              if (typeof payload.usage.output_tokens === 'number') {
+                currentRound.outputTokens = payload.usage.output_tokens;
+              }
+            }
             // 最终 message_stop：把最后一轮（end_turn）也 commit
-            if (currentRound.text || currentRound.toolName) {
+            // （最后一轮空但**带了 token**时也要 commit —— 否则 token 无处可挂，
+            //   placeholder 永远不被替换 ⇒ 刷新后这段对话里看不到 token）
+            if (currentRound.text || currentRound.toolName ||
+                currentRound.inputTokens != null || currentRound.outputTokens != null) {
               commitRoundToState();
             }
             // 移除所有 chip 的 streaming 态

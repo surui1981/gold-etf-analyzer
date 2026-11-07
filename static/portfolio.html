@@ -634,13 +634,14 @@ async function refreshQuote() {
 }
 
 function startAlertPolling() {
-  // V0.60.0：60s → 30s（持仓 + 决策是最高优先级页面）；同步拉 freshness
+  // V0.60.0：60s → 30s（持仓 + 决策是最高优先级页面）
+  // ⚠ V0.121.2（P0-6）：原注释写「同步拉 freshness」，但**本页从没引入 freshness.js**
+  //   ⇒ ``window.FreshnessBar`` 恒为 undefined ⇒ 那两行是**永远不会执行的死代码**
+  //   （读起来却像「本页有时效保护」⇒ 误导）。已删除。
+  //   数据时效统一收敛到「数据健康」页（V0.85 起的 chip + panel 模式）。
   setInterval(async () => {
     await refreshQuote();
     await loadDecision();
-    if (window.FreshnessBar && typeof window.FreshnessBar.load === "function") {
-      window.FreshnessBar.load();
-    }
   }, 30000);
   // 切回前台立即刷一次
   document.addEventListener("visibilitychange", () => {

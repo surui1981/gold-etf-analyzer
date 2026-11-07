@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import itertools
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -39,6 +40,7 @@ from app.services.review import judge_hit
 from app.services.settings import WeightService
 from app.services.trend import TrendService
 from app.utils.logger import get_logger
+from app.utils.market_clock import cn_today, trading_days_between
 
 logger = get_logger(__name__)
 
@@ -65,6 +67,24 @@ _CALIBRATION_BUCKETS: tuple[tuple[float, float], ...] = (
     (60, 80),
     (80, 100),
 )
+
+# ── V0.121.2（B1）· 价格日历增量补齐的判定阈值 ──────────────────────────
+# 尾部滞后容忍度（自然日）：最新一行落后今天 ≤ 此值 ⇒ 视为「已追平」，不再回填。
+# ⚠ 之所以用 3 个**自然日**而不是 1 个交易日：周末 + 节假日会天然产生 2~3 天的
+# 「日历差」（周五收盘后到下周一）⇒ 阈值太小 ⇒ 每个周末都判定为缺口 ⇒
+# 每次回测都打外网（慢 + 可能超时拖垮回测）。
+_CALENDAR_STALE_TOLERANCE_DAYS = 3
+
+# 窗口内覆盖率下限：窗口内实际行数 / 期望工作日数 低于此值 ⇒ 判定「窗口内有洞」。
+# ⚠ 阈值取 0.6 而不是 0.9：A 股长假（春节 9 天 / 国庆 7 天）会让比值天然偏低
+# （期望工作日数按「周一至周五」算，不含法定节假日）⇒ 阈值太严 ⇒ 每次回测都
+# 判定有洞 ⇒ 无谓的外网请求。0.6 足以抓「真的缺了一大段」。
+_CALENDAR_COVERAGE_MIN_RATIO = 0.6
+
+# 窗口起点容忍度（工作日数）：最早一行比窗口起点晚这么多个工作日 ⇒ 判定「头部不足」。
+# ⚠ 窗口起点 = today - N 自然日，**多半不是交易日**（周末/假期）⇒ 首行晚 1~3 个
+# 工作日是正常的 ⇒ 阈值太小 ⇒ 每次回测都判定「头部不足」⇒ 每次都全量取数。
+_CALENDAR_HEAD_TOLERANCE_TRADING_DAYS = 3
 
 
 def compute_sharpe(daily_returns: list[float], rf: float = 0.0) -> float:
@@ -179,6 +199,12 @@ class BacktestService:
     而回测 / 复盘 / 校准曲线**都依赖它** ⇒ 未回填时三者静默返回假结果
     （见 ``coverage()`` 的 ``usable`` 字段）。回测是按需动作，故在
     ``run()`` 里惰性回填而非塞进 07:00 调度器 —— 少一次无谓取数。
+
+    V0.121.2（B1）：``ensure_price_calendar()`` 由「all-or-nothing」改为
+    **增量补齐** —— 原实现只要表里有**任何一行**就跳过 ⇒ 价格日历永远停在
+    过去某天（实测 ``ny`` 落后 23 天 / ``etf`` 落后 9 天）。
+    ⇒ 而 ``price_direction``（V0.121.1 P0-2）的覆盖率完全取决于这张表
+    ⇒ 「上涨天数」大半是空就是这么来的。
     """
 
     def __init__(
@@ -187,6 +213,8 @@ class BacktestService:
         gold: GoldPriceRepository,
         weights: WeightService,
         trend: TrendService | None = None,
+        *,
+        today: Callable[[], date] | None = None,
     ) -> None:
         self._session = session
         self._gold = gold
@@ -194,6 +222,11 @@ class BacktestService:
         # ⚠ 可选注入：未注入时 ``ensure_price_calendar`` 直接返回「不可用」，
         # 回测照常跑（只是拿不到价格数据）⇒ **不因缺依赖而 500**。
         self._trend = trend
+        # ⚠ V0.121.2（B1）：「今天」**可注入** —— 追平判据要拿今天与最新一行比，
+        #   若把今天写死在代码/测试里，跨周末跨月就是永久红（clock-drift-time-bomb）。
+        #   默认用北京时间（``cn_today``）而不是 ``date.today()``：本服务面向
+        #   A 股/上交所用户，服务器本地时区不保证是中国时区。
+        self._today: Callable[[], date] = today or cn_today
 
     # ───────────────────── 覆盖期报告 ─────────────────────
 
@@ -340,13 +373,18 @@ class BacktestService:
         #   ② 回填失败不抛异常（增强而非前置），此时 cov 仍是「不可用」，
         #      后面的 rows/summary 会如实带上 usable=False；
         #   ③ 回填成功才重算 coverage，否则用户拿到的还是回填前的口径。
-        if not cov.usable:
-            wrote, why = await self.ensure_price_calendar(target=target, days=params.days)
-            logger.info(
-                "Backtest lazy price-calendar backfill: target=%s wrote=%s (%s)", target, wrote, why
-            )
-            if wrote:
-                cov = await self.coverage(target=target, days=params.days)
+        #
+        # ⚠ **V0.121.2（B1）**：判据从「``not cov.usable``」改成**无条件尝试增量补齐**。
+        #   旧判据 = 「只要有任意一条收益数据就算 usable」⇒ 价格日历**永远不会追到今天**
+        #   （实测 ny 落后 23 天 / etf 落后 9 天）⇒ 回测观测窗口越用越旧。
+        #   新判据下 `ensure_price_calendar` 自己会判定「已追平 ⇒ 跳过」，
+        #   所以「已追平」的常见情况只多一次数据库查询，不产生任何外网请求。
+        wrote, why = await self.ensure_price_calendar(target=target, days=params.days)
+        logger.info(
+            "Backtest lazy price-calendar backfill: target=%s wrote=%s (%s)", target, wrote, why
+        )
+        if wrote:
+            cov = await self.coverage(target=target, days=params.days)
 
         snapshots = await self._load_snapshots(target=target)
         if len(snapshots) < 2:
@@ -442,7 +480,7 @@ class BacktestService:
         days: int = 90,
         force: bool = False,
     ) -> tuple[bool, str]:
-        """价格日历为空时按需回填。返回 ``(是否写入, 说明)``。
+        """价格日历**增量补齐**。返回 ``(是否写入, 说明)``。
 
         ⚠⚠ **三条不可退让的约束**（都源于本次修复的教训）：
 
@@ -453,22 +491,47 @@ class BacktestService:
            不让 ``upsert_many`` 的白名单校验去兜底（那会抛 400 打断回测）。
         2. **失败不抛异常**。回填是**增强**而非前置条件，失败只记录并如实反映在
            ``coverage.usable`` 上；抛异常会把「增强失败」变成「回测不可用」。
-        3. **不覆盖已有数据**。``upsert_many`` 本身幂等，但 ``force=False`` 时
-           仅在**区间内完全无数据**时才回填，避免每次回测都打数据源。
+        3. **不无谓覆盖已有数据**。``upsert_many`` 本身幂等；``force=False`` 时
+           仅在**确有缺口**时才回填，避免每次回测都打数据源。
+
+        ⚠ **V0.121.2（B1）改写了第 3 条的判据** —— 原文是「区间内完全无数据才回填」
+        （all-or-nothing），实测后果是**价格日历永远停在过去某天**：
+
+            | target | 行数 | 最早      | 最晚      | 落后 |
+            |--------|------|-----------|-----------|------|
+            | ny     | 80   | 2026-06-25 | 2026-10-14 | **23 天** |
+            | etf    | 73   | 2026-07-10 | 2026-10-28 | **9 天**  |
+
+        ⇒ 跳过条件改为「**已覆盖回测窗口且已追到今天**」；
+        有缺口时按**缺口大小**取数（增量），而不是全量或全跳过。
         """
         if self._trend is None:
             return False, "未注入趋势服务，无法自动回填"
 
-        start, end = await self._existing_calendar_span(target=target)
-        if not force and start is not None and end is not None:
-            return False, f"价格日历已有数据（{start} ~ {end}），跳过回填"
+        today = self._today()
+        window_start = today - timedelta(days=days)
+
+        fetch_days = days
+        if not force:
+            need = await self._calendar_gap_days(
+                target=target,
+                window_start=window_start,
+                today=today,
+                window_days=days,
+            )
+            if need is None:
+                start, end = await self._existing_calendar_span(target=target)
+                return False, f"价格日历已追平（{start} ~ {end}），跳过回填"
+            fetch_days = need
 
         try:
             # ⚠ V0.120.0：走**轻路径**（只取价格序列 + 来源标记），不走 analyze()。
             # analyze() 会顺带把宏观面 / 消息面 / **资金流面**各拉一遍外网
             # （实测资金流面单次 8.25s），算出的指数在这里被整段丢掉 ——
             # 「只要价格」却要等十几秒，还会把回测拖过超时预算。
-            bars, sources = await self._trend.fetch_price_bars(days=days, target=target)
+            # ⚠ V0.121.2（B1）：``fetch_days`` 可能是**缺口大小**（增量），
+            #   而非恒等于 ``days``（全量）。
+            bars, sources = await self._trend.fetch_price_bars(days=fetch_days, target=target)
         except Exception as exc:
             logger.warning(
                 "Price calendar backfill aborted: price fetch failed target=%s: %s", target, exc
@@ -513,6 +576,63 @@ class BacktestService:
         if not bars:
             return None, None
         return bars[0].price_date, bars[-1].price_date
+
+    async def _calendar_gap_days(
+        self,
+        *,
+        target: str,
+        window_start: date,
+        today: date,
+        window_days: int,
+    ) -> int | None:
+        """价格日历的缺口体检。返回 **需要补取的交易日数**；``None`` = 无需补齐。
+
+        ⚠ **V0.121.2（B1）新增**。原实现只问「表里有没有数据」⇒ 价格日历
+        永远停在过去某天（实测 ``ny`` 落后 23 天）。这里改成**三个可查的缺口**：
+
+        | 缺口 | 判据 | 取多少 |
+        |---|---|---|
+        | ① 尾部滞后 | 最新一行落后今天 > ``_CALENDAR_STALE_TOLERANCE_DAYS`` **自然日** | 缺口的工作日数 + 5 冗余 |
+        | ② 头部不足 | 最早一行比窗口起点晚 > ``_CALENDAR_HEAD_TOLERANCE_TRADING_DAYS`` **工作日** | 整个窗口（取数 API 只能取「最近 N 根」） |
+        | ③ 窗口内有洞 | 窗口内行数 < 期望工作日数 × ``_CALENDAR_COVERAGE_MIN_RATIO`` | 整个窗口（同上） |
+
+        ⚠ **为什么 ① 要 +5 冗余**：交易日数是按「周一至周五」估算的
+        （``market_clock.trading_days_between``，不含法定节假日）⇒ 跨春节 / 国庆
+        时真实交易日更少 ⇒ 只取「刚够」的根数会**永远差一点**，下次仍然判定有缺口
+        ⇒ 变成每次回测都打数据源。多取几根是廉价的保险。
+
+        ⚠ **为什么 ③ 的阈值取 0.6 而不是 0.9**：A 股长假（春节 9 天 / 国庆 7 天）
+        会让「窗口内行数 / 工作日数」天然偏低 ⇒ 阈值太严 ⇒ **每次回测都判定有洞**
+        ⇒ 变成无谓的外网请求（还可能超时拖慢回测）。0.6 足以抓「真的缺了一大段」。
+        """
+        bars = await self._gold.list_range(target, start=date(1990, 1, 1), end=today)
+        if not bars:
+            # 空表 ⇒ 按窗口全量拉（与 V0.79.0 的行为一致）
+            return window_days
+
+        earliest = bars[0].price_date
+        latest = bars[-1].price_date
+
+        # ① 尾部滞后（核心症状）
+        lag_days = (today - latest).days
+        tail = 0
+        if lag_days > _CALENDAR_STALE_TOLERANCE_DAYS:
+            tail = trading_days_between(latest, today) + 5
+
+        # ② 头部不足：没覆盖回测窗口的起点
+        #    ⚠ 判据用**工作日数**而不是自然日：窗口起点常落在周末 / 假期
+        #    （window_start = today - 90 天，多半不是交易日）⇒ 首行比起点晚
+        #    1~3 天是正常的 ⇒ 用自然日判会**每次都判成缺口**。
+        head_gap = trading_days_between(window_start, earliest) if earliest > window_start else 0
+        head = window_days if head_gap > _CALENDAR_HEAD_TOLERANCE_TRADING_DAYS else 0
+
+        # ③ 窗口内有洞：行数明显不足
+        expected = trading_days_between(window_start, today)
+        in_window = sum(1 for b in bars if b.price_date >= window_start)
+        hole = window_days if in_window < expected * _CALENDAR_COVERAGE_MIN_RATIO else 0
+
+        need = max(tail, head, hole)
+        return need or None
 
     # ───────────────────── 内部辅助 ─────────────────────
 

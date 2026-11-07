@@ -4,6 +4,117 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.121.2] · 2026-11-07
+
+`诚实性与数据链批次：价格日历不追最新 · 组权重滑块是装饰 · 三页误导性时效调用 · AI token 永远不显示` — fix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)
+
+> 本版是「把显示假的逐条修回来」三批计划里的**第 3 批（批次 2 · 诚实性与数据链）**。
+> 批次 0（V0.121.0）先修门禁、批次 1（V0.121.1）修可信度 P0，本批收尾。
+> **零 schema 变更、零 alembic 迁移** ⇒ 回滚代价低。
+
+- 🐛 **价格日历永远追不到今天**（B1）—— 回测的观测窗口越用越旧
+  - 根因有**两层**（旧文档只写了一层）：
+    ① `ensure_price_calendar()` 在 `force=False` 时「**区间内已有数据就整段跳过**」
+       ⇒ all-or-nothing ⇒ 只补过一次之后，**永远不会再补**；
+    ② 调用点还套着 `if not cov.usable:` ⇒ **覆盖 deemed 可用时压根不调用回填**
+  - 修法：新增 `_calendar_gap_days()` 按**交易日**算缺口，只补缺口那一段
+    （尾部滞后 / 头部不足 / 中段空洞三选一，取最大）；
+    调用点从「`cov.usable` 才回填」改成「**每次都尝试追平**」
+  - ⚠ **窗口大小按「bar 数」而不是「日历天」算**：`market_providers` 的 `days`
+    是**K 线根数**（`df.tail(days)`）⇒ 用日历天会多取一倍
+  - ⚠ **容忍度用交易日**：窗口起点常落在周末 ⇒ 用日历天判断「头部缺了」
+    ⇒ 每次回测都触发一次无用抓取
+  - 📉 反向验证：撤掉调用点的追平逻辑 ⇒ 新测试变红
+  - ✅ **线上实测**（`POST /api/v1/backtest/run`）：
+    | 目标 | 修复前 | 修复后 |
+    |---|---|---|
+    | `ny` | 80 行 / 最新 **2026-10-14**（落后 21 天） | **97 行 / 最新 2026-11-06** |
+    | `etf` | 73 行 / 最新 2026-10-28（落后 7 天） | **80 行 / 最新 2026-11-06** |
+    | 回测覆盖报告 | `price_calendar_days=15` · `returns_available_days=12` | **22 · 18** |
+- 🐛 **`group_combine` 下 5 个权重滑块是装饰**（P0-7）—— 用户调参对技术面指数零影响
+  - 根因：`trend.py` 的 `GROUP_WEIGHTS = {trend:0.50, overbought:0.30, risk:0.20}`
+    是**模块级常量** ⇒ 真正参与合成的是它，而页面让用户调的是**另外 5 个维度权重**
+    ⇒ 用户拖滑块 → 数字变 → 显示「100% 绿」→ 保存成功 → **对结果零影响**
+  - 修法（用户拍板：置灰 + 说明 + 补组权重入口）：
+    ① 新增 `GroupWeightConfig`（trend/overbought/risk，**带「和为 1」校验器**）
+       + `WeightService.group_weights()` + `WeightConfig.group_weights` 字段；
+    ② `combine_by_group()` 接受真实生效的组权重（缺省仍回退模块常量）；
+    ③ `TrendService.analyze()` 把 `group_weights` 一路传到合成层；
+    ④ 权重页：组内平均模式下 5 个滑块**真 `disabled`**（不是「看起来灰」）+
+       一行说明「生效的是下方 3 个组权重」+ 新增 3 个组权重滑块（默认 0.50/0.30/0.20）
+  - ✅ **线上实测**（改组权重 → 看技术面分 → 还原）：
+    `group_weights` (0.5/0.3/0.2) → (0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**；
+    还原 ⇒ **回到 16.4** ⇒ 组权重**确实参与计算**
+  - 📉 反向验证：撤掉「组权重真正参与计算」⇒ 3 个测试红；去掉 `disabled` ⇒ 浏览器门禁红
+- 🐛 **三页的「数据时效保护」是假的**（P0-6）—— 读代码像有，实测没有
+  - 计划里写的是「4 处」，**实测是 3 处**（如实记录）：
+    ① `portfolio.html` / `trades.html`：调 `window.FreshnessBar.load()` 但**没引 `freshness.js`**
+       ⇒ 该对象恒为 `undefined` ⇒ 守卫静默跳过 ⇒ **死代码**；
+    ② `settings.html`：引了 `freshness.js` 但**没有容器** ⇒ 脚本每 60 秒空轮询一次外网接口
+       并渲染到不存在的节点 ⇒ 纯浪费
+  - 只有 `news.html` 是**正当**用法（它有 `#freshnessBar` 容器）⇒ 不动
+  - 修法：删掉那 3 处误导性调用（比补容器 + 补脚本 + 补设计更诚实、成本更低）
+  - 🆕 **新增通用门禁 `scripts/check_freshness_consistency.py`**：
+    「引了 freshness.js ⇒ 必须有容器」+「调了 `window.FreshnessBar` ⇒ 必须引脚本」
+    ⇒ 这**类**缺陷以后会自己变红，不再靠人工复核
+  - 📉 **门禁的 4 个反向验证场景**（全部实测）：
+    ① 引了脚本但删掉容器 ⇒ 红（exit 1）；
+    ② 调了 `window.FreshnessBar` 但没引脚本 ⇒ 红（exit 1）；
+    ③ 同样的调用写在 `//` 注释里 ⇒ **不红**（注释不算代码）；
+    ④ 脚本从 `https://cdn/.../freshness.js` 加载且页面无容器 ⇒ 红
+  - ⚠ **写门禁时自己踩了一个「假绿」洞**：剥 JS 行注释最初用朴素的
+    `re.sub(r"//[^\n]*", "")` ⇒ 它会把 `https://cdn/x/freshness.js`
+    截成 `https:` ⇒ 页面明明引了脚本，门禁却认为「没引」⇒ **真缺陷被永久放行**
+    ⇒ 改成「只在 `//` 前是空白/标点/行首时才算注释」（`:` / `"` / `'` 前面一律保留）
+  - ⚠ **假绿比假红危险** —— 门禁多报一次只是多修一次，门禁漏报一次是缺陷永生
+- 🐛 **AI token 一栏永远不显示**（P0-5）—— 而且是两层原因叠加
+  - **客户端**：`case 'message_stop'` **从不读** `payload.usage`
+    ⇒ `currentRound.inputTokens/outputTokens` 永远是初值 ⇒ 页面 token 栏恒空
+    ⇒ 修法：**先读 usage 再 commit**（顺序反了就挂不上），初值改 `null`（未知），
+      `|| null` 改 `?? null`（0 是合法值，`||` 会把它也变成 null）
+  - **服务端**：拿不到的输入 token 写 **0**（= 谎称「用了 0 个 token」）⇒ 改写 **NULL**
+  - ⚠ **实测比计划更深一层**：miniMax 代理**照发** `message_start`，但
+    `usage.input_tokens` 要么**缺失**、要么**报 0** —— 而请求必带 system prompt +
+    tools + 历史 ⇒ 真实输入 token **不可能为 0** ⇒ 代理的 0 其实是「没数」
+    ⇒ 判据定成「**字段缺失 或 值为 0 ⇒ 未知**」（`claude.py` 解析层保留原值，
+      策略放在落库层，一处说了算）
+  - 🆕 **顺带修好一个更严重的缺陷（此前从未被发现）**：
+    `ask.js` 的 `var userMsg` 在 `sendMessage()` 的作用域里，
+    而 `handleEvent()` 在 `sendMessageStream()` 里 —— **两个不同的函数作用域**
+    ⇒ `user_saved` 事件一进来就 `ReferenceError: userMsg is not defined`
+    ⇒ **整条 SSE 流当场死掉** ⇒ 每次提问都**静默降级**到同步端点
+    ⇒ **/ask 的「流式」此前从未真正生效过**（页面看起来能用，所以没人发现）
+    —— 这是本轮 P0-5 能被端到端门禁抓到的直接原因
+  - ✅ **线上实测**（真 SSE 抓包）：
+    `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`；
+    落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`）
+  - 📉 反向验证：客户端去掉 usage 读取 ⇒ 浏览器门禁 3 条红；
+    服务端去掉 `if saw_input_usage else None` ⇒ 2 条测试红
+- 🧪 **新增/改写的测试**（只加必要的）
+  - `test_price_calendar_backfill.py`：尾部滞后 ⇒ 增量回填；抓取窗口**按缺口大小**算；
+    空表 ⇒ 拉满窗口；头部不足 ⇒ 至少拉满窗口；**覆盖 deemed 可用时也要追平**
+  - `test_trend.py`：组权重**真的改变**技术面指数（⚠ 必须先
+    `TrendService.invalidate_cached_results()`，否则命中 `served_cache` ⇒ 测试空转）；
+    缺省回退模块常量；`combine_by_group` 接受自定义权重
+  - `test_settings_service.py`：组权重默认值 / 存取往返 / 老 JSON 缺字段回退默认 /
+    和 ≠ 1 被拒 / 越界被拒
+  - `test_ai_chat_endpoints.py`：`message_stop` 带 usage ⇒ 上报 + 落库一致；
+    上游没真数 ⇒ 报 **NULL** 而不是 0
+  - `test_llm_client.py`：`message_start` 不带 usage ⇒ `input_tokens` 必须是 `None`
+    （原来的 `or 0` 把「字段缺失」洗成了「0」）
+- 🚪 **新增浏览器门禁 `scripts/_verify_ask_tokens.mjs`**（6 条断言，可判红）
+  - 用**假 SSE** 驱动（不调真模型、不花 token）：上报了就显示 `↓ 10 / ↑ 42`；
+    上游没报就**一个都不显示**（不拿 0 充数）
+  - ⚠ 写门禁时又踩了一次「空转恒真」：第 2 个场景原本查「剩下的 meta 都不含 ↓/↑」，
+    而剩下的数组**是空的** ⇒ 断言恒真 ⇒ 加了「第 2 条消息真的渲染出来了」前置断言
+  - `LIVE=1` 模式打**真实模型**跑整条链（会消耗 token + 建一条对话 ⇒ 默认不跑）
+- 📌 **改 `static/` ⇒ 立即 bump `sw.js` VERSION**（V0.100.1 铁律）
+  - 本次改了 `static/weights.html` + `static/ask.js` + `static/portfolio.html`
+    + `static/trades.html` + `static/settings.html` + 3 语字典
+    ⇒ `sw.js` VERSION → `v0.121.2`
+  - ⚠ `/static/ask.js` **已在** `SHELL_ASSETS`（V0.97.0 就加进去了）⇒ 换代即重新 precache
+- ⚠️ **推送状态**：见文末「推送状态」一节（如实记录，没推出去就写没推出去）
+
 ## [V0.121.1] · 2026-11-06
 
 `可信度 P0 批次：days 参数此前完全失效 · 上涨天数恒为 0 · 64% 历史行带伪造消息面 50 分` — fix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)

@@ -288,6 +288,33 @@ class MoneyFlowWeightConfig(BaseModel):
         return self
 
 
+class GroupWeightConfig(BaseModel):
+    """技术面 **3 组权重**（趋势组 / 超买组 / 风险组）。
+
+    ⚠ **V0.121.2（P0-7）新增**。这才是「组内平均」模式下**真正生效**的权重：
+    ``services/trend.py::GROUP_WEIGHTS`` 原本是**模块级常量**
+    （0.50 / 0.30 / 0.20）⇒ 用户在权重页看到的 5 个维度滑块**对结果零影响**
+    （组内平均模式下），而「调这 5 个滑块 → 保存成功 → 什么都没变」是**误导**。
+
+    ⇒ 本模型把这 3 个组权重变成**可编辑、可持久化**的配置；
+    ``GROUP_WEIGHTS`` 降级为**默认值**（设置缺失 / 旧存量配置时的兜底）。
+
+    组内映射（``services/trend.py::GROUP_MAPPING``）：
+    趋势组 = 结构 + 动量；超买组 = 动能 + 支撑；风险组 = 回撤。
+    """
+
+    trend: float = Field(0.50, ge=0, le=1, description="趋势组（结构 + 动量）")
+    overbought: float = Field(0.30, ge=0, le=1, description="超买组（动能 RSI + 支撑乖离）")
+    risk: float = Field(0.20, ge=0, le=1, description="风险组（回撤）")
+
+    @model_validator(mode="after")
+    def _sum_to_one(self) -> "GroupWeightConfig":
+        total = self.trend + self.overbought + self.risk
+        if abs(total - 1.0) > 0.001:
+            raise ValueError(f"组权重之和须为 1，当前 {total:.3f}")
+        return self
+
+
 class WeightConfig(BaseModel):
     """完整权重配置（GET/PUT /settings/weights）。"""
 
@@ -300,6 +327,12 @@ class WeightConfig(BaseModel):
     group_combine: bool = Field(
         True,
         description="技术面 5 维度是否按组内平均合成（V0.79.0 Step F，默认开启）",
+    )
+    # V0.121.2（P0-7）：组内平均模式下**真正生效**的 3 个组权重。
+    # 存量配置没有这个键 ⇒ 落到默认 0.50/0.30/0.20（与旧常量一致 ⇒ 行为不变）。
+    group_weights: GroupWeightConfig = Field(
+        default_factory=GroupWeightConfig,
+        description="技术面 3 组权重（组内平均模式下生效；V0.121.2 P0-7）",
     )
 
 

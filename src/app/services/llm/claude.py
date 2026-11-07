@@ -354,8 +354,14 @@ def _parse_sse_event(
     if ev_type == "message_start":
         msg = payload.get("message") or {}
         usage = msg.get("usage") or {}
+        raw_in = usage.get("input_tokens")
         return StreamMessageStart(
-            input_tokens=int(usage.get("input_tokens") or 0),
+            # ⚠️ V0.121.2（P0-5）：上游**没给** input_tokens 就是「未知」，
+            #    不是「用了 0 个」⇒ 保持 None。
+            #    原来的 `or 0` 把「字段缺失」洗成了「0」——实测 miniMax 代理
+            #    就是这样：message_start 事件照发，usage 里没有 input_tokens
+            #    ⇒ 线上一直显示「输入 0 个 token」。
+            input_tokens=int(raw_in) if isinstance(raw_in, (int, float)) else None,
             model=msg.get("model", ""),
         )
     if ev_type == "content_block_start":
@@ -419,7 +425,9 @@ class StreamPing(StreamEvent):
 
 @dataclass
 class StreamMessageStart(StreamEvent):
-    input_tokens: int = 0
+    #: ⚠️ V0.121.2（P0-5）：``None`` = 上游没报（未知）；``0`` = 真的用了 0 个。
+    #: 两者语义不同，**不能**用 `or 0` 互转。
+    input_tokens: int | None = None
     model: str = ""
 
 

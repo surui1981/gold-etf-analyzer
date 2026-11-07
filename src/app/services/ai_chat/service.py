@@ -453,6 +453,15 @@ class AIChatService:
         all_msgs: list[AIMessage] = [user_msg]
         total_in_tok = 0
         total_out_tok = 0
+        # 本轮（单次 API 调用）的输出 token。message_delta 里的值是**当轮累计**，
+        #   同一轮可能发多次 ⇒ 轮内只能覆盖（取最后一次），跨轮才累加。
+        round_out_tok = 0
+        # ⚠️ V0.121.2（P0-5）：「拿到 0」与「没拿到」是两回事。
+        #   saw_* 只有在**真的收到过**对应事件时才为 True：
+        #   miniMax 代理不发 message_start ⇒ 输入 token 永远是「未知」，
+        #   写 0 等于谎称「用了 0 个 token」⇒ 拿不到时写 NULL（int | None 列）。
+        saw_input_usage = False
+        saw_output_usage = False
         start_ts = datetime.utcnow()
         final_text = ""
         final_tool_calls: list[dict[str, Any]] = []
@@ -491,9 +500,17 @@ class AIChatService:
                                 }
                                 break
                     elif ev.__class__.__name__ == "StreamMessageStart":
-                        total_in_tok = ev.input_tokens
+                        # ⚠️ V0.121.2（P0-5）：「上游报了」与「上游真数了」是两回事。
+                        #   ① 字段缺失 ⇒ None（未知）
+                        #   ② 报 **0** ⇒ 也不可信：请求必带 system prompt + tools + 历史
+                        #      ⇒ 真实输入 token 不可能为 0 ⇒ 代理的 0 = 「没数」
+                        #   ⇒ 两种都当「未知」，写 NULL 而不是 0（0 = 谎称「用了 0 个」）
+                        if ev.input_tokens:
+                            total_in_tok = ev.input_tokens
+                            saw_input_usage = True
                     elif ev.__class__.__name__ == "StreamMessageDelta":
-                        total_out_tok = ev.output_tokens
+                        round_out_tok = ev.output_tokens
+                        saw_output_usage = True
                     elif ev.__class__.__name__ == "StreamError":
                         raise LLMError(f"sse error: type={ev.err_type} msg={ev.message[:200]}")
                 # 流正常结束
@@ -523,9 +540,12 @@ class AIChatService:
                                 final_text += ev.text
                                 yield {"event": "text_delta", "delta": ev.text}
                             elif ev.__class__.__name__ == "StreamMessageStart":
-                                total_in_tok = ev.input_tokens
+                                if ev.input_tokens:
+                                    total_in_tok = ev.input_tokens
+                                    saw_input_usage = True
                             elif ev.__class__.__name__ == "StreamMessageDelta":
-                                total_out_tok = ev.output_tokens
+                                round_out_tok = ev.output_tokens
+                                saw_output_usage = True
                             elif ev.__class__.__name__ == "StreamError":
                                 raise LLMError(
                                     f"sse L1 error: type={ev.err_type} msg={ev.message[:200]}"
@@ -552,9 +572,12 @@ class AIChatService:
                                     final_text += ev.text
                                     yield {"event": "text_delta", "delta": ev.text}
                                 elif ev.__class__.__name__ == "StreamMessageStart":
-                                    total_in_tok = ev.input_tokens
+                                    if ev.input_tokens:
+                                        total_in_tok = ev.input_tokens
+                                        saw_input_usage = True
                                 elif ev.__class__.__name__ == "StreamMessageDelta":
-                                    total_out_tok = ev.output_tokens
+                                    round_out_tok = ev.output_tokens
+                                    saw_output_usage = True
                                 elif ev.__class__.__name__ == "StreamError":
                                     raise LLMError(
                                         f"sse L3 error: type={ev.err_type} msg={ev.message[:200]}"
@@ -577,6 +600,11 @@ class AIChatService:
                     except (json.JSONDecodeError, ValueError):
                         tc["input"] = {}
 
+            # 本轮输出 token 入账：轮内是覆盖（message_delta 给的是当轮累计值，
+            #   同轮可能发多次），跨轮在这里累加 ⇒ 多轮 tool_use 的总数不再只报最后一轮。
+            total_out_tok += round_out_tok
+            round_out_tok = 0
+
             # 持久化 assistant 消息
             asst_msg = await self._msg.insert(
                 msg_id=str(uuid.uuid4()),
@@ -586,8 +614,10 @@ class AIChatService:
                 content=final_text,
                 tool_name=final_tool_calls[0]["name"] if final_tool_calls else None,
                 tool_input=final_tool_calls[0].get("input") if final_tool_calls else None,
-                input_tokens=total_in_tok,
-                output_tokens=total_out_tok,
+                # ⚠️ V0.121.2（P0-5）：拿不到就写 NULL（未知），不写 0
+                #   （0 的语义是「用了 0 个 token」= 谎称）
+                input_tokens=total_in_tok if saw_input_usage else None,
+                output_tokens=total_out_tok if saw_output_usage else None,
                 latency_ms=int((datetime.utcnow() - start_ts).total_seconds() * 1000),
             )
             all_msgs.append(asst_msg)
@@ -684,9 +714,17 @@ class AIChatService:
                         retry_text += ev.text
                         yield {"event": "text_delta", "delta": ev.text}
                     elif ev.__class__.__name__ == "StreamMessageStart":
-                        total_in_tok = ev.input_tokens
+                        # ⚠️ V0.121.2（P0-5）：「上游报了」与「上游真数了」是两回事。
+                        #   ① 字段缺失 ⇒ None（未知）
+                        #   ② 报 **0** ⇒ 也不可信：请求必带 system prompt + tools + 历史
+                        #      ⇒ 真实输入 token 不可能为 0 ⇒ 代理的 0 = 「没数」
+                        #   ⇒ 两种都当「未知」，写 NULL 而不是 0（0 = 谎称「用了 0 个」）
+                        if ev.input_tokens:
+                            total_in_tok = ev.input_tokens
+                            saw_input_usage = True
                     elif ev.__class__.__name__ == "StreamMessageDelta":
-                        total_out_tok = ev.output_tokens
+                        round_out_tok = ev.output_tokens
+                        saw_output_usage = True
                     elif ev.__class__.__name__ == "StreamError":
                         raise LLMError(
                             f"sse final error: type={ev.err_type} msg={ev.message[:200]}"
@@ -698,27 +736,41 @@ class AIChatService:
             else:
                 # 落库：否则刷新页面后这段结论就丢了（前端只拿到流里的文本）
                 if retry_text:
+                    # 这次「安全网」重试也是一次真实调用 ⇒ 它的输出 token 要入账
+                    total_out_tok += round_out_tok
+                    round_out_tok = 0
                     asst_msg = await self._msg.insert(
                         msg_id=str(uuid.uuid4()),
                         conversation_id=conversation_id,
                         user_id=user_id,
                         role=ROLE_ASSISTANT,
                         content=retry_text,
+                        input_tokens=total_in_tok if saw_input_usage else None,
+                        output_tokens=total_out_tok if saw_output_usage else None,
                         latency_ms=int((datetime.utcnow() - start_ts).total_seconds() * 1000),
                     )
                     all_msgs.append(asst_msg)
 
         # 终态 message_stop
+        # ⚠️ V0.121.2（P0-5）：usage 里拿不到的值给 **None**（未知），不给 0
+        #   （0 = 「用了 0 个」= 谎称）。前端据此决定是否显示 token 栏。
         yield {
             "event": "message_stop",
-            "usage": {"input_tokens": total_in_tok, "output_tokens": total_out_tok},
+            "usage": {
+                "input_tokens": total_in_tok if saw_input_usage else None,
+                "output_tokens": total_out_tok if saw_output_usage else None,
+            },
         }
 
         # 5. 更新会话统计
+        #    ⚠️ `total_input_tokens` 是 NOT NULL 列 ⇒ 上游没报输入 token 时只能加 0。
+        #       这里 0 的含义是「未知」而不是「用了 0 个」⇒ 会话级输入 token 在
+        #       miniMax 代理下**系统性偏低**（不是精确值）。前端目前不读这个字段，
+        #       所以不影响用户可见效果；若以后用它做成本核算，必须先修上游。
         await self._conv.bump_stats(
             conversation_id,
             last_message_at=datetime.utcnow(),
-            add_input=total_in_tok,
+            add_input=total_in_tok if saw_input_usage else 0,
             add_output=total_out_tok,
             add_messages=len(all_msgs),
         )

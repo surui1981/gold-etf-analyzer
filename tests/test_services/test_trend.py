@@ -764,10 +764,21 @@ class FakeWeightService:
     """假 WeightService：仅暴露本测试所需的 trend_weights / combine_weights / group_combine。
 
     其余 WeightService 方法在本测试中不被调用，无需实现。
+
+    ⚠ **V0.121.2（P0-7）**：新增 ``group_weights()`` —— ``analyze()`` 现在会读它
+    （组内平均模式下真正生效的 3 个组权重）。
+    ⚠ **教训（``stub-hides-replaced-caller``）**：桩少一个方法 ⇒ 调用方 ``AttributeError``
+    ⇒ 但如果调用点外面套着 ``try/except``，这个错会被**静默吞掉** ⇒ 真缺陷藏住。
     """
 
-    def __init__(self, *, group_combine: bool = True) -> None:
+    def __init__(
+        self,
+        *,
+        group_combine: bool = True,
+        group_weights: dict[str, float] | None = None,
+    ) -> None:
         self._gc = group_combine
+        self._gw = group_weights
 
     async def trend_weights(self) -> dict[str, float]:
         return dict(TREND_WEIGHTS)
@@ -778,6 +789,9 @@ class FakeWeightService:
 
     async def group_combine(self) -> bool:
         return self._gc
+
+    async def group_weights(self) -> dict[str, float]:
+        return dict(self._gw) if self._gw else dict(GROUP_WEIGHTS)
 
 
 async def test_settings_group_combine_true_routes_to_grouped_path() -> None:
@@ -823,6 +837,69 @@ async def test_settings_none_falls_back_to_grouped_default() -> None:
     )
     result = await service.analyze(days=60)
     assert result.tech_composed_by == "grouped"
+
+
+# ─── V0.121.2（P0-7）：组权重**真正生效** ───────────────────────────
+
+
+async def test_group_weights_actually_change_tech_index() -> None:
+    """★ **组权重要真的影响技术面指数** —— 这是 P0-7 的核心断言。
+
+    ⚠ **P0-7 的真缺陷**：``combine_by_group`` 读的是**模块级常量**
+    ``GROUP_WEIGHTS`` ⇒ 用户在权重页调参对结果**零影响**，却显示「保存成功」。
+    ⇒ 本测试是那条「反向验证」的锚点：把 ``combine_by_group`` 改回读常量
+    ⇒ 本测试必须变红。
+
+    ⚠ 造一个**组间分数不等**的行情（单调上涨 ⇒ 趋势组强、回撤组弱），
+    否则三组分数相同 ⇒ 换任何权重结果都一样 ⇒ 测试恒绿（空转）。
+    """
+    closes = [round(100 + i * 2.0, 3) for i in range(60)]
+    klines = _mk_klines(closes)
+
+    # 用两套权重各跑一次 analyze，比较技术面指数
+    async def _index(gw: dict[str, float]) -> float:
+        # ⚠ served_cache 的 key **不含权重** ⇒ 第二次 analyze 会命中第一次的缓存
+        # ⇒ 拿到的还是同一份结果（测试恒绿 / 空转）。必须先失效。
+        # （生产上由 ``PUT /settings/weights`` 失效缓存，语义一致。）
+        TrendService.invalidate_cached_results()
+        svc = TrendService(
+            FakeRepo(klines),
+            macro=FakeMacro(),
+            settings=FakeWeightService(group_combine=True, group_weights=gw),
+        )
+        result = await svc.analyze(days=60)
+        return result.index.components["tech"]
+
+    default_idx = await _index(dict(GROUP_WEIGHTS))
+    tilted_idx = await _index({"trend": 0.20, "overbought": 0.20, "risk": 0.60})
+
+    assert default_idx != tilted_idx, (
+        "组权重改了技术面指数却没变 ⇒ 组权重仍是装饰性参数（P0-7 未修好）"
+    )
+
+
+async def test_group_weights_fall_back_to_constant_when_absent() -> None:
+    """未配置组权重（老存量配置 / 无 settings）⇒ 回退模块常量，行为不变。"""
+    from app.services.trend import GROUP_WEIGHTS as GW
+
+    dims = {"结构": 80.0, "动量": 60.0, "动能": 40.0, "支撑": 20.0, "回撤": 10.0}
+    gs_default, wn_default = TrendService.combine_by_group(dims)
+    gs_none, wn_none = TrendService.combine_by_group(dims, None)
+    assert gs_default == gs_none
+    assert wn_default == wn_none
+    assert set(wn_none) == set(GW)
+
+
+async def test_combine_by_group_accepts_custom_weights() -> None:
+    """``combine_by_group(dims, gw)`` ⇒ 权重按传入值归一化。"""
+    dims = {"结构": 80.0, "动量": 60.0, "动能": 40.0, "支撑": 20.0, "回撤": 10.0}
+    gs, wn = TrendService.combine_by_group(dims, {"trend": 0.2, "overbought": 0.3, "risk": 0.5})
+    assert gs["trend"] == 70.0  # (80+60)/2
+    assert gs["overbought"] == 30.0  # (40+20)/2
+    assert gs["risk"] == 10.0
+    assert wn["trend"] == pytest.approx(0.2)
+    assert wn["risk"] == pytest.approx(0.5)
+    assert sum(wn.values()) == pytest.approx(1.0, abs=1e-9)
 
 
 # ─── V0.100：消息面未打分 → 综合指数 pending ──────────────────────────

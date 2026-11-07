@@ -21,7 +21,7 @@
 // V0.103.1 hotfix：5 子页 subnav 一致性（news/central_bank/silver mount 移出 .wrap + 抽 .subnav CSS 到 theme.css）
 // V0.111.0 正式发版：/report-archive 报告存档页 + /api/v1/reports/* 8 端点
 //   ⚠ 上传的 HTML 报告**绝不**进 static/，故不进任何缓存名单——/content 由网络直出且带 no-store
-const VERSION = "v0.121.1";  // V0.121.1 · 可信度 P0 批次：① days 进 served cache key（?days= 参数此前完全失效）② 新增 price_direction 列 + 迁移 t2u3v4w5x6y（上涨天数此前恒为 0）③ 消息面未打分的伪造 50 分改存 NULL（治源头 + 幂等回填清掉 26 个伪造命中）④ /headlines 相对时间 i18n key 字面量修好；本次改 static/scoring.js + static/headlines.js + 3 语字典 ⇒ 必须换代以清旧缓存
+const VERSION = "v0.121.2";  // V0.121.2 · 诚实性与数据链批次：① 价格日历改**增量补齐**（此前「区间内有数据就整段跳过」⇒ 永远追不到今天）② group_combine 的 5 个维度滑块此前是**装饰**（真正生效的是模块常量 GROUP_WEIGHTS）⇒ 置灰 + 新增可编辑的组权重（trend/overbought/risk）并真正接进计算链 ③ portfolio/trades/settings 三页删掉误导性的 freshness 调用（引了脚本没有容器 / 调了不存在的对象）④ /ask 的 token 栏此前**永远不显示**（客户端从不读 message_stop 的 usage；且 userMsg 作用域缺陷让整条 SSE 流当场死掉、静默降级到同步端点 ⇒ 流式此前从未真正生效）；本次改 static/weights.html + static/ask.js + static/portfolio.html + static/trades.html + static/settings.html + 3 语字典 ⇒ 必须换代以清旧缓存
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
 const OFFLINE_URL = "/static/offline.html";

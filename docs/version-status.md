@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.121.1** ｜ **最近更新**：2026-11-06 ｜ **状态**：一致，无漂移**
+> **基线：V0.121.2** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，服务未重启（见下）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,9 @@
 
 ## 一句话结论
 
-**当前版本 = 0.121.1**，代码里 4 处版本号完全一致，运行中的服务也报这个版本。
+**当前版本 = 0.121.2**，代码里 4 处版本号完全一致。
+⚠ **运行中的服务仍报 `0.121.1`** —— 8888 的重启在本轮被环境策略拦下（不能杀不是本会话
+创建的进程）⇒ **代码已就位、服务未加载**。恢复办法见本文件 §三。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
 ---
@@ -18,17 +20,32 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.1` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.1` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.2` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.2` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.121.1
+GET /openapi.json  →  info.version = 0.121.1   ← ⚠ 服务还没重启，仍是上一版
 GET /              →  307 → /static/trend.html → 200
 ```
+
+> ⚠ **代码已 bump 到 `0.121.2`，但 8888 上跑的还是 `0.121.1`** ——
+> 本轮的重启命令被环境策略拦下（不能 `kill` 非本会话创建的进程），
+> **不是「重启了但失败」**。用户在主机上执行一次即可：
+
+```bash
+kill 26452                       # 停掉旧的 8888 uvicorn
+cd /home/surui/gold-etf-analyzer
+setsid env PYTHONPATH=src:. uvicorn app.main:app --host 0.0.0.0 --port 8888 \
+  > /tmp/gold-8888.log 2>&1 < /dev/null &
+sleep 12 && curl -s http://192.168.0.204:8888/openapi.json | grep -o '"version":"[^"]*"'
+```
+
+> ⚠ **必须 `setsid` 脱离会话**（否则会话结束进程就没了 ⇒ 用户报「加载失败」）；
+> **必须 `PYTHONPATH=src:.`**；**不要用 `pkill -f`**（会连别的进程一起杀）。
 
 ### 为什么这 4 处必须一样
 
@@ -52,42 +69,44 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **79** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **54** 段 / 53 个唯一版本号 | 发版史的**人读**记录 |
+| `__version__` bump 史 | **80** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **55** 段 / 54 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **115** 个（**本地**；含 `v0.121.1`。⚠️ 远端仍是 114 —— 本机 DNS 解析不了境外域名，`push` 未执行，见 §二注） | 按版本 checkout 的锚点 |
+| git tag | **116** 个（**本地**；含 `v0.121.2`。⚠️ 远端仍是 114 —— 本机 DNS 解析不了境外域名，`push` 未执行，见 §二注） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
 > （实测 bump 史 78 而非 74、CHANGELOG 53 段而非 49、releases 已合并为 7 份而非 58 份）。
 > ⇒ 这正是 §3.3 说的那类「**内容腐化**」：**门禁只校验版本号，不校验计数**，
 > 所以计数腐化不会报红，只能靠人工复核 —— 本轮顺手订正。
+> （V0.121.2 只加了 1 段 CHANGELOG / 1 次 bump / 1 个 tag ⇒ 79→80、54 段→55 段、115→116。）
 >
-> **53 段 ≠ 52 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **55 段 ≠ 54 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **115 个 tag = 114 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
-> 但确实是真实存在的发布锚点）。其中 annotated **109** / lightweight **6**。
+> **116 个 tag = 115 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> 但确实是真实存在的发布锚点）。其中 annotated **110** / lightweight **6**。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
 > `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致。）
 > （⚠️ 上一版此处写的「annotated 102 / lightweight 7」**两个数都差 1** —— lightweight 实为 6 个
 > （v0.51.0 / v0.51.1 / v0.64.0 / v0.65.0 / v0.66.0 / v0.82.0，见本文件下方那张表）。
 > 本版按 `git for-each-ref --format='%(objecttype)'` **实测**改写。）
 >
-> ⚠️ **V0.121.1 的 tag 尚未推送** —— 本地已有（`v0.121.1`，annotated，指向 `a3153db`），
+> ⚠️ **V0.121.1 与 V0.121.2 的 tag 都尚未推送** —— 本地已有
+> （`v0.121.1`，annotated，指向 `a3153db`；`v0.121.2`，annotated，指向本轮发版 commit），
 > 但**远端仍只有 114 个**。原因是**本机 DNS 解析不了境外域名**
 > （路由器 `192.168.0.1` 只解析国内域名；`ping 8.8.8.8` 通、`getent hosts github.com` 不通）
 > ⇒ `git push` 根本连不上 GitHub。
-> ⇒ **本地与远端此刻不一致**，恢复网络后需补推 `main` + `v0.121.1`。
+> ⇒ **本地与远端此刻不一致**，恢复网络后需补推 `main` + `v0.121.1` + `v0.121.2`。
 > ⇒ 这不是「推送了但失败」，而是「**没发出去**」—— 按本仓库「诚实优先」的规矩，如实记录。
 >
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.120.1` 是 **tag 对象**
 > 的 SHA，`refs/tags/v0.120.1^{}` 才是它指向的 **commit** SHA；统计数量时
 > 必须把 `^{}` 行去掉再数，否则 114 个 tag 会数成 222 行左右（实测 `ls-remote --tags` 原始行数
-> = 220 + 2 = 222）。**本地**的 115 个同理（`v0.121.1` 是 annotated ⇒ 远端补推后
-> 原始行数会从 222 变成 222 + 2 = 224）。
+> = 220 + 2 = 222）。**本地**的 116 个同理（`v0.121.1` 与 `v0.121.2` 都是 annotated ⇒
+> 远端补推后原始行数会从 222 变成 222 + 2 + 2 = 226）。
 
 > **本轮把 `## [Unreleased]` 段转正成了 `## [V0.116.1]`** —— 起因是 CI 修绿这轮
 > **改了 `static/*.html` 与 `static/i18n/*.js`**（`ask.html` / `weights.html` / 3 个 i18n 文件），
@@ -217,7 +236,28 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.121.1（2026-11-06 发版）
+### 本轮：V0.121.2（2026-11-07 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **诚实性与数据链批次**（「把显示假的逐条修回来」三批计划的**第 3 批 / 收尾批**）。① **价格日历永远追不到今天**（B1）—— 根因有**两层**：`ensure_price_calendar()` 在 `force=False` 时「区间内已有数据就整段跳过」（all-or-nothing ⇒ 只补过一次就永远不再补）**且**调用点套着 `if not cov.usable:`（覆盖 deemed 可用时压根不调用回填）⇒ 修法是新增 `_calendar_gap_days()` **按交易日**算缺口、只补缺口那一段，调用点改成「每次都尝试追平」；⚠ 窗口大小按 **bar 数**（`df.tail(days)`）而不是日历天算，容忍度按**交易日**算（窗口起点常落在周末 ⇒ 用日历天判断会每次触发一次无用抓取）。② **`group_combine` 下 5 个权重滑块是装饰**（P0-7）—— 真正参与合成的是 `trend.py` 的**模块级常量** `GROUP_WEIGHTS`，页面让用户调的是**另外 5 个维度权重** ⇒ 用户拖滑块 → 显示「100% 绿」→ 保存成功 → **对结果零影响**；按用户拍板「置灰 + 说明 + 补组权重入口」处理：新增 `GroupWeightConfig`（带「和为 1」校验器）+ `WeightService.group_weights()` + `combine_by_group()` 接受真实生效值 + 5 个滑块**真 `disabled`** + 3 个组权重滑块（默认 0.50/0.30/0.20）。③ **三页的「数据时效保护」是假的**（P0-6）—— 计划里写「4 处」，**实测是 3 处**（`portfolio.html` / `trades.html` 调 `window.FreshnessBar.load()` 却**没引 `freshness.js`** ⇒ 恒 `undefined` ⇒ 守卫静默跳过；`settings.html` 引了脚本但**没有容器** ⇒ 每 60 秒空轮询一次外网）⇒ 删掉那 3 处误导性调用 + 新增通用门禁 `scripts/check_freshness_consistency.py`（「引了 `freshness.js` ⇒ 必须有容器」+「调了 `window.FreshnessBar` ⇒ 必须引脚本」）。④ **AI token 一栏永远不显示**（P0-5）—— **两层原因叠加**：客户端 `case 'message_stop'` **从不读** `payload.usage`（且 `|| null` 会把合法的 0 也吞掉 ⇒ 改 `?? null`）；服务端拿不到的输入 token 写 **0**（= 谎称「用了 0 个」）⇒ 改写 **NULL**。⚠ 实测比计划更深一层：miniMax 代理**照发** `message_start`，但 `usage.input_tokens` 要么**缺失**、要么**报 0** —— 请求必带 system prompt + tools + 历史 ⇒ 真实输入 token **不可能为 0** ⇒ 代理的 0 其实是「没数」⇒ 判据定成「**字段缺失 或 值为 0 ⇒ 未知**」（解析层 `claude.py` 保留原值，策略放在落库层，一处说了算）。详见 [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) |
+| 🐛 **顺带修好的更大缺陷** | ⚠️ `static/ask.js` 的 `var userMsg` 在 `sendMessage()` 的作用域里，而 `handleEvent()` 在 `sendMessageStream()` 里 —— **两个不同的函数作用域** ⇒ `user_saved` 事件一进来就 `ReferenceError: userMsg is not defined` ⇒ **整条 SSE 流当场死掉** ⇒ 每次提问都**静默降级**到同步端点 ⇒ **/ask 的「流式」自 V0.98 C5 起从未真正生效过**（页面看起来能用，所以没人发现）。这是本轮 P0-5 能被端到端门禁抓到的直接原因 |
+| `__version__` | ✅ 已 bump 到 `0.121.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移** ⇒ 回滚代价低 |
+| 生产库写入 | ⚠️ **本批未写生产库**（B1 的回填只发生在**跑回测时**按需触发，线上实测触发的是「新增行」，不改动既有行；P0-7 的组权重实测改过又**已还原**为 0.50/0.30/0.20） |
+| git tag | ⚠️ `v0.121.2`（annotated）**已在本地打好，但未推送** —— 本机 DNS 解析不了境外域名 ⇒ `git push` 连不上 GitHub（见 §二注）。**远端仍缺 V0.121.1 与 V0.121.2 两版** |
+| 线上实测 | ⚠️ **8888 未重启**（本轮的重启命令被环境策略拦下 —— 不能 `kill` 非本会话创建的进程）⇒ 实测改用**临时的 loopback 实例**（8891 / 8892，跑的是**新代码**，自带 `timeout` 自毁）完成：**B1** `ny` 80→97 行 / 最新 2026-10-14→**2026-11-06**、`etf` 73→80 行 / 最新 2026-10-28→**2026-11-06**、回测覆盖报告 `price_calendar_days` 15→**22** / `returns_available_days` 12→**18**；**P0-7** 组权重 (0.5/0.3/0.2)→(0.1/0.1/0.8) ⇒ 技术面 **16.4 → 4.7**，还原 ⇒ **回到 16.4**（证明组权重真的参与计算）；**P0-5** 真 SSE 抓包 `message_stop.usage = {"input_tokens": null, "output_tokens": 1874}`、落库 `(input_tokens=NULL, output_tokens=1874)`（修复前是 `0`） |
+| 浏览器门禁 | ✅ 新增 `scripts/_verify_ask_tokens.mjs`（**6 条断言**，假 SSE 驱动 ⇒ 不调真模型、不花 token；`LIVE=1` 可打真实模型跑整条链）；新增 `scripts/_verify_weights_group.mjs`（组权重滑块态 + 组权重真的影响结果）；新增 `scripts/check_freshness_consistency.py`（P0-6 这类缺陷以后会自己变红） |
+| 测试 | ✅ 目标测试文件全绿（详见 milestone 文档的实测表）；`ruff check src tests scripts` → All checks passed |
+| ⚠️ **留给用户的 3 步** | ① **重启 8888**（命令见本文件 §一）—— 否则线上跑的还是 `0.121.1`；② `LIVE=1 node scripts/_verify_ask_tokens.mjs`（打真实模型，消耗 token ⇒ 默认不跑）；③ 删掉本轮实测留下的 **4 条**测试对话（「一句话说明今天金价的主要驱动」，生产库）—— 本轮 `DELETE` 被环境策略拦下 |
+
+> **反向验证**（每条修复都做过「撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿」）：
+> B1 撤掉调用点的追平逻辑 ⇒ **新测试变红** ⇒ 恢复；
+> P0-7 撤掉「组权重真正参与计算」⇒ **3 个测试变红**；去掉滑块的 `disabled` ⇒ **浏览器门禁红** ⇒ 恢复；
+> P0-6 恢复那 3 处误导性调用 ⇒ **新门禁红** ⇒ 恢复；
+> P0-5 客户端去掉 usage 读取 ⇒ **浏览器门禁 3 条红**；服务端去掉 `if saw_input_usage else None` ⇒ **2 个测试红** ⇒ 恢复。
+
+### 上一轮：V0.121.1（2026-11-06 发版）
 
 | 项 | 状态 |
 |---|---|

@@ -621,6 +621,33 @@ def test_claude_client_base_url_default() -> None:
     assert c._endpoint == "https://api.anthropic.com/v1/messages"
 
 
+def test_message_start_without_usage_keeps_input_tokens_unknown() -> None:
+    """⚠️ **V0.121.2（P0-5）**：上游 ``message_start`` **不带 usage** ⇒
+    ``input_tokens`` 必须是 ``None``（未知），不是 ``0``。
+
+    实测（线上 SSE 抓包，2026-11-07）：miniMax 代理**照发** ``message_start``，
+    但 payload 里没有 ``usage.input_tokens`` ⇒ 原来的
+    ``int(usage.get("input_tokens") or 0)`` 把「**字段缺失**」洗成了「**0 个**」
+    ⇒ 页面显示「↓ 0」= 谎称「这次输入 0 个 token」。
+
+    📉 反向验证：把解析改回 ``or 0`` ⇒ 本测试必须变红。
+    """
+    from app.services.llm.claude import _parse_sse_event
+
+    # ① 上游没给 usage ⇒ 未知
+    ev = _parse_sse_event("message_start", {"message": {"model": "m"}}, {})
+    assert ev.input_tokens is None, f"字段缺失必须留 None 而不是 0：{ev}"
+
+    # ② 上游给了 ⇒ 原样照抄（不能被 `or 0` 洗掉）
+    ev2 = _parse_sse_event("message_start", {"message": {"usage": {"input_tokens": 12}}}, {})
+    assert ev2.input_tokens == 12, ev2
+
+    # ③ usage 在但 input_tokens 为 0 ⇒ 也是「上游说了 0」，不是「缺失」
+    #    （本例保留 0，与 ① 的 None 语义不同）
+    ev3 = _parse_sse_event("message_start", {"message": {"usage": {"input_tokens": 0}}}, {})
+    assert ev3.input_tokens == 0, ev3
+
+
 def test_claude_client_base_url_override_strips_trailing_slash() -> None:
     """自定义 base_url（国内代理）+ 尾部 / 自动 strip。"""
     c = ClaudeClient(

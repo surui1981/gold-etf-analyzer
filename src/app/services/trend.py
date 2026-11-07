@@ -83,6 +83,10 @@ TREND_WEIGHTS: dict[str, float] = {
 # - 超买组：动能(RSI) + 支撑(乖离) → 都衡量超买/超卖程度
 # - 风险组：回撤 → 距区间高点的回撤（独立信号）
 # 键集合必须覆盖 TREND_WEIGHTS 所有 5 个维度（test_trend.py 断言）。
+#
+# ⚠ **V0.121.2（P0-7）：本常量降级为「默认值」** —— 真实生效的组权重来自
+# ``settings.WeightService.group_weights()``（可编辑、可持久化）。
+# 保留本常量是为了：① 设置缺失 / 旧存量配置时的兜底；② 无 settings 的 fallback 路径。
 GROUP_WEIGHTS: dict[str, float] = {
     "trend": 0.50,  # 结构 + 动量
     "overbought": 0.30,  # 动能(RSI) + 支撑(乖离)
@@ -527,7 +531,10 @@ class TrendService:
             tech_w, macro_w, news_w, flow_w = await self._settings.combine_weights()
             # V0.79.0 Step F：技术面 5 维度合成方式（组内平均 vs 单维度加权）
             use_group_combine = await self._settings.group_combine()
-            weights_meta = {"group_combine": use_group_combine}
+            # ⚠ **V0.121.2（P0-7）**：组内平均模式下**真正生效**的是这 3 个组权重。
+            # 此前只读模块常量 ⇒ 用户调 5 个维度滑块对结果零影响却「保存成功」。
+            group_weights = await self._settings.group_weights()
+            weights_meta = {"group_combine": use_group_combine, "group_weights": group_weights}
         else:
             tech_weights = TREND_WEIGHTS
             tech_w, macro_w, news_w, flow_w = (
@@ -767,11 +774,16 @@ class TrendService:
     @staticmethod
     def combine_by_group(
         dims: dict[str, float | None],
+        group_weights: dict[str, float] | None = None,
     ) -> tuple[dict[str, float | None], dict[str, float]]:
         """组内平均合成技术面指数（V0.79.0 Step F）。
 
         Args:
             dims: {维度名 → score 或 None}，缺失维度传 None。
+            group_weights: {组名 → 权重}，**组内平均模式下真正生效的那套**。
+                ``None`` ⇒ 回退到模块常量 ``GROUP_WEIGHTS``（默认 0.50/0.30/0.20）。
+                ⚠ **V0.121.2（P0-7）**：此前这里**只能**读常量 ⇒ 用户在权重页
+                调 5 个维度滑块对结果零影响却显示「保存成功」（装饰性参数）。
 
         Returns:
             (group_scores, valid_group_weights_normalized)
@@ -784,7 +796,10 @@ class TrendService:
         加到剩余组上，不引入 50 兜底（与单维度缺失时行为一致：宁可剔除
         也别让缺失看起来像「完整判断」）。
         """
-        groups: dict[str, list[float]] = {g: [] for g in GROUP_WEIGHTS}
+        # ⚠ 合并而非替换：传入的组权重只覆盖**同名**组，缺失的组回退常量
+        # （防「只传了 1 个组」导致 ``groups[g].append`` KeyError）。
+        weights = {**GROUP_WEIGHTS, **(group_weights or {})}
+        groups: dict[str, list[float]] = {g: [] for g in weights}
         for name, val in dims.items():
             if val is None:
                 continue
@@ -796,9 +811,9 @@ class TrendService:
         group_scores: dict[str, float | None] = {
             g: (round(sum(vs) / len(vs), 2) if vs else None) for g, vs in groups.items()
         }
-        valid_w_sum = sum(GROUP_WEIGHTS[g] for g, s in group_scores.items() if s is not None)
+        valid_w_sum = sum(weights[g] for g, s in group_scores.items() if s is not None)
         weights_norm: dict[str, float] = (
-            {g: GROUP_WEIGHTS[g] / valid_w_sum for g, s in group_scores.items() if s is not None}
+            {g: weights[g] / valid_w_sum for g, s in group_scores.items() if s is not None}
             if valid_w_sum > 0
             else {}
         )
@@ -919,7 +934,10 @@ class TrendService:
         dim_scores: dict[str, float | None] = {n: d.score for n, d in dims.items()}
 
         if use_group_combine:
-            group_scores, weights_norm = self.combine_by_group(dim_scores)
+            group_scores, weights_norm = self.combine_by_group(
+                dim_scores,
+                (weights_meta or {}).get("group_weights"),
+            )
             # tech_index = Σ(组权重 × 组均值)
             total_grouped: float | None = (
                 round(
