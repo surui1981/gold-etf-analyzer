@@ -83,28 +83,35 @@
   ⇒ 导入 149 行（合计行 51 + 国别 H1 46 + 月报估读 52；其中 **2 行 UZB 被 WGC 覆盖**
   ⇒ 手工补丁不再压过 WGC，正是本次修复的效果）
 
-- 📌 **推送状态（如实记录）：⚠ 本轮未推送 —— 被凭据挡住**
-  - 代码 / 生产库 / 服务 / 门禁 / 文档 / commit（发版 `e431f80` + 其后纯文档 commit）/ tag（`v0.121.4`）**全部就绪**，
-    只有「推到 GitHub」这一步没做成
-  - **不是网络问题**（`getent hosts github.com` → 正常、`https://github.com` → 200、
-    SSH 22/443 都通），**是权限问题**：gh keyring 里只有一枚 **fine-grained PAT**
-    （`github_pat_` 前缀）⇒ `git push` 与 REST 写接口**双双 403**
-  - ⚠ **别信 `repo.permissions`**：它报 `push: true`，但 no-op `PATCH /git/refs/heads/main` 直接 403
-    ⇒ 这枚 PAT 的写权限字段**是假的**
-  - 只有 **classic PAT（`ghp_` 前缀）** 能 push；本机已无 classic PAT 的任何副本
-    ⇒ **需用户重新提供一枚**（在 chat 里出现即视为已泄露 ⇒ 用完即轮换）
-  - 远端 `refs/heads/main` 仍是 `41df7c8`；远端 tag 数 117（本地 118，差 `v0.121.4`）
-  - 📌 用户侧一条命令即可推送（token 走环境变量，不进 argv、不落盘）：
+- 📌 **推送状态：✅ 已推送**（`refs/heads/main` + tag `v0.121.4`）
+  - 代码 / 生产库 / 服务 / 门禁 / 文档 / commit（发版 `e431f80` + 其后纯文档 commit）/ tag（`v0.121.4`）全部就绪并已推到 GitHub
+  - **远端回读核对**（唯一可信判据）：
+    | 项 | 远端 | 本地 | 一致 |
+    |---|---|---|---|
+    | `refs/heads/main` | == 本地 HEAD | == 本地 HEAD | ✅ |
+    | tag 数 | **118** | **118** | ✅ |
+    | `refs/tags/v0.121.4^{}` | `e431f80` | `e431f80` | ✅ |
+    - ⚠ **main 的 SHA 不写死**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+      首次推送时远端读到 `0bac4f0`（= 当时的 HEAD）；其后这条「推送状态订正」commit 会再推一次 ⇒ **远端 main 与本地 HEAD 始终相等**。
+  - ⚠ **凭据链的两个坑（都实测踩到）**：
+    1. gh keyring 里那枚 **fine-grained PAT**（`github_pat_` 前缀）**没有写权限** ——
+       `git push` 403 + no-op `PATCH /git/refs/heads/main` 也 403
+       ⇒ **不是网络问题**（DNS 正常、`https://github.com` 200、SSH 22/443 都通）
+    2. ⚠ **别信 `repo.permissions`**：它报 `push: true`，但那是**用户角色**不是 token 权限
+       ⇒ 真判据是 no-op `PATCH`（body 要合法 JSON，`-f force=false` 会先吃 422，那个 422 是干扰项）
+  - ⇒ **只有 classic PAT（`ghp_` 前缀）能 push**；本轮由用户在 chat 提供一枚，
+    走**环境变量**推送（token 不进 git 的 argv、不落盘、不进 `remote.origin.url`）：
     ```bash
-    read -rsp "classic PAT: " GH_TOKEN && export GH_TOKEN && echo
+    export GH_TOKEN='<classic PAT>'
     git -c credential.helper='!gh auth git-credential' push origin main
     git -c credential.helper='!gh auth git-credential' push origin v0.121.4
     unset GH_TOKEN
     ```
-    成功判据 = `git ls-remote origin refs/heads/main` 读回的值 == `git rev-parse HEAD`
-    （⚠ 用 HEAD 而不是发版 commit —— 发版 commit 之后还排着纯文档 commit，
-    否则会把「推送成功」误判成失败）；tag `v0.121.4` 的 `^{}` 行读回 `e431f80`
-    （tag 指向发版 commit，文档 commit 排在 tag 之后，与 `v0.121.3` 的先例一致）
+  - 📌 **推完已清 token 痕迹**：`~/.bash_history`（`ghp_` / `GH_TOKEN` 命中 0）、
+    `~/.gitconfig`（0）、仓库内（严格形态 0）、`remote.origin.url` 保持不带 token
+  - ⚠ **回读时 DNS 又断了一次**（`Could not resolve host: github.com`）⇒ 用
+    **DoH 拿 IP + `git -c http.curloptResolve=github.com:443:<IP>`** 绕开才读到 tag 列表
+    ⇒ **「推送成功」必须远端回读，不能看 `git push` 没报错**
 
 ## [V0.121.3] · 2026-11-07
 

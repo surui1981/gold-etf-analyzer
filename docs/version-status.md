@@ -76,7 +76,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **82** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **57** 段 / 56 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **118** 个（**本地 118 / 远端 117** —— ⚠ **差 1**：`v0.121.4` **尚未推送**，见下方「推送状态」） | 按版本 checkout 的锚点 |
+| git tag | **118** 个（**本地 118 / 远端 118** ✅ 一致；`v0.121.4` 已推送） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -286,7 +286,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 线上实测 | ✅ `192.168.0.204:8888`（服务已加载 V0.121.4）：`/central-bank/purchases` → `current_quarter = 2026Q3`、`current_quarter_total = **321.2**`（旧 336.7）、`t12m_total = **885.1**`（旧 842.6，同窗口真值 790.2）、`country_count = **24**`（旧 25）、`top_buyers[0] = POL 82.2`（合计行不在排名里）；首页卡 3「央行购金变化」主值 **+321.2**，副标题「数据截止 2026Q3 · 来源：世界黄金协会 GDT 全球合计」 |
 | 测试 | ✅ `pytest tests/test_services/test_central_bank.py tests/test_repositories/test_central_bank_data.py tests/test_services/test_irfcl_fetcher.py` → **102 passed**；`check_pwa_assets` / `check_i18n_keys` / `check_static_js` 全绿 |
 | 门禁 | ✅ 新增 `scripts/_verify_central_bank_aggregate.mjs`（**18 条**）；扩 `scripts/_verify_home_metals.mjs`（+6 条）⇒ 合计 **39 passed** / **18 passed** |
-| git tag | ⏳ `v0.121.4`（annotated，指向 `e431f80`）**已创建、本地**；⚠ **尚未推送** —— 推送被凭据挡住，见下方「推送状态（如实记录）」 |
+| git tag | ✅ `v0.121.4`（annotated，指向 `e431f80`）**已创建并已推送**；远端 tag 数 **118 = 本地 118** ✅ |
 
 > **反向验证**（撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿），共 **6 处**：
 > 撤 `summary()` 的合计优先 ⇒ `test_summary_prefers_aggregate_over_country_sum` 变红；
@@ -299,52 +299,59 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 第一次做反向验证时因为**没重启**而「假绿」，这本身又是一次
 > 「**门禁读到还没准备好的东西**」的复现。
 
-#### 推送状态（如实记录）—— ⚠ **本轮未推送：被凭据挡住**
+#### 推送状态：✅ **已推送**（`refs/heads/main` + tag `v0.121.4`）
 
-**结论先行：代码、数据库、服务、门禁、文档、提交、tag 全部就绪；只有「推到 GitHub」这一步没做成，
-原因不是网络，是凭据。**
+**结论先行：代码、数据库、服务、门禁、文档、提交、tag 全部就绪，且已全部推到 GitHub。**
 
-| 项 | 值 |
-|---|---|
-| 本地 commit | ✅ 已提交（自查 `git rev-parse HEAD`）；**发版 commit = `e431f80`**，其后还有纯文档 commit |
-| 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
-| 远端 `refs/heads/main` | **仍是 `41df7c8`**（V0.121.3 的文档订正提交）⇒ **本轮未推送** |
-| 远端 tag 数 | **117**（本地 118）⇒ 差 `v0.121.4` 这一个 |
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main` | == 本地 HEAD | == 本地 HEAD | ✅ |
+| tag 数 | **118** | **118** | ✅ |
+| `refs/tags/v0.121.4^{}` | `e431f80` | `e431f80` | ✅（tag 指向**发版** commit，纯文档 commit 排在 tag 之后，与 `v0.121.3` 先例一致） |
 
-**实测过的三次尝试（都是「权限不够」，不是「网络不通」）：**
+> ⚠ **main 的 SHA 故意不写死**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 首次推送时远端读到 `0bac4f0`（= 当时的 HEAD）；其后这条「推送状态订正」commit 会再推一次 ⇒ **远端 main 与本地 HEAD 始终相等**。
 
-1. `git -c credential.helper='!gh auth git-credential' push origin main`
-   → `remote: Permission to surui1981/gold-etf-analyzer.git denied to surui1981` / HTTP **403**
+⚠ 判据**不是「`git push` 没报错」**，而是**远端回读** ——
+本轮回读时 DNS 又断了一次（`Could not resolve host: github.com`），
+靠 **DoH 拿 IP + `git -c http.curloptResolve=github.com:443:<IP>`** 才读到 tag 列表。
+
+**卡住的那一环：凭据（不是网络）。** 实测证据链：
+
+1. `git push origin main` → `remote: Permission to surui1981/gold-etf-analyzer.git denied` / HTTP **403**
 2. `GET /repos/surui1981/gold-etf-analyzer` 的 `permissions` 字段
    → `{"admin": true, "push": true, ...}` —— **这是假的** ⚠
-   fine-grained PAT 的 `repo.permissions` 字段**不代表实际写权限**
-3. `PATCH /repos/.../git/refs/heads/main`（no-op，同一个 SHA）
-   → HTTP **403** ⇒ 写路径确实没有权限
+   那是**用户角色**，不是 token 权限
+3. `PATCH /repos/.../git/refs/heads/main`（no-op，同一个 SHA，body 必须是合法 JSON）
+   → HTTP **403** `Resource not accessible by personal access token` ⇒ 写路径确实没权限
+   ⚠ 用 `-f force=false` 会先吃 **422**（`force` 不是 boolean）—— 那个 422 是「请求体没过」，
+   **不是**「权限过了」，别把它当好消息
+4. 同时 `git push` 的网络层是好的：DNS 正常、`https://github.com` → **200**、SSH 22/443 都通
 
 ⇒ 根因：**gh keyring 里只有一枚 fine-grained PAT（`github_pat_` 前缀），它没有写权限**；
-只有 **classic PAT（`ghp_` 前缀）** 能 push。
-本机上已**没有** classic PAT 的任何副本（`~/.bash_history` 已按纪律清过、
-无 `~/.git-credentials`、keyring 里只有那一枚 fine-grained）。
-⇒ **需要用户重新提供一枚 classic PAT**（且它一旦在 chat 里出现就应视为已泄露 ⇒ 用完即轮换）。
+**只有 classic PAT（`ghp_` 前缀）能 push**（classic 才带 `x-oauth-scopes: repo` 头）。
 
-**给用户的一条命令**（token 走环境变量，不进 argv、不落盘、不进 `remote.origin.url`）：
+**本轮的实际推送方式**（用户在 chat 提供一枚 classic PAT，走**环境变量**，
+token 不进 git 的 argv、不落盘、不进 `remote.origin.url`）：
 
 ```bash
-cd /home/surui/gold-etf-analyzer
-read -rsp "classic PAT: " GH_TOKEN && export GH_TOKEN && echo
+export GH_TOKEN='<classic PAT>'
 git -c credential.helper='!gh auth git-credential' push origin main
 git -c credential.helper='!gh auth git-credential' push origin v0.121.4
 unset GH_TOKEN
-# 成功判据（不是「命令没报错」）：
-git -c credential.helper='!gh auth git-credential' ls-remote origin refs/heads/main refs/tags/v0.121.4
-#   ⇒ refs/heads/main 应 == `git rev-parse HEAD` 的值（当前 HEAD ——
-#     ⚠ 不是发版 commit e431f80：其后还排着纯文档 commit，写死 SHA 会把「推送成功」误判成失败）
+# 成功判据 = 远端回读（不是「命令没报错」）：
+git ls-remote origin refs/heads/main refs/tags/v0.121.4
+#   ⇒ refs/heads/main 应 == `git rev-parse HEAD` 的值
+#     （⚠ 用 HEAD 而不是发版 commit：其后还排着纯文档 commit，写死 SHA 会把「推送成功」误判成失败）
 #   ⇒ refs/tags/v0.121.4 的 ^{} 行应 == e431f80（tag 指向发版 commit，文档 commit 在其后）
 ```
 
-⚠ 若 `gh` 的 keyring 里换成了 classic PAT，上面这条**直接可用**（helper 会自动取）。
-⚠ 推完仍要 `sed -i '/ghp_/d' ~/.bash_history`（本轮用的是 `read`，token 不进 history，
-但保险起见照做）。
+📌 **推完已清 token 痕迹**（4 处自查全 0）：`~/.bash_history`（`ghp_` / `GH_TOKEN`）、
+`~/.gitconfig`、仓库内（严格形态 `ghp_[A-Za-z0-9]{20,}`）、`/tmp`；
+`git config --get remote.origin.url` 仍是**不带 token** 的
+`https://github.com/surui1981/gold-etf-analyzer.git`。
+
+⚠ 那枚 classic PAT 在 chat 里明文出现过 ⇒ **已算泄露 ⇒ 请立即轮换**。
 
 ### 上一轮：V0.121.3（2026-11-07 发版）
 

@@ -852,23 +852,34 @@ GET /api/v1/central-bank/purchases
 > **数据缺一季 ≠ 可以编一季。** Q3 没有国别图，就让国别明细停在 H1，
 > 并在 `source` 里写清覆盖到哪一季。
 
-#### 推送状态（如实记录）
+#### 推送状态：✅ **已推送**
 
-⚠ **本轮未推送 —— 被凭据挡住**（不是网络问题）。
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main` | == 本地 HEAD | == 本地 HEAD | ✅ |
+| tag 数 | **118** | **118** | ✅ |
+| `refs/tags/v0.121.4^{}` | `e431f80` | `e431f80` | ✅（tag 指向**发版** commit，纯文档 commit 排在 tag 之后，与 `v0.121.3` 先例一致） |
 
-| 项 | 值 |
-|---|---|
-| 本地 commit | ✅ 已提交（自查 `git rev-parse HEAD`）；**发版 commit = `e431f80`**，其后还有纯文档 commit |
-| 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
-| 远端 `refs/heads/main` | 仍是 `41df7c8` ⇒ **未推送** |
-| 远端 tag 数 | **117**（本地 118） |
+> ⚠ **main 的 SHA 故意不写死**（写进去的那条 commit 自己就会推动 HEAD）。
+> 首次推送时远端读到 `0bac4f0`（= 当时的 HEAD）；其后这条「推送状态订正」commit 会再推一次 ⇒ **远端 main 与本地 HEAD 始终相等**。
 
-**三次实测都指向「权限」而非「网络」**：DNS 正常、`https://github.com` → 200、SSH 22/443 都通；
-但 `git push` 403、REST 写接口 403。
-⇒ gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**。
-⚠ `GET /repos/.../permissions` 报 `push: true` —— **这个字段是假的**，
-no-op `PATCH /git/refs/heads/main` 直接 403 才暴露真相。
-⇒ 只有 classic PAT（`ghp_` 前缀）能 push；本机已无 classic PAT 副本 ⇒ 需用户重新提供。
+**卡住的那一环是「凭据」，不是「网络」** —— 这条结论是实测出来的，不是推测：
+
+- 网络层是好的：DNS 正常、`https://github.com` → **200**、SSH 22/443 都通；
+- 但 `git push` 403、REST 写接口 403 ⇒ 指向**权限**。
+- ⚠ `GET /repos/.../permissions` 报 `push: true` —— **这个字段是假的**（那是用户角色，不是 token 权限）；
+  真正的判据是 **no-op `PATCH /git/refs/heads/main`** ⇒ 403 才暴露真相。
+  ⚠ 顺带一个干扰项：用 `-f force=false` 会先吃 **422**（`force` 不是 boolean），
+  那是「请求体没过」，**不是**「权限过了」—— 别把 422 当好消息。
+- gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**；
+  **只有 classic PAT（`ghp_` 前缀）能 push**。
+
+⇒ 本轮由用户在 chat 提供一枚 classic PAT，走**环境变量**推送（token 不进 git 的 argv、
+不落盘、不进 `remote.origin.url`），推完已清 `~/.bash_history` / `~/.gitconfig` /
+仓库内 / `/tmp` 四处痕迹（全部 0 命中）。
+
+⚠ **判据不是「`git push` 没报错」，而是远端回读** —— 本轮回读时 DNS 又断了一次
+（`Could not resolve host: github.com`），靠 **DoH 拿 IP + `http.curloptResolve`** 才读到 tag 列表。
 
 ---
 
