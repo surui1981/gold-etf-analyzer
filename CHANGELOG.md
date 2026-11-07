@@ -83,6 +83,26 @@
   ⇒ 导入 149 行（合计行 51 + 国别 H1 46 + 月报估读 52；其中 **2 行 UZB 被 WGC 覆盖**
   ⇒ 手工补丁不再压过 WGC，正是本次修复的效果）
 
+- 📌 **推送状态（如实记录）：⚠ 本轮未推送 —— 被凭据挡住**
+  - 代码 / 生产库 / 服务 / 门禁 / 文档 / commit（`e431f80`）/ tag（`v0.121.4`）**全部就绪**，
+    只有「推到 GitHub」这一步没做成
+  - **不是网络问题**（`getent hosts github.com` → 正常、`https://github.com` → 200、
+    SSH 22/443 都通），**是权限问题**：gh keyring 里只有一枚 **fine-grained PAT**
+    （`github_pat_` 前缀）⇒ `git push` 与 REST 写接口**双双 403**
+  - ⚠ **别信 `repo.permissions`**：它报 `push: true`，但 no-op `PATCH /git/refs/heads/main` 直接 403
+    ⇒ 这枚 PAT 的写权限字段**是假的**
+  - 只有 **classic PAT（`ghp_` 前缀）** 能 push；本机已无 classic PAT 的任何副本
+    ⇒ **需用户重新提供一枚**（在 chat 里出现即视为已泄露 ⇒ 用完即轮换）
+  - 远端 `refs/heads/main` 仍是 `41df7c8`；远端 tag 数 117（本地 118，差 `v0.121.4`）
+  - 📌 用户侧一条命令即可推送（token 走环境变量，不进 argv、不落盘）：
+    ```bash
+    read -rsp "classic PAT: " GH_TOKEN && export GH_TOKEN && echo
+    git -c credential.helper='!gh auth git-credential' push origin main
+    git -c credential.helper='!gh auth git-credential' push origin v0.121.4
+    unset GH_TOKEN
+    ```
+    成功判据 = `git ls-remote origin refs/heads/main` 读回 `e431f80`
+
 ## [V0.121.3] · 2026-11-07
 
 `宽表桶聚合三处各写一份 · 两处漏填「上涨/下跌/方向已知」⇒ API 返回 0` — hotfix · 详见 [M6 里程碑文档](docs/releases/milestones/m6-truthful-signals-v0.121.md)

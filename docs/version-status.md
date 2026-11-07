@@ -76,7 +76,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **82** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **57** 段 / 56 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **7** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **118** 个（**本地 118 / 远端 118** —— 一致 ✅；`v0.121.4` 于 2026-11-07 推送） | 按版本 checkout 的锚点 |
+| git tag | **118** 个（**本地 118 / 远端 117** —— ⚠ **差 1**：`v0.121.4` **尚未推送**，见下方「推送状态」） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -286,7 +286,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 线上实测 | ✅ `192.168.0.204:8888`（服务已加载 V0.121.4）：`/central-bank/purchases` → `current_quarter = 2026Q3`、`current_quarter_total = **321.2**`（旧 336.7）、`t12m_total = **885.1**`（旧 842.6，同窗口真值 790.2）、`country_count = **24**`（旧 25）、`top_buyers[0] = POL 82.2`（合计行不在排名里）；首页卡 3「央行购金变化」主值 **+321.2**，副标题「数据截止 2026Q3 · 来源：世界黄金协会 GDT 全球合计」 |
 | 测试 | ✅ `pytest tests/test_services/test_central_bank.py tests/test_repositories/test_central_bank_data.py tests/test_services/test_irfcl_fetcher.py` → **102 passed**；`check_pwa_assets` / `check_i18n_keys` / `check_static_js` 全绿 |
 | 门禁 | ✅ 新增 `scripts/_verify_central_bank_aggregate.mjs`（**18 条**）；扩 `scripts/_verify_home_metals.mjs`（+6 条）⇒ 合计 **39 passed** / **18 passed** |
-| git tag | ⏳ `v0.121.4`（annotated）—— **本轮提交后推送**，推送状态见下方「推送状态（如实记录）」 |
+| git tag | ⏳ `v0.121.4`（annotated，指向 `e431f80`）**已创建、本地**；⚠ **尚未推送** —— 推送被凭据挡住，见下方「推送状态（如实记录）」 |
 
 > **反向验证**（撤销 ⇒ 变红 ⇒ 恢复 ⇒ 变绿），共 **6 处**：
 > 撤 `summary()` 的合计优先 ⇒ `test_summary_prefers_aggregate_over_country_sum` 变红；
@@ -298,6 +298,51 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > ⚠ **后两条必须重启服务**才测得到（浏览器门禁打的是**运行中的服务**）——
 > 第一次做反向验证时因为**没重启**而「假绿」，这本身又是一次
 > 「**门禁读到还没准备好的东西**」的复现。
+
+#### 推送状态（如实记录）—— ⚠ **本轮未推送：被凭据挡住**
+
+**结论先行：代码、数据库、服务、门禁、文档、提交、tag 全部就绪；只有「推到 GitHub」这一步没做成，
+原因不是网络，是凭据。**
+
+| 项 | 值 |
+|---|---|
+| 本地 commit | `e431f80` = `HEAD` ✅ |
+| 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
+| 远端 `refs/heads/main` | **仍是 `41df7c8`**（V0.121.3 的文档订正提交）⇒ **本轮未推送** |
+| 远端 tag 数 | **117**（本地 118）⇒ 差 `v0.121.4` 这一个 |
+
+**实测过的三次尝试（都是「权限不够」，不是「网络不通」）：**
+
+1. `git -c credential.helper='!gh auth git-credential' push origin main`
+   → `remote: Permission to surui1981/gold-etf-analyzer.git denied to surui1981` / HTTP **403**
+2. `GET /repos/surui1981/gold-etf-analyzer` 的 `permissions` 字段
+   → `{"admin": true, "push": true, ...}` —— **这是假的** ⚠
+   fine-grained PAT 的 `repo.permissions` 字段**不代表实际写权限**
+3. `PATCH /repos/.../git/refs/heads/main`（no-op，同一个 SHA）
+   → HTTP **403** ⇒ 写路径确实没有权限
+
+⇒ 根因：**gh keyring 里只有一枚 fine-grained PAT（`github_pat_` 前缀），它没有写权限**；
+只有 **classic PAT（`ghp_` 前缀）** 能 push。
+本机上已**没有** classic PAT 的任何副本（`~/.bash_history` 已按纪律清过、
+无 `~/.git-credentials`、keyring 里只有那一枚 fine-grained）。
+⇒ **需要用户重新提供一枚 classic PAT**（且它一旦在 chat 里出现就应视为已泄露 ⇒ 用完即轮换）。
+
+**给用户的一条命令**（token 走环境变量，不进 argv、不落盘、不进 `remote.origin.url`）：
+
+```bash
+cd /home/surui/gold-etf-analyzer
+read -rsp "classic PAT: " GH_TOKEN && export GH_TOKEN && echo
+git -c credential.helper='!gh auth git-credential' push origin main
+git -c credential.helper='!gh auth git-credential' push origin v0.121.4
+unset GH_TOKEN
+# 成功判据（不是「命令没报错」）：
+git -c credential.helper='!gh auth git-credential' ls-remote origin refs/heads/main refs/tags/v0.121.4
+#   ⇒ refs/heads/main 应 == e431f80；refs/tags/v0.121.4 的 ^{} 行应 == e431f80
+```
+
+⚠ 若 `gh` 的 keyring 里换成了 classic PAT，上面这条**直接可用**（helper 会自动取）。
+⚠ 推完仍要 `sed -i '/ghp_/d' ~/.bash_history`（本轮用的是 `read`，token 不进 history，
+但保险起见照做）。
 
 ### 上一轮：V0.121.3（2026-11-07 发版）
 

@@ -852,6 +852,24 @@ GET /api/v1/central-bank/purchases
 > **数据缺一季 ≠ 可以编一季。** Q3 没有国别图，就让国别明细停在 H1，
 > 并在 `source` 里写清覆盖到哪一季。
 
+#### 推送状态（如实记录）
+
+⚠ **本轮未推送 —— 被凭据挡住**（不是网络问题）。
+
+| 项 | 值 |
+|---|---|
+| 本地 commit | `e431f80` = `HEAD` ✅ |
+| 本地 tag | `v0.121.4`（annotated）→ `e431f80` ✅ |
+| 远端 `refs/heads/main` | 仍是 `41df7c8` ⇒ **未推送** |
+| 远端 tag 数 | **117**（本地 118） |
+
+**三次实测都指向「权限」而非「网络」**：DNS 正常、`https://github.com` → 200、SSH 22/443 都通；
+但 `git push` 403、REST 写接口 403。
+⇒ gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**。
+⚠ `GET /repos/.../permissions` 报 `push: true` —— **这个字段是假的**，
+no-op `PATCH /git/refs/heads/main` 直接 403 才暴露真相。
+⇒ 只有 classic PAT（`ghp_` 前缀）能 push；本机已无 classic PAT 副本 ⇒ 需用户重新提供。
+
 ---
 
 ## 三、这一阶段的通用教训
