@@ -101,7 +101,9 @@
     git -c credential.helper='!gh auth git-credential' push origin v0.121.4
     unset GH_TOKEN
     ```
-    成功判据 = `git ls-remote origin refs/heads/main` 读回 `e431f80`
+    成功判据 = `git ls-remote origin refs/heads/main` 读回 **`fc74580`**（= 当前 HEAD；
+    tag `v0.121.4` 的 `^{}` 行读回 `e431f80` = 发版 commit —— tag 指向发版 commit、
+    纯文档 commit 排在 tag 之后，与 `v0.121.3` 的先例一致）
 
 ## [V0.121.3] · 2026-11-07
 
