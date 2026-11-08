@@ -396,7 +396,7 @@ const COMBINE_FIELDS = [
 // V0.120.0：资金流面 6 因子面内权重（周频 3 个 54% / 月频 3 个 46%）
 // 与后端 schemas/settings.py::MoneyFlowWeightConfig 默认值逐字一致
 const MONEY_FLOW_FIELDS = [
-  ["cot_gold_net", "黄金投机净多占 OI（周）"],
+  ["cot_gold_net", "黄金投机净多占 OI · 拥挤度（周）"],
   ["cot_gold_flow", "黄金投机净多 4 周变化（周）"],
   ["gold_etf_flow", "黄金ETF 4 周累计净申赎（周）"],
   ["us_liq_net", "美元净流动性 4 周变化（月）"],

@@ -254,7 +254,7 @@ class MoneyFlowWeightConfig(BaseModel):
     ==================  ==========  =====  ==================================
     因子                  节奏         权重  符号
     ==================  ==========  =====  ==================================
-    ``cot_gold_net``     周           18%   + 投机净多占 OI 越高越利多黄金
+    ``cot_gold_net``     周           18%   − 拥挤度口径：净多占 OI 越高越拥挤（V0.122.0）
     ``cot_gold_flow``    周           14%   + 4 周净多增加 = 钱正在买黄金
     ``gold_etf_flow``    周           22%   + 4 周累计净申购（国内真金白银进场）
     ``us_liq_net``       月           14%   + 美元净流动性扩张利多黄金
@@ -264,6 +264,10 @@ class MoneyFlowWeightConfig(BaseModel):
 
     ``gold_etf_flow`` 权重最高（22%）：它是**唯一直接度量「国内的钱有没有买黄金」**
     的因子，而本项目的用户就是国内黄金 ETF 持有人。
+
+    ⚠ **权重只决定「这个因子在面内占多少」，不决定「它的方向」** ——
+    方向烧在 ``services/money_flow.py::MONEY_FLOW_FACTOR_RULES`` 的
+    ``positive`` / ``best`` / ``worst`` 里。
     """
 
     cot_gold_net: float = Field(0.18, ge=0, le=1, description="黄金投机净多占 OI")

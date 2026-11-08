@@ -24,7 +24,7 @@
 > 🗺️ **项目路线与历史**：
 > - [docs/roadmap.md](docs/roadmap.md) — **唯一活跃路线图**（逐条带可复现的实测判据）
 > - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（"哪个能力在哪个版本落地"的单源）
-> - [docs/releases/milestones/](docs/releases/milestones/) — **7 份里程碑文档**（演进脉络：为什么当初这么做）
+> - [docs/releases/milestones/](docs/releases/milestones/) — **8 份里程碑文档**（演进脉络：为什么当初这么做）
 > - [docs/version-status.md](docs/version-status.md) — **当前到底是哪个版本**（4 处版本号 + 推送状态的单一真源）
 > - [CHANGELOG.md](CHANGELOG.md) — Keep-a-Changelog 发版条目（发行节点）
 > - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 参数清单与调参建议（**活跃**）
@@ -294,7 +294,7 @@ ruff format src tests                                    # format
 
 ## 版本历程
 
-> 逐版完整记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/releases/milestones/](docs/releases/milestones/)（7 份里程碑文档）。
+> 逐版完整记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/releases/milestones/](docs/releases/milestones/)（8 份里程碑文档）。
 > **V0.120.5 起**逐版 release notes 已合并进里程碑文档，逐版原文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
 
 | 版本 | 日期 | 亮点 |
@@ -304,7 +304,7 @@ ruff format src tests                                    # format
 | **V0.121.2** | 2026-11-07 | 诚实性与数据链批次：价格日历增量补齐（不再「有数据就整段跳过」）· 组权重滑块从**装饰**变成真生效 · 三页误导性时效调用清理 · AI token 统计（顺带修好 `/ask` 流式**从未真正生效**的 `userMsg` 作用域 bug） |
 | **V0.121.1** | 2026-11-06 | 可信度 P0 批次：`days` 进缓存 key（此前 52W/24M 按钮画的是 12 周）· 上涨天数恒 0 治本（加列 + 迁移）· **64% 历史行带伪造消息面 50 分**（治源头 + 幂等回填，清掉 26 个伪造命中）· `/headlines` 渲染 i18n key 字面量 |
 | **V0.121.0** | 2026-11-06 | 门禁自愈：3 个浏览器门禁从「坏了 / 假绿」修成「**能判红**」 |
-| **V0.120.5** | 2026-11-05 | 文档收敛：60 份逐版 release notes → 7 份里程碑文档；6 份重叠规划文档 → 1 份 `roadmap.md`（并逐条实测复核旧待办） |
+| **V0.120.5** | 2026-11-05 | 文档收敛：60 份逐版 release notes → 里程碑文档（M0–M5）；6 份重叠规划文档 → 1 份 `roadmap.md`（并逐条实测复核旧待办） |
 | **V0.120.4** | 2026-11-04 | 首页 hero 右侧新增「**综合评估**」结论块（指数 + 4 面分数条 + 因子明细），**零新增网络请求** |
 | **V0.120.3** | 2026-11-03 | 修 `/ask` 回复不可读 —— 缺 assistant(tool_use) 回合 ⇒ 上游吐原生协议；历史污染行读时清洗；工具层真缺陷 |
 | **V0.120.2** | 2026-11-02 | 修 `/ask` 「加载对话失败：Internal Server Error」—— `tool_input` 落库是 JSON 字符串，接口边界没解码 |
@@ -354,7 +354,7 @@ ruff format src tests                                    # format
 - 🗺️ **项目路线与历史**：
   - [docs/roadmap.md](docs/roadmap.md) — 唯一活跃路线图（逐条带实测判据）
   - [docs/releases/index.md](docs/releases/index.md) — 能力 × 版本对照表（单源）
-  - [docs/releases/milestones/](docs/releases/milestones/) — 7 份里程碑文档（演进脉络）
+  - [docs/releases/milestones/](docs/releases/milestones/) — 8 份里程碑文档（演进脉络）
   - [docs/version-status.md](docs/version-status.md) — 当前版本状态（单一真源）
   - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 参数清单与调参建议
   - [CHANGELOG.md](CHANGELOG.md) — 发版条目

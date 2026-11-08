@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date
 from types import SimpleNamespace
 
@@ -94,16 +95,41 @@ def test_规则表_阈值带best不等于worst():
         assert float(r["best"]) != float(r["worst"]), r["key"]
 
 
-def test_规则表_两个中国因子取负号口径():
-    """用户拍板：机会成本口径（值越高越利空黄金）。"""
+def test_规则表_负号口径含拥挤度因子():
+    """负号口径有两个来源：**机会成本**（cn_*）与**拥挤度**（cot_gold_net）。
+
+    用户拍板：机会成本口径（值越高越利空黄金）。
+    V0.122.0 实测：拥挤度口径（净多占 OI 越高 = 越挤 = 越利空黄金）。
+    """
     assert RULE_BY_KEY["cn_margin_flow"]["positive"] is False
     assert RULE_BY_KEY["cn_money_gap"]["positive"] is False
+    # V0.122.0：crowding 口径
+    assert RULE_BY_KEY["cot_gold_net"]["positive"] is False
     # 负号口径 ⇒ best 在低位、worst 在高位
-    for k in ("cn_margin_flow", "cn_money_gap"):
+    for k in ("cn_margin_flow", "cn_money_gap", "cot_gold_net"):
         assert float(RULE_BY_KEY[k]["best"]) < float(RULE_BY_KEY[k]["worst"]), k
-    for k in ("cot_gold_net", "cot_gold_flow", "gold_etf_flow", "us_liq_net"):
+    for k in ("cot_gold_flow", "gold_etf_flow", "us_liq_net"):
         assert RULE_BY_KEY[k]["positive"] is True
         assert float(RULE_BY_KEY[k]["best"]) > float(RULE_BY_KEY[k]["worst"]), k
+
+
+def test_规则表_静态带方向与positive标志一致():
+    """**防「滚动分位一接管就把符号翻回去」**（V0.122.0 的核心护栏）。
+
+    同一个因子的方向有**两条独立的路**：
+
+    1. **静态带** = 规则里写死的 ``best`` / ``worst``；
+    2. **滚动分位** = ``services/macro_thresholds.py`` 读同一份规则的
+       ``positive`` 字段，决定 P90 / P10 谁当 best。
+
+    两条路一旦方向不一致 ⇒ 样本不足时走静态、样本够了走滚动，
+    **同一个因子会给出相反的分数**，而且不报错（这正是「静默失效」）。
+    """
+    for r in MONEY_FLOW_FACTOR_RULES:
+        positive = bool(r["positive"])
+        assert (float(r["best"]) > float(r["worst"])) == positive, (
+            f"{r['key']}: positive={positive} 但静态带 best/worst 方向与之相反"
+        )
 
 
 def test_静态兜底值覆盖全部因子():
@@ -127,13 +153,16 @@ def test_打分_best得100_worst得0_中点得50():
 def test_打分_越界截断():
     """超出阈带的读数必须截断到 0/100，而不是线性外推。
 
-    ⚠ 注意方向：``worst`` 本身可能是**正数**（cot_gold_net 的 worst=6.49%），
-    所以「低于 worst」要用**减法**构造，不能用 ``worst * 10`` ——
-    那样算出来是 64.9，反而**高于** best（34.1），截断到 100 而不是 0。
+    ⚠ **方向无关**的写法：``best`` / ``worst`` 谁在高位取决于因子的符号约定 ——
+    ``cot_gold_net`` 自 V0.122.0 起是拥挤度口径（``best`` 在**低位** 6.49%），
+    而它是正号因子时 ``best`` 在高位。⇒ 「越界」必须按 ``best - worst`` 的
+    **符号**朝各自外侧构造，不能假定 ``best`` 一定是高位端
+    （本测试最初就是那样写的，V0.122.0 改号后立刻变红 —— 说明它一直隐含绑着符号）。
     """
     rule = dict(RULE_BY_KEY["cot_gold_net"])
-    assert _friendly_score(rule["best"] + 100, rule) == 100.0
-    assert _friendly_score(rule["worst"] - 100, rule) == 0.0
+    step = math.copysign(100.0, float(rule["best"]) - float(rule["worst"]))
+    assert _friendly_score(rule["best"] + step, rule) == 100.0
+    assert _friendly_score(rule["worst"] - step, rule) == 0.0
 
 
 def test_打分_带子午线为0时恒50():
@@ -150,6 +179,25 @@ def test_打分_负号口径下高值得低分():
     assert high < low
     assert high == pytest.approx(0.0)
     assert low == pytest.approx(100.0)
+
+
+def test_打分_拥挤度口径下净多越高分越低():
+    """V0.122.0：``cot_gold_net`` 改成拥挤度口径后的方向断言。
+
+    之前这个因子是「+」（净多占 OI 越高越利多黄金）⇒ 拥挤时给满分。
+    实测（核心标的 = COMEX/GLD 美元金价）：净多占 OI 的年内秩 Q5（最拥挤）
+    前瞻 60 日比 Q1（最不拥挤）**低 3.72pp** ⇒ 方向反了。
+    """
+    rule = dict(RULE_BY_KEY["cot_gold_net"])
+    # 不拥挤（净多占 OI 低）⇒ 利多黄金 ⇒ 高分
+    assert _friendly_score(rule["best"], rule) == pytest.approx(100.0)
+    # 极度拥挤 ⇒ 利空黄金 ⇒ 低分
+    assert _friendly_score(rule["worst"], rule) == pytest.approx(0.0)
+    # 真实读数 25.90%（V0.120.0 标定时的实测值）⇒ 拥挤度中等偏上 ⇒ 分数 < 50
+    assert _friendly_score(25.9039, rule) < 50.0
+    # 单调性：值越大分越低
+    assert _friendly_score(10.0, rule) > _friendly_score(20.0, rule)
+    assert _friendly_score(20.0, rule) > _friendly_score(30.0, rule)
 
 
 # ───────────────────────── 3. evaluate() ─────────────────────────

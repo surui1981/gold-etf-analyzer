@@ -8,7 +8,7 @@
 >
 > **V0.120.5 起**：60 份逐版 release notes 已合并为**里程碑文档**（见 [milestones/](milestones/)）——
 > 本表的「详情」列现在指向**该能力所属里程碑**；逐版原始全文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
-> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**。
+> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**；**V0.122.0 起**新增第 8 份 **M7 · 因子符号校准（V0.122）**。
 
 ## §1 能力全景（按能力所属类别组织）
 
@@ -23,6 +23,7 @@
 | 宏观因子「末次落库」兜底层（源挂时退回真实读数而非 2026-08-28 常量）+ 手动校准页降级/滞后可见 | **V0.118.1** | [v0.118.1.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **宏观参考因子 8 → 11 个**（+美国/中国/欧洲 政府债务/GDP，组权重 12% = 美 5 / 中 4 / 欧 3）+ 低频因子 `cadence`/`max_lag_days` + 后端 `rolling_factors` 清单 | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **第 4 个评分面「资金流面」**（6 因子 = 周 3 / 月 3：CFTC 净多·净多 4 周变化 / 黄金 ETF 4 周累计净申赎 / 美元净流动性 4 周变化 / A 股融资余额月环比 / M1−M2 剪刀差）+ 综合指数权重 30/40/30 → 25/35/25/15 + 滚动分位按观测节奏取窗 + 历史回填 482 行（每日调度续增） | **V0.120.0** | [v0.120.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
+| **资金流面 `cot_gold_net` 符号治本（拥挤度口径）** —— 实测判定「净多占 OI 越高越利多」方向反了（GLD 年内五分位 Q1 前瞻 60 交易日 +6.45% vs Q5 +0.62%）⇒ 符号 `+` → `−`（静态带与滚动分位**两条路同改**）+ 测量方法入库（可复算脚本）+ 2 条不变式测试守住符号 | **V0.122.0** | [m7-factor-sign-calibration-v0.122.md](milestones/m7-factor-sign-calibration-v0.122.md) |
 | 权重配置页（技术 5 维 + 合成比可调） | V0.20 | [CHANGELOG](../../CHANGELOG.md) |
 | 阈值口径统一（4 组 IntEnum）+ 决策 9 档 + 共振反向识别 | **V0.78.0** | [CHANGELOG](../../CHANGELOG.md) |
 | 动态化宏观阈值（252 日滚动 90/10 分位 + 24h TTL） | **V0.79.0** | [v0.79.0.md](milestones/m1-foundation-and-tooling-v0.79-v0.92.md) |
@@ -208,7 +209,7 @@
 | 门禁 `scripts/_verify_macro_debt.mjs`（3 个新因子的 API / 权重页 / 趋势页 + **2 处反向验证**：删掉 mock 的 `max_lag_days` 后必须亮滞后红灯；把 mock 的 `rolling_factors` 砍到 3 个后角标必须显示「3 个可滚动因子」） | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **门禁自愈批次**：`check_v084.mjs` 0/27 → **27/27**（过期断言对齐 V0.85 后的真实结构 + 反向断言）· `_verify_sw_update.mjs` 0 条 → **8 条**（含「缓存无陈旧副本」+ 持久化 profile）· `_verify_mobile.mjs` 聚焦断言改确定性轮询 | **V0.121.0** | [v0.121.0.md](milestones/m6-truthful-signals-v0.121.md) |
 | **可信度 P0 批次**：`?days=` 进 served cache key（此前完全失效）· 新增 `price_direction` 列 + 迁移 `t2u3v4w5x6y`（上涨天数 0 → 11，方向已知天数可见）· 伪造消息面 50 分治源头 + 幂等回填（清掉 26 个伪造命中、29 行被消息面方向污染的 `direction`）· `/headlines` 相对时间 i18n key 字面量修好 + 门禁纳入 `time.` 命名空间 | **V0.121.1** | [v0.121.1.md](milestones/m6-truthful-signals-v0.121.md) |
-| **诚实性与数据链批次**：价格日历**增量**补齐（`ny` 最新 2026-10-14 → **2026-11-06`，回测覆盖 15 → 22 天）· `group_combine` 的 5 个权重滑块**真正置灰** + 补 3 个**真的生效**的组权重滑块（技术面 16.4 → 4.7 → 还原 16.4）· 删掉 3 处**误导性**的数据时效调用 + 新增通用门禁 `check_freshness_consistency.py` · AI token 栏显示出来了（上游报 0 ⇒ 记 NULL 而不是 0）—— 并**顺带修好「/ask 的流式自 V0.98 起从未真正生效」**这个更大的缺陷 | **V0.121.2** | [v0.121.2.md](milestones/m6-truthful-signals-v0.121.md) || **诚实性与数据链批次**：价格日历**增量**补齐（`ny` 最新 2026-10-14 → **2026-11-06`，回测覆盖 15 → 22 天）· `group_combine` 的 5 个权重滑块**真正置灰** + 补 3 个**真的生效**的组权重滑块（技术面 16.4 → 4.7 → 还原 16.4）· 删掉 3 处**误导性**的数据时效调用 + 新增通用门禁 `check_freshness_consistency.py` · AI token 栏显示出来了（上游报 0 ⇒ 记 NULL 而不是 0）—— 并**顺带修好「/ask 的流式自 V0.98 起从未真正生效」**这个更大的缺陷 | **V0.121.2** | [v0.121.2.md](milestones/m6-truthful-signals-v0.121.md) |
+| **诚实性与数据链批次**：价格日历**增量**补齐（`ny` 最新 2026-10-14 → **2026-11-06`，回测覆盖 15 → 22 天）· `group_combine` 的 5 个权重滑块**真正置灰** + 补 3 个**真的生效**的组权重滑块（技术面 16.4 → 4.7 → 还原 16.4）· 删掉 3 处**误导性**的数据时效调用 + 新增通用门禁 `check_freshness_consistency.py` · AI token 栏显示出来了（上游报 0 ⇒ 记 NULL 而不是 0）—— 并**顺带修好「/ask 的流式自 V0.98 起从未真正生效」**这个更大的缺陷 | **V0.121.2** | [v0.121.2.md](milestones/m6-truthful-signals-v0.121.md)|
 | **P0-2 收尾 hotfix**：桶聚合**三处统一一份口径**（`/scoring/hit-stats` 与 `/scoring/hit-stats-all` 此前**漏填**上涨/下跌/方向已知 ⇒ API 返回 0，而 0 与 null 语义不同）· 宽表按补齐后的价格日历**重算**（`price_direction` 覆盖 28 → **45** 行，`hit_t1` 13 → **22** 行）· **服务已用 systemd 重启** ⇒ 首次「代码 = 服务」 | **V0.121.3** | [v0.121.3.md](milestones/m6-truthful-signals-v0.121.md) |
 | **央行购金口径治本**：央行季度合计此前是**「WGC 全球合计行 + 各国明细行」一起求和** ⇒ 重复计数（2026Q2：336.7 = 288.9 + 47.8）· 合计行用伪 ISO `WGC_AGGR` 单独标记、两者**永不相加** · 首次取到 **2026Q3 = 321.2 吨**，滚动 12 月 842.6 → **885.1**，国家数 25 → **24** · 报告版本 q3→q2→q1 逐版回退 + 图表按**结构**识别（Q3 报告只有区域图 ⇒ **不伪造** Q3 国别明细）· 手工补丁不再覆盖 WGC 国别值（UZB H1：4 → **41.4 吨**） | **V0.121.4** | [v0.121.4.md](milestones/m6-truthful-signals-v0.121.md) |
 | Python 3.13 迁移收口 | **V0.101**（in progress） | — |
@@ -220,7 +221,7 @@
 - **能力全景**（本表）回答"项目有什么、什么时候加的"
 - **[CHANGELOG.md](../../CHANGELOG.md)** 回答"发版节点"（发行时刻 + 类型分类）
 - **[docs/version-status.md](../version-status.md)** 回答"**现在到底是哪个版本**"（4 处版本号一致性 / 各来源覆盖矩阵 / 已知缺口 / 怎么自己查）
-- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（7 份里程碑文档，覆盖 V0.11 → 当前）
+- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（8 份里程碑文档，覆盖 V0.11 → 当前）
 - **[docs/roadmap.md](../roadmap.md)** 回答"**现在要做什么**"（唯一活跃路线，逐条带实测判据）
 - **[docs/releases/milestones/](milestones/)** 里程碑文档回答"该阶段的实现细节（根因 / 修法 / 验证 / 教训）"
 

@@ -22,11 +22,13 @@ import pytest
 
 from app.repositories.db import async_session_factory
 from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+from app.repositories.money_flow_factor_history import MoneyFlowFactorHistoryRepository
 from app.services.macro import MACRO_FACTOR_RULES
 from app.services.macro_thresholds import (
     MacroThresholdCalculator,
     _percentile,
 )
+from app.services.money_flow import MONEY_FLOW_FACTOR_RULES
 
 # ───────────────────────── 单元：_percentile ─────────────────────────
 
@@ -67,6 +69,13 @@ class TestPercentile:
 async def repo() -> MacroFactorHistoryRepository:
     async with async_session_factory() as session:
         yield MacroFactorHistoryRepository(session)
+
+
+@pytest.fixture
+async def money_flow_repo() -> MoneyFlowFactorHistoryRepository:
+    """资金流面历史仓储（V0.122.0：滚动分位方向护栏用）。"""
+    async with async_session_factory() as session:
+        yield MoneyFlowFactorHistoryRepository(session)
 
 
 def _hardcode_dict() -> dict[str, tuple[float, float]]:
@@ -263,6 +272,56 @@ class TestRollingSignConvention:
             key = rule["key"]
             if key in SKIP_ROLLING_FACTORS:
                 continue
+            best, worst = thresholds[key]
+            if rule["positive"]:
+                assert best > worst, f"{key} 是正相关因子，best 必须是高分位"
+            else:
+                assert best < worst, f"{key} 是负相关因子，best 必须是低分位"
+
+
+class TestMoneyFlowRollingSignConvention:
+    """V0.122.0：资金流面**滚动分位**那条路的 best/worst 方向。
+
+    背景：资金流面复用同一个 ``MacroThresholdCalculator``（``rules`` 换成
+    ``MONEY_FLOW_FACTOR_RULES``），滚动分位的方向由规则的 ``positive`` 决定
+    —— 与「静态带」那条路（规则里写死的 best/worst）**是两条独立的路**。
+
+    V0.122.0 把 ``cot_gold_net`` 从「+」改成「−」（拥挤度口径），
+    静态带与 ``positive`` 都改了；本测试守住**滚动分位这条腿**，
+    否则样本一够、滚动分位接管，符号就被悄悄翻回去（且不报错）。
+    """
+
+    async def test_money_flow_rolling_direction_matches_positive(
+        self, money_flow_repo: MoneyFlowFactorHistoryRepository
+    ) -> None:
+        for rule in MONEY_FLOW_FACTOR_RULES:
+            key = rule["key"]
+            # 每个因子种 80 条递增样本（够周频 60 / 月频 36 的门槛）
+            rows = []
+            end = date.today()
+            for i in range(80):
+                rows.append(
+                    (
+                        end - timedelta(days=i),
+                        key,
+                        10.0 + i * 0.2,
+                        "2026-10-20",
+                        "seed",
+                    )
+                )
+            await money_flow_repo.upsert_batch(target="default", rows=rows)
+
+        calc = MacroThresholdCalculator(
+            repo=money_flow_repo,
+            rules=MONEY_FLOW_FACTOR_RULES,
+            skip_rolling=frozenset(),
+            window_days=728,
+            min_samples=40,
+        )
+        thresholds = await calc.get_or_compute("default")
+
+        for rule in MONEY_FLOW_FACTOR_RULES:
+            key = rule["key"]
             best, worst = thresholds[key]
             if rule["positive"]:
                 assert best > worst, f"{key} 是正相关因子，best 必须是高分位"

@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.121.4** ｜ **最近更新**：2026-11-07 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.121.4`）**
+> **基线：V0.122.0** ｜ **最近更新**：2026-11-08 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.122.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.121.4**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.121.4`**
+**当前版本 = 0.122.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.122.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.121.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.121.4` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.121.4` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.121.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.122.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.122.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.122.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.122.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.121.4   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.122.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 16:00 重启加载 V0.121.4）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-08 重启加载 V0.122.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -270,7 +270,25 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.121.4（2026-11-07 发版）
+### 本轮：V0.122.0（2026-11-08 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **资金流面 `cot_gold_net` 符号治本（拥挤度口径）** —— 起因是用户框架「衡量金价 / 对比当前评估参数有什么数值改进措施 / 考虑一个核心标的 / **资金的共识才是投资的价值**」⇒ 落到可执行一步（用户拍板「先修已确认的符号缺陷」+「核心标的 = COMEX/GLD 美元金价」）。实测判定「净多占 OI 越高越利多黄金」**方向反了**（GLD 年内五分位：Q1 前瞻 60 交易日 **+6.45%** vs Q5 **+0.62%** ⇒ 差 **5.84pp**；三个子区间同向）⇒ 符号 `+` → `−`，静态带 `best`/`worst` 对调（best = P10 = 6.49% / worst = P90 = 34.10%），**权重 18% 不动** |
+| ⚠ 两条独立代码路 | 静态带（`best`/`worst`）与**滚动分位**（`services/macro_thresholds.py` 读 `positive` 决定 P90/P10 谁当 best）是**两条路** ⇒ 必须同改，否则滚动分位一接管就把符号翻回去 |
+| 测量方法 | ✅ 入库：**年内去均值**（年份固定效应）+ **非重叠采样** + **控制当期金价水平** + **前瞻/回看对称性检验**；证据可用 `python scripts/verify_cot_sign.py` 复算（需联网，不在 CI 门禁集） |
+| 证据边界 | ✅ 同时写进源码模块文档（不是只写注释）：**单因子本身不通过对称性检验**（h=60：前瞻 +0.027 vs 回看 +0.168）· 效果**逐年衰减**（2023-26 段相关≈0，518880 该段**反向** −2.08pp）· 短窗 h=20/30 改善不出现 ⇒ 拥挤度口径**近期偏弱** |
+| `__version__` | ✅ 已 bump 到 `0.122.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移**（只改符号与阈值带方向）⇒ 回滚代价低 |
+| 静态资源 | ⚠ **改了 `static/help.js` + `static/weights.html`** ⇒ 按 V0.100.1 **必须** bump `sw.js` 的 `VERSION` 到 `v0.122.0`（已做） |
+| 测试 | ✅ `tests/test_services/test_money_flow_service.py` + `tests/test_services/test_macro_thresholds.py` → **58 passed**；新增 2 条守卫测试（静态带方向 vs `positive` 不变式 · 滚动分位路径方向一致）+ 改写 1 条原本**隐含绑着符号**的旧测试 |
+| 反向验证 | ✅ 撤 `best`/`worst` 对调 ⇒ **3 条红**；破坏 `macro_thresholds.py` 负号分支 ⇒ **4 条红**（含新增的滚动路径测试）⇒ 恢复后全绿 |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.122.0**` |
+| 线上实测 | ✅ `192.168.0.204:8888/api/v1/market/gold/ny-trend?days=60` → 资金流面 47.4/100；`cot_gold_net` = **25.9574 %**（data_date 2026-11-03，tier=live）→ **score 77.1 / bullish / 权重 18% / 贡献 13.88**。**符号翻转在线上可观测**：用生产库复算滚动窗口（728 天 / 104 个周频样本）得 **p10 = 22.8774、p90 = 36.3515** ⇒ 负号口径 `(v−p90)/(p10−p90)×100 = **77.14**`（与线上 77.1 一致）；**旧的正号口径会给出 22.86** ⇒ 改号确实在生效，不是巧合 |
+| 综合指数 | ✅ `index` = **36.4**、level `down`、direction `bearish`；summary「= 技术面 16.8×33% + 宏观参考 45.7×47% + 资金流面 47.4×20%（消息面未打分，综合指数待定；已剔除并按剩余面权重归一化）」⇒ 资金流面在「消息面缺席」时被提到 20% 权重（名义 15%） |
+| git tag | ⏳ `v0.122.0`（发版后回填） |
+
+### 上一轮：V0.121.4（2026-11-07 发版）
 
 | 项 | 状态 |
 |---|---|

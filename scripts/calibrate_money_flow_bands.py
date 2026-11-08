@@ -10,6 +10,32 @@
     .venv/bin/python scripts/calibrate_money_flow_bands.py --out /tmp/bands.json
 
 ⚠ 脚本会**打外网**（CFTC / FRED / 上交所 / akshare），跑一次约 3~5 分钟。
+
+⚠⚠ **抄回 ``best`` / ``worst`` 时必须先看符号方向**（V0.122.0 的教训）
+------------------------------------------------------------------------
+本脚本只输出 **P10 / P90**（纯分位，不带方向）。抄进
+``services/money_flow.py::MONEY_FLOW_FACTOR_RULES`` 时，**谁当 best 取决于
+该因子的符号约定**，抄反了会把已修好的符号缺陷悄悄改回去：
+
+======================  ===============  ================  ================
+因子                    符号（positive）  best              worst
+======================  ===============  ================  ================
+``cot_gold_net``        **False**       **P10（不拥挤）**  **P90（拥挤）**
+``cot_gold_flow``       True            P90               P10
+``gold_etf_flow``       True            P90               P10
+``us_liq_net``          True            P90               P10
+``cn_margin_flow``      False           P10               P90
+``cn_money_gap``        False           P10               P90
+======================  ===============  ================  ================
+
+``cot_gold_net`` 自 **V0.122.0** 起是**负号（拥挤度）**口径 ——
+净多占 OI 越高 = 投机盘越挤 = 越利空黄金（实测依据见该模块的文档字符串）。
+**它与其他负号因子的理由不同**（一个是机会成本、一个是拥挤度），
+但**方向一样**：best = P10。
+
+⚠ 滚动分位那条路读的是同一条规则里的 ``positive`` 字段
+（``services/macro_thresholds.py`` 用它决定 P90/P10 谁当 best）⇒
+**静态带与 ``positive`` 必须同时改**，否则滚动分位一接管就又翻回去。
 """
 
 from __future__ import annotations
