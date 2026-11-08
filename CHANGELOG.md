@@ -57,6 +57,14 @@
     （改 static ⇒ 按 V0.100.1 铁律**立即 bump `sw.js` VERSION**，本版已 bump）
   - `docs/composite-trend-index.md` / `docs/api-reference.md`：同步口径与实测数字
   - `docs/releases/index.md`：顺手修掉 V0.121.2 那一行**表格单元格重复**的损坏
+- 🌐 **线上实测**（`192.168.0.204:8888`，服务已 systemd 重启 ⇒ `info.version = 0.122.0`）：
+  `cot_gold_net` = **25.9574 %**（data_date 2026-11-03）→ **score 77.1 / bullish / 权重 18%**；
+  用生产库复算滚动窗口（p10 = 22.8774 / p90 = 36.3515）⇒ 负号口径算得 **77.14**（与线上一致），
+  **旧正号口径会给出 22.86** ⇒ 符号翻转确实在线上生效（不是巧合）
+- 📌 **推送**：`v0.122.0`（annotated）已创建并推送 ⇒ 远端 `refs/heads/main` 与本地 HEAD 一致、
+  远端 tag 数 **119 = 本地 119**；PAT 走 `GH_TOKEN` 环境变量（不进 argv/不落盘/不进 remote URL），
+  推完已清 `~/.bash_history` 并复查 5 处 token 痕迹 ⇒ **干净**
+  ⚠️ 该 PAT 在 chat 里明文出现过 ⇒ **建议用完即轮换**（唯一能一次性作废所有副本的办法）
 
 ## [V0.121.4] · 2026-11-07
 
