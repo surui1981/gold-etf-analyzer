@@ -93,6 +93,11 @@
   - point-in-time 重建的**唯一真源** ⇒ 生产回填与证据脚本**共用**
     （`build_observations`）⇒ 两侧口径不会漂
   - `src/app/services/macro_backfill.py` 改为调用它（删掉约 60 行重复的映射代码）
+- 📌 **推送**：annotated tag `v0.124.0` 已创建并推送 ⇒ 远端 `refs/heads/main` 与本地 HEAD 一致、
+  远端 tag 数 **121** = 本地 **121**、`refs/tags/v0.124.0^{}` 指到发版 commit
+  ⇒ **以远端回读为准**（`git push` 的退出码恒 0 ⇒ 失败会被伪装成成功）。
+  凭据走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`** ⇒ token 不进 argv、不落盘、
+  不进 `remote.origin.url`；推完复查 5 处痕迹全部为 0。
 
 ## [V0.123.0] · 2026-11-09
 

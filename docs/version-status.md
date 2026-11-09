@@ -76,7 +76,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **85** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **60** 段 / 59 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **10** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **121** 个（**本地 121 / 远端 120** ⚠ 本轮的 `v0.124.0` **尚未推送**） | 按版本 checkout 的锚点 |
+| git tag | **121** 个（**本地 121 / 远端 121** ✅ 一致） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -294,15 +294,45 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 文档 | ✅ 新增**第 10 份里程碑文档 M9 · 宏观面证据复算（V0.124）**（`docs/releases/milestones/m9-macro-face-evidence-v0.124.md`）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) §〇 指针 + §三·C6 段落改成**实测结论** + §六「已完成」登记本条 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.124.0**`；线上宏观面 11 个因子**全部 `tier=live`**（无一条退回静态兜底） |
 
-#### 推送状态：⏳ **待推送**（`refs/heads/main` + tag `v0.124.0`）
+#### 推送状态：✅ **已推送**（`refs/heads/main` + tag `v0.124.0`）
 
-> 📌 判据 = **远端回读**（`git ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.124.0^{}`），
-> **不信 `git push | tail` 的退出码**（它恒为 0 ⇒ 失败会被伪装成成功）。
+**结论先行：代码、门禁、文档、提交、tag 全部就绪，且已全部推到 GitHub。**
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main` | `8a4d908` | `8a4d908` | ✅ |
+| tag 数（去掉 `^{}` 行） | **121** | **121** | ✅ |
+| `refs/tags/v0.124.0` | tag 对象 `75d2062` | `75d2062` | ✅ |
+| `refs/tags/v0.124.0^{}` | `8a4d908` | `8a4d908` | ✅（tag 指向**发版** commit；其后这条「推送状态」commit 会再推一次 ⇒ 远端 main 与本地 HEAD 始终相等） |
+
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
+> ⇒ 失败会被伪装成成功。本轮 `git push origin main v0.124.0` 的**真实退出码为 0**，
+> 且回读 `refs/heads/main` 与本地 HEAD 相等、tag 对象与 `^{}` 行都相等。
 >
 > ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.124.0` 是 **tag 对象**的 SHA，
 > `refs/tags/v0.124.0^{}` 才是它指向的 **commit** SHA。统计数量必须把 `^{}` 行去掉再数。
 >
-> ⚠️ **main 的 SHA 故意不写死**（写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效）。
+> ⚠️ **main 的 SHA 故意不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+
+**这次推送前踩到的一个前置**（实测过）：
+
+| 前置 | 实测 | 结论 |
+|---|---|---|
+| **网络** | `curl -sI https://github.com` → **HTTP/2 200**；DNS → `20.205.243.166`；`git ls-remote` 通 | ✅ 通道正常（不必用 DoH + `http.curloptResolve` 绕路） |
+| **凭据** | gh keyring 里**只有一枚 fine-grained PAT** ⇒ `git push` **403**（`Permission to surui1981/gold-etf-analyzer.git denied`）；`GET /repos/…` 的 `permissions` 显示 `push: true` —— **那是用户角色，不是 token 权限** | ⚠️ **只有 classic PAT（`ghp_` 前缀）能 push**（本轮用的是用户在 chat 提供的一枚 classic PAT） |
+
+> 🔐 **凭据卫生**：推送走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`**
+> ⇒ token **不进 argv、不落盘、不进 `remote.origin.url`**；
+> 推完立刻 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`，
+> 并复查 5 处 token 痕迹（严格形态 `ghp_[A-Za-z0-9]{20,}`）：
+> `~/.bash_history` **0** / `~/.gitconfig` **0** / 仓库（含未跟踪）**0** / `/tmp` **0** / memory 目录 **0**
+> ⇒ **全部干净**；`git config --get remote.origin.url` 仍是**不带 token** 的
+> `https://github.com/surui1981/gold-etf-analyzer.git`。
+>
+> ⚠️ **这枚 classic PAT 在 chat 里明文出现过** ⇒ **已算泄露**。
+> 本地已清理的都是**可清理的**；会话记录（`.claude/projects/…/*.jsonl`）里的副本**清不掉**
+> ⇒ **只能靠轮换**。（本轮未触发 auto-mode 分类器 ⇒ 没有新的
+> `auto-mode-classifier-error.txt` 转储副本。）
 
 ### 上一轮：V0.123.0（2026-11-09 发版）
 
