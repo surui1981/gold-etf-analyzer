@@ -7,7 +7,8 @@
 
 from __future__ import annotations
 
-from datetime import date
+import sqlite3
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -112,3 +113,61 @@ class TestGetLatestPerFactor:
         latest = await repo.get_latest_per_factor("default")
         assert len(latest) == 7
         assert latest["curve_10y2y"].value == pytest.approx(0.31)
+
+
+class TestUpsertManyChunking:
+    """``upsert_many`` 必须**分块**写（V0.124.0 生产实测踩到的坑）。
+
+    SQLite 单条语句的绑定变量上限是 ``SQLITE_LIMIT_VARIABLE_NUMBER``
+    （本机实测 **32766**），每行要绑 **6** 个变量 ⇒ 一次最多约 5461 行。
+    V0.124.0 的深回填一次要写 **2 万行**（12 万个绑定变量）
+    ⇒ 单语句必然 ``sqlite3.OperationalError: too many SQL variables``
+    ⇒ **整批回滚、零行落库**（实测：抛错时表里一行都没多）。
+
+    ⚠ 反向验证：把 ``upsert_many`` 改回「一条语句写全部」⇒
+    ``test_writes_more_rows_than_sqlite_variable_limit`` 必须变红。
+    """
+
+    async def test_writes_more_rows_than_sqlite_variable_limit(
+        self, db_session: AsyncSession
+    ) -> None:
+        """一次写入的行数必须超过「单语句能容纳的行数」上限。"""
+        repo = MacroFactorHistoryRepository(db_session)
+
+        limit = sqlite3.connect(":memory:").getlimit(sqlite3.SQLITE_LIMIT_VARIABLE_NUMBER)
+        rows_per_statement = limit // 6  # 每行 6 个绑定变量
+        n_rows = rows_per_statement + 139  # 明确超过上限
+        rows = [
+            (
+                date(2021, 1, 1) + timedelta(days=i),
+                "dxy",
+                90.0 + i,
+                "2021-01-01",
+                "Yahoo DX-Y.NYB",
+            )
+            for i in range(n_rows)
+        ]
+
+        written = await repo.upsert_many("default", rows)
+
+        assert written == n_rows
+        assert await repo.count_samples("default", "dxy", n_rows + 10) == n_rows
+
+    async def test_chunking_is_idempotent(self, db_session: AsyncSession) -> None:
+        """分块后重跑仍然幂等覆盖（不会翻倍、不会留旧值）。"""
+        repo = MacroFactorHistoryRepository(db_session)
+        rows = [
+            (date(2021, 1, 1) + timedelta(days=i), "dxy", 90.0 + i, "2021-01-01", "s")
+            for i in range(2500)
+        ]
+        await repo.upsert_many("default", rows)
+
+        rows2 = [
+            (date(2021, 1, 1) + timedelta(days=i), "dxy", 999.0, "2021-01-01", "s")
+            for i in range(2500)
+        ]
+        await repo.upsert_many("default", rows2)
+
+        assert await repo.count_samples("default", "dxy", 3000) == 2500
+        latest = await repo.get_latest_per_factor("default")
+        assert latest["dxy"].value == pytest.approx(999.0)
