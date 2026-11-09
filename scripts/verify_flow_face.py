@@ -50,14 +50,17 @@ from __future__ import annotations
 import argparse
 import asyncio
 import itertools
-import math
 import pickle
 import sys
 from datetime import date, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+# ⚠ 同目录模块（``_evidence_core``）—— 无论本脚本是「当脚本跑」还是
+# 「被 importlib 按路径加载」（离线测试就是这么做的）都要能找到它。
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import _evidence_core as core
 import numpy as np
 import pandas as pd
 
@@ -73,7 +76,6 @@ from app.repositories.money_flow_sources import (
     fetch_us_net_liquidity_monthly,
     week_end_days,
 )
-from app.services.macro_thresholds import _percentile
 from app.services.money_flow import MONEY_FLOW_FACTOR_RULES
 
 #: 规则表 → {key: rule}（**服务唯一真源** —— 不在这里抄一份权重/方向）
@@ -96,62 +98,26 @@ TARGETS = ("GLD", "518880")
 
 
 # ───────────────────────── 基础统计 ─────────────────────────
+#
+# ⚠ **实现已抽到 ``scripts/_evidence_core.py``**（V0.124.0）——
+# 与宏观面证据脚本共用**同一份**口径，避免两边各写各的、悄悄漂开。
+# 下面这些名字是本脚本的**公开 API**（V0.123.0 的离线测试直接按名字调）
+# ⇒ 保留别名，行为逐位不变。
 
-
-def partial_corr(x, y, ctrl, min_samples: int = 8) -> tuple[float, int]:
-    """控制 ``ctrl`` 之后 x 与 y 的偏相关。
-
-    做法：x、y 各自对 ``[1, ctrl]`` 做 OLS 回归取残差，再对残差求相关
-    （= 相关分析里的「控制变量」标准做法）。
-    """
-    d = pd.DataFrame({"x": x, "y": y, "c": ctrl}).dropna()
-    if len(d) < min_samples:
-        return float("nan"), len(d)
-    X = np.column_stack([np.ones(len(d)), d["c"].to_numpy(float)])
-    rx = d["x"].to_numpy(float) - X @ np.linalg.lstsq(X, d["x"].to_numpy(float), rcond=None)[0]
-    ry = d["y"].to_numpy(float) - X @ np.linalg.lstsq(X, d["y"].to_numpy(float), rcond=None)[0]
-    if np.std(rx) < 1e-12 or np.std(ry) < 1e-12:
-        return float("nan"), len(d)
-    return float(np.corrcoef(rx, ry)[0, 1]), len(d)
-
-
-def fisher_p(r: float, n: int) -> float:
-    """相关系数的双尾 p 值（Fisher z 变换）。"""
-    if not np.isfinite(r) or n < 5 or abs(r) >= 1:
-        return float("nan")
-    z = 0.5 * math.log((1 + r) / (1 - r)) * math.sqrt(n - 3)
-    return float(2 * (1 - 0.5 * (1 + math.erf(abs(z) / math.sqrt(2)))))
-
-
-def _within_year_rank(s: pd.Series) -> pd.Series:
-    """年内秩（百分位）—— 去掉年度共振。"""
-    return s.groupby(s.index.year).rank(pct=True)
-
-
-def _align_to_price(series: pd.Series, px: pd.Series) -> pd.Series:
-    """把因子序列对齐到**价格日历**（前向填充，不回填未来）。
-
-    ⚠ 因子与价格的日历**不一样**（518880 是 A 股日历、GLD 是美股日历）⇒
-    直接 ``pd.DataFrame({"c": series, "px": px})`` 会取**并集**，
-    于是 ``shift(-60)`` 数的是「并集行数」而不是「60 个交易日」
-    ⇒ 前瞻窗口长度飘忽（V0.123.0 修）。
-    """
-    return series.reindex(px.index, method="ffill")
-
-
-def _change_points(s: pd.Series) -> pd.Series:
-    """序列的**观测点**（值发生变化的那天，含首个有效值）。
-
-    ⚠ 日频表里同一个周频/月频观测值会连续重复好几天（真实库就是这么写的）⇒
-    「去重索引」等于没去重（索引本来就唯一）⇒
-    任何按「观测点」定义的统计都会被「值停留了几天」加权。
-    """
-    s = s.dropna()
-    if s.empty:
-        return s
-    changed = s.ne(s.shift(1))
-    changed.iloc[0] = True
-    return s[changed]
+partial_corr = core.partial_corr
+fisher_p = core.fisher_p
+_within_year_rank = core.within_year_rank
+_align_to_price = core.align_to_price
+_change_points = core.change_points
+_clip_to_observations = core.clip_to_observations
+measure = core.measure
+measure_spans = core.measure_spans
+_quintile_by_order = core.quintile_by_order
+_quintile_sample = core.quintile_sample
+_agg_quintile = core.agg_quintile
+quintile_spread = core.quintile_spread
+observation_series = core.observation_series
+consensus_readings = core.consensus_readings
 
 
 def factor_on_calendar(
@@ -181,104 +147,12 @@ def factor_on_calendar(
     return obs.reindex(cal, method="ffill")
 
 
-def _clip_to_observations(values: pd.Series, px: pd.Series) -> tuple[pd.Series, pd.Series]:
-    """把价格日历裁到「因子首观测 ~ 末观测」之间，并把因子对齐上去。
-
-    与 ``verify_cot_sign.py::analyse`` 同型：因子在首观测之前没有读数、
-    末观测之后不再更新 ⇒ 那些天的因子值只是「沿用的旧读数」，
-    留着会稀释样本（V0.123.0 对齐：n 差 3 行、Q1−Q5 差 0.07pp）。
-    """
-    obs = _change_points(values)
-    if obs.empty:
-        return values, px
-    cal = px[(px.index >= obs.index[0]) & (px.index <= obs.index[-1])]
-    return values.reindex(cal.index, method="ffill"), cal
-
-
-def measure(
-    series: pd.Series,
-    px: pd.Series,
-    h: int = H_FORWARD,
-    years: tuple[int, int] | None = None,
-) -> dict:
-    """严格管线下的一个读数。
-
-    管线：**非重叠采样**（每隔 h 个交易日取一次）+ 前瞻/回看收益**年内去均值**
-    + 控制**当期金价水平**的年内秩。
-    """
-    c_series, c_px = _clip_to_observations(series, px)
-    d = pd.DataFrame({"c": c_series, "px": c_px})
-    d["yr"] = d.index.year
-    d["r"] = _within_year_rank(d["c"])
-    d["pxr"] = _within_year_rank(d["px"])
-    d["fwd"] = d["px"].shift(-h) / d["px"] - 1.0
-    d["past"] = d["px"] / d["px"].shift(h) - 1.0
-    s = d.iloc[(np.arange(len(d)) % h == 0)].copy()
-    for c in ("fwd", "past"):
-        s[c + "_dm"] = s[c] - s.groupby("yr")[c].transform("mean")
-    s = s.dropna(subset=["r", "fwd_dm", "past_dm", "pxr"])
-    if years is not None:
-        s = s[(s["yr"] >= years[0]) & (s["yr"] <= years[1])]
-    pc, n = partial_corr(s["r"], s["fwd_dm"], s["pxr"])
-    pcp, _ = partial_corr(s["r"], s["past_dm"], s["pxr"])
-    ratio = abs(pc) / abs(pcp) if np.isfinite(pcp) and abs(pcp) > 1e-9 else float("nan")
-    return {
-        "pc_fwd": pc,
-        "p_fwd": fisher_p(pc, n),
-        "pc_past": pcp,
-        "p_past": fisher_p(pcp, n),
-        "ratio": ratio,
-        "n": n,
-        "raw_corr": float(s["r"].corr(s["fwd_dm"])) if len(s) > 2 else float("nan"),
-    }
-
-
-def measure_spans(series: pd.Series, px: pd.Series, h: int = H_FORWARD) -> list[float]:
-    """三个子区间的 pc_fwd —— 检验「不是某一段行情撑起来的」。"""
-    out: list[float] = []
-    for span in SPANS:
-        out.append(measure(series, px, h, years=span)["pc_fwd"])
-    return out
-
-
 # ───────────────────────── 服务真实打分 ─────────────────────────
 
 
 def rolling_band(factors: pd.DataFrame, key: str, positive: bool) -> pd.Series:
-    """服务口径的滚动分位带。
-
-    ⚠ 口径必须与 ``services/macro_thresholds.py`` 一致：
-    窗口是**最近 ``window_days`` 个日历日**内的**全部日频行**
-    （含同一观测值的重复行 —— 真实库里就是一天一行地重复写），
-    **不是**「去重后的观测日」。两者算出来的 P10/P90 不同。
-
-    返回 ``Series[日期] = (best, worst)``。
-    """
-    rule = RULES[key]
-    raw = factors[key]
-    window = int(rule["window_days"])
-    min_samples = int(rule["min_samples"])
-    out: dict[pd.Timestamp, tuple[float, float]] = {}
-    for d in raw.index:
-        v = raw.loc[d]
-        if pd.isna(v):
-            continue
-        lo = d - pd.Timedelta(days=window)
-        vals = raw.loc[(raw.index >= lo) & (raw.index <= d)].dropna()
-        if len(vals) < min_samples:
-            continue
-        sv = sorted(float(x) for x in vals)
-        p10 = _percentile(sv, 10.0)
-        p90 = _percentile(sv, 90.0)
-        out[d] = (p90, p10) if positive else (p10, p90)
-    # ⚠ 显式构造 DatetimeIndex：``pd.Series({}, dtype=object)`` 的索引是 **object**，
-    # 下游 ``reindex(..., method="ffill")`` 会因索引类型不可比而抛 TypeError
-    # （样本不足、滚动带为空时才触发 —— V0.123.0 的离线测试撞到过）。
-    return pd.Series(
-        list(out.values()),
-        index=pd.DatetimeIndex(list(out.keys())),
-        dtype=object,
-    ).sort_index()
+    """服务口径的滚动分位带（实现见 ``_evidence_core``，规则表绑定资金流面）。"""
+    return core.rolling_band(factors, key, positive, RULES[key])
 
 
 def service_scores(
@@ -296,174 +170,42 @@ def service_scores(
             生产口径下滚动带来自服务自己的因子历史（与目标标的无关），
             而「因子的当期读数」是**按标的日历 as-of** 的 ⇒ 两者日历可以不同。
     """
-    src = factors if band_source is None else band_source
-    out: dict[str, pd.Series] = {}
-    for key in KEYS:
-        rule = RULES[key]
-        positive = bool(rule.get("positive", True))
-        if flip_net and key == "cot_gold_net":
-            positive = not positive
-        raw = factors[key]
-        band = rolling_band(src, key, positive)
-        best = band.map(lambda t: t[0]).reindex(raw.index, method="ffill")
-        worst = band.map(lambda t: t[1]).reindex(raw.index, method="ffill")
-        # 样本不足 ⇒ 回退静态带（hardcode）。
-        #
-        # ⚠ 静态带**不带符号**：服务里 `hardcode[key] = (rule["best"], rule["worst"])`
-        # （`macro_thresholds.py:107` / `money_flow.py:625`）—— 负号因子的
-        # `rule["best"]` 本身就是**低**值（如 cot_gold_net：best=6.49 < worst=34.10）。
-        # 符号只决定**滚动分位**里 P10/P90 谁当 best。
-        # （V0.123.0 修：这里曾按符号把静态带也翻一次 ⇒ 负号因子在样本不足段方向反了。）
-        best = best.fillna(rule["best"])
-        worst = worst.fillna(rule["worst"])
-        # best == worst ⇒ 服务返回 50（`_friendly_score` 的显式分支），不能算成 NaN
-        denom = (best - worst).replace(0.0, np.nan)
-        score = (raw - worst) / denom * 100.0
-        score = score.where(denom.notna(), 50.0)
-        out[key] = score.clip(0, 100)
-    return pd.DataFrame(out)
+    return core.service_scores(
+        factors,
+        RULES,
+        KEYS,
+        flip_keys={"cot_gold_net"} if flip_net else None,
+        band_source=band_source,
+    )
 
 
 def face_composite(scores: pd.DataFrame) -> pd.Series:
     """资金流面 composite（服务口径：因子分数 × 规则权重之和）。"""
-    return sum(scores[k] * float(RULES[k]["weight"]) for k in KEYS)
+    return core.face_composite(scores, RULES, KEYS)
 
 
 # ───────────────────────── 单因子方向证据 ─────────────────────────
-
-
-def _quintile_by_order(values: list[float]) -> list[int]:
-    """按**因子值**排序（同值按时间顺序）等分 5 组 —— 与 ``verify_cot_sign.py`` 同型。
-
-    ⚠ 不用 pandas 的 ``qcut(rank, 5)``：n 不能被 5 整除时它与「按序等分」差 ±1 行，
-    两个脚本会给出**不同的数字**（V0.123.0 对齐过一轮）。
-    """
-    n = len(values)
-    order = sorted(range(n), key=lambda i: (values[i], i))
-    out = [0] * n
-    for pos, idx in enumerate(order):
-        p = (pos + 1) / n
-        out[idx] = 1 if p <= 0.2 else 2 if p <= 0.4 else 3 if p <= 0.6 else 4 if p <= 0.8 else 5
-    return out
-
-
-def _quintile_sample(values: pd.Series, px: pd.Series, fwd_days: int = H_FORWARD) -> pd.DataFrame:
-    """样本 + 年内五分位标签（一次算完；分区间复用**同一套**标签）。
-
-    与 ``scripts/verify_cot_sign.py::analyse`` **同型**，以便两个脚本给出同一个数字：
-
-    ① 因子先对齐到价格日历（前向填充），价格日历裁到「首观测~末观测」；
-    ② 前瞻收益 = 价格日历上**位置**位移 h 个交易日；
-    ③ **只在样本内**（有前瞻收益的行）做年内五分位分组；
-    ④ 分区间统计用**全样本的分组标签**再按年份切片（不是分段重新分组）。
-    """
-    v_series, v_px = _clip_to_observations(values, px)
-    d = pd.DataFrame({"v": v_series, "px": v_px})
-    d["yr"] = d.index.year
-    d["fwd"] = d["px"].shift(-fwd_days) / d["px"] - 1.0
-    d = d.dropna(subset=["v", "px", "fwd"])
-    if d.empty:
-        return d
-    q = pd.Series(index=d.index, dtype=float)
-    for _yr, sub in d.groupby("yr"):
-        q.loc[sub.index] = _quintile_by_order(sub["v"].tolist())
-    d["q"] = q
-    return d.dropna(subset=["q"])
-
-
-def _agg_quintile(d: pd.DataFrame) -> dict:
-    """把带 ``q`` 标签的样本聚合成 Q1..Q5 的前瞻收益均值与 Q1−Q5。"""
-    if d.empty:
-        return {}
-    g = d.groupby("q", observed=True)["fwd"].mean() * 100.0
-    if g.empty or 1 not in g.index or 5 not in g.index:
-        return {}
-    return {
-        # ``q`` 是 float 列 ⇒ 分组标签形如 1.0..5.0 ⇒ 截断成 int 才是 Q1..Q5 的编号
-        "quintile": {int(float(lbl)): float(g[lbl]) for lbl in g.index},
-        "spread": float(g.iloc[0] - g.iloc[-1]),
-        "n": len(d),
-    }
-
-
-def quintile_spread(values: pd.Series, px: pd.Series, fwd_days: int = H_FORWARD) -> dict:
-    """年内五分位的前瞻收益差（Q1 = 因子最低 ⇒ 对拥挤度口径是「最不拥挤」）。"""
-    return _agg_quintile(_quintile_sample(values, px, fwd_days))
+#
+# ⚠ 五分位相关的实现（``_quintile_by_order`` / ``_quintile_sample`` /
+# ``_agg_quintile`` / ``quintile_spread``）已随实现移入 ``_evidence_core``，
+# 上面的别名保留本脚本的公开 API。
 
 
 # ───────────────────────── C5 候选读数 ─────────────────────────
 
 
-def observation_series(factors: pd.DataFrame, key: str) -> pd.Series:
-    """因子的**观测序列**（值发生变化的那天）—— 用于拥挤度的窗口统计。
-
-    ⚠ V0.123.0 修：此前写的是「按索引去重」，而日频表的索引本来就唯一
-    ⇒ 等于没去重 ⇒ 百分位被「这个值停留了几天」加权。
-    """
-    return _change_points(factors[key])
-
-
 def crowding_readings(factors: pd.DataFrame, key: str = "cot_gold_net") -> dict[str, pd.Series]:
-    """两种拥挤度读数。
-
-    - ``pctile``：当前值在**自己窗口**里的百分位（位置读数）；
-    - ``wmax``：窗口**最大值**（水平读数 —— 拥挤程度本身）。
-    """
-    rule = RULES[key]
-    window = int(rule["window_days"])
-    min_samples = int(rule["min_samples"])
-    obs = observation_series(factors, key)
-    series = factors[key]
-    pctile: dict[pd.Timestamp, float] = {}
-    wmax: dict[pd.Timestamp, float] = {}
-    # ⚠ 日频求值（窗口是滑动的，每天的读数都不同），
-    # 但窗口里的**分布**用观测点（周频读数）而不是日频重复行
-    # ⇒ 百分位不被「这个值停留了几天」加权（V0.123.0 修）。
-    for d in series.index:
-        v = series.loc[d]
-        if pd.isna(v):
-            continue
-        w = obs[(obs.index >= d - pd.Timedelta(days=window)) & (obs.index <= d)]
-        if len(w) < min_samples:
-            continue
-        arr = w.to_numpy(float)
-        pctile[d] = float((arr <= v).sum()) / len(arr) * 100.0
-        wmax[d] = float(arr.max())
-    return {
-        "pctile": pd.Series(pctile, dtype=float).sort_index(),
-        "wmax": pd.Series(wmax, dtype=float).sort_index(),
-    }
-
-
-def consensus_readings(scores: pd.DataFrame) -> dict[str, pd.Series]:
-    """面内「共识度」三种读数（都基于服务打分）。"""
-    centered = (scores - 50.0) / 50.0
-    direction = centered.mean(axis=1)
-    return {
-        "dir": direction,
-        "agree": direction.abs(),
-        "dispersion": scores.std(axis=1),
-    }
+    """两种拥挤度读数（实现见 ``_evidence_core``，规则表绑定资金流面）。"""
+    return core.crowding_readings(factors, key, RULES[key])
 
 
 def three_question_verdict(m: dict, spans: list[float]) -> dict:
-    """三问判据的机械判决（不含人的解读）。
+    """三问判据的机械判决 —— **实现已抽到 ``_evidence_core``**（与宏观面共用）。
 
-    ⚠ 比值的**退化保护**：``|pc_past|`` 趋零时比值会爆表（分母趋零 ⇒ 任何 pc_fwd 都"过线"），
-    那种"通过"是假的 ⇒ ``|pc_past| < RATIO_FLOOR`` 时第②问判**不可判**（按不过处理）。
+    这里保留同名薄壳，是为了不破坏 V0.123.0 的公开 API
+    （``tests/test_scripts/test_verify_flow_face.py`` 直接按名字调）。
     """
-    q1 = bool(np.isfinite(m["pc_fwd"]) and abs(m["pc_fwd"]) >= POWER_GATE)
-    usable = np.isfinite(m["pc_past"]) and abs(m["pc_past"]) >= RATIO_FLOOR
-    q2 = bool(usable and np.isfinite(m["ratio"]) and m["ratio"] > RATIO_GATE)
-    finite = [s for s in spans if np.isfinite(s)]
-    q3 = bool(len(finite) == len(spans) and len(set(np.sign(finite))) == 1)
-    return {
-        "q1_power": q1,
-        "q2_symmetry": q2,
-        "q3_spans": q3,
-        "ratio_usable": bool(usable),
-        "passed": q1 and q2 and q3,
-    }
+    return core.three_question_verdict(m, spans)
 
 
 # ───────────────────────── 取数与缓存 ─────────────────────────
