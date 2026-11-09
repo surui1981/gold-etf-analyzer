@@ -76,7 +76,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | `__version__` bump 史 | **84** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
 | [CHANGELOG.md](../CHANGELOG.md) | **59** 段 / 58 个唯一版本号 | 发版史的**人读**记录 |
 | [docs/releases/](releases/) | **9** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **119** 个（本地）→ 本轮新建 `v0.123.0` 后为 **120** | 按版本 checkout 的锚点 |
+| git tag | **120** 个（**本地 120 / 远端 120** ✅ 一致；`v0.123.0` 已推送） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -292,7 +292,45 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 文档 | ✅ 新增**第 9 份里程碑文档 M8 · 资金流面证据复算（V0.123）**；M7 里加**订正框**（订正推论、不订正符号）；[docs/composite-trend-index.md](../docs/composite-trend-index.md) 加「资金流面 composite 的定位」小节；[docs/roadmap.md](../docs/roadmap.md) §〇 指针 + C5/C6/C7 三条处置 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.123.0**`（本版**零生产代码改动**，重启只为让版本号与代码一致） |
 
-#### 推送状态：⏳ **本节在推送完成后回填**（判据 = **远端回读**，不是「`git push` 没报错」）
+#### 推送状态：✅ **已推送**（`refs/heads/main` + tag `v0.123.0`）
+
+**结论先行：代码、门禁、文档、提交、tag 全部就绪，且已全部推到 GitHub。**
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main` | `bff3371` | `bff3371` | ✅ |
+| tag 数（去掉 `^{}` 行） | **120** | **120** | ✅ |
+| `refs/tags/v0.123.0` | tag 对象 `c7ae5b4` | `c7ae5b4` | ✅ |
+| `refs/tags/v0.123.0^{}` | `bff3371` | `bff3371` | ✅（tag 指向**发版** commit；其后这条「推送状态」commit 会再推一次 ⇒ 远端 main 与本地 HEAD 始终相等） |
+
+> ⚠️ **main 的 SHA 故意不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 首推时远端读到 `bff3371`（= 当时的 HEAD）；其后这条「推送状态」commit 再推一次 ⇒ **远端 main 与本地 HEAD 始终相等**。
+>
+> ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.123.0` 是 **tag 对象**的 SHA，
+> `refs/tags/v0.123.0^{}` 才是它指向的 **commit** SHA。统计数量必须把 `^{}` 行去掉再数。
+>
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
+> ⇒ 失败会被伪装成成功。本轮两次 `git push` 的**真实退出码均为 0**，且回读 `refs/heads/main` 与本地 HEAD 相等。
+
+**这次推送前踩到的两个前置**（都实测过）：
+
+| 前置 | 实测 | 结论 |
+|---|---|---|
+| **网络** | DNS 解析 `github.com` → `20.205.243.166` 成功；`curl -sI https://github.com` → **HTTP/2 200**；SSH 22 与 `ssh.github.com:443` 均通 | ✅ 通道正常（不必再用 DoH + `http.curloptResolve` 绕路） |
+| **凭据** | gh keyring 里**只有一枚 fine-grained PAT** ⇒ `git push` **403**（`Permission to … denied`）、`PATCH git/refs/heads/main`（同 SHA 的 no-op）也 **403** `Resource not accessible by personal access token`；而 `GET /repos/…` 的 `permissions` 字段显示 `push: true` —— **那是用户角色，不是 token 权限** | ⚠️ **只有 classic PAT（`ghp_` 前缀）能 push**（本轮用的是用户在 chat 提供的一枚 classic PAT） |
+
+> 🔐 **凭据卫生**：推送走 **`GH_TOKEN` 环境变量 + `gh auth git-credential`**
+> ⇒ token **不进 argv、不落盘、不进 `remote.origin.url`**；
+> 推完立刻 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`，
+> 并复查 5 处 token 痕迹（严格形态 `ghp_[A-Za-z0-9]{20,}`）：
+> `~/.bash_history` **0** / `~/.gitconfig` **0** / 仓库（含未跟踪）**0** / `/tmp` **0** / memory 目录 **0**
+> ⇒ **全部干净**；`git config --get remote.origin.url` 仍是**不带 token** 的
+> `https://github.com/surui1981/gold-etf-analyzer.git`。
+>
+> ⚠️ **这枚 classic PAT 在 chat 里明文出现过** ⇒ **已算泄露**。
+> 本地已清理的都是**可清理的**；会话记录（`.claude/projects/…/*.jsonl`）与几份
+> `auto-mode-classifier-error.txt` 错误转储里的副本**清不掉** ⇒ **只能靠轮换**。
+> （用户已计划**周五轮换**。）
 
 ### 上一轮：V0.122.0（2026-11-08 发版）
 
@@ -810,7 +848,7 @@ sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history
 grep -c 'ghp_' ~/.bash_history ~/.gitconfig   # 两个都应为 0
 
 # 推送后核对远端
-git ls-remote --tags origin | grep -v '\^{}' | wc -l   # 期望 117（去掉 ^{} 行）
+git ls-remote --tags origin | grep -v '\^{}' | wc -l   # 期望 120（去掉 ^{} 行）
 git ls-remote origin refs/heads/main                   # 期望 = 本地 git rev-parse HEAD
 ```
 
