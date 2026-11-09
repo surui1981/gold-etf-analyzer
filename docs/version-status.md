@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.123.0** ｜ **最近更新**：2026-11-09 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.123.0`）**
+> **基线：V0.124.0** ｜ **最近更新**：2026-11-09 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.124.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.123.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.123.0`**
+**当前版本 = 0.124.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.124.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.123.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.123.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.123.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.123.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.124.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.124.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.124.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.124.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.123.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.124.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-09 重启加载 V0.123.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-09 重启加载 V0.124.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **84** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **59** 段 / 58 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **9** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **120** 个（**本地 120 / 远端 120** ✅ 一致；`v0.123.0` 已推送） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **85** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **60** 段 / 59 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **10** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **121** 个（**本地 121 / 远端 120** ⚠ 本轮的 `v0.124.0` **尚未推送**） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -87,16 +87,17 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > V0.121.3 同理 ⇒ 80→81、55 段→56 段、116→117；
 > V0.121.4 同理 ⇒ 81→82、56 段→57 段、117→118；
 > V0.122.0 同理 ⇒ 82→83、57 段→58 段、118→119，**另加 1 份里程碑文档**（M7）⇒ 7→8 份；
-> V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份。）
+> V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份；
+> V0.124.0 同理 ⇒ 84→85、59 段→60 段、120→121，**另加 1 份里程碑文档**（M9）⇒ 9→10 份。）
 >
-> **59 段 ≠ 58 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **60 段 ≠ 59 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **120 个 tag = 119 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> **121 个 tag = 120 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
 > 但确实是真实存在的发布锚点，**而且它也是 annotated**）。
-> 其中 annotated **114** / lightweight **6**（114 + 6 = **120** ✅ 自洽）。
+> 其中 annotated **115** / lightweight **6**（115 + 6 = **121** ✅ 自洽）。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
 > `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致；
 > 本轮新增的 2 个也已逐一比对：`v0.121.1` → `a3153db`、`v0.121.2` → `f823909`，**均一致**。）
@@ -276,7 +277,34 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.123.0（2026-11-09 发版）
+### 本轮：V0.124.0（2026-11-09 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **宏观面 35% 的第一次真正测量**（roadmap C6 收口）—— 此前生产库 `daily_macro_factors` 只有 **201 天**、4 个低频因子不足 33 行 ⇒ h=60 非重叠采样只剩 ~3 个样本 ⇒ **连测量资格都没有**。本版交付三样东西：① **历史深度**：新建纯 Python 重建模块 `src/app/services/macro_history.py`（point-in-time 单一真源，生产回填与证据脚本**共用**）⇒ 生产库补到 **20 086 行**（11 因子 × 5 年 × **日历日**，2021-11-10 → 2026-11-09，每因子 1826 行）；② **第一次真正的三问复测**（生产真实打分口径 + 20 年重建 + h=60/20 + GLD/518880）：**16 个读数全部未过线**（`macro_all` / `macro_daily` / `macro_lowfreq` / `zscore_all` 候选）⇒ 宏观面 35% 是「**描述当下**」的读数，**不是前瞻指标** ⇒ **权重与因子方向一律不动**（roadmap C6 明令）；③ **可复算**：新增 `scripts/verify_macro_face.py` + 共用管线 `scripts/_evidence_core.py`（V0.123.0 的 `verify_flow_face.py` 改为从它导入，**13 条旧测试全绿**）+ **23 条离线测试** |
+| 🐛 顺带修掉的 2 个生产缺陷 | ① **`sqlite3.OperationalError: too many SQL variables`** —— 深回填一次要写 2 万行 × 6 绑定变量 = **12 万变量**，远超 SQLite 的 `SQLITE_LIMIT_VARIABLE_NUMBER`（本机实测 **32766**）⇒ 单语句**整批回滚、零行落库**（不是「写了一半」）⇒ 改为按 `UPSERT_CHUNK_SIZE = 1000` 行分块写；② **窗口第一天整行缺失** —— Yahoo 是**唯一按窗口取数**的源（H.15 / FRED / Eurostat 都是全量历史）⇒ 窗口第一天的「当时能拿到的最新读数」必须来自窗口**之前**的一次观测 ⇒ 新增 `YAHOO_LOOKBACK_DAYS = 30` |
+| X1 / X2 交叉验证 | ✅ **X1 绿**：脚本重建 ≡ 生产表**逐行相等**（**20 086 行相同 / 不同 0 / 只在一侧 0**）⇒ 证明脚本量的是**生产口径**；✅ **X2 有效**：撤销 point-in-time（把可得日退回观测日）⇒ 重叠区间内 **17 539 行不一致**（相同仅 2 546）⇒ 前视守卫能判红。⚠ X1 判据在比对**两窗口的交集**（脚本测 20 年 / 生产表 5 年 ⇒ 脚本独有的行不是不一致） |
+| roadmap C6 | ✅ **关闭**：C6「宏观面缺短周期择时力」原为 ⚪（前置是补历史深度）⇒ 现已实测 ⇒ 16 个读数**通过 0 项** ⇒ 结论「宏观面描述当下、不预测」⇒ **权重不动、因子方向不动**；唯一机械过线的单因子（`macro_daily`·GLD·h=20，`pc_fwd +0.1975`、`p=0.002`）**比值 1.20 < 1.3 仍不过线** ⇒ 不构成 roadmap 触发条件 |
+| 线上分数影响 | ✅ **已实测、不藏**：宏观面 **45.8 → 45.5（−0.3）**；综合指数 **42.2 → 42.2（0.0）**（⚠ 同一份行情快照下的前后对照；**综合指数本身还会随金价动** —— 发版时线上读数已是 38.9，而**宏观面仍是 45.5**）；逐因子 `us10y −3.0` / `us30y −2.1` / `real10y +0.8` / `dxy −0.6`（**触底被 0 截断**）/ 其余 7 个不变 |
+| `__version__` | ✅ 已 bump 到 `0.124.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移**；但**有生产库写入**（`daily_macro_factors` +19 660 行，**写前已备份** ⇒ 备份在 `data/backups/`） |
+| 静态资源 | ⚠ **只改了 `static/sw.js` 的 `const VERSION`**（未改任何 `static/*.html|js|css` 内容）⇒ 按 V0.100.1 仍换代，但**无需清 SW 缓存内容** |
+| 测试 | ✅ `tests/test_scripts/test_verify_macro_face.py`（**23**）+ `tests/test_scripts/test_verify_flow_face.py`（**13**，V0.123.0 安全网）+ `tests/test_services/test_macro_history.py` + `tests/test_services/test_macro_backfill.py`（+2 回看余量）+ `tests/test_repositories/test_macro_factor_history.py`（+2 分块）⇒ 全绿 |
+| 反向验证 | ✅ **5 个变异点全部变红**：① 关掉分块 ⇒ 重现 `too many SQL variables` ② 去掉 Yahoo 回看 ⇒ 窗口第一天缺 1 行（X1 转红）③ 撤销 point-in-time ⇒ X2 判红（17 539 行不同）④ 静态带按符号取反 ⑤ 滚动带方向翻转。**X1 判据自身也反向验过**：把 `DATABASE_URL` 指回回填前的备份库 ⇒ X1 报 1278 处不同、退出码 1 |
+| 文档 | ✅ 新增**第 10 份里程碑文档 M9 · 宏观面证据复算（V0.124）**（`docs/releases/milestones/m9-macro-face-evidence-v0.124.md`）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) §〇 指针 + §三·C6 段落改成**实测结论** + §六「已完成」登记本条 |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.124.0**`；线上宏观面 11 个因子**全部 `tier=live`**（无一条退回静态兜底） |
+
+#### 推送状态：⏳ **待推送**（`refs/heads/main` + tag `v0.124.0`）
+
+> 📌 判据 = **远端回读**（`git ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.124.0^{}`），
+> **不信 `git push | tail` 的退出码**（它恒为 0 ⇒ 失败会被伪装成成功）。
+>
+> ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.124.0` 是 **tag 对象**的 SHA，
+> `refs/tags/v0.124.0^{}` 才是它指向的 **commit** SHA。统计数量必须把 `^{}` 行去掉再数。
+>
+> ⚠️ **main 的 SHA 故意不写死**（写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效）。
+
+### 上一轮：V0.123.0（2026-11-09 发版）
 
 | 项 | 状态 |
 |---|---|
@@ -848,7 +876,7 @@ sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history
 grep -c 'ghp_' ~/.bash_history ~/.gitconfig   # 两个都应为 0
 
 # 推送后核对远端
-git ls-remote --tags origin | grep -v '\^{}' | wc -l   # 期望 120（去掉 ^{} 行）
+git ls-remote --tags origin | grep -v '\^{}' | wc -l   # 期望 121（去掉 ^{} 行）
 git ls-remote origin refs/heads/main                   # 期望 = 本地 git rev-parse HEAD
 ```
 
@@ -882,5 +910,7 @@ git ls-remote origin refs/heads/main                   # 期望 = 本地 git rev
 
 - [roadmap.md](roadmap.md) — **当前推进计划**（唯一活跃路线，逐条带实测判据）
 - [releases/index.md](releases/index.md) — 能力全景索引
-- [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) — 当前里程碑（V0.121 可信度修复线）
+- [releases/milestones/m9-macro-face-evidence-v0.124.md](releases/milestones/m9-macro-face-evidence-v0.124.md) — 当前里程碑（V0.124 宏观面证据复算线）
+- [releases/milestones/m8-flow-face-evidence-v0.123.md](releases/milestones/m8-flow-face-evidence-v0.123.md) — 上一里程碑（V0.123 资金流面证据复算线）
+- [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) — V0.121 可信度修复线
 - [CHANGELOG.md](../CHANGELOG.md) — 发版史
