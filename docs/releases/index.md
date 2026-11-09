@@ -8,7 +8,7 @@
 >
 > **V0.120.5 起**：60 份逐版 release notes 已合并为**里程碑文档**（见 [milestones/](milestones/)）——
 > 本表的「详情」列现在指向**该能力所属里程碑**；逐版原始全文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
-> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**；**V0.122.0 起**新增第 8 份 **M7 · 因子符号校准（V0.122）**。
+> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**；**V0.122.0 起**新增第 8 份 **M7 · 因子符号校准（V0.122）**；**V0.123.0 起**新增第 9 份 **M8 · 资金流面证据复算（V0.123）**。
 
 ## §1 能力全景（按能力所属类别组织）
 
@@ -24,6 +24,7 @@
 | **宏观参考因子 8 → 11 个**（+美国/中国/欧洲 政府债务/GDP，组权重 12% = 美 5 / 中 4 / 欧 3）+ 低频因子 `cadence`/`max_lag_days` + 后端 `rolling_factors` 清单 | **V0.119.0** | [v0.119.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **第 4 个评分面「资金流面」**（6 因子 = 周 3 / 月 3：CFTC 净多·净多 4 周变化 / 黄金 ETF 4 周累计净申赎 / 美元净流动性 4 周变化 / A 股融资余额月环比 / M1−M2 剪刀差）+ 综合指数权重 30/40/30 → 25/35/25/15 + 滚动分位按观测节奏取窗 + 历史回填 482 行（每日调度续增） | **V0.120.0** | [v0.120.0.md](milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md) |
 | **资金流面 `cot_gold_net` 符号治本（拥挤度口径）** —— 实测判定「净多占 OI 越高越利多」方向反了（GLD 年内五分位 Q1 前瞻 60 交易日 +6.45% vs Q5 +0.62%）⇒ 符号 `+` → `−`（静态带与滚动分位**两条路同改**）+ 测量方法入库（可复算脚本）+ 2 条不变式测试守住符号 | **V0.122.0** | [m7-factor-sign-calibration-v0.122.md](milestones/m7-factor-sign-calibration-v0.122.md) |
+| **资金流面证据复算 + 订正「composite 前瞻主导」的推论** —— 拿**生产打分口径**（0~100 截断分 + 滚动分位带）重测：单因子证据**逐位复现**（+5.835pp / 三段同向）⇒ **符号修复保留不回滚**；但「资金流面 composite 是前瞻指标」**证伪**（现状 × 改号前 × GLD × 518880 四组**三问全不过**）⇒ 资金流面是「当下资金状态」的读数。可复算脚本 `scripts/verify_flow_face.py` + **13 条离线测试**守住分析口径 | **V0.123.0** | [m8-flow-face-evidence-v0.123.md](milestones/m8-flow-face-evidence-v0.123.md) |
 | 权重配置页（技术 5 维 + 合成比可调） | V0.20 | [CHANGELOG](../../CHANGELOG.md) |
 | 阈值口径统一（4 组 IntEnum）+ 决策 9 档 + 共振反向识别 | **V0.78.0** | [CHANGELOG](../../CHANGELOG.md) |
 | 动态化宏观阈值（252 日滚动 90/10 分位 + 24h TTL） | **V0.79.0** | [v0.79.0.md](milestones/m1-foundation-and-tooling-v0.79-v0.92.md) |
@@ -221,7 +222,7 @@
 - **能力全景**（本表）回答"项目有什么、什么时候加的"
 - **[CHANGELOG.md](../../CHANGELOG.md)** 回答"发版节点"（发行时刻 + 类型分类）
 - **[docs/version-status.md](../version-status.md)** 回答"**现在到底是哪个版本**"（4 处版本号一致性 / 各来源覆盖矩阵 / 已知缺口 / 怎么自己查）
-- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（8 份里程碑文档，覆盖 V0.11 → 当前）
+- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（9 份里程碑文档，覆盖 V0.11 → 当前）
 - **[docs/roadmap.md](../roadmap.md)** 回答"**现在要做什么**"（唯一活跃路线，逐条带实测判据）
 - **[docs/releases/milestones/](milestones/)** 里程碑文档回答"该阶段的实现细节（根因 / 修法 / 验证 / 教训）"
 

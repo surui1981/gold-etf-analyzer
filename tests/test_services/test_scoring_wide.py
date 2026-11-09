@@ -655,20 +655,16 @@ class TestV01213HitStatsDirectionDays:
         svc = _service(db_session)
 
         summary_b = (
-            await svc.summary(
-                start=date(2026, 10, 1), end=date(2026, 10, 31), group_by="month"
-            )
+            await svc.summary(start=date(2026, 10, 1), end=date(2026, 10, 31), group_by="month")
         ).buckets[0]
         stats_b = (
-            await svc.hit_stats(
-                start=date(2026, 10, 1), end=date(2026, 10, 31), horizon="t1"
-            )
+            await svc.hit_stats(start=date(2026, 10, 1), end=date(2026, 10, 31), horizon="t1")
         ).by_month[0]
         all_b = (
-            await svc.hit_stats_all_horizons(
-                start=date(2026, 10, 1), end=date(2026, 10, 31)
-            )
-        ).by_horizon["t1"].by_month[0]
+            (await svc.hit_stats_all_horizons(start=date(2026, 10, 1), end=date(2026, 10, 31)))
+            .by_horizon["t1"]
+            .by_month[0]
+        )
 
         # summary 含全部 4 行（不过滤 ready），另两处只含 3 行 ⇒ days 不同，
         # 但**方向天数的口径**必须一致。
@@ -678,4 +674,3 @@ class TestV01213HitStatsDirectionDays:
             assert b.up_days == 1
             assert b.down_days == 1
             assert b.known_days == 3
-

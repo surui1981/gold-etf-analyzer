@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.122.0** ｜ **最近更新**：2026-11-08 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.122.0`）**
+> **基线：V0.123.0** ｜ **最近更新**：2026-11-09 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.123.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.122.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.122.0`**
+**当前版本 = 0.123.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.123.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.122.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.122.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.122.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.122.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.123.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.123.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.123.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.123.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.122.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.123.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-08 重启加载 V0.122.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-09 重启加载 V0.123.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **83** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **58** 段 / 57 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **8** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **119** 个（**本地 119 / 远端 119** ✅ 一致；`v0.122.0` 已推送） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **84** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **59** 段 / 58 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **9** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **119** 个（本地）→ 本轮新建 `v0.123.0` 后为 **120** | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -86,16 +86,17 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > （V0.121.2 只加了 1 段 CHANGELOG / 1 次 bump / 1 个 tag ⇒ 79→80、54 段→55 段、115→116；
 > V0.121.3 同理 ⇒ 80→81、55 段→56 段、116→117；
 > V0.121.4 同理 ⇒ 81→82、56 段→57 段、117→118；
-> V0.122.0 同理 ⇒ 82→83、57 段→58 段、118→119，**另加 1 份里程碑文档**（M7）⇒ 7→8 份。）
+> V0.122.0 同理 ⇒ 82→83、57 段→58 段、118→119，**另加 1 份里程碑文档**（M7）⇒ 7→8 份；
+> V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份。）
 >
-> **58 段 ≠ 57 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
+> **59 段 ≠ 58 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
 > 所以它是同一个版本号的第 2 段，不是重复 bug。门禁 `check_version_sync.py`
 > 把 hotfix 后缀排在同版本基础段**之上**，因此这段顺序是合法的。
 >
-> **119 个 tag = 118 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> **120 个 tag = 119 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
 > 但确实是真实存在的发布锚点，**而且它也是 annotated**）。
-> 其中 annotated **113** / lightweight **6**（113 + 6 = **119** ✅ 自洽）。
+> 其中 annotated **114** / lightweight **6**（114 + 6 = **120** ✅ 自洽）。
 > （**已推送的 114 个**此前逐个比对 `git rev-parse <tag>^{commit}` 与
 > `git ls-remote --tags` 的 `^{}` 行，**指向不一致的 0 个** ⇒ 本地与远端一致；
 > 本轮新增的 2 个也已逐一比对：`v0.121.1` → `a3153db`、`v0.121.2` → `f823909`，**均一致**。）
@@ -180,7 +181,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 完整推理 | ✅ [roadmap.md](roadmap.md) |
 | 缺陷清单 | ✅ [roadmap.md](roadmap.md) |
 | **代码** | ❌ 一行都没有 |
-| `__version__` | ❌ 仍是 `0.118.0`（V0.117.0 是方向文档，不 bump） |
+| `__version__` | ❌ 未 bump（V0.117.0 是方向文档，**不占版本号**） |
 | CHANGELOG 段 | ❌ 无（未发版） |
 | git tag | ❌ 无（未发版） |
 
@@ -275,7 +276,25 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.122.0（2026-11-08 发版）
+### 本轮：V0.123.0（2026-11-09 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **资金流面证据复算（零生产代码改动）** —— 把 V0.122.0 的结论拿到**生产真实打分口径**（0~100 截断分 + 滚动分位带）上重测。① **单因子证据逐位复现**：GLD 年内五分位 Q1 − Q5 = **+5.835pp**、三段 **+10.463 / +4.864 / +1.747pp** 全部为正 ⇒ **`cot_gold_net` 的负号（拥挤度口径）保留，不回滚**；② ⚠ **订正 V0.122.0 的一处推论**：「改号后资金流面 composite 前瞻主导」**不成立** —— 现状/改号前 × GLD/518880 四组**三问全不过**（功效 / 比值 > 1.3 / 三段同向）⇒ 资金流面 composite 是「当下资金状态」的读数，**不是前瞻指标**（当初错在：用了 z 分数而非 0~100 打分，且面内权重最大的 `gold_etf_flow`（22%）依赖的上交所份额序列当时是坏的）；③ 新增**可复算证据脚本** `scripts/verify_flow_face.py`（含 `--cache` 离线模式）+ **13 条离线测试** `tests/test_scripts/test_verify_flow_face.py` 守住它的分析口径（脚本依赖外网 ⇒ 不在 CI 门禁集，口径靠测试守） |
+| 🐛 顺带修掉的 4 个口径缺陷 | ① **静态兜底带按符号取反**（负号因子在样本不足段方向整个反过来 —— 服务里 `hardcode[key] = (rule["best"], rule["worst"])` **不带符号**，符号只决定**滚动分位**里 P10/P90 谁当 best）② 滚动带为空时索引类型不是 datetime ⇒ `reindex(method="ffill")` 抛 `TypeError` ③ 「观测点」= 按索引去重（索引本来就唯一 ⇒ 等于没去重）⇒ 改成**值变化点** ④ 因子与价格日历不同 ⇒ 前瞻窗口取**并集行数**（GLD 的「60 交易日」其实是 60 个 A 股交易日）⇒ 改成按**标的自己的日历**取窗 |
+| roadmap C5/C6/C7 | ✅ 三条待办给出**可复算结论**：**C5**（面内离散度）❌ **不进规则表**（两个标的都不过三问）· **C6**（宏观面缺短周期择时力）⚪ **先补历史深度**（生产库 `daily_macro_factors` 仅 **200 天**、11 个因子里 4 个不足 15 行 ⇒ h=60 非重叠采样只剩 ~3 个样本 ⇒ **连测量资格都没有**）· **C7**（共识度独立维度）❌ **不新增维度**（5 个候选读数无一同时过三问；唯一机械过线的是在册因子的水平代理 ⇒ 进表即**重复计权**） |
+| `__version__` | ✅ 已 bump 到 `0.123.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移、零生产库写入**（只动 `scripts/` + `tests/` + `docs/` + `static/sw.js` 的 VERSION 常量） |
+| 静态资源 | ⚠ **只改了 `static/sw.js` 的 `const VERSION`**（未改任何 `static/*.html|js|css` 内容）⇒ 按 V0.100.1 仍换代，但**无需清 SW 缓存内容** |
+| 测试 | ✅ `pytest tests/test_scripts/test_verify_flow_face.py` → **13 passed**；`python scripts/verify_flow_face.py --cache data/verify/flow_face_cache.pkl` → **结果：2 passed**（退出码 0） |
+| 门禁缺口 | ✅ 顺带补上两处**会让 CI 变红**的缺口：① 新测试直接 `import numpy / pandas` ⇒ `check_deps.py` 判红（该门禁只扫 `src/` 与 `tests/`）⇒ `dev` extra 补声明（两者运行时本就由 akshare 传递带入 ⇒ **不增加安装体积**）+ `uv lock` 同步；② `tests/test_services/test_scoring_wide.py` 的 `ruff format` 失败是 **V0.121.3 hotfix 引入的预存红**（本版之前 main 就是红的）⇒ 纯格式化修掉，**零行为变化**。本版起 `ruff check` / `ruff format --check` 全绿 |
+| 反向验证 | ✅ **6 个变异点**全部变红（静态带翻转 / 滚动带方向 / 五分位方向 / 五分位边界 pos·n / 不做日历对齐 / 观测点=全部行）⇒ 恢复后 13 passed |
+| 文档 | ✅ 新增**第 9 份里程碑文档 M8 · 资金流面证据复算（V0.123）**；M7 里加**订正框**（订正推论、不订正符号）；[docs/composite-trend-index.md](../docs/composite-trend-index.md) 加「资金流面 composite 的定位」小节；[docs/roadmap.md](../docs/roadmap.md) §〇 指针 + C5/C6/C7 三条处置 |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.123.0**`（本版**零生产代码改动**，重启只为让版本号与代码一致） |
+
+#### 推送状态：⏳ **本节在推送完成后回填**（判据 = **远端回读**，不是「`git push` 没报错」）
+
+### 上一轮：V0.122.0（2026-11-08 发版）
 
 | 项 | 状态 |
 |---|---|

@@ -2,7 +2,7 @@
 name = "gold-etf-analyzer"
 # 版本号须与 src/app/__init__.py 的 __version__ 一致（运行时读那里）；
 # 发版改版本后必须跑一次 `uv lock`，否则 CI 的 `uv sync --frozen` 会因 lock 过期失败。
-version = "0.122.0"
+version = "0.123.0"
 description = "黄金价格投资辅助工具 REST API —— 三市场对照（纽约金/上海金/黄金ETF）、综合趋势评估指数（技术/宏观/消息面）、个人持仓跟踪与ETF购买决策"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -51,6 +51,14 @@ dev = [
     # 门禁基线锁定 0.16.x：select 使用规则组前缀（RUF/UP/B 等），跨版本升级会引入
     # 新规则导致门禁突增；升级时须重跑 `ruff check src tests` 并复核 ignore 列表。
     "ruff>=0.16,<0.17",
+    # V0.123.0：tests/test_scripts/test_verify_flow_face.py 的合成夹具要造
+    # 「因子 → 前瞻收益」这类序列 ⇒ 必须直接用 numpy/pandas。
+    # ⚠ 此前只有 scripts/ 里的证据脚本用它们，而 check_deps **只扫 src/ 与 tests/**
+    # ⇒ 测试侧直接 import 会被判「未声明」（V0.123.0 首次跑该门禁即报红）。
+    # 两者在运行时依赖里本来就由 akshare 传递带入（lock 已解析为 numpy 2.5.4 / pandas 3.0.6），
+    # 这里补的是**声明**，不是新引入的安装体积。
+    "numpy>=2.0,<3.0",
+    "pandas>=2.2,<4.0",
 ]
 
 [build-system]
