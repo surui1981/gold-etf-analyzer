@@ -416,6 +416,45 @@ async def fetch_yahoo_daily(
     return series
 
 
+async def fetch_yahoo_daily_period(
+    symbol: str,
+    *,
+    base_url: str,
+    start: date,
+    end: date,
+    interval: str = "1d",
+) -> list[tuple[date, float]]:
+    """取 Yahoo 日线的**指定区间** → ``[(日期, 收盘价), ...]``（升序）。
+
+    ⚠ **为什么不能只靠 ``range`` 参数**（V0.124.0 实测）：
+
+    - ``range="max"`` ⇒ Yahoo **自动降频**：DX-Y.NYB 只回 **169** 根、跨
+      1985-01-01 → 2026-11-09（实测 2026-11-09）—— 月线级，拿它当日线用会
+      让「滚动分位窗口」里的样本数少一个数量级；
+    - ``range="5y"`` ⇒ 1258 根日线（够 5 年，不够 20 年）。
+
+    ``period1``/``period2`` 才是**日线级**的深历史入口：
+    实测 DX-Y.NYB 日线可回 **1999-12-31**、**8232** 根。
+
+    ⚠ 必须带浏览器 UA（不发 UA 直接 403）—— 见 ``_http_text`` docstring。
+    """
+    p1 = int(datetime(start.year, start.month, start.day, tzinfo=timezone.utc).timestamp())
+    p2 = int(datetime(end.year, end.month, end.day, tzinfo=timezone.utc).timestamp())
+    url = base_url.format(
+        symbol=urllib.parse.quote(symbol),
+        period1=p1,
+        period2=p2,
+        interval=urllib.parse.quote(interval),
+    )
+    text = await _fetch_text(url, user_agent=BROWSER_UA)
+    if text is None:
+        return []
+    series = parse_yahoo_chart_json(text)
+    if not series:
+        logger.warning("Yahoo %s（区间）无有效数据点", symbol)
+    return series
+
+
 async def fetch_fred_latest(
     series_id: str,
     *,
@@ -479,6 +518,57 @@ async def fetch_fred_periodic_latest(
     return v, fred_period_end(obs, period)
 
 
+def _eurostat_gov_debt_url(
+    base_url: str,
+    geo: str,
+    periods: int | None,
+) -> str:
+    """Eurostat「季度一般政府债务」查询 URL。
+
+    ``periods=None`` ⇒ **不带** ``lastTimePeriod`` ⇒ 返回**全历史**
+    （实测 2000-Q1 起 106 期；带 ``lastTimePeriod=2`` 只有 2 期）。
+    """
+    url = (
+        f"{base_url.format(dataset=urllib.parse.quote(EUROSTAT_GOV_DEBT_DATASET))}"
+        f"?format=JSON&lang=en&geo={urllib.parse.quote(geo)}&unit=PC_GDP"
+        f"&na_item=GD&sector=S13"
+    )
+    if periods is not None:
+        url = f"{url}&lastTimePeriod={max(1, int(periods))}"
+    return url
+
+
+async def fetch_eurostat_gov_debt_history(
+    *,
+    base_url: str,
+    geo: str = EUROSTAT_GOV_DEBT_GEO,
+) -> list[tuple[date, float]]:
+    """Eurostat 季度一般政府债务/GDP **全历史** → ``[(期末日, 值), ...]``（升序）。
+
+    与 :func:`fetch_eurostat_gov_debt`（只取最近 N 期）同源同口径，
+    区别只在**不限期数** ⇒ 实测 2000-Q1 → 2026-Q2 共 **106** 期。
+
+    返回的日期是**期末**（``"2026-Q2"`` → ``2026-06-30``）——
+    这正是 point-in-time 重建需要的「观测可得日」口径
+    （见 ``services/macro_history.py``）。
+
+    ⚠ 缺值**不向前填充**（同 ``parse_fred_csv`` 的理由）。
+    """
+    url = _eurostat_gov_debt_url(base_url, geo, periods=None)
+    text = await _fetch_text(url, user_agent=None)
+    if text is None:
+        return []
+    out: list[tuple[date, float]] = []
+    for label, value in parse_eurostat_gov_debt(text):
+        period_end = eurostat_period_end(label)
+        if period_end is None:
+            logger.warning("Eurostat 期间标签无法解析: %s", label)
+            continue
+        out.append((period_end, float(value)))
+    out.sort(key=lambda t: t[0])
+    return out
+
+
 async def fetch_eurostat_gov_debt(
     *,
     base_url: str,
@@ -493,11 +583,7 @@ async def fetch_eurostat_gov_debt(
     ⚠ Eurostat 无 UA 限制（实测 2026-10-26：Python-urllib / Mozilla / 无 UA
     三种都 200），与 FRED（不发 UA 才对）相反。
     """
-    url = (
-        f"{base_url.format(dataset=urllib.parse.quote(EUROSTAT_GOV_DEBT_DATASET))}"
-        f"?format=JSON&lang=en&geo={urllib.parse.quote(geo)}&unit=PC_GDP"
-        f"&na_item=GD&sector=S13&lastTimePeriod={max(1, int(periods))}"
-    )
+    url = _eurostat_gov_debt_url(base_url, geo, periods)
     text = await _fetch_text(url, user_agent=None)
     if text is None:
         return None

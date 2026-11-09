@@ -71,6 +71,24 @@ class CentralBankPurchaseRepository:
         await self._session.commit()
         return result.rowcount or 0
 
+    async def aggregate_quarter_series(self) -> list[tuple[str, float]]:
+        """WGC **全球合计行**的季度净购金序列 → ``[(季度标签, 吨), ...]``（升序）。
+
+        ⚠ 只取合计行（``country_iso == "WGC_AGGR"``）——
+        「合计 + 明细」相加 = 重复计数（V0.121.4 实测：同一窗口
+        各国行相加报 842.6 吨，合计行真值 790.2 吨）。
+
+        用途：``cb_gold`` 因子的历史重建（``services/macro_history.py``
+        的滚动 4 季合计口径，与 :meth:`t12m_total` 一致）。
+        """
+        stmt = (
+            select(CentralBankPurchase.quarter, CentralBankPurchase.tonnes_net)
+            .where(CentralBankPurchase.country_iso == AGGREGATE_ISO)
+            .order_by(CentralBankPurchase.quarter)
+        )
+        result = await self._session.execute(stmt)
+        return [(str(q), float(t)) for q, t in result.all()]
+
     async def list_all(self) -> list[CentralBankPurchase]:
         """全部记录，按 quarter 倒序 + country_iso 正序。"""
         stmt = select(CentralBankPurchase).order_by(

@@ -56,6 +56,16 @@ class Settings(BaseSettings):
         "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         "?range={range}&interval={interval}"
     )
+    # Yahoo chart 的**区间**端点（V0.124.0 新增 · 宏观面深历史用）。
+    #
+    # ⚠ 为什么不能只靠 ``range``：``range="max"`` 会让 Yahoo **自动降频**
+    # （实测 DX-Y.NYB 只回 **169** 根、跨 1985→2026 ⇒ 月线级），
+    # ``range="5y"`` 也只给 1258 根日线。要 20 年**日线**必须用
+    # ``period1``/``period2``（实测 DX-Y.NYB 日线可回 1999-12-31、**8232** 根）。
+    yahoo_chart_period_url: str = (
+        "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        "?period1={period1}&period2={period2}&interval={interval}"
+    )
     # ===== V0.119.0 · 政府债务因子数据源 =====
     # Eurostat dissemination API（季度一般政府债务/GDP）：``{dataset}`` 占位符。
     # 官方一手源；实测无 UA 限制（与 FRED 相反）。
