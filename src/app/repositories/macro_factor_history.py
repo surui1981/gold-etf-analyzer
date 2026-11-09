@@ -6,6 +6,15 @@
 - 单因子样本计数（判定数据是否充足）。
 
 唯一键 ``(target, snapshot_date, factor_key)`` 幂等覆盖。
+
+⚠ **V0.124.0：``upsert_many`` 改为分块写**。
+SQLite 单条语句的绑定变量上限是 ``SQLITE_LIMIT_VARIABLE_NUMBER``
+（本机实测 **32766**），而每行要绑 **6** 个变量 ⇒ 一次最多约 **5 461** 行。
+V0.124.0 的深回填一次要写 **2 万行**（12 万个绑定变量）⇒ 单语句必然
+`sqlite3.OperationalError: too many SQL variables` ⇒ **整批回滚、零行落库**
+（实测：抛错时表里一行都没多，不是「写了一半」）。
+⇒ 现在按 ``UPSERT_CHUNK_SIZE`` 行一批切块，语义不变（仍然按同一唯一键幂等覆盖），
+只是多了几次 commit —— 部分失败时重跑即可补齐（幂等）。
 """
 
 from datetime import date, timedelta
@@ -15,6 +24,11 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.daily_macro_factor import DailyMacroFactor
+
+#: 单条 upsert 语句最多写入多少行。
+#: 6 个绑定变量/行 ⇒ 1000 行 = 6000 变量，离 SQLite 的 32766 上限有 5 倍余量，
+#: 也远低于老版本 SQLite 的 999 上限（兼容旧 libsqlite3）。
+UPSERT_CHUNK_SIZE = 1000
 
 
 class MacroFactorHistoryRepository:
@@ -72,32 +86,39 @@ class MacroFactorHistoryRepository:
 
         ``rows`` 每条为 ``(snapshot_date, factor_key, value, data_date, source)``。
         同样按 ``(target, snapshot_date, factor_key)`` 幂等覆盖。
+
+        ⚠ **V0.124.0**：按 ``UPSERT_CHUNK_SIZE`` **分块**写 —— 一次 ``INSERT``
+        带 N 行会绑 6N 个变量，超过 SQLite 的上限就会整批失败（见模块 docstring）。
         """
         if not rows:
             return 0
-        payload = [
-            {
-                "target": target,
-                "snapshot_date": snapshot_date,
-                "factor_key": factor_key,
-                "value": value,
-                "data_date": data_date,
-                "source": source,
-            }
-            for (snapshot_date, factor_key, value, data_date, source) in rows
-        ]
-        stmt = sqlite_insert(DailyMacroFactor).values(payload)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["target", "snapshot_date", "factor_key"],
-            set_={
-                "value": stmt.excluded.value,
-                "data_date": stmt.excluded.data_date,
-                "source": stmt.excluded.source,
-            },
-        )
-        result = await self._session.execute(stmt)
-        await self._session.commit()
-        return result.rowcount or 0
+        written = 0
+        for start in range(0, len(rows), UPSERT_CHUNK_SIZE):
+            chunk = rows[start : start + UPSERT_CHUNK_SIZE]
+            payload = [
+                {
+                    "target": target,
+                    "snapshot_date": snapshot_date,
+                    "factor_key": factor_key,
+                    "value": value,
+                    "data_date": data_date,
+                    "source": source,
+                }
+                for (snapshot_date, factor_key, value, data_date, source) in chunk
+            ]
+            stmt = sqlite_insert(DailyMacroFactor).values(payload)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["target", "snapshot_date", "factor_key"],
+                set_={
+                    "value": stmt.excluded.value,
+                    "data_date": stmt.excluded.data_date,
+                    "source": stmt.excluded.source,
+                },
+            )
+            result = await self._session.execute(stmt)
+            await self._session.commit()
+            written += result.rowcount or 0
+        return written
 
     async def get_window(
         self,

@@ -39,9 +39,17 @@ V0.79.0 Step E 造了「近 252 个交易日滚动 90/10 分位」的动态阈�
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 from app.repositories.macro_factor_history import MacroFactorHistoryRepository
+from app.services.macro_history import (
+    FRED_PERIODIC_FACTORS,
+    Observation,
+    Row,
+    asof_rows,
+    build_observations,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -200,3 +208,242 @@ async def _fetch_yahoo_history() -> list[tuple[date, float]]:
 
     cfg = get_settings()
     return await fetch_yahoo_daily("DX-Y.NYB", base_url=cfg.yahoo_chart_url, range_="2y")
+
+
+# ═══════════════════════════════════════════════════════════════
+# V0.124.0 · 深回填（11 因子 × 多年 × 日历日，point-in-time）
+# ═══════════════════════════════════════════════════════════════
+
+#: 深回填默认窗口（自然日）—— 5 年。
+#:
+#: 为什么是 5 年：roadmap §三·C6 要求「≥ 3 年」；5 年给 252 日滚动窗口
+#: 留了两次余量，也给「三个子区间各 ~1.7 年」的检验留了空间。
+#: 11 因子 × 1826 日历日 ≈ **2 万行**（SQLite 无压力）。
+DEEP_WINDOW_DAYS = 1825
+
+#: 深回填覆盖的 11 个因子（= ``MACRO_FACTOR_RULES`` 的全部 key）。
+DEEP_DAILY_FACTORS = (
+    "dxy",
+    "us2y",
+    "us10y",
+    "us30y",
+    "curve_10y2y",
+    "real10y",
+    "vix",
+)
+DEEP_LOWFREQ_FACTORS = ("cb_gold", "us_gov_debt", "cn_gov_debt", "eu_gov_debt")
+DEEP_FACTORS = DEEP_DAILY_FACTORS + DEEP_LOWFREQ_FACTORS
+
+#: 低频因子的 FRED 序列 → (观测期类型)。与 ``macro_sources.FRED_PERIODIC_SERIES`` 同源。
+#:
+#: ⚠ 真源在 ``services/macro_history.py::FRED_PERIODIC_FACTORS`` ——
+#: 生产回填与证据脚本共用同一份映射（V0.124.0 抽出来，避免各抄一份必然腐化）。
+_DEEP_FRED_PERIODIC = FRED_PERIODIC_FACTORS
+
+
+async def _fetch_yahoo_dxy_deep(start: date, end: date) -> list[tuple[date, float]]:
+    """Yahoo DXY **日线**深历史（区间端点）→ ``[(日期, 收盘价), ...]``。
+
+    ⚠ 不用 ``range`` 参数：``range="max"`` 会被 Yahoo 自动降频成月线级
+    （实测只回 169 根）；``period1``/``period2`` 才是日线级深历史
+    （实测可回 1999-12-31、8232 根）。
+    """
+    from app.config import get_settings
+    from app.repositories.macro_sources import fetch_yahoo_daily_period
+
+    cfg = get_settings()
+    return await fetch_yahoo_daily_period(
+        "DX-Y.NYB",
+        base_url=cfg.yahoo_chart_period_url,
+        start=start,
+        end=end,
+    )
+
+
+#: Yahoo DXY 取数的**回看余量**（自然日）。
+#:
+#: ⚠ **V0.124.0 的实测教训**：Yahoo 是**唯一一个按窗口取数**的源
+#: （H.15 / FRED / Eurostat 都是全量历史）⇒ 窗口第一天的「当时能拿到的最新读数」
+#: 必须来自**窗口之前**的一次观测 ⇒ 若不预留回看，窗口第一天的 DXY 会**整行缺失**
+#: （实测：脚本重建有 ``2021-11-10 dxy``，生产回填没有 ⇒ X1 差 1 行）。
+#: 回看量要盖住「Yahoo 发布时滞（B+1 天）」+「长假」⇒ 取 30 天。
+YAHOO_LOOKBACK_DAYS = 30
+
+
+async def _fetch_eurostat_deep() -> list[tuple[date, float]]:
+    """Eurostat 季度一般政府债务/GDP **全历史** → ``[(期末日, 值), ...]``。"""
+    from app.config import get_settings
+    from app.repositories.macro_sources import fetch_eurostat_gov_debt_history
+
+    cfg = get_settings()
+    return await fetch_eurostat_gov_debt_history(base_url=cfg.eurostat_stats_url)
+
+
+async def _fetch_fred_periodic_history() -> dict[str, list[tuple[date, float]]]:
+    """FRED **低频**序列（政府债务类）全量历史。
+
+    → ``{series_id: [(观测期初日, 值), ...]}``。
+    ⚠ FRED 的季度/年度序列用**期初**日期标注观测 ⇒ 调用方要再用
+    ``fred_period_end`` 归一到期末（那才是 point-in-time 的可得日）。
+    """
+    from app.config import get_settings
+    from app.repositories.macro_sources import fetch_fred_series
+
+    cfg = get_settings()
+    out: dict[str, list[tuple[date, float]]] = {}
+    for series_id in _DEEP_FRED_PERIODIC:
+        out[series_id] = await fetch_fred_series(series_id, base_url=cfg.fred_csv_url)
+    return out
+
+
+async def _fetch_cb_gold_quarters() -> list[tuple[str, float]]:
+    """WGC **全球合计行**的季度序列 → ``[(季度标签, 吨), ...]``。
+
+    数据来自生产库 ``central_bank_purchases`` 表（本地，不用联网）。
+    """
+    from app.repositories.central_bank import CentralBankPurchaseRepository
+    from app.repositories.db import async_session_factory
+
+    async with async_session_factory() as session:
+        repo = CentralBankPurchaseRepository(session)
+        return await repo.aggregate_quarter_series()
+
+
+async def backfill_macro_history_deep(
+    repo: MacroFactorHistoryRepository,
+    *,
+    target: str = "default",
+    days: int = DEEP_WINDOW_DAYS,
+    end: date | None = None,
+    dry_run: bool = False,
+    cb_quarters: list[tuple[str, float]] | None = None,
+    factors: Sequence[str] = DEEP_FACTORS,
+) -> dict[str, int]:
+    """**深回填**：把宏观因子的历史按 point-in-time 重放进历史表。
+
+    与 :func:`backfill_macro_history`（日常补缺口）的区别：
+
+    ==================  ==========================  ==========================
+                      ``backfill_macro_history``    ``backfill_macro_history_deep``
+    ==================  ==========================  ==========================
+    因子                7 个日频                    **11 个**（含 4 个低频）
+    行粒度              **交易日**                  **日历日**（与线上采集一致）
+    窗口                252 自然日                   1825 自然日（5 年）
+    门禁                样本够就跳过                 无条件全量重放
+    用途                每天补缺口                   一次性铺历史（证据复测 + 归档）
+    ==================  ==========================  ==========================
+
+    ⚠ **行粒度为什么是日历日**：线上 ``daily_capture_loop`` 每天 07:00 触发、
+    **无星期过滤** ⇒ 库里每个日历日都有一行（周末也有，值沿用上一交易日）。
+    滚动分位窗口是 252 **日历**日 ⇒ 若历史只写交易日，窗口里的样本数
+    会与线上不一致 ⇒ P10/P90 会算出不同的数 ⇒ 「复算」就不是生产口径了。
+
+    ⚠ **point-in-time**：低频因子按**观测期末**判定可得
+    （见 ``services/macro_history.py`` 的口径说明）⇒ 相对真实发布滞后
+    （WGC 约 1~2 个月、FRED 债务约 1 个季度）**乐观了最多一个观测期**
+    ⇒ 该偏差只会**高估**低频因子的前瞻力 ⇒ 若低频组实测不过三问，
+    结论是保守且安全的。
+
+    ⚠ **H.15 的 1 个工作日发布时滞**：本函数把 H.15 观测按其**观测日**当天
+    即可得（与既有 ``backfill_macro_history`` 同一约定）⇒ 相对真实发布
+    乐观 1 个工作日。对滚动分位与前瞻测量都无实质影响（已记录）。
+
+    ``factors`` 可指定要写的因子子集（默认全部 11 个）——
+    只写低频 4 个时（``DEEP_LOWFREQ_FACTORS``）仍然走同一套 point-in-time 口径，
+    但**不必**再拉 H.15 / FRED 日频 / Yahoo（省 3 次网络请求）。
+
+    ``dry_run=True`` 时**只统计不写库**，返回 ``{因子: 行数}``。
+    """
+    end_day = end or date.today()
+    start = end_day - timedelta(days=days)
+    wanted = tuple(f for f in factors if f in DEEP_FACTORS)
+    need_daily = any(f in DEEP_DAILY_FACTORS for f in wanted)
+    need_lowfreq = any(f in DEEP_LOWFREQ_FACTORS for f in wanted)
+
+    # ── 1. 取原始序列（各源互相独立 ⇒ 某源挂掉不影响其它源）──
+    h15_hist: object = []
+    fred_hist: object = {}
+    yahoo_hist: object = []
+    if need_daily:
+        h15_hist, fred_hist, yahoo_hist = await asyncio.gather(
+            _fetch_h15_history(),
+            _fetch_fred_history(),
+            # ⚠ Yahoo 是唯一按窗口取数的源 ⇒ 必须留回看余量，
+            # 否则窗口第一天拿不到「窗口之前的最后一次收盘」⇒ 该行整行缺失。
+            _fetch_yahoo_dxy_deep(start - timedelta(days=YAHOO_LOOKBACK_DAYS), end_day),
+            return_exceptions=True,
+        )
+    euro_hist: object = []
+    fred_periodic: object = {}
+    if need_lowfreq:
+        euro_hist, fred_periodic = await asyncio.gather(
+            _fetch_eurostat_deep(),
+            _fetch_fred_periodic_history(),
+            return_exceptions=True,
+        )
+
+    def _ok(obj: object, name: str) -> bool:
+        if isinstance(obj, BaseException):
+            logger.warning("%s 历史取数失败: %s", name, obj)
+            return False
+        return True
+
+    h15_ok = _ok(h15_hist, "H.15")
+    fred_ok = _ok(fred_hist, "FRED")
+    yahoo_ok = _ok(yahoo_hist, "Yahoo DXY")
+    euro_ok = _ok(euro_hist, "Eurostat")
+    fred_periodic_ok = _ok(fred_periodic, "FRED 低频")
+
+    quarters = cb_quarters
+    if need_lowfreq and quarters is None:
+        try:
+            quarters = await _fetch_cb_gold_quarters()
+        except Exception as exc:  # pragma: no cover - 本地库异常
+            logger.warning("WGC 合计行读取失败: %s", exc)
+            quarters = []
+
+    # ── 2. 组装成「观测」序列（观测日 = 这个读数最早可得的日期）──
+    #
+    # ⚠ **映射逻辑只有一份**（``services/macro_history.py::build_observations``）——
+    # 生产回填与证据脚本（``scripts/verify_macro_face.py``）共用它 ⇒ 口径不会漂。
+    #
+    # ⚠ **不要按窗口起点过滤观测**：窗口第一天（如 2021-11-10）需要知道
+    # 「窗口之前最近的一次观测」才能还原线上真实值（线上每个日历日都写一行，
+    # 值是「当时能拿到的最新读数」）⇒ 窗口前的观测必须**保留**，由 ``asof_rows``
+    # 自己挑「可得日 ≤ 该天的最后一条」。
+    # 只过滤**可得日晚于窗口终点**的观测（未来数据，point-in-time 禁止使用）。
+    all_observations = build_observations(
+        h15=h15_hist if h15_ok else [],
+        fred=fred_hist if fred_ok else {},
+        yahoo=yahoo_hist if yahoo_ok else [],
+        eurostat=euro_hist if euro_ok else {},
+        fred_periodic=fred_periodic if fred_periodic_ok else {},
+        cb_quarters=quarters or [],
+        end=end_day,
+    )
+    observations: dict[str, list[Observation]] = {k: all_observations.get(k, []) for k in wanted}
+
+    # ── 3. 展开成「每天一行」并写库 ──
+    rows: list[Row] = []
+    for key in wanted:
+        rows.extend(asof_rows(observations[key], factor_key=key, start=start, end=end_day))
+
+    by_factor: dict[str, int] = {}
+    for _, factor_key, *_ in rows:
+        by_factor[factor_key] = by_factor.get(factor_key, 0) + 1
+
+    if dry_run:
+        logger.info("深回填 dry-run：%d 行（%s）", len(rows), by_factor)
+        return by_factor
+
+    if not rows:
+        logger.warning("宏观因子深回填：窗口内没有可用历史数据")
+        return {}
+
+    written = await repo.upsert_many(target, rows)
+    logger.info(
+        "宏观因子深回填完成：%d 行（%s）",
+        written,
+        "，".join(f"{k}={v}" for k, v in sorted(by_factor.items())),
+    )
+    return by_factor
