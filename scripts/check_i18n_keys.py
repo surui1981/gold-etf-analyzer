@@ -160,11 +160,26 @@ def extract_html_keys(static_dir: str) -> tuple[set[str], dict[str, set[str]]]:
     #   只认字符串字面量（模板字面量 `` T(`scoring.hit_rate_${h}`) `` 动态拼接，
     #   扫不出来也不该扫）。
     t_call_re = re.compile(r'(?<![A-Za-z0-9_])T\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
+    # V0.125.0：补**小写** `t('key', 'fallback')` 形式。
+    #   home.js / ask.js / auth.js / favorites.js / report-archive.js 各自定义
+    #   了同名的小写包装器 `t(key, fallback)`（字典没命中就回退代码里的中文常量），
+    #   而既有的 `I18n.t(` / `tr(` / `T(` 三个正则**一个都扫不到它们**
+    #   ⇒ `home.*`（29 个键）/ `ai.*` / `favorites.*` / `reports.*` 等命名空间
+    #   此前有大量键**完全不在门禁视野内** —— 漏了 zh-TW / en-US 不会报错，
+    #   运行时只是悄悄显示中文。
+    #   正则加 `\.` 到前置断言里，避免命中 `obj.t(` 这类成员调用；
+    #   只认字符串字面量（动态拼接的 key 扫不出来，也不该扫）。
+    #   实测（HEAD 的 static/ 与本轮改后的 static/ 对拍）：
+    #   被引用的 key 总数 906 → 1011（+105），
+    #   落在严格清单里的 in-scope 数 **501 → 582（+81）**，
+    #   这 81 个里**唯一真缺失**是 `ai.streaming`（ask.js:829，三语都缺 ⇒
+    #   en-US / zh-TW 一直在显示中文兜底串）—— 已在本轮补齐。
+    lt_call_re = re.compile(r'(?<![A-Za-z0-9_$.])t\(\s*["\']([A-Za-z0-9_.\-]+)["\']')
     for path in glob.glob(os.path.join(static_dir, "*.js")):
         rel = os.path.relpath(path, static_dir)
         with open(path, encoding="utf-8") as f:
             content = f.read()
-        for rx in (js_attr_re, js_call_re, tr_call_re, t_call_re):
+        for rx in (js_attr_re, js_call_re, tr_call_re, t_call_re, lt_call_re):
             for m in rx.finditer(content):
                 k = m.group(1)
                 if not k:
