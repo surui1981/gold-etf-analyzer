@@ -9,6 +9,7 @@
 - GET    /api/v1/reports/{id}/content  CSP sandbox 安全头（隔离的关键）
 - GET    /api/v1/reports/categories    分类下拉
 - GET    /api/v1/reports/stats         侧栏统计
+- GET    /api/v1/reports/latest        **最新一份**（V0.125.0 首页入口；路由顺序 + 空库 null）
 
 ⚠ 两个必须的 fixture：
 1. ``_seed_legacy`` —— conftest 每例 drop_all，LEGACY_USER(id=1) 不存在时
@@ -415,6 +416,95 @@ async def test_stats_route_not_swallowed_by_report_id(client) -> None:
     r = await client.get("/api/v1/reports/stats")
     assert r.status_code == 200
     assert r.json()["total"] == 0
+
+
+# ──────────────── /latest（V0.125.0 首页「今日市场研究报告」入口）───────────────
+
+
+async def test_latest_route_not_swallowed_by_report_id(client) -> None:
+    """⚠ 路由顺序：/latest 必须注册在 /{report_id} 之前。
+
+    FastAPI 按声明顺序匹配，否则 /latest 会被当成 report_id="latest"
+    走进详情分支报 **422**（不是 404 —— 数字路径参数解析不了 "latest"）。
+    这条断言是反向验证的锚点：把 @router.get("/latest") 挪到
+    @router.get("/{report_id}") 下面，它必须变红。
+    """
+    r = await client.get("/api/v1/reports/latest")
+    assert r.status_code == 200, r.text
+    assert "item" in r.json()
+
+
+async def test_latest_empty_is_null_item_not_404(client) -> None:
+    """一份都没有时返回 200 + ``{"item": null}``，**不是 404**。
+
+    ⚠ 语义差别是实质的：404 会让「还没上传过报告」（正常状态）和
+    「接口挂了」（异常状态）在前端长得一模一样，只能一律显示「加载失败」。
+    """
+    r = await client.get("/api/v1/reports/latest")
+    assert r.status_code == 200
+    assert r.json() == {"item": None}
+
+
+async def test_latest_returns_last_uploaded(client) -> None:
+    """最新上传的那份就是 latest。"""
+    a = (await _upload(client, title="A")).json()
+    b = (await _upload(client, title="B")).json()
+    c = (await _upload(client, title="C")).json()
+    r = await client.get("/api/v1/reports/latest")
+    assert r.status_code == 200
+    item = r.json()["item"]
+    assert item is not None
+    assert item["id"] == c["id"]
+    assert item["title"] == "C"
+    # view_url 必须可用（首页拿它当链接地址）
+    assert item["view_url"] == f"/api/v1/reports/{c['id']}/content"
+    assert a["id"] < b["id"] < c["id"]
+
+
+async def test_latest_uses_upload_time_not_report_date(client) -> None:
+    """⚠ 口径：latest 按**上传时间**排，不按 report_date 排。
+
+    补录一份旧报告是常态（模型文档：report_date 与 created_at 刻意分开）。
+    若按 report_date 排，用户刚上传的那份会被挤下去 —— 首页显示的
+    根本不是用户刚拿到的报告。
+    """
+    await _upload(client, title="新报告", report_date="2026-11-09")
+    old = (await _upload(client, title="补录的旧报告", report_date="2020-01-01")).json()
+    item = (await client.get("/api/v1/reports/latest")).json()["item"]
+    assert item is not None
+    assert item["id"] == old["id"]
+    assert item["title"] == "补录的旧报告"
+    assert item["report_date"] == "2020-01-01"
+
+
+async def test_latest_matches_list_first_item(client) -> None:
+    """不变式：latest 恒等于存档列表的第一行（同一套排序口径）。
+
+    两处排序若各写一份，首页显示的那份与用户点「全部报告」看到的第一行
+    可能不是同一份 —— 用户会以为系统出错。
+    """
+    await _upload(client, title="A")
+    await _upload(client, title="B")
+    listing = (await client.get("/api/v1/reports?limit=50")).json()
+    item = (await client.get("/api/v1/reports/latest")).json()["item"]
+    assert item is not None
+    assert item["id"] == listing["items"][0]["id"]
+
+
+async def test_latest_excludes_other_users_report(client, db_session) -> None:
+    """跨用户的报告不作为 latest 返回（返回 null，而不是别人的那份）。"""
+    from sqlalchemy import update
+
+    from app.models.reports import Report
+
+    up = (await _upload(client, title="别人的")).json()
+    await db_session.execute(update(Report).where(Report.id == up["id"]).values(user_id=999))
+    await db_session.commit()
+    db_session.expire_all()
+
+    r = await client.get("/api/v1/reports/latest")
+    assert r.status_code == 200
+    assert r.json()["item"] is None
 
 
 async def test_stats_aggregates(client) -> None:
