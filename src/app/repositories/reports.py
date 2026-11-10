@@ -122,9 +122,7 @@ class ReportRepository:
         刚拿到的那份挤下去 —— 用户要的是「刚上传的那份」。
         """
         uid = resolve_user_id(user_id)
-        stmt = (
-            select(Report).where(Report.user_id == uid).order_by(*LATEST_ORDER).limit(1)
-        )
+        stmt = select(Report).where(Report.user_id == uid).order_by(*LATEST_ORDER).limit(1)
         return (await self._session.execute(stmt)).scalars().first()
 
     async def get_by_stored_name(self, stored_name: str) -> Report | None:
