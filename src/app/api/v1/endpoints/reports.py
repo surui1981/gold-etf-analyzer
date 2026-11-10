@@ -1,14 +1,22 @@
 """报告存档 REST 端点（V0.111.0）
 
-7 个端点：
+9 个端点：
 - GET    /api/v1/reports              列表（q / category / tag 筛选 + 分页）
 - GET    /api/v1/reports/{id}         单条元数据
 - GET    /api/v1/reports/{id}/content **HTML 本体**（CSP sandbox 隔离，见下）
 - GET    /api/v1/reports/categories   分类 distinct（喂筛选下拉）
 - GET    /api/v1/reports/stats        侧栏统计
+- GET    /api/v1/reports/latest       **最新上传的一份**（V0.125.0 首页入口）
 - POST   /api/v1/reports/upload       上传（multipart；require_user）
 - PATCH  /api/v1/reports/{id}         改登记表字段（require_user）
 - DELETE /api/v1/reports/{id}         删除记录 + 磁盘文件（require_user）
+
+⚠⚠ **路由声明顺序**（FastAPI 按声明顺序匹配）
+----------------------------------------------------
+``/categories``、``/stats``、``/latest`` 三条字面量路径**必须**声明在
+``/{report_id}`` **之前** —— 否则 ``"latest"`` 会被当成 report_id 解析，
+走到单条详情分支报 422（而不是 404）。新增字面量子路径时记得插在
+``@{router.get("/{report_id}")}`` 上方。
 
 ⚠⚠ ``/{id}/content`` 是本模块的安全关键端点
 ----------------------------------------------------
@@ -39,6 +47,7 @@ from app.dependencies import get_report_repository, get_report_service, require_
 from app.repositories.reports import ReportRepository
 from app.schemas.reports import (
     ReportCategoriesOut,
+    ReportLatestOut,
     ReportListOut,
     ReportOut,
     ReportStatsOut,
@@ -90,6 +99,19 @@ async def stats(
     service: ReportService = Depends(get_report_service),
 ) -> ReportStatsOut:
     return await service.stats()
+
+
+@router.get("/latest", response_model=ReportLatestOut, summary="最新上传的一份报告（首页入口）")
+async def latest_report(
+    service: ReportService = Depends(get_report_service),
+) -> ReportLatestOut:
+    """首页「今日市场研究报告」入口用：只返回**最新上传**的那一份，不返回列表。
+
+    ⚠ 路径必须注册在 ``/{report_id}`` **之前** —— FastAPI 按声明顺序匹配路由，
+    ``/latest`` 若排在 ``/{report_id}`` 后面会被当成 report_id="latest"
+    而走到单条详情分支报 422（同 ``/categories`` 的坑）。
+    """
+    return await service.latest()
 
 
 @router.get("/{report_id}", response_model=ReportOut, summary="单条报告元数据")

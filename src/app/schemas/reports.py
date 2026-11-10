@@ -1,11 +1,12 @@
 """报告存档 Pydantic schemas（V0.111.0）
 
-5 个 schema：
+6 个 schema：
 - ``ReportOut``：单条报告 Out（**不含** 磁盘路径，只出 id + 元数据）
 - ``ReportUpdateIn``：PATCH 请求体（title / report_date / category / tags / summary 任选）
 - ``ReportListOut``：列表响应（items + total + limit + offset）
 - ``ReportCategoriesOut``：分类去重列表（喂前端筛选下拉）
 - ``ReportStatsOut``：侧栏统计（total / last_30d_count / by_category）
+- ``ReportLatestOut``：最新一份报告（V0.125.0；空库时 ``item=null`` 而非 404）
 
 ⚠ **``stored_name`` 刻意不出现在任何 Out schema 里**：它是磁盘真名，
    一旦下发给前端就等于把「上传目录 + 文件名规律」暴露给浏览器，
@@ -65,6 +66,19 @@ class ReportCategoriesOut(BaseModel):
     """分类去重列表（喂前端筛选下拉）。"""
 
     categories: list[str] = Field(default_factory=list, description="出现过的分类（按频次倒序）")
+
+
+class ReportLatestOut(BaseModel):
+    """最新上传的一份报告（V0.125.0 首页「今日市场研究报告」入口）。
+
+    ⚠ 空库时返回 ``{"item": null}`` 而**不是 404** —— 首页要能区分
+    「还没有报告」（正常状态，显示「暂无报告」）与「接口挂了」（降级态）。
+    404 会让这两种情况长得一样，前端只能一律显示「加载失败」。
+    """
+
+    item: ReportOut | None = Field(
+        default=None, description="最新上传的一份报告；一份都没有则为 null"
+    )
 
 
 class ReportStatsOut(BaseModel):

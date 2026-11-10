@@ -45,6 +45,7 @@ from app.config import PROJECT_ROOT
 from app.repositories.reports import ReportRepository
 from app.schemas.reports import (
     ReportCategoriesOut,
+    ReportLatestOut,
     ReportListOut,
     ReportOut,
     ReportStatsOut,
@@ -328,6 +329,20 @@ class ReportService:
 
     async def stats(self, *, user_id: int | None = None) -> ReportStatsOut:
         return ReportStatsOut(**await self._repo.get_stats(user_id=user_id))
+
+    async def latest(self, *, user_id: int | None = None) -> ReportLatestOut:
+        """最新上传的一份报告（V0.125.0 首页入口）。
+
+        ⚠ 「最新」= **最新上传**（created_at 倒序），不是「报告日期最新」——
+        补录旧报告是常态，按 report_date 排会把刚拿到的那份挤下去。
+        排序口径在仓储层与列表页共用（``desc(created_at), desc(id)``），
+        ⇒ 首页显示的那份**永远**是存档列表第一行那一份。
+
+        ⚠ 一份都没有时返回 ``item=null``，**不抛 404** —— 「还没上传过」
+        是正常状态（首页要显示「暂无报告」），不是错误。
+        """
+        row = await self._repo.get_latest(user_id=user_id)
+        return ReportLatestOut(item=self._to_out(row) if row is not None else None)
 
     # ────────────── 内部 ──────────────
 

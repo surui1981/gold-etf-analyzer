@@ -24,6 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.reports import Report
 from app.utils.user_scope import resolve_user_id
 
+# 「最新上传的一份」的排序口径（V0.125.0）
+# ⚠ 列表与 latest **必须用同一个** —— 否则首页显示的那份与存档列表第一行
+#   可能不是同一份，用户点进去看到另一份会以为系统出错。
+#   两处各写一份字面量是漂移的温床（改了一处忘了另一处 ⇒ 症状极难定位）。
+#   另有测试 ``test_latest_matches_list_first_item`` 钉住这个不变式。
+LATEST_ORDER = (desc(Report.created_at), desc(Report.id))
+
 
 class ReportRepository:
     """报告存档仓储（V0.111.0）。"""
@@ -102,6 +109,24 @@ class ReportRepository:
         stmt = select(Report).where(Report.id == report_id, Report.user_id == uid)
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    async def get_latest(self, *, user_id: int | None = None) -> Report | None:
+        """取**最新上传**的一份报告（无则 None）。
+
+        ⚠ 排序口径**必须**与 :meth:`list_items` 完全一致 —— 两者共用模块级常量
+        :data:`LATEST_ORDER`（``desc(created_at), desc(id)``）——
+        否则首页显示的那份与存档列表第一行可能不是同一份，
+        用户点进去看到另一份会以为系统出错。
+
+        ⚠ 「最新」= **最新上传**（created_at），**不是**「报告自身日期最新」
+        （report_date）：补录一份上个月的报告是常态，按 report_date 排会把
+        刚拿到的那份挤下去 —— 用户要的是「刚上传的那份」。
+        """
+        uid = resolve_user_id(user_id)
+        stmt = (
+            select(Report).where(Report.user_id == uid).order_by(*LATEST_ORDER).limit(1)
+        )
+        return (await self._session.execute(stmt)).scalars().first()
+
     async def get_by_stored_name(self, stored_name: str) -> Report | None:
         """按磁盘文件名取（仅供 service 内部校验，不对外暴露端点）。"""
         stmt = select(Report).where(Report.stored_name == stored_name)
@@ -134,7 +159,9 @@ class ReportRepository:
         if tag:
             # JSON 数组中精确字符串匹配：LIKE '%"<tag>"%'
             stmt = stmt.where(Report.tags.like(f'%"{_escape_like(tag)}"%', escape="\\"))
-        stmt = stmt.order_by(desc(Report.created_at), desc(Report.id))
+        # ⚠ 与 :meth:`get_latest` 共用 :data:`LATEST_ORDER` ——
+        #   「首页那份」必须永远等于「存档列表第一行」（有测试钉住）。
+        stmt = stmt.order_by(*LATEST_ORDER)
         stmt = stmt.limit(max(1, min(limit, 200))).offset(max(0, offset))
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
