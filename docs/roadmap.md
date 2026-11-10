@@ -583,7 +583,8 @@ CFTC 黄金净多的连续周序列 → 美元净流动性的日频 → 黄金 E
 
 > **坏门禁比没门禁更坏** —— 它让人以为有保护。
 > 下表 4 条已在 **V0.121.0（批次 0 · 门禁自愈）** 逐条复核并处理 ——
-> **其中 2 条是「本来就修好了，只是记录过期」**。
+> **其中 2 条是「本来就修好了，只是记录过期」**；
+> **第 5 条**是 V0.125.0 排障时**新发现**的（挂在第 4~5 次 `page.goto` 上无限期等待）。
 
 | # | 门禁 | 复核结论（2026-11-06） | 处置 |
 |---|---|---|---|
@@ -591,8 +592,82 @@ CFTC 黄金净多的连续周序列 → 美元净流动性的日频 → 黄金 E
 | 2 | `scripts/_verify_sw_update.mjs` | 🔴 **成立** —— 脚本里 `ok()` 出现 **0 次**，退出码恒 0 ⇒ **永远绿** | ✅ **V0.121.0 已修**：重写为 **8 条断言**（含「缓存无陈旧副本」+ 持久化 profile + 非安全上下文守卫）⇒ 8/8 |
 | 3 | `scripts/_verify_mobile.mjs` | ❌ **记录已过期** —— V0.116.3 早已把聚焦断言改成确定性判据（连续 3 跑 35/35） | ✅ **V0.121.0 补做**：关闭后的可见性断言从「等固定 350ms」改成**轮询到 `visibility === "hidden"`** ⇒ 35/35 |
 | 4 | `tests/test_api/test_ai_chat_endpoints.py::test_send_message_stream_error_event_yields_error` | ❌ **记录已过期** —— `tests/conftest.py::_reset_sse_app_status` 早已修好（该文件 21 passed，`tests/test_api/` **355 passed / 0 failed**） | ✅ **V0.121.0 订正记录**（未改测试） |
+| 5 | `scripts/_verify_nav_8.mjs` | 🔴 **V0.125.0 新发现：间歇性挂死** —— `page.goto` 永不 settle（第 4~5 次导航起）；⚠ **与 V0.125.0 改动无关**（换回 HEAD 静态文件后照样挂） | ✅ **V0.125.0 已修**：根因见 §五·5.1 ⇒ 连跑 **4 次 27 passed / 0 failed** |
 
 **已修复的**：`window.PM_I18N` 从未定义（12 处调用）—— V0.120.4 修完。
+
+### 5.1 一个**系统性**的挂死：主文档命中磁盘缓存 ⇒ Chrome 不发 `Page.lifecycleEvent`
+
+> **一句话**：`/static/*.html` 的响应头只有 `etag` + `last-modified`、**没有 `Cache-Control`**
+> ⇒ Chrome 套用「启发式缓存」⇒ **同一浏览器上下文里再次访问同一页面时，主文档从磁盘缓存直接命中**
+> ⇒ Chrome **不再发 `Page.lifecycleEvent`** ⇒ puppeteer 的 `waitUntil`
+> （`domcontentloaded` / `load` / `networkidle0` / `networkidle2` **全都**）永远等不到那个事件
+> ⇒ `page.goto` **无限期挂死**。
+> 挂起时页面其实**早已加载完**（`readyState === "complete"`、标题正确、`frameNavigated` 已发）——
+> **只有 puppeteer 在等一个不会来的事件**。
+
+| 项 | 实测值 |
+|---|---|
+| 复现脚本 | `scripts/_diag_nav8_cdp.mjs`（抓 CDP 原始事件，30 秒复现） |
+| 缓存开 + `domcontentloaded` | 6 次导航挂 **4** 次 |
+| 缓存开 + `networkidle2` | 4 次导航挂 **2** 次 |
+| **缓存关**（`setCacheEnabled(false)`） | **8 次全过** |
+| **修法** | `await page.setCacheEnabled(false)`（一行）—— **本项目既有惯例**：`_verify_money_flow.mjs`（9 处）、`_verify_category_filter.mjs`、`_verify_date_nav.mjs`、`_verify_upload_dialog.mjs`、`_verify_multi_source.mjs` **早就写了**；**缺这一行的门禁就是会挂的那些** |
+
+⚠ **误判留档**：初版把根因写成「Service Worker 接管」——
+**错的**：LAN 入口（`192.168.0.204:8888`）**不是安全上下文** ⇒ `navigator.serviceWorker`
+是 `undefined` ⇒ SW 在 LAN 上根本不参与。
+**教训：门禁挂死要抓 CDP 原始事件，不要靠现象反推**（现象是「在飞请求一直不减」，
+但真正缺的事件是 `Page.lifecycleEvent`，两者毫无关系）。
+
+#### ⚠ 待办（**不在 V0.125.0 扫**）
+
+本轮只给**本版要跑、且本轮逐个验证过**的 5 个门禁补了这一行
+（`_verify_nav_8` / `_verify_home_report` / `_verify_home_metals` / `_verify_home_verdict` /
+`_verify_report_archive`）。**其余浏览器门禁仍有若干缺这一行** ——
+`goto` 次数越多的越容易挂：
+
+| 门禁 | `page.goto` 次数 | 状态 |
+|---|---|---|
+| `_verify_money_flow.mjs` | 9 | ✅ 已有 `setCacheEnabled(false)` |
+| `_verify_cmd_palette.mjs` | 6 | ⬜ **缺**（未扫） |
+| `_verify_nav_8.mjs` | 5 | ✅ V0.125.0 已补 |
+| `_verify_macro_debt.mjs` | 4 | ✅ 已有 |
+| `_verify_i18n_keys.mjs` | 3 | ⬜ **缺**（未扫） |
+| `_verify_ask_format.mjs` / `_verify_mobile.mjs` / `_verify_v0121_truth.mjs` | 2 | ⬜ **缺**（未扫） |
+| 其余单 `goto` 门禁 | 1 | ⬜ 未扫（单次导航命中磁盘缓存的概率低，但**并非 0**） |
+
+⇒ **下一轮批量做**，纪律同 §五 的老规矩：**改一行很便宜，但没逐个跑过的批量改动
+比不改更危险**（memory `gate-that-crashes-is-not-a-gate`）——
+⇒ 批量改完**每个门禁至少连跑 3 次**，并把结果写进本表。
+
+#### 附带发现：门禁会被**限流**打成假红
+
+同一批连跑暴露出**第二个**不稳定源（**它比第一个更阴险**，因为假红长得像真 bug）：
+
+| 事实 | 实测值 |
+|---|---|
+| 服务端限速 | 按 IP 做 **60s 滑动窗口**，`RATE_LIMIT_PER_MIN=600`（`.env.prod` 实测） |
+| 一次 `/home` 加载的 API 请求 | **32 个**，其中 **20 个是 `/api/v1/favorites/exists/{external_id}`**（`scripts/_diag_home_req_count.mjs`） |
+| 一个首页门禁跑一次 | **224 个请求**（其中 140 个是 favorites） |
+| 后果 | 连续跑 4 次就把桶打满 ⇒ **429** |
+
+**429 为什么长得像真 bug**：429 打中 `/api/v1/reports/latest` ⇒ 首页 `getJSON` 返回
+null ⇒ 条带走进**降级态** ⇒ CTA 消失、chip 变「—」⇒ 断言以为「功能坏了」；
+而门禁的错误过滤原先把**所有** `/reports/latest` 错误一并排掉 ⇒ **429 连日志都没留下**。
+
+⇒ 本轮修法三条：
+1. **打桩掉 favorites**（与这些门禁要测的东西无关）⇒ 一次门禁从 **224 个请求降到 84 个**；
+2. 每个门禁配一个**独立限流桶**（`X-Forwarded-For` 假 IP，`198.51.100.1` ~ `.5`）
+   —— 服务端**只对限流**信任 XFF（认证默认不看：`trust_proxy_headers=False`）；
+3. **收窄门禁的错误过滤**：打桩阶段的错误单独收进 `mockErrs`，
+   并**新增一条断言「打桩期间不许出现 429」** ⇒ 以后限流假红会**自己喊出来**。
+
+⚠ **首页那 20 个请求本身是个真问题**（用户刷新几次就可能撞 429）——
+批量 favorites 查询端点属**应用层**改动（可能要加端点 + 改前端 + 加测试），
+**另立一轮**，本轮只登记不做。
+⚠ 由此推论：**任何加载 `/home` 的门禁都要么打桩 favorites、要么自带限流桶**，
+否则连跑几次就会假红 —— 新增此类门禁时**先抄这 5 个里的一个**。
 
 > ⚠️ **本轮的一条元教训**：本表的 G3 / G4 两条**在写下时就已经不成立了**，
 > 但因为**门禁只做存在性断言、不校验内容**，它们在文档里「红着」也不会有人发现

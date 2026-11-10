@@ -87,6 +87,16 @@
 | POST | `/api/v1/auth/logout` | **登出（幂等；撤销当前会话并清 cookie，无需先登录）** | - |
 | GET | `/api/v1/auth/me` | **当前登录用户（未登录 401）** | - |
 | POST | `/api/v1/auth/change-password` | **修改口令（保留当前会话，撤销其余全部会话）** | body: `{current_password, new_password}` |
+| GET | `/report-archive` | **报告存档页**（307 跳 `/static/report-archive.html`，V0.111.0） | - |
+| GET | `/api/v1/reports` | **报告存档列表**（标题/摘要/原文件名模糊搜索 + 分类 / 标签筛选 + 分页） | `q`、`category`、`tag`、`limit`(1-200，默认 50)、`offset`(≥0) |
+| GET | `/api/v1/reports/categories` | **报告分类去重列表**（喂筛选下拉） | - |
+| GET | `/api/v1/reports/stats` | **报告存档侧栏统计**（总数 / 近 30 天数 / 分类分布） | - |
+| GET | `/api/v1/reports/latest` | **最新上传的一份报告**（首页「今日市场研究报告」入口；V0.125.0）—— **不返回列表**；一份都没有时 `{"item": null}`（**200，不是 404**） | - |
+| GET | `/api/v1/reports/{id}` | 单条报告元数据（**不含**磁盘路径） | - |
+| GET | `/api/v1/reports/{id}/content` | **报告 HTML 本体**（`Content-Security-Policy: sandbox` 隔离 ⇒ opaque origin ⇒ **只能新标签页打开**，不能 iframe / 不能 fetch 后塞 innerHTML） | - |
+| POST | `/api/v1/reports/upload` | **上传 HTML 报告**（multipart；`require_user`） | form: `file`（.html/.htm，≤20MB）、`title`、`report_date`(YYYY-MM-DD)、`category`、`tags`（逗号分隔或 JSON 数组串）、`summary` |
+| PATCH | `/api/v1/reports/{id}` | 修改报告登记表字段（`require_user`；任一字段为 `null` ⇒ 不更新；**磁盘文件不受影响**） | body: `{title?, report_date?, category?, tags?, summary?}` |
+| DELETE | `/api/v1/reports/{id}` | 删除报告（记录 + 磁盘文件；`require_user`） | - |
 
 ### 5.1 机会分析示例
 

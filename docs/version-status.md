@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.124.0** ｜ **最近更新**：2026-11-09 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.124.0`）**
+> **基线：V0.125.0** ｜ **最近更新**：2026-11-10 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.125.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.124.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.124.0`**
+**当前版本 = 0.125.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.125.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.124.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.124.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.124.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.124.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.125.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.125.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.125.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.125.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.124.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.125.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-09 重启加载 V0.124.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-10 重启加载 V0.125.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **85** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **60** 段 / 59 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **10** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **121** 个（**本地 121 / 远端 121** ✅ 一致） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **86** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **61** 段 / 60 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **11** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **122** 个（**本地 122 / 远端 122** ✅ 一致） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -88,7 +88,8 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > V0.121.4 同理 ⇒ 81→82、56 段→57 段、117→118；
 > V0.122.0 同理 ⇒ 82→83、57 段→58 段、118→119，**另加 1 份里程碑文档**（M7）⇒ 7→8 份；
 > V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份；
-> V0.124.0 同理 ⇒ 84→85、59 段→60 段、120→121，**另加 1 份里程碑文档**（M9）⇒ 9→10 份。）
+> V0.124.0 同理 ⇒ 84→85、59 段→60 段、120→121，**另加 1 份里程碑文档**（M9）⇒ 9→10 份；
+> V0.125.0 同理 ⇒ 85→86、60 段→61 段、121→122，**另加 1 份里程碑文档**（M10）⇒ 10→11 份。）
 >
 > **60 段 ≠ 59 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
@@ -277,7 +278,28 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.124.0（2026-11-09 发版）
+### 本轮：V0.125.0（2026-11-10 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **首页「今日市场研究报告」入口** —— 用户诉求：「在首页提供一个今日市场研究报告的连接，**只显示最新的那份上传报告**」。本版交付：新端点 `GET /api/v1/reports/latest`（**只返回最新上传的那一份**，不是列表）+ 首页新增 `.home-report` 条带（标题 / 日期 chip / 分类·大小·上传于 / 摘要 / 「查看报告 →」/「全部报告 →」）+ 3 语 i18n（`home.report_*` **7 键**） |
+| 口径决策 | ✅ **「最新」= 最新上传**（`created_at` 倒序 + `id` 兜底），**不是**报告自身日期最新 —— 补录旧报告是常态，按 `report_date` 排会把刚拿到的那份挤下去。排序口径**只在仓储层写一份**，列表与 latest 共用 ⇒ 首页那份**永远**是存档列表第一行（有一条测试钉住这个不变式） |
+| 空库契约 | ✅ `200 {"item": null}`（**不是 404**）—— 首页要能区分「还没上传过」（正常）与「接口挂了」（降级）；前端用 `hasOwnProperty(payload,'item')` 判定，**绝不把故障说成空库** |
+| 安全关键点 | ✅ 报告本体走 `/api/v1/reports/{id}/content`（响应带 **CSP sandbox** ⇒ opaque origin）⇒ 只能 `<a target="_blank" rel="noopener noreferrer">` **新标签页**打开，**不能 iframe、不能 fetch 完塞 innerHTML** |
+| 🐛 顺带修掉的真缺陷 | ① **i18n 门禁的扫描盲区** —— `scripts/check_i18n_keys.py` 此前只扫 `i18n: "k"` / `I18n.t('k')` / `tr('k')` / `T('k')` **4 种**形式，**漏掉小写 `t('k')`** —— 而 home.js / ask.js / auth.js / favorites.js / report-archive.js **5 个文件**都定义了小写包装器 `t(key, fallback)` ⇒ 这 5 个文件的 key **完全不在门禁视野内**（漏 zh-TW/en-US 不报错，运行时悄悄显示中文）。补上后实测：in-scope **501 → 582（+81）**，其中**唯一真缺失**是 `ai.streaming`（ask.js:829，三语都缺 ⇒ en-US/zh-TW 一直在显示中文兜底串）—— **已补齐 3 语**；② **`created_at` 是 UTC 而前端当本地时间解析** —— SQLite 的 `CURRENT_TIMESTAMP` 是 UTC（实测与 `date -u` 逐秒相同），SQLAlchemy 读回是 naive datetime ⇒ Pydantic 输出 `"2026-11-08T22:15:34"`（**不带 Z**）⇒ `new Date(...)` 按本地时间解析 ⇒ **显示值比真实时刻早 8 小时** ⇒ 首页改用显式的 UTC 解析器（实测：报告 id=20 真实上传时刻 = BJT 11-09 06:15，不补 `'Z'` 会显示成 11-08 22:15） |
+| 已知遗留（未做） | ⚠ `static/report-archive.js::fmtBjt` **仍是本地时间解析** ⇒ 存档页「上传于」**比真实时刻早 8 小时**（改它要连带重验 `_verify_report_archive.mjs` 的既有断言 ⇒ 单独立一轮） |
+| 🔧 顺带修好的**既有坏门禁** | ✅ `scripts/_verify_nav_8.mjs` **间歇性挂死** —— 根因（**抓 CDP 原始事件实测**）：`/static/*.html` 响应头无 `Cache-Control` ⇒ Chrome 启发式缓存 ⇒ **主文档命中磁盘缓存时 Chrome 不发 `Page.lifecycleEvent`** ⇒ puppeteer 的 `waitUntil`（`domcontentloaded`/`load`/`networkidle0`/`networkidle2` **全都**）永不 settle ⇒ `page.goto` 无限期挂死（挂起时页面其实早已加载完）。⚠ **与本版改动无关**（换回 HEAD 静态文件 + 重启服务后照样挂）；⚠ 初版把根因写成「SW 拦截」是**错的** —— LAN 入口非安全上下文 ⇒ `navigator.serviceWorker` 为 `undefined` ⇒ SW 根本不参与。⇒ 修法：`setCacheEnabled(false)`（**本项目既有惯例**，`_verify_money_flow.mjs` 等 5 个门禁早有）+ `domcontentloaded` + 每断言点 `waitForSelector` ⇒ **连跑 4 次 27 passed / 0 failed** |
+| 🔧 附带修好的**第二个**不稳定源 | ✅ **限流假红** —— 服务端按 IP 做 60s 滑动窗口限速（`RATE_LIMIT_PER_MIN=600`），而**首页一次加载打 ~20 个 `/api/v1/favorites/exists/{external_id}`** ⇒ 5 个首页门禁连着跑就把真实 IP 的额度耗光 ⇒ **429** ⇒ 跟被测功能无关的断言（i18n 文案 / chip）跟着挂（实测 4 次连跑里挂了 3 次）。⇒ 本轮 5 个门禁各配一个**独立限流桶**（`X-Forwarded-For` 假 IP；服务端**只对限流**信任它，认证默认不看：`trust_proxy_headers=False`）。⚠ **首页那 20 个请求本身是真问题**（用户刷新几次就可能撞 429）⇒ 批量 favorites 查询端点属应用层改动，**另立一轮** |
+| `__version__` | ✅ 已 bump 到 `0.125.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 schema 变更、零 alembic 迁移、零生产库写入** |
+| 静态资源 | ⚠ **改了 `static/home.html` + `static/home.js` + 3 个 `static/i18n/*.js`** ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION**（本轮已 bump 到 `v0.125.0`）；⚠ 新条带刻意**不进** `.home-scenes` 网格 —— 那 8 张是 260px 纯链接磁贴，且 **4 个门禁脚本硬编码「场景卡 = 8 张」** ⇒ 独立 `<section>` 零断言改动 |
+| 测试 | ✅ `tests/test_api/test_reports.py` **43 passed**（**6 条新增**：路由顺序不被 `/{report_id}` 吞掉 / 空库返回 `item=null` / 返回刚上传那份 / **上传时间 ≠ 报告日期** / **首页那份 == 存档列表第一行** / 多用户隔离） |
+| 门禁 | ✅ `check_version_sync`（4 处版本号 + CHANGELOG 降序 + 里程碑登记 + 基线）/ `check_i18n_keys`（**0 missing / 582 in-scope**）/ `check_pwa_assets`（SW `v0.125.0` == 应用版本，54 条 SHELL_ASSETS）/ `check_static_js`（22 页 + 39 脚本）/ `check_docs_claims`（149 处端点引用全部可在 `app.openapi()` 找到） |
+| 稳定性复测 | ✅ **5 个首页门禁 × 连续 4 次 = 20/20 全绿**（`_verify_nav_8` 27/0 ×4、`_verify_home_report` **49**/0 ×4、`_verify_home_metals` 39/0 ×4、`_verify_home_verdict` 55/0 ×4、`_verify_report_archive` 43/0 ×4）。⚠ **修之前的对照组**：同一串命令下 `_verify_home_report` 4 次挂 1 次、`_verify_home_verdict` 4 次挂 2 次 ⇒ **一次绿不算数，连跑不翻才算** |
+| 文档 | ✅ 新增**第 11 份里程碑文档 M10 · 首页研报入口（V0.125）**（`docs/releases/milestones/m10-home-latest-report-v0.125.md`）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/api-reference.md](api-reference.md) §5 **补上此前整段缺失的 9 个报告端点** |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.125.0**`；线上实测 `GET /api/v1/reports/latest` → `{"item": {"id": 21, "report_date": "2026-11-10", "view_url": "/api/v1/reports/{id}/content"（实际 id=21）…}}`，且 `GET /api/v1/reports?limit=3` 的**第一行同样是 id=21** ⇒ 不变式在线上成立（⚠ `id` 逐日递增：每日 BJT 06:15 自动上传一份 ⇒ 不变式由测试 + 门禁钉住，不依赖具体 id） |
+
+### 上一轮：V0.124.0（2026-11-09 发版）
 
 | 项 | 状态 |
 |---|---|
@@ -940,7 +962,8 @@ git ls-remote origin refs/heads/main                   # 期望 = 本地 git rev
 
 - [roadmap.md](roadmap.md) — **当前推进计划**（唯一活跃路线，逐条带实测判据）
 - [releases/index.md](releases/index.md) — 能力全景索引
-- [releases/milestones/m9-macro-face-evidence-v0.124.md](releases/milestones/m9-macro-face-evidence-v0.124.md) — 当前里程碑（V0.124 宏观面证据复算线）
-- [releases/milestones/m8-flow-face-evidence-v0.123.md](releases/milestones/m8-flow-face-evidence-v0.123.md) — 上一里程碑（V0.123 资金流面证据复算线）
+- [releases/milestones/m10-home-latest-report-v0.125.md](releases/milestones/m10-home-latest-report-v0.125.md) — 当前里程碑（V0.125 首页研报入口线）
+- [releases/milestones/m9-macro-face-evidence-v0.124.md](releases/milestones/m9-macro-face-evidence-v0.124.md) — 上一里程碑（V0.124 宏观面证据复算线）
+- [releases/milestones/m8-flow-face-evidence-v0.123.md](releases/milestones/m8-flow-face-evidence-v0.123.md) — 更早里程碑（V0.123 资金流面证据复算线）
 - [releases/milestones/m6-truthful-signals-v0.121.md](releases/milestones/m6-truthful-signals-v0.121.md) — V0.121 可信度修复线
 - [CHANGELOG.md](../CHANGELOG.md) — 发版史

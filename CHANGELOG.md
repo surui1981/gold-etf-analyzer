@@ -4,6 +4,102 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.125.0] · 2026-11-10
+
+`首页加一条「今日市场研究报告」入口 —— 只显示最新上传的那一份，点标题直达报告本体` — docs · 详见 [M10 里程碑文档](docs/releases/milestones/m10-home-latest-report-v0.125.md)
+
+> 用户诉求原文：「我们在首页提供一个今日市场研究报告的连接提供查看研究报告的功能，
+> **只显示最新的得到的上传报告**。」
+
+- 📌 **新端点 `GET /api/v1/reports/latest`** —— 只返回**最新上传的那一份**，不返回列表
+  - 空库时返回 `200 {"item": null}`（**不是 404**）—— 首页要能区分「还没上传过」（正常）
+    与「接口挂了」（降级）⇒ 前端用 `hasOwnProperty(payload, 'item')` 判定，
+    **绝不把故障说成空库**
+  - ⚠ **路由必须注册在 `/{report_id}` 之前** —— 否则 `"latest"` 被当成 report_id
+    ⇒ **422**（不是 404）。同 `/categories`、`/stats` 当初踩过的坑，有测试守着
+  - 「最新」= **最新上传**（`created_at` 倒序 + `id` 兜底），**不是**报告自身日期最新 ——
+    补录旧报告是常态，按 `report_date` 排会把刚拿到的那份挤下去。
+    排序口径**只在仓储层写一份** ⇒ 首页那份**永远**是存档列表第一行（测试钉住这个不变式）
+- 🏠 **首页新增 `.home-report` 条带**（标题 / 日期 chip / 分类·大小·上传于 / 摘要 /
+  「查看报告 →」/「全部报告 →」）
+  - ⚠ 报告本体走 `/api/v1/reports/{id}/content`（响应带 **CSP sandbox** ⇒ opaque origin）
+    ⇒ 只能 `<a target="_blank" rel="noopener noreferrer">` **新标签页**打开，
+    **不能 iframe、不能 fetch 完塞 innerHTML**
+  - ⚠ 新条带刻意**不进** `.home-scenes` 网格 —— 那 8 张是 260px 纯链接磁贴，
+    且 **4 个门禁脚本硬编码「场景卡 = 8 张」** ⇒ 独立 `<section>` 零断言改动
+  - 3 语 i18n 新增 `home.report_*` **7 键**
+- 🐛 **顺带修掉两个真缺陷**
+  - **i18n 门禁的扫描盲区** —— `scripts/check_i18n_keys.py` 此前只扫 4 种取 key 的写法
+    （`i18n: "k"` / `I18n.t('k')` / `tr('k')` / `T('k')`），**漏掉小写 `t('k')`** ——
+    而 home.js / ask.js / auth.js / favorites.js / report-archive.js **5 个文件**
+    都定义了小写包装器 `t(key, fallback)` ⇒ 这 5 个文件的 key **完全不在门禁视野内**
+    （漏 zh-TW/en-US 不报错，运行时悄悄显示中文）。
+    补上后实测（HEAD 的 `static/` 与改后对拍）：in-scope **501 → 582（+81）**，
+    其中**唯一真缺失**是 `ai.streaming`（ask.js:829，三语都缺 ⇒ en-US/zh-TW 一直在显示
+    中文兜底串）—— **已补齐 3 语**
+  - **`created_at` 是 UTC 而前端当本地时间解析 ⇒ 显示值早 8 小时** ——
+    SQLite 的 `CURRENT_TIMESTAMP` 是 UTC（实测与 `date -u` 逐秒相同），SQLAlchemy 读回是
+    naive datetime ⇒ Pydantic 输出 `"2026-11-08T22:15:34"`（**不带 Z**）⇒
+    `new Date(...)` 按本地时间解析。首页改用显式的 UTC 解析器
+    （实测：报告 id=20 真实上传时刻 = BJT 11-09 06:15，不补 `'Z'` 会显示成 11-08 22:15）。
+    ⚠ **已知遗留**：`static/report-archive.js::fmtBjt` 仍是本地时间解析 ⇒ 存档页「上传于」
+    早 8 小时（改它要连带重验 `_verify_report_archive.mjs` 的既有断言 ⇒ 单独立一轮）
+- 🧪 **6 条新测试**（`tests/test_api/test_reports.py` ⇒ **43 passed**）：路由顺序不被吞 /
+  空库 `item=null` / 返回刚上传那份 / **上传时间 ≠ 报告日期** /
+  **首页那份 == 存档列表第一行** / 多用户隔离
+- 🔧 **顺手修好一个「既有坏门禁」**：`scripts/_verify_nav_8.mjs` **间歇性挂死**
+  —— 根因（**抓 CDP 原始事件实测定位**）：`/static/*.html` 的响应头只有
+  `etag` + `last-modified`、**没有 `Cache-Control`** ⇒ Chrome 套用「启发式缓存」
+  ⇒ **同一浏览器上下文里再次访问同一页面时，主文档从磁盘缓存直接命中**
+  （`Network.responseReceived` 带 `fromDiskCache=true`）⇒ 此时 Chrome **不再发
+  `Page.lifecycleEvent`** ⇒ puppeteer 的 `waitUntil`
+  （`domcontentloaded` / `load` / `networkidle0` / `networkidle2` **全都**）
+  永远等不到那个事件 ⇒ `page.goto` 无限期挂死。
+  实测：缓存开 + `domcontentloaded` → 6 次导航挂 4 次；缓存开 + `networkidle2` → 4 次挂 2 次；
+  **缓存关 → 8 次全过**。挂起时页面其实**早已加载完**（`readyState === "complete"`、
+  标题正确、`framenavigated` 已发）—— 只有 puppeteer 在等一个不会来的事件。
+  ⚠ **与本版改动无关**：把 static/home.html + home.js 换回 HEAD 版本、
+  重启服务后同一个门禁照样挂死（挂在另一处 goto）。
+  ⚠ **先前把根因写成「Service Worker 拦截」是错的**：LAN 入口（192.168.0.204:8888）
+  **不是安全上下文** ⇒ `navigator.serviceWorker` 为 `undefined` ⇒ SW 在 LAN 上根本不参与。
+  ⇒ 修法：`setCacheEnabled(false)`（**本项目既有惯例** —— `_verify_money_flow.mjs` 等
+  5 个门禁早就这么写了；缺它的门禁就是会挂的那些）+ `domcontentloaded` +
+  每个断言点各自 `waitForSelector`（等 DOM，不等网络）⇒ 连跑 4 次 **27 passed / 0 failed**。
+  ⚠ 同一缺陷的**系统性排查**：本轮给本版要跑的 5 个门禁（`_verify_nav_8` /
+  `_verify_home_report` / `_verify_home_metals` / `_verify_home_verdict` /
+  `_verify_report_archive`）都补上了 `setCacheEnabled(false)`；
+  其余 ~20 个浏览器门禁里仍有若干缺这一行（多 goto 的最易挂）⇒ 已在
+  [docs/roadmap.md](docs/roadmap.md) §五 登记为待办，**不在本版扫**（未验证的批量改动
+  比不改动更危险）。
+- 🔧 **顺带修好的第二个不稳定源：门禁被限流打成假红**
+  - 现象：5 个首页门禁连着跑时，`_verify_home_report` / `_verify_home_verdict` 间歇性
+    报「en-US CTA 文案 → 实际 ""」「chip → 实际 "—"」—— **跟被测功能毫无关系**
+  - 根因（实测）：服务端按 IP 做 **60s 滑动窗口限速**（`RATE_LIMIT_PER_MIN=600`），
+    而**一次 `/home` 加载会打 32 个 API 请求，其中 20 个是
+    `/api/v1/favorites/exists/{external_id}`**（实测脚本 `scripts/_diag_home_req_count.mjs`）⇒
+    一个门禁跑一次就是 **224 个请求**（140 个是 favorites）⇒ 连续跑 4 次就把
+    桶打满 ⇒ **429**
+  - ⚠ **假红为什么长得像真 bug**：429 打中 `/api/v1/reports/latest` ⇒ `getJSON` 返回
+    null ⇒ 首页条带走进**降级态** ⇒ CTA 消失、chip 变「—」⇒ 断言以为功能坏了；
+    而门禁的错误过滤又把**所有** `/reports/latest` 错误一并排掉 ⇒ **429 连日志都没留下**
+  - ⇒ 修法两条：① **打桩掉 favorites**（它与这些门禁要测的东西无关）⇒ 一次门禁从
+    224 个请求降到 **84 个**；② 每个门禁配一个**独立限流桶**
+    （`X-Forwarded-For` 假 IP，服务端**只对限流**信任它）
+  - ⇒ 顺带**收窄了门禁的错误过滤**：原先 `!/reports\/latest/` 会把**真实**的
+    429 / 500 也藏起来 ⇒ 改成「打桩阶段的错误单独收进 `mockErrs`」，
+    并**新增一条断言：打桩期间不许出现 429**
+  - ⚠ **首页那 20 个请求本身是个真问题**（用户刷新几次就可能撞 429）⇒
+    批量 favorites 查询端点属**应用层**改动，另立一轮（本轮只登记，不做）
+  - 其余 3 个同样硬编码「场景卡 = 8 张」的门禁本轮实测全绿：
+    `_verify_home_metals` **39** · `_verify_home_verdict` **55** · `_verify_report_archive` **43**
+- 📚 **文档**：[M10 里程碑文档](docs/releases/milestones/m10-home-latest-report-v0.125.md)（第 11 份里程碑）
+  + [docs/releases/index.md](docs/releases/index.md) 登记 +
+  [docs/version-status.md](docs/version-status.md) 基线 + **[docs/api-reference.md](docs/api-reference.md)
+  §5 补上此前整段缺失的 9 个报告端点**
+- 🔢 版本 4 处同步（`__init__.py` / `pyproject.toml` / `uv.lock` / `static/sw.js`）⇒ `0.125.0`
+  ⚠ 本轮**改了 `static/*.html|js` 与 3 个 `static/i18n/*.js`** ⇒ 按 V0.100.1 规则必须 bump
+  `sw.js` VERSION（已 bump 到 `v0.125.0`）
+
 ## [V0.124.0] · 2026-11-09
 
 `宏观面（35% 权重）第一次被真正测过 —— 结论是「它描述当下，不预判未来」⇒ 权重与因子方向一律不动` — docs · 详见 [M9 里程碑文档](docs/releases/milestones/m9-macro-face-evidence-v0.124.md)
