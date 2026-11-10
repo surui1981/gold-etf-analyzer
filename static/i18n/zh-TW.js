@@ -1194,6 +1194,7 @@ window.PM_I18N_zh_TW = {
   "ai.input_placeholder": "提問關於黃金市場 / 持倉 / 評分…",
   "ai.send": "發送",
   "ai.sending": "發送中…",
+  "ai.streaming": "呼叫中…",
   "ai.empty_state": "還沒有對話 — 點左側「+ 新對話」開始提問",
   "ai.empty_input": "請先輸入問題",
   "ai.empty_conv_list": "還沒有對話",
@@ -1325,6 +1326,15 @@ window.PM_I18N_zh_TW = {
   "home.metals_cb_qoq_na": "無上季可比",
   "home.metals_cb_fail": "央行購金取數失敗",
   "home.metals_cb_source": "來源：世界黃金協會 GDT 全球合計",
+
+  /* V0.125.0 · 首頁「今日市場研究報告」入口（只顯示最新上傳的一份） */
+  "home.report_title": "今日市場研究報告",
+  "home.report_all": "全部報告 →",
+  "home.report_view": "查看報告 →",
+  "home.report_none": "還沒有上傳過報告 —— 去「報告存檔」上傳一份。",
+  "home.report_load_fail": "報告載入失敗",
+  "home.report_uploaded": "上傳於 {dt}",
+  "home.report_no_date": "未填日期",
 
   /* V0.120.4 · 首頁 hero 右側「綜合評估」結論區塊 */
   "home.idx_detail_toggle": "各面因子明細",

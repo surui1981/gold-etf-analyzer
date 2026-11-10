@@ -11,6 +11,7 @@
  * 7. /api/v1/market/gold/etf-quote + gram-quote → 卡 1 的 ETF / 克价副行
  * 8. /api/v1/market/gold/inventory → 贵金属卡 2 COMEX 库存（V0.115.0 新端点）
  * 9. /api/v1/central-bank/purchases → 贵金属卡 3 央行购金（V0.115.0）
+ * 10. /api/v1/reports/latest       → 「今日市场研究报告」入口（V0.125.0）
  *
  * 设计纪律（memory）：
  * - i18n-init-await：等待 i18n.ready 后再渲染（防 undefined 注入）
@@ -93,6 +94,7 @@
   const [
     gold, fresh, headlines, headStatus, daily,
     goldTrend, goldEtf, goldGram, goldInv, goldCb,
+    latestReport,
   ] = await Promise.allSettled([
     getJSON('/api/v1/market/gold'),
     getJSON('/api/v1/market/freshness'),
@@ -107,6 +109,8 @@
     getJSON('/api/v1/market/gold/gram-quote'),
     getJSON('/api/v1/market/gold/inventory?days=90'),
     getJSON('/api/v1/central-bank/purchases'),
+    // V0.125.0：最新上传的一份研报（首页「今日市场研究报告」入口）
+    getJSON('/api/v1/reports/latest'),
   ]);
 
   // ── 4. 渲染金价 chip ──
@@ -382,6 +386,140 @@
   const setText = (id, text) => {
     const el = document.getElementById(id);
     if (el) el.textContent = text;
+  };
+
+  // ══════════════════════════════════════════════════════════════
+  //  V0.125.0 · 今日市场研究报告（首页直达最新一份上传的研报）
+  // ══════════════════════════════════════════════════════════════
+
+  /** 把后端的无时区时间串当 **UTC** 解析。
+   *
+   *  ⚠ 后端 `created_at` 来自 SQLite 的 `CURRENT_TIMESTAMP` —— 它是 **UTC**
+   *    （实测：sqlite CURRENT_TIMESTAMP 与 `date -u` 逐秒相同），而 SQLAlchemy
+   *    读回来是**无时区**的 naive datetime，Pydantic 序列化成
+   *    "2026-11-08T22:15:34"（**不带 Z**）。
+   *    `new Date("2026-11-08T22:15:34")` 按 ES2015 规范当作**本地时间**解析
+   *    ⇒ 在 CST（UTC+8）机器上显示值比真实时刻**早 8 小时**。
+   *    补 'Z' 才是对的。实测：报告 id=20 的真实上传时刻 = BJT 11-09 06:15，
+   *    不补 'Z' 会显示成 11-08 22:15（/report-archive.js 的 fmtBjt 此前就是这个坑）。
+   */
+  const parseUtc = (s) => {
+    if (!s) return null;
+    const str = String(s);
+    const hasTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(str);
+    const d = new Date(hasTz ? str : str + 'Z');
+    return isNaN(d.getTime()) ? null : d;
+  };
+
+  /** 上传时间 → "YYYY-MM-DD HH:MM"（按浏览器本地时区 = 站点的 BJT 口径）。 */
+  const fmtDateTime = (s) => {
+    const d = parseUtc(s);
+    if (!d) return '—';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+
+  /** 字节数 → 人类可读（与 report-archive.js 的 fmtSize 同一口径）。 */
+  const fmtSize = (bytes) => {
+    const n = Number(bytes) || 0;
+    if (n < 1024) return `${n} B`;
+    if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+    return `${(n / 1024 / 1024).toFixed(1)} MB`;
+  };
+
+  const renderReport = () => {
+    const sec = document.getElementById('homeReport');
+    const body = document.getElementById('homeReportBody');
+    const chip = document.getElementById('homeReportChip');
+    if (!sec || !body || !chip) return;
+    chip.classList.remove('is-loading');
+
+    // ⚠ 必须用 hasOwnProperty 判定「接口回来了」—— `latestReport.value` 为 null
+    //   与「请求失败」在 allSettled 里长得一样（前者 fulfilled+null，后者 rejected）。
+    const payload = latestReport.status === 'fulfilled' ? latestReport.value : null;
+    const ok = payload && typeof payload === 'object'
+      && Object.prototype.hasOwnProperty.call(payload, 'item');
+
+    if (!ok) {
+      // 取不到 ⇒ 明确说「加载失败」，**不**说「暂无报告」（那是把故障说成空库）
+      sec.classList.add('is-empty');
+      body.textContent = '';
+      const p = document.createElement('p');
+      p.className = 'home-report-empty';
+      p.textContent = t('home.report_load_fail', '报告加载失败');
+      body.appendChild(p);
+      chip.textContent = '—';
+      return;
+    }
+
+    sec.classList.remove('is-empty');
+    body.textContent = '';
+    const item = payload.item;
+
+    if (!item) {
+      // 真的没上传过（正常状态，不是故障）
+      chip.textContent = '—';
+      const p = document.createElement('p');
+      p.className = 'home-report-empty';
+      p.textContent = t('home.report_none', '还没有上传过报告 —— 去「报告存档」上传一份。');
+      body.appendChild(p);
+      return;
+    }
+
+    // chip = 报告自身日期（不是上传日）—— 用户要看的是「哪一天的研报」
+    chip.textContent = item.report_date
+      ? String(item.report_date).slice(0, 10)
+      : t('home.report_no_date', '未填日期');
+
+    const wrap = document.createElement('div');
+    wrap.className = 'home-report-item';
+
+    // ⚠ 标题即链接 → 报告本体。/content 的响应带 CSP sandbox（opaque origin），
+    //   ⇒ 只能新标签页打开，不能 iframe、也不能 fetch 完塞 innerHTML。
+    const viewUrl = item.view_url || `/api/v1/reports/${item.id}/content`;
+    const title = document.createElement('a');
+    title.className = 'home-report-title';
+    title.textContent = item.title || '(未命名报告)';
+    title.href = viewUrl;
+    title.target = '_blank';
+    title.rel = 'noopener noreferrer';
+    wrap.appendChild(title);
+
+    // meta：分类 · 大小 · 上传于
+    const meta = document.createElement('div');
+    meta.className = 'home-report-meta';
+    if (item.category) {
+      const cat = document.createElement('span');
+      cat.className = 'cat';
+      cat.textContent = item.category;
+      meta.appendChild(cat);
+    }
+    const size = document.createElement('span');
+    size.textContent = fmtSize(item.size_bytes);
+    meta.appendChild(size);
+    const up = document.createElement('span');
+    up.textContent = t('home.report_uploaded', '上传于 {dt}', { dt: fmtDateTime(item.created_at) });
+    meta.appendChild(up);
+    wrap.appendChild(meta);
+
+    // 摘要摘录（单行省略由 CSS 做；正文一律 textContent，不拼 HTML）
+    if (item.summary) {
+      const sum = document.createElement('p');
+      sum.className = 'home-report-sum';
+      sum.textContent = item.summary;
+      wrap.appendChild(sum);
+    }
+
+    // CTA
+    const cta = document.createElement('a');
+    cta.className = 'home-report-cta';
+    cta.textContent = t('home.report_view', '查看报告 →');
+    cta.href = viewUrl;
+    cta.target = '_blank';
+    cta.rel = 'noopener noreferrer';
+    wrap.appendChild(cta);
+
+    body.appendChild(wrap);
   };
 
   // ══════════════════════════════════════════════════════════════
@@ -799,11 +937,13 @@
 
   renderMetals();
   renderVerdict();
+  renderReport();
 
   // 切换语言 ⇒ 重绘 JS 拼的内容（i18n.js 的 apply 只管 data-i18n 元素）
   document.addEventListener('i18n:change', () => {
     renderMetals();
     renderVerdict();
+    renderReport();
     // 要闻列表**不整体重渲染** —— 那会重新触发 20 次 favorites/exists 请求；
     // 只换掉 JS 拼的 tooltip 文案。
     document.querySelectorAll('.home-news-title-nourl').forEach((el) => {

@@ -210,6 +210,43 @@
   .metal-card.is-empty { opacity: .72; border-color: #f5d77a; }
   [data-theme="dark"] .metal-card.is-empty { border-color: #8a6d1f; }
 
+  /* V0.125.0 今日市场研究报告（首页直达最新一份上传的研报）
+     ⚠ 刻意**不进** .home-scenes grid：那 8 张是 260px 的纯链接磁贴，
+       且 4 个门禁脚本硬编码「场景卡 = 8 张」（_verify_nav_8 / _verify_home_metals /
+       _verify_home_verdict / _verify_report_archive），插进去要连带改断言。
+     ⚠ 报告本体走 /content 端点（响应带 CSP sandbox）⇒ 只能**新标签页**打开，
+       不能 iframe、也不能 fetch 完塞 innerHTML。 */
+  .home-report { padding: 16px 20px; background: var(--card);
+    border: 1px solid var(--border); border-radius: 12px; margin-bottom: 16px; }
+  .home-report-head { display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .home-report h3 { font-size: 15px; font-weight: 600; margin: 0; }
+  .home-report-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .home-report-chip { font-size: 11px; padding: 2px 10px;
+    background: rgba(0,0,0,0.04); border: 1px solid var(--border);
+    border-radius: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  [data-theme="dark"] .home-report-chip { background: rgba(255,255,255,0.06); }
+  .home-report-chip.is-loading { opacity: 0.6; }
+  .home-report-item { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .home-report-title { font-size: 15px; font-weight: 600; color: var(--text);
+    text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-report-title:hover { color: var(--accent, #2563eb); text-decoration: underline; }
+  .home-report-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline;
+    font-size: 11.5px; color: var(--muted); }
+  .home-report-meta .cat { padding: 1px 8px; background: #e8eefc; color: #1d4ed8;
+    border-radius: 999px; }
+  [data-theme="dark"] .home-report-meta .cat { background: #1e293b; color: #93c5fd; }
+  .home-report-sum { margin: 0; font-size: 12px; line-height: 1.6; color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .home-report-cta { align-self: flex-start; font-size: 12px; color: var(--accent, #2563eb);
+    text-decoration: none; padding: 3px 10px; border: 1px solid var(--border);
+    border-radius: 6px; }
+  .home-report-cta:hover { background: rgba(37,99,235,0.08); }
+  .home-report-empty { margin: 0; font-size: 13px; color: var(--muted); font-style: italic; }
+  /* 整块取不到（端点挂了 / 返回体不对）：压暗 + amber 描边，与金属卡的降级态同款 */
+  .home-report.is-empty { opacity: .72; border-color: #f5d77a; }
+  [data-theme="dark"] .home-report.is-empty { border-color: #8a6d1f; }
+
   /* V0.120.4 · 综合评估结论块（hero 右栏）
      hero 原本右半边是死区（文案全靠左对齐），把它变成「结论先行」：
      大分数 + 等级徽章 + 一句话说明 + 4 面分数条 + 折叠的因子明细。
@@ -425,6 +462,24 @@
       </div>
       <span class="home-ai-cta" data-i18n="home.scene_ai_btn">进入 AI 助手</span>
     </a>
+  </section>
+
+  <!-- V0.125.0 今日市场研究报告：首页直达**最新上传**的那一份研报。
+       ⚠ 只显示一份，不给列表 —— 用户要的是「刚拿到的那份」，不是一份目录。
+       ⚠ 排序口径 = created_at（上传时间）倒序，与 /report-archive 列表第一行
+         同一套 ⇒ 首页点进去的永远是存档列表最上面那份。
+       ⚠ 报告本体走 /content（带 CSP sandbox）⇒ 只能**新标签页**打开。
+       ⚠ body 初始为空：JS 没跑成时宁可空着，也不显示「暂无报告」——
+         「没有报告」这句断言必须来自接口，不能是猜的。 -->
+  <section class="home-report" id="homeReport" aria-labelledby="homeReportTitle">
+    <div class="home-report-head">
+      <h3 id="homeReportTitle" data-i18n="home.report_title">今日市场研究报告</h3>
+      <div class="home-report-actions">
+        <span class="home-report-chip is-loading" id="homeReportChip">--</span>
+        <a class="home-news-more" href="/report-archive" data-i18n="home.report_all">全部报告 →</a>
+      </div>
+    </div>
+    <div class="home-report-body" id="homeReportBody"></div>
   </section>
 
   <!-- V0.115.0 贵金属走势：插在 .home-scenes 之后、今日要闻（.home-bottom）之前。

@@ -1294,6 +1294,7 @@ window.PM_I18N_ZH_CN = {
   "ai.input_placeholder": "提问关于黄金市场 / 持仓 / 评分…",
   "ai.send": "发送",
   "ai.sending": "发送中…",
+  "ai.streaming": "调用中…",
   "ai.empty_state": "还没有对话 — 点左侧「+ 新对话」开始提问",
   "ai.empty_input": "请先输入问题",
   "ai.empty_conv_list": "还没有对话",
@@ -1425,6 +1426,15 @@ window.PM_I18N_ZH_CN = {
   "home.metals_cb_qoq_na": "无上季可比",
   "home.metals_cb_fail": "央行购金取数失败",
   "home.metals_cb_source": "来源：世界黄金协会 GDT 全球合计",
+
+  /* V0.125.0 · 首页「今日市场研究报告」入口（只显示最新上传的一份） */
+  "home.report_title": "今日市场研究报告",
+  "home.report_all": "全部报告 →",
+  "home.report_view": "查看报告 →",
+  "home.report_none": "还没有上传过报告 —— 去「报告存档」上传一份。",
+  "home.report_load_fail": "报告加载失败",
+  "home.report_uploaded": "上传于 {dt}",
+  "home.report_no_date": "未填日期",
 
   /* V0.120.4 · 首页 hero 右侧「综合评估」结论块 */
   "home.idx_detail_toggle": "各面因子明细",

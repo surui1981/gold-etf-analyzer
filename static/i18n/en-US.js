@@ -1290,6 +1290,7 @@ window.PM_I18N_en_US = {
   "ai.input_placeholder": "Ask about gold markets, portfolio, scoring…",
   "ai.send": "Send",
   "ai.sending": "Sending…",
+  "ai.streaming": "Calling…",
   "ai.empty_state": "No conversation yet — click “+ New chat” on the left to start",
   "ai.empty_input": "Please type a question first",
   "ai.empty_conv_list": "No conversations",
@@ -1422,6 +1423,15 @@ window.PM_I18N_en_US = {
   "home.metals_cb_qoq_na": "No prior quarter",
   "home.metals_cb_fail": "Central bank data unavailable",
   "home.metals_cb_source": "Source: World Gold Council GDT global total",
+
+  /* V0.125.0 · home "Today's market research report" entry (only the latest upload) */
+  "home.report_title": "Today's Market Research Report",
+  "home.report_all": "All reports →",
+  "home.report_view": "View report →",
+  "home.report_none": "No report uploaded yet — go to \"Report Archive\" to upload one.",
+  "home.report_load_fail": "Failed to load report",
+  "home.report_uploaded": "Uploaded {dt}",
+  "home.report_no_date": "No date",
 
   /* V0.120.4 · home hero right column "Composite assessment" verdict block */
   "home.idx_detail_toggle": "Factor detail by face",
