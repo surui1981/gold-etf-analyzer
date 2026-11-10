@@ -59,6 +59,33 @@ const browser = await puppeteer.launch({
 });
 
 const page = await browser.newPage();
+// ⚠ 必须禁用浏览器缓存（V0.125.0 定位的挂死根因）：
+//   `/static/*.html` 无 `Cache-Control` ⇒ Chrome 启发式缓存 ⇒ 主文档从磁盘缓存
+//   命中时**不发 `Page.lifecycleEvent`** ⇒ `waitUntil` 永不 settle ⇒ goto 挂死。
+await page.setCacheEnabled(false);
+// ⚠ 给门禁**独立的限流桶**（V0.125.0）：服务端按 IP 做 60s 滑动窗口限速
+//   （`rate_limit_per_min = 600`），而**首页一次加载会打 ~20 个
+//   `/api/v1/favorites/exists/*`** ⇒ 多个首页门禁连着跑就把真实 IP 的额度耗光
+//   ⇒ 429 ⇒ 跟被测功能无关的断言（i18n 文案）跟着挂。
+//   ⇒ 门禁改用 RFC 5737 文档保留网段的假 IP ⇒ 每个门禁一个**独立桶**，互不干扰。
+//   ⚠ 服务端**只对限流**信任 `X-Forwarded-For`：认证默认不看（`trust_proxy_headers=False`，
+//     实测 .env.prod 未设该项）；即便开启，XFF 也只用于「审计展示 + 登录节流」，
+//     **不做安全判定**（见 middleware/auth.py:124 client_ip 的 docstring）。
+await page.setExtraHTTPHeaders({ "X-Forwarded-For": "198.51.100.5" });
+// ── 门禁豁免：把首页那 20 个 /api/v1/favorites/exists 请求打桩掉 ──
+//   它与本门禁要测的东西无关，却占掉一次 /home 加载 **32 个 API 请求里的 20 个**
+//   （实测脚本 scripts/_diag_home_req_count.mjs）⇒ 多个首页门禁连着跑就把服务端
+//   `RATE_LIMIT_PER_MIN=600` 的额度吃光 ⇒ **429** ⇒ 跟被测功能无关的断言
+//   （i18n 文案 / chip）跟着挂 —— 实测本门禁连跑 4 次就挂过 1 次。
+//   ⇒ 打桩成「未收藏」（真实端点在未收藏时返回 200 + body `null`）。
+//   ⚠ **豁免失效的条件**：若哪天有门禁要断言**收藏态**，必须先撤掉这条打桩。
+await page.setRequestInterception(true);
+page.on("request", async (req) => {
+  if (req.url().includes("/api/v1/favorites/exists/")) {
+    return req.respond({ status: 200, contentType: "application/json", body: "null" });
+  }
+  return req.continue();
+});
 // ⚠ 必须给一个够大的视口。puppeteer 默认 800x600，顶 nav 在窄宽下会折行成多行、
 //   撑高后的 sticky 层（z-index 100）正好盖住上传按钮 —— page.click() 于是把点击
 //   派发给了顶栏的 pmThemeBtn，脚本表现为「点了没反应 / 上传超时」。

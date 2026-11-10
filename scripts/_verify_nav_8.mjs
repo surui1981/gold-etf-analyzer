@@ -3,6 +3,31 @@
 //
 // ⚠ 必须打 8888（主入口）。8889/gold/ 是备用入口且全站 /api/v1/* 404，
 //   在那里跑只会得到与本改动无关的假失败。见记忆 lan-only-deployment。
+//
+// ⚠⚠ V0.125.0 hotfix：**goto 必须禁用浏览器缓存**（`setCacheEnabled(false)`）
+//   —— 根因（抓 CDP 原始事件实测定位，**不是** SW）：
+//   `/static/*.html` 的响应头只有 `etag` + `last-modified`、**没有 `Cache-Control`**
+//   ⇒ Chrome 套用「启发式缓存」⇒ **同一浏览器上下文里再次访问同一页面时，
+//     主文档直接从磁盘缓存命中**
+//     （实测 `Network.responseReceived` 带 `fromDiskCache=true`）
+//   ⇒ 此时 Chrome **不再发 `Page.lifecycleEvent`**
+//   ⇒ puppeteer 的 `waitUntil`（`domcontentloaded` / `load` / `networkidle0` /
+//     `networkidle2` **全都**）永远等不到那个事件 ⇒ `page.goto` 无限期挂死。
+//   实测（脚本 `scripts/_diag_nav8_cdp.mjs` 抓 CDP 事件）：
+//     缓存开 + domcontentloaded → 6 次里挂 4 次；缓存开 + networkidle2 → 4 次里挂 2 次；
+//     缓存关 → 8 次全过。挂起时页面其实**早已加载完**
+//     （`document.readyState === "complete"`、标题正确、`framenavigated` 已发）。
+//   ⇒ 修法三条一起上：
+//     ① `setCacheEnabled(false)`（**关键**：本项目既有惯例 —— `_verify_money_flow.mjs`
+//        等 5 个门禁早就这么写了；缺它的门禁就是会挂的那些）；
+//     ② `waitUntil: "domcontentloaded"` + 每个断言点各自 `waitForSelector`
+//        （等 DOM，不等网络 —— 见记忆 gate-reads-unready-page）；
+//     ③ `setBypassServiceWorker(true)`：LAN 入口（192.168.0.204:8888）**不是安全
+//        上下文** ⇒ `navigator.serviceWorker` 为 undefined ⇒ SW 在 LAN 上根本不参与
+//        （实测）；保留它是为了 localhost（那里 SW 可用）。
+//   ⚠ 与本版改动**无关**：把 static/home.html + home.js 换回 HEAD 版本、
+//     重启服务后同一个门禁照样挂死。
+//   ⚠ SW 自身的行为由 `scripts/_verify_sw_update.mjs` 单独覆盖，不靠本门禁。
 import puppeteer from "puppeteer-core";
 import { readFileSync } from "node:fs";
 
@@ -23,6 +48,33 @@ const browser = await puppeteer.launch({
   args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
 });
 const page = await browser.newPage();
+// ⚠ 必须禁用浏览器缓存 —— 见文件头「V0.125.0 hotfix」的根因说明：
+//   主文档命中磁盘缓存时 Chrome 不发 `Page.lifecycleEvent` ⇒ goto 永远不 settle。
+await page.setCacheEnabled(false);
+// ⚠ 给门禁**独立的限流桶**（V0.125.0）：服务端按 IP 做 60s 滑动窗口限速
+//   （`rate_limit_per_min = 600`），而**首页一次加载会打 ~20 个
+//   `/api/v1/favorites/exists/*`** ⇒ 多个首页门禁连着跑就把真实 IP 的额度耗光
+//   ⇒ 429 ⇒ 跟被测功能无关的断言（i18n 文案）跟着挂。
+//   ⇒ 门禁改用 RFC 5737 文档保留网段的假 IP ⇒ 每个门禁一个**独立桶**，互不干扰。
+//   ⚠ 服务端**只对限流**信任 `X-Forwarded-For`：认证默认不看（`trust_proxy_headers=False`，
+//     实测 .env.prod 未设该项）；即便开启，XFF 也只用于「审计展示 + 登录节流」，
+//     **不做安全判定**（见 middleware/auth.py:124 client_ip 的 docstring）。
+await page.setExtraHTTPHeaders({ "X-Forwarded-For": "198.51.100.1" });
+// ── 门禁豁免：把首页那 20 个 /api/v1/favorites/exists 请求打桩掉 ──
+//   它与本门禁要测的东西无关，却占掉一次 /home 加载 **32 个 API 请求里的 20 个**
+//   （实测脚本 scripts/_diag_home_req_count.mjs）⇒ 多个首页门禁连着跑就把服务端
+//   `RATE_LIMIT_PER_MIN=600` 的额度吃光 ⇒ **429** ⇒ 跟被测功能无关的断言
+//   （i18n 文案 / chip）跟着挂 —— 实测本门禁连跑 4 次就挂过 1 次。
+//   ⇒ 打桩成「未收藏」（真实端点在未收藏时返回 200 + body `null`）。
+//   ⚠ **豁免失效的条件**：若哪天有门禁要断言**收藏态**，必须先撤掉这条打桩。
+await page.setRequestInterception(true);
+page.on("request", async (req) => {
+  if (req.url().includes("/api/v1/favorites/exists/")) {
+    return req.respond({ status: 200, contentType: "application/json", body: "null" });
+  }
+  return req.continue();
+});
+await page.setBypassServiceWorker(true);
 const bad = [];
 page.on("response", (r) => {
   if (r.status() >= 400 && !/favicon/.test(r.url())) bad.push(`${r.status()} ${r.url()}`);
@@ -43,7 +95,7 @@ async function readTopnav() {
 
 // ─── 1. 顶 nav 8 项 ───
 console.log("【1】顶 nav 项数");
-await page.goto(`${BASE}/home`, { waitUntil: "networkidle2" });
+await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".topnav a", { timeout: 15000 });
 const nav = await readTopnav();
 ok("顶 nav 8 个场景项", nav.length === 8, `实际 ${nav.length}：${nav.map((n) => n.text).join(" / ")}`);
@@ -81,8 +133,9 @@ ok("AI 顶项文案 = 字典值（不是 fb 兜底）",
 
 // ─── 2. 配置的 subnav 含数据健康 ───
 console.log("\n【2】配置子页");
-await page.goto(`${BASE}/weights`, { waitUntil: "networkidle2" });
+await page.goto(`${BASE}/weights`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".topnav a", { timeout: 15000 });
+await page.waitForSelector(".subnav a, .subnav-item, .subnav .tab", { timeout: 15000 });
 const sub = await page.$$eval(".subnav a, .subnav-item, .subnav .tab", (els) =>
   els.map((e) => ({ href: e.getAttribute("href") || "", text: e.textContent.trim() }))
 );
@@ -97,8 +150,9 @@ ok("在 /weights 时「配置」高亮", (activeTop?.text || "").includes("配�
 
 // ─── 3. 数据健康页：高亮回归 + 仍是独立场景渲染 ───
 console.log("\n【3】数据健康页");
-await page.goto(`${BASE}/data-health`, { waitUntil: "networkidle2" });
+await page.goto(`${BASE}/data-health`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".topnav a", { timeout: 15000 });
+await page.waitForSelector(".subnav a, .subnav-item, .subnav .tab", { timeout: 15000 });
 const navHealth = await readTopnav();
 const activeHealth = navHealth.find((n) => n.active);
 ok("数据健康页高亮「配置」（不再是独立顶项）", (activeHealth?.text || "").includes("配置"), activeHealth?.text);
@@ -113,7 +167,7 @@ ok("数据健康页内容正常（非 404）", !/404 Not Found/i.test(hTitle), h
 
 // ─── 4. 首页 8 张板块 ───
 console.log("\n【4】首页板块");
-await page.goto(`${BASE}/home`, { waitUntil: "networkidle2" });
+await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".home-scene", { timeout: 15000 });
 const cards = await page.$$eval(".home-scene", (els) =>
   els.map((e) => ({
@@ -143,7 +197,7 @@ ok("首页卡顺序与顶 nav 一致", JSON.stringify(gotCards) === JSON.stringi
 // ─── 5. 三语 ───
 console.log("\n【5】三语");
 for (const [lang, expect] of [["en-US", "Data Health"], ["zh-TW", "數據健康"], ["zh-CN", "数据健康"]]) {
-  await page.goto(`${BASE}/weights`, { waitUntil: "networkidle2" });
+  await page.goto(`${BASE}/weights`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector(".topnav a", { timeout: 15000 });
   await page.evaluate(async (l) => { await window.I18n.setLang(l); }, lang);
   await new Promise((r) => setTimeout(r, 500));
