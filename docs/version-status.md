@@ -310,9 +310,9 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 项 | 状态 |
 |---|---|
 | 本地 | ✅ **工作区干净**（`git status` 无未提交改动）+ 全部 commit 已落地（`feat` / `fix` / `test` / `style` / `chore` / `docs`）+ annotated tag `v0.126.0`（**tag 指向 HEAD**，推完回填实测 SHA） |
-| 阻塞 ① | ⚠ **凭据（当前唯一的阻塞）**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**（`git push` 直接 403：`Permission to surui1981/gold-etf-analyzer.git denied to surui1981`）⇒ **只有 classic PAT（`ghp_` 前缀）能 push** |
+| 阻塞 ① | ⚠ **凭据（当前唯一的阻塞）**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **没有 Contents: 写权限**。<br>⚠ **别被 `/repos/…` 读接口回的 `permissions` 骗了** —— 它给的是**用户的仓库角色**（实测 `admin:true`），**不是 token 自己的权限** ⇒ 拿它判断「能不能 push」会得到相反结论。<br>✅ **实测判据**：`PUT /repos/surui1981/gold-etf-analyzer/contents/_probe_write_test.txt`（body 故意非法 ⇒ 真有写权限也只是 422，**不会建文件**）⇒ **403 `Resource not accessible by personal access token`** ⇒ 确认该 token 的细粒度权限里没有 Contents:write；`git push` 的 403（`Permission to … denied to surui1981`）是同一件事的 git 侧表现。<br>⇒ **解法**：换一枚 classic PAT（`ghp_` 前缀），或把现有 fine-grained PAT 的 **Contents 改成 Read and write** |
 | 阻塞 ② | ✅ **网络当前是通的**（曾一度不通）：本机系统 DNS 解析不了 `github.com` ⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS」的老路；实测 `20.205.243.166` **探得通** ⇒ 收到的是 **403（凭据被拒）而不是超时** ⇒ 请求**确实到了** GitHub |
-| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（网络不通时 15s 一轮，凭据被拒后退到 60s 一轮）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
+| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（网络不通时 15s 一轮，凭据被拒后退到 60s 一轮；日志只在**状态变化**时记一行 + 每 10 分钟一条心跳 ⇒ 「静默」= 脚本死了，而不是「没事发生」）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
 | token 卫生 | ✅ 推完仍要 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`；**本轮推送前自查 5 处严格形态（`ghp_[A-Za-z0-9]{20,}`）全 0**：`~/.bash_history` 0 / `~/.gitconfig` 0 / 仓库 0 / `/tmp` 0 / memory 目录 0；`remote.origin.url` 不带 token |
 
 ### 上一轮：V0.125.0（2026-11-10 发版）
