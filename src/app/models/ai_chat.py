@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -140,7 +140,11 @@ class AIMessage(Base):
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, comment="V0.80.0 #159 冗余存")
     role: Mapped[str] = mapped_column(String(16), nullable=False, comment="user / assistant / tool")
     content: Mapped[str] = mapped_column(
-        Text, nullable=False, server_default="", comment="消息正文"
+        Text,
+        nullable=False,
+        # ⚠ V0.126.0：TEXT 列不能有字面量默认值（MySQL error 1101）⇒ 表达式式 DEFAULT ('')
+        server_default=text("('')"),
+        comment="消息正文",
     )
     tool_name: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="tool_use 时填 tool 名"

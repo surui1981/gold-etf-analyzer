@@ -35,7 +35,7 @@
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -95,14 +95,15 @@ class Report(Base):
         Text,
         nullable=False,
         default="[]",
-        server_default="[]",
+        # ⚠ V0.126.0：TEXT 列不能有字面量默认值（MySQL error 1101）⇒ 表达式式 DEFAULT ('[]')
+        server_default=text("('[]')"),
         comment="标签 JSON 数组（去重 + 字母序，LIKE 模式搜索）",
     )
     summary: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         default="",
-        server_default="",
+        server_default=text("('')"),
         comment="一句话摘要（默认空字符串，非 NULL —— 用户内容占位用 ''）",
     )
     created_at: Mapped[datetime] = mapped_column(

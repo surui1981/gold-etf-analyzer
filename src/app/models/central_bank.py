@@ -9,6 +9,7 @@
 - ``tonnes_net``：季度净购金（吨），正=买入/负=卖出；俄罗斯/土耳其历史上多次卖出。
 - ``quarter``：6 字符串 "2026Q2"（年+季度），便于按字典序排序与范围筛选。
 - ``country_iso``：ISO 3 字母代码（CHN/POL/.../UZB/IRN），唯一约束的右半段。
+  ⚠ 例外：WGC **全球合计行**用伪码 ``WGC_AGGR``（8 字符）⇒ 列宽是 16 而不是 3。
 """
 
 from datetime import date, datetime
@@ -30,7 +31,12 @@ class CentralBankPurchase(Base):
     __tablename__ = "central_bank_purchases"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    country_iso: Mapped[str] = mapped_column(String(3), index=True, comment="ISO 3 字母代码")
+    # ⚠ V0.126.0：**不是** String(3) —— WGC 全球合计行用伪 ISO ``WGC_AGGR``（8 字符）。
+    #   SQLite 不校验 VARCHAR 长度 ⇒ 一直没人发现；MySQL 严格模式会直接报
+    #   error 1406「Data too long」⇒ 整个 ``cb_gold`` 因子写不进去。
+    country_iso: Mapped[str] = mapped_column(
+        String(16), index=True, comment="ISO 3 字母代码（WGC 全球合计行为伪码 WGC_AGGR）"
+    )
     country_name: Mapped[str] = mapped_column(String(64), comment="国家中文名")
     quarter: Mapped[str] = mapped_column(String(6), index=True, comment="季度，如 2026Q2")
     tonnes_net: Mapped[float] = mapped_column(Float, comment="季度净购金（吨），正=买入/负=卖出")

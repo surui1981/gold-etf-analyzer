@@ -35,7 +35,7 @@
 from datetime import date as date_t
 from datetime import datetime
 
-from sqlalchemy import Date, DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import Date, DateTime, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SourceId
@@ -69,7 +69,12 @@ class NewsFeedItem(Base):
     )
     title: Mapped[str] = mapped_column(Text, comment="新闻标题")
     summary: Mapped[str] = mapped_column(
-        Text, default="", server_default="", comment="新闻摘要（部分源只给正文，标题回退自正文）"
+        Text,
+        default="",
+        # ⚠ V0.126.0：TEXT 列**不能**有字面量默认值（MySQL error 1101）⇒ 用表达式式
+        #   ``DEFAULT ('')``（8.0.13+ 支持；SQLite 也接受带括号的常量表达式）。
+        server_default=text("('')"),
+        comment="新闻摘要（部分源只给正文，标题回退自正文）",
     )
     url: Mapped[str | None] = mapped_column(
         Text,

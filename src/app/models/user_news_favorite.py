@@ -31,7 +31,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, Integer, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, SourceId
@@ -68,7 +68,8 @@ class UserNewsFavorite(Base):
         Text,
         nullable=False,
         default="",
-        server_default="",
+        # ⚠ V0.126.0：TEXT 列不能有字面量默认值（MySQL error 1101）⇒ 表达式式 DEFAULT ('')
+        server_default=text("('')"),
         comment="收藏时的摘要快照",
     )
     url: Mapped[str | None] = mapped_column(
@@ -105,14 +106,15 @@ class UserNewsFavorite(Base):
         Text,
         nullable=False,
         default="[]",
-        server_default="[]",
+        # ⚠ V0.126.0：TEXT 列不能有字面量默认值（MySQL error 1101）⇒ 表达式式 DEFAULT ('[]')
+        server_default=text("('[]')"),
         comment="用户自定义 tag JSON 数组（去重 + 字母序，LIKE 模式搜索）",
     )
     user_note: Mapped[str] = mapped_column(
         Text,
         nullable=False,
         default="",
-        server_default="",
+        server_default=text("('')"),
         comment="用户自由笔记（默认空字符串，占位）",
     )
     importance: Mapped[int] = mapped_column(
