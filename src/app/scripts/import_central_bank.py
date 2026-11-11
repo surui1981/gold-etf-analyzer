@@ -14,11 +14,14 @@ import asyncio
 import sys
 from collections import Counter
 
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
-
 from app.models.base import Base
 from app.repositories.central_bank_data import QuarterlyPurchase, build_full_dataset
 from app.repositories.db import async_session_factory, engine
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -44,18 +47,19 @@ async def upsert_rows(rows: list[QuarterlyPurchase]) -> int:
     ]
 
     async with async_session_factory() as session, session.begin():
-        stmt = sqlite_insert(CentralBankPurchase).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            session,
+            CentralBankPurchase.__table__,
+            payload,
             index_elements=["country_iso", "quarter"],
-            set_={
-                "country_name": stmt.excluded.country_name,
-                "tonnes_net": stmt.excluded.tonnes_net,
-                "source": stmt.excluded.source,
-                "data_date": stmt.excluded.data_date,
-            },
+            update_columns=["country_name", "tonnes_net", "source", "data_date"],
         )
         result = await session.execute(stmt)
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(session),
+            expected_rows=len(payload),
+        )
 
 
 async def run_import(include_manual: bool = True) -> int:

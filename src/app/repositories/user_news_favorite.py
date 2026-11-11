@@ -2,9 +2,10 @@
 
 设计要点：
 - 纯 CRUD 仓储，**不**做业务编排（业务在 ``services/user_news_favorite.py``）
-- **不**走 SQLite ``on_conflict_do_update`` 路径（与 ``news_feed`` 区别）：
+- **不**走 upsert 路径（与 ``news_feed`` 区别）：
   收藏是用户主动行为，重复 POST 应当显式 409 Conflict 而不是默默覆盖
   （V0.97.0 user_saved 信号 + V0.84 失败态不伪装正常 设计纪律）
+  ⇒ 用**方言无关**的 ``insert()``（V0.126.0：原先是 ``sqlite_insert`` ⇒ MySQL 语法错）
 - 列表查询 6 维：days / site_name / tag (LIKE) / importance (>=) / limit / offset
 - 排序：3 模式（最近收藏 / 重要度 / 发布时间）
 - 状态查询：total + by_importance + by_site + by_tag (top) + by_month
@@ -17,12 +18,12 @@ import json
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import desc, distinct, func, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy import desc, distinct, func, insert, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_news_favorite import UserNewsFavorite
+from app.repositories.sql_expr import year_month_expr
 
 
 class DuplicateFavoriteError(Exception):
@@ -39,7 +40,8 @@ class UserNewsFavoriteRepository:
 
     async def add(self, payload: dict[str, Any]) -> UserNewsFavorite:
         """新增一条收藏。重复（external_id+source）抛 DuplicateFavoriteError。"""
-        stmt = sqlite_insert(UserNewsFavorite).values(payload)
+        # ⚠ V0.126.0：用**方言无关**的 insert（原先是 sqlite_insert ⇒ MySQL 下语法错）
+        stmt = insert(UserNewsFavorite).values(payload)
         try:
             result = await self._session.execute(stmt)
             await self._session.commit()
@@ -262,12 +264,16 @@ class UserNewsFavoriteRepository:
             key=lambda x: -x["count"],
         )[:10]
         # by_month（按 archived_at YYYY-MM 分组，6 个月）
+        # ⚠ V0.126.0：MySQL 8.0 没有 strftime ⇒ 用 date_format。
+        #   同一份表达式必须**逐字**同时进 select() 与 group_by()
+        #   （SQLite 上 group_by("ym") 认的是列名不是别名 ⇒ 两个库结果会分叉）。
+        _ym_expr = year_month_expr(self._session, UserNewsFavorite.archived_at).label("ym")
         by_month_stmt = (
             select(
-                func.strftime("%Y-%m", UserNewsFavorite.archived_at).label("ym"),
+                _ym_expr,
                 func.count(UserNewsFavorite.id),
             )
-            .group_by("ym")
+            .group_by(_ym_expr)
             .order_by(desc("ym"))
             .limit(6)
         )

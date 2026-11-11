@@ -3,10 +3,14 @@
 from datetime import date
 
 from sqlalchemy import desc, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.gold_inventory import GoldInventoryDaily
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 
 
 class GoldInventoryRepository:
@@ -40,18 +44,20 @@ class GoldInventoryRepository:
             }
             for r in records
         ]
-        stmt = sqlite_insert(GoldInventoryDaily).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            GoldInventoryDaily.__table__,
+            payload,
             index_elements=["inv_date"],
-            set_={
-                "tonnes": stmt.excluded.tonnes,
-                "ounces": stmt.excluded.ounces,
-                "source": stmt.excluded.source,
-            },
+            update_columns=["tonnes", "ounces", "source"],
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(self._session),
+            expected_rows=len(payload),
+        )
 
     async def list_since(self, since: date) -> list[GoldInventoryDaily]:
         """``inv_date >= since`` 的记录，按日期**升序**（前端直接画走势）。"""

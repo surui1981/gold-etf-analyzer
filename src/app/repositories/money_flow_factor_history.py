@@ -14,10 +14,14 @@
 from datetime import date, timedelta
 
 from sqlalchemy import and_, delete, desc, func, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.daily_money_flow_factor import DailyMoneyFlowFactor
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 
 
 class MoneyFlowFactorHistoryRepository:
@@ -50,18 +54,20 @@ class MoneyFlowFactorHistoryRepository:
             }
             for (snapshot_date, factor_key, value, data_date, source) in rows
         ]
-        stmt = sqlite_insert(DailyMoneyFlowFactor).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            DailyMoneyFlowFactor.__table__,
+            payload,
             index_elements=["target", "snapshot_date", "factor_key"],
-            set_={
-                "value": stmt.excluded.value,
-                "data_date": stmt.excluded.data_date,
-                "source": stmt.excluded.source,
-            },
+            update_columns=["value", "data_date", "source"],
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(self._session),
+            expected_rows=len(payload),
+        )
 
     async def get_window(
         self,

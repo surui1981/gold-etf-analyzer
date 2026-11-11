@@ -2,8 +2,8 @@
 
 设计要点：
 - 纯 CRUD 仓储，**不**做业务编排（业务在 ``services/news_feed.py``）
-- 唯一入口 ``upsert_bulk`` 走 SQLite ``on_conflict_do_update``（参考
-  ``central_bank.py`` 同模式），二次抓取 dedup 不重不漏
+- 唯一入口 ``upsert_bulk`` 走方言无关的 upsert（``repositories/upsert.py``，
+  V0.126.0 起 SQLite / MySQL 共用），二次抓取 dedup 不重不漏
 - 列表查询 6 维：date / days / site_name / language / category / limit（任选组合）
   - V0.104 新增 ``date`` + ``tz_offset_minutes``：单日模式（与 ``days`` 互斥）
   - ``date`` 是浏览器本地日期（YYYY-MM-DD），由 service 层负责转 UTC 边界
@@ -26,11 +26,15 @@ from datetime import date as date_t
 from datetime import datetime, time, timedelta, timezone
 
 from sqlalchemy import and_, case, desc, distinct, func, literal, select, update
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.news_feed import NewsFeedDaily, NewsFeedItem
 from app.repositories.news_classifier import classify
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -75,26 +79,32 @@ class NewsFeedRepository:
         # 各自记得转一遍可靠（漏一处就是 OverflowError）。
         for r in payload:
             r["external_id"] = str(r["external_id"])
-        stmt = sqlite_insert(NewsFeedItem).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            NewsFeedItem.__table__,
+            payload,
             index_elements=["source", "external_id"],
-            set_={
-                "title": stmt.excluded.title,
-                "summary": stmt.excluded.summary,
-                "url": stmt.excluded.url,
-                "mobile_url": stmt.excluded.mobile_url,
-                "site_name": stmt.excluded.site_name,
-                "language": stmt.excluded.language,
-                "author_name": stmt.excluded.author_name,
-                "publish_date": stmt.excluded.publish_date,
-                "fetched_at": stmt.excluded.fetched_at,
-                "source": stmt.excluded.source,
-                "category": stmt.excluded.category,  # V0.105：upsert 时更新类目
-            },
+            update_columns=[
+                "title",
+                "summary",
+                "url",
+                "mobile_url",
+                "site_name",
+                "language",
+                "author_name",
+                "publish_date",
+                "fetched_at",
+                "source",
+                "category",  # V0.105：upsert 时更新类目
+            ],
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(self._session),
+            expected_rows=len(payload),
+        )
 
     # ────────────── 读 ──────────────
 
@@ -363,10 +373,12 @@ class NewsFeedRepository:
             "last_publish_at": row.last_pub,
             "last_refresh_at": now_utc,
         }
-        stmt = sqlite_insert(NewsFeedDaily).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            NewsFeedDaily.__table__,
+            payload,
             index_elements=["date"],
-            set_={k: stmt.excluded[k] for k in payload if k != "date"},
+            update_columns=[k for k in payload if k != "date"],
         )
         await self._session.execute(stmt)
         await self._session.commit()

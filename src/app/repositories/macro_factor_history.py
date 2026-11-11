@@ -20,10 +20,14 @@ V0.124.0 的深回填一次要写 **2 万行**（12 万个绑定变量）⇒ 单
 from datetime import date, timedelta
 
 from sqlalchemy import and_, desc, func, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.daily_macro_factor import DailyMacroFactor
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 
 #: 单条 upsert 语句最多写入多少行。
 #: 6 个绑定变量/行 ⇒ 1000 行 = 6000 变量，离 SQLite 的 32766 上限有 5 倍余量，
@@ -61,18 +65,20 @@ class MacroFactorHistoryRepository:
             }
             for (factor_key, value, data_date, source) in factors
         ]
-        stmt = sqlite_insert(DailyMacroFactor).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            DailyMacroFactor.__table__,
+            payload,
             index_elements=["target", "snapshot_date", "factor_key"],
-            set_={
-                "value": stmt.excluded.value,
-                "data_date": stmt.excluded.data_date,
-                "source": stmt.excluded.source,
-            },
+            update_columns=["value", "data_date", "source"],
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(self._session),
+            expected_rows=len(payload),
+        )
 
     async def upsert_many(
         self,
@@ -106,18 +112,20 @@ class MacroFactorHistoryRepository:
                 }
                 for (snapshot_date, factor_key, value, data_date, source) in chunk
             ]
-            stmt = sqlite_insert(DailyMacroFactor).values(payload)
-            stmt = stmt.on_conflict_do_update(
+            stmt = build_upsert(
+                self._session,
+                DailyMacroFactor.__table__,
+                payload,
                 index_elements=["target", "snapshot_date", "factor_key"],
-                set_={
-                    "value": stmt.excluded.value,
-                    "data_date": stmt.excluded.data_date,
-                    "source": stmt.excluded.source,
-                },
+                update_columns=["value", "data_date", "source"],
             )
             result = await self._session.execute(stmt)
             await self._session.commit()
-            written += result.rowcount or 0
+            written += affected_row_count(
+                result,
+                dialect=session_dialect_name(self._session),
+                expected_rows=len(payload),
+            )
         return written
 
     async def get_window(

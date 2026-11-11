@@ -3,11 +3,15 @@
 from datetime import datetime
 
 from sqlalchemy import desc, select
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.central_bank import CentralBankPurchase
 from app.repositories.central_bank_data import AGGREGATE_ISO
+from app.repositories.upsert import (
+    affected_row_count,
+    build_upsert,
+    session_dialect_name,
+)
 
 
 class CentralBankPurchaseRepository:
@@ -29,15 +33,12 @@ class CentralBankPurchaseRepository:
             "source": record.source,
             "data_date": record.data_date,
         }
-        stmt = sqlite_insert(CentralBankPurchase).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            CentralBankPurchase.__table__,
+            payload,
             index_elements=["country_iso", "quarter"],
-            set_={
-                "country_name": stmt.excluded.country_name,
-                "tonnes_net": stmt.excluded.tonnes_net,
-                "source": stmt.excluded.source,
-                "data_date": stmt.excluded.data_date,
-            },
+            update_columns=["country_name", "tonnes_net", "source", "data_date"],
         )
         await self._session.execute(stmt)
         await self._session.commit()
@@ -57,19 +58,20 @@ class CentralBankPurchaseRepository:
             }
             for r in records
         ]
-        stmt = sqlite_insert(CentralBankPurchase).values(payload)
-        stmt = stmt.on_conflict_do_update(
+        stmt = build_upsert(
+            self._session,
+            CentralBankPurchase.__table__,
+            payload,
             index_elements=["country_iso", "quarter"],
-            set_={
-                "country_name": stmt.excluded.country_name,
-                "tonnes_net": stmt.excluded.tonnes_net,
-                "source": stmt.excluded.source,
-                "data_date": stmt.excluded.data_date,
-            },
+            update_columns=["country_name", "tonnes_net", "source", "data_date"],
         )
         result = await self._session.execute(stmt)
         await self._session.commit()
-        return result.rowcount or 0
+        return affected_row_count(
+            result,
+            dialect=session_dialect_name(self._session),
+            expected_rows=len(payload),
+        )
 
     async def aggregate_quarter_series(self) -> list[tuple[str, float]]:
         """WGC **全球合计行**的季度净购金序列 → ``[(季度标签, 吨), ...]``（升序）。
