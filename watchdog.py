@@ -8,6 +8,13 @@
     python watchdog.py --once             # 只检查一次（用于调试）
 
 开机自启：见 install_startup.ps1（注册为计划任务 GoldPriceAssistantWatchdog）
+
+⚠ V0.126.0 起**手动跑**本脚本要自己带上 ``DATABASE_URL``：
+    方言判定取自 ``get_settings().database_url``，而 ``get_settings()`` 默认读
+    **项目根的 ``.env``（dev）** —— 生产用的 ``.env.prod`` 只在 systemd 的
+    ``EnvironmentFile`` 里生效。⇒ 不注入的话，本脚本会以为生产库还是 SQLite，
+    备份分支走错（拷一个不存在的 ``.db`` ⇒ **什么也不产出，且不报错**）。
+    systemd 部署时环境变量已由 unit 注入，无需额外处理。
 """
 
 from __future__ import annotations
