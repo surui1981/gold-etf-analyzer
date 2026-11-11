@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.125.0** ｜ **最近更新**：2026-11-10 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.125.0`）**
+> **基线：V0.126.0** ｜ **最近更新**：2026-11-11 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.126.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.125.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.125.0`**
+**当前版本 = 0.126.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.126.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.125.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.125.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.125.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.125.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.126.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.126.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.126.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.126.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.125.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.126.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-10 重启加载 V0.125.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-11 重启加载 V0.126.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **86** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **61** 段 / 60 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **11** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **122** 个（**本地 122 / 远端 122** ✅ 一致） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **87** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **62** 段 / 61 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **12** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **123** 个（**本地 123 / 远端 123** ✅ 一致） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -89,7 +89,8 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > V0.122.0 同理 ⇒ 82→83、57 段→58 段、118→119，**另加 1 份里程碑文档**（M7）⇒ 7→8 份；
 > V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份；
 > V0.124.0 同理 ⇒ 84→85、59 段→60 段、120→121，**另加 1 份里程碑文档**（M9）⇒ 9→10 份；
-> V0.125.0 同理 ⇒ 85→86、60 段→61 段、121→122，**另加 1 份里程碑文档**（M10）⇒ 10→11 份。）
+> V0.125.0 同理 ⇒ 85→86、60 段→61 段、121→122，**另加 1 份里程碑文档**（M10）⇒ 10→11 份；
+> V0.126.0 同理 ⇒ 86→87、61 段→62 段、122→123，**另加 1 份里程碑文档**（M11）⇒ 11→12 份。）
 >
 > **60 段 ≠ 59 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
@@ -278,7 +279,35 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.125.0（2026-11-10 发版）
+### 本轮：V0.126.0（2026-11-11 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **生产库从 SQLite 正式切到 MySQL 8.0.46** —— 用户诉求：「当前主机已经安装了 MYSQL，我们准备数据迁移到 MYSQL 数据库」。本版交付：结构 + 历史数据**全迁**（**25 张表 / 88 284 行**，逐表「行数 + SHA-256 内容校验和」一致），停机窗口实测 **30 秒**（预算 5–30 分钟）。同时把**方言差异收进一层抽象**（`repositories/upsert.py` + `repositories/sql_expr.py`），并让**备份链路双方言统一** |
+| 用户拍板 | ✅ 三件事：① **目标形态 = 生产库正式切到 MySQL**（不是「留个影子库」）；② **历史数据 = 结构 + 全迁**；③ **停机窗口 = 可停 5–30 分钟**（实测只用掉 **30 秒**） |
+| 目标 schema 照谁建 | ✅ 照**生产 SQLite 的 `sqlite_master`**，**不是** ORM —— 实测 ORM 与生产库有 **42 处差异**（ORM 里 `news_source` 是 `String(32)`、生产库里还是 `TEXT`）⇒ 用 ORM `create_all` 生成目标结构 = 顺手改掉 42 处没人审过的东西。只有 **3 处**例外（`COLUMN_TYPE_OVERRIDES`：`news_source`/`site_name` 改 VARCHAR 因为 MySQL 的 UNIQUE/INDEX 不能建在 TEXT 上；`country_iso` 放宽到 `VARCHAR(16)` 因为库里装着 8 字符的伪 ISO `WGC_AGGR`） |
+| MySQL 上不跑 Alembic | ✅ 那 32 个迁移是「从零建库」脚本，在已有表的库上会中途失败、留下**半迁移 schema** 且版本号已推进 ⇒ 两道防线：`migrations/env.py` 对 MySQL **硬性拒绝** + `main.py::_migrate_db` 的 MySQL 分支只做**只读校验**（表齐不齐、`alembic_version` 对不对），对不上就**启动失败并说清楚**。MySQL 的 `alembic_version` 由迁移脚本**从 SQLite 一起搬过去**（`t2u3v4w5x6y`） |
+| 9 个方言坑 | ✅ ① **会话时区**（MySQL 的 `CURRENT_TIMESTAMP` 用会话时区 ⇒ 连接层钉 `SET time_zone='+00:00'`；⚠ **不能**改 server 级 `default-time-zone` —— 这台机器上还跑着别的库）；② **`rowcount` 语义**（MySQL 报「改动行数」⇒ 开 `CLIENT_FOUND_ROWS`；⚠ SQLAlchemy 的 asyncmy 实现了 `_found_rows_client_flag()` 但**基类从不调用它** ⇒ 必须自己设）；③ **行别名 `new.<col>` 只暴露 INSERT 列清单里出现过的列**（⇒ 少一列就是 error 1054）；④ **`VALUES(col)` vs `AS new`**（SQLAlchemy 按 `server_version_info` 自己换形态，**离线 `dialect()` 不设这个开关** ⇒ 离线测试必须手工 `_initialize_mysql()`）；⑤ **`strftime` 在 MySQL 8.0 上不存在**（⇒ `date_format`；且同一份表达式必须逐字同时进 `select()` 与 `group_by()`）；⑥ **`sqlite_insert` 在 MySQL 上是硬语法错**；⑦ **UNIQUE/INDEX 不能建在 TEXT 上**（1170）；⑧ **VARCHAR 长度真的会被校验**（1406）；⑨ **TEXT 列不能有字面量默认值**（1101 ⇒ 改 `DEFAULT ('')`） |
+| 🐛 顺带修掉的真缺陷 | ① **模型注册漏了 3 张表** —— `models/__init__.py` 缺 `news_feed` / `daily_money_flow_factor` / `user_news_favorite` ⇒ `Base.metadata` 只有 20 张表 ⇒ 启动期 schema 校验会**误报「MySQL 缺表」**；② **整条新闻流在 MySQL 上写不进去** —— payload 不带 `fetched_at`（靠列默认值补）而 `update_columns` 里有它 ⇒ MySQL 报 `Unknown column 'new.fetched_at'`（**只在跑那行 SQL 时才炸**，启动不炸）；③ **`cb_gold` 因子写不进去** —— `country_iso VARCHAR(3)` 装 8 字符的 `WGC_AGGR` ⇒ 严格模式报 1406；④ **两条备份工具各写各的目录**（`data/backup/` vs `data/backups/`）⇒ 同一个库两份互不相干的备份 ⇒ 目录名统一为 `backups`；⑤ **COMEX 库存卡的「1 年」变化率恒为「—」**（**与 MySQL 无关**，是被新数据触发的时间炸弹）—— 回看窗口卡在 `latest - 365d`，而源是**交易日频**（周末缺行）⇒ 恰好等于那天的观测常常不存在 ⇒ 基线被挡在窗口之外 ⇒ 1y 恒为 `None`。2026-11-09 新观测写入后窗口前移 3 天 ⇒ 窗口内最早一条（2025-11-10）比基线目标（2025-11-09）晚一天 ⇒ 1y 显示「—」。⚠ **反向验证**：同一段计算在**迁移前的 SQLite 备份数据**上跑出**同样的 None** ⇒ 与 MySQL 无关。修法：回看窗口多取 **10 天余量** ⇒ 实测 1y 变成 `base=2025-11-07 / -39.05%`。⚠ 老单测用**每天一行**的序列（没有缺口）⇒ 这条边界永远测不到 ⇒ 补了 1 条**带缺口**的回归测试（撤销修复 ⇒ **实测变红**） |
+| 备份链路 | ✅ 统一成一条口径：`scripts/daily_backup.sh`（systemd timer，每日 03:00）+ `watchdog.py` 都读 `.env.prod` 的 `DATABASE_URL` 前缀自动分流 —— SQLite ⇒ `.backup()` + `integrity_check`；MySQL ⇒ `mysqldump --single-transaction`（**不停写**的一致性快照）。⚠ 凭据走 **0600 临时 defaults 文件** ⇒ 密码不进 argv、不进环境变量、不进日志 |
+| 三库分工 | ✅ **生产 = MySQL**（`.env.prod`，迁移工具维护，**零 Alembic**）/ **开发测试 = SQLite**（`.env`，Alembic 32 个迁移照旧）/ **一次性凭据 = `.env.mysql`**（0600，已在 `.gitignore` 里） |
+| 时区实测 | ✅ 切换后新写入的行 `fetched_at = 2026-11-11 07:12:54` = **UTC**（日志本地时间 15:12:54 = UTC+8）⇒ **没偏 8 小时**；`news_feed_items` 3 584 → **3 600**（+16 新行，与调度器 `upserted=16` 一致）⇒ **upsert 在 MySQL 上真的成功** |
+| `__version__` | ✅ 已 bump 到 `0.126.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 Alembic 迁移**（MySQL 分支压根不跑）；SQLite 侧的结构照旧由 32 个迁移管 |
+| 静态资源 | ✅ **未改 `static/*.html|js|css`**（只 bump 了 `sw.js` 的 `VERSION` 常量）⇒ 无 SW 缓存击穿风险 |
+| 测试 | ✅ `tests/test_repositories/` **334 passed**（其中 `test_upsert_dialect.py` **5 passed** —— **纯离线**，只断言编译出来的 SQL、不连库 ⇒ CI（只有 SQLite）也能跑）；`tests/test_services/test_gold_inventory.py` **15 passed**（含 1 条新回归测试）⇒ 合计 **349 passed** |
+| 门禁 | ✅ `ruff check src tests scripts` **0** / `ruff format --check src tests` **0** / `check_pwa_assets`（SW `v0.126.0` == 应用版本，54 条 SHELL_ASSETS）/ `check_deps`（`src/` 14 个三方 import 全在 dependencies）/ `check_i18n_keys`（**0 missing / 582 in-scope**）/ `check_static_js`（22 页 + 39 脚本）/ `check_freshness_consistency` / `check_links`（**31** 份文档 / **446** 条内部链接 + 4 个锚点）/ `check_routes`（**20 条路由**全部返回期望 status）/ `check_version_sync`（4 处版本号 + CHANGELOG 降序 + 里程碑登记 + 基线） |
+| 浏览器门禁 | ✅ DB 换了后端 ⇒ 重跑 DB 相关页面：`_verify_nav_8` **27/0** · `_verify_home_report` **49/0** · `_verify_home_verdict` **55/0** · `_verify_home_metals` **39/0**（连跑 4 次）· `_verify_scoring_robust` **8/0** · `_verify_report_archive` **43/0** · `_verify_central_bank_aggregate` **18/0** · `_verify_top20` / `_verify_date_nav` 无失败项 |
+| 反向验证 | ✅ 撤销 `_mysql_update_expressions`（改回 `{col: stmt.inserted[col]}`）⇒ 编译结果里重新出现 `new.fetched_at` ⇒ **测试变红**（实测过 ⇒ 再改回）；另加一条 `test_mysql_dialect_uses_row_alias_form` 专门钉住「生产用的行别名形态」，防止其余断言因 SQLAlchemy 换形而**假绿** |
+| 回滚 | ✅ 备份文件 `data/backups/gold_etf-cutover-20261111-151153.db` **原样保留** + 回滚脚本 `/tmp/cutover_rollback.sh`（停服务 → `.env.prod` 切回 SQLite → 用备份覆盖 `data/gold_etf.db` → 起服务）。⚠ 回滚**不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置） |
+| 文档 | ✅ 新增**第 12 份里程碑文档 M11 · 生产库切到 MySQL（V0.126）**（`docs/releases/milestones/m11-mysql-production-migration-v0.126.md`，含 9 个方言坑的逐条剖析）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) 记录本次迁移 |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.126.0**`；启动日志 `MySQL schema 校验通过：25 张表，alembic_version=t2u3v4w5x6y（迁移工具已写入）` |
+
+#### 推送状态：⏳ 待推送
+
+（本节在推送完成后回填「远端回读」实测值。）
+
+### 上一轮：V0.125.0（2026-11-10 发版）
 
 | 项 | 状态 |
 |---|---|

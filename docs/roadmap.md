@@ -1,6 +1,6 @@
 # 开发路线图（唯一活跃路线）
 
-> **目标读者**：开发者 / 决策者 ｜ **状态**：活跃 ｜ **最近更新**：2026-11-08 ｜ **基线**：V0.122.0
+> **目标读者**：开发者 / 决策者 ｜ **状态**：活跃 ｜ **最近更新**：2026-11-11 ｜ **基线**：V0.126.0
 >
 > **本文件是 `docs/` 里唯一的「下一步」真源。**
 > 它合并了原 6 份互相重叠的规划文档（`improvement-path.md` / `ux-roadmap.md` / `roadmap.md` /
@@ -21,6 +21,10 @@
 > 有什么数值改进措施 / 考虑一个核心标的 / **资金的共识才是投资的价值**」）。
 > 第一轮只修**已确认**的符号缺陷（`cot_gold_net`），并把**测量方法本身**沉淀下来
 > （见 §三·C4）。逐版记录见 [releases/milestones/m7-factor-sign-calibration-v0.122.md](releases/milestones/m7-factor-sign-calibration-v0.122.md)。
+>
+> **V0.126.0 起**：**生产库从 SQLite 正式切到 MySQL 8.0.46**（用户拍板「生产库正式切到 MySQL」+「结构与历史数据全迁」+「可停 5–30 分钟」，实测停机 **30 秒**）⇒
+> **新增一条工程纪律：方言纪律**（见 §五·5.2）—— 新写的数据访问代码一律走 `repositories/upsert.py` / `repositories/sql_expr.py` 两个抽象层，**不直接写方言专属 SQL**。
+> 逐版记录见 [releases/milestones/m11-mysql-production-migration-v0.126.md](releases/milestones/m11-mysql-production-migration-v0.126.md)。
 
 ---
 
@@ -678,6 +682,25 @@ null ⇒ 条带走进**降级态** ⇒ CTA 消失、chip 变「—」⇒ 断言�
 
 ---
 
+### 5.2 方言纪律（**V0.126.0 起**）：SQLite 上能跑 ≠ 语义相同
+
+生产库切到 MySQL 后，**同一条 SQL 在两个库上的行为差异**成了新的「静默失败」来源。
+SQLite 的宽松（**不校验 VARCHAR 长度** / **不执行外键** / `excluded.<col>` 含被省略列的默认值 /
+`CURRENT_TIMESTAMP` 是 **UTC**）在 MySQL 上**每一条**都会变成一次静默失败或只在生产炸。
+
+⇒ **三条纪律**：
+
+| # | 纪律 | 落地位置 |
+|---|---|---|
+| 1 | **不直接写方言专属 SQL** —— upsert 走 `repositories/upsert.py`（SQLite `excluded` 形态 / MySQL 行别名 `AS new` 形态，各写一份），日期分组走 `repositories/sql_expr.py`（`strftime` ↔ `date_format`） | `src/app/repositories/` |
+| 2 | **MySQL 上不跑 Alembic** —— `migrations/env.py` 对 MySQL 直接 `RuntimeError`；生产结构由迁移工具维护，`main.py` 只做**只读** schema 校验 | `migrations/env.py` / `src/app/main.py` |
+| 3 | **涉及时间/计数/默认值的改动，必须有判据** —— 时区（连接层钉 UTC + 断言新行时间戳是 UTC）、`rowcount`（`CLIENT_FOUND_ROWS`）、TEXT 默认值（`DEFAULT ('')` 表达式式） | 见 M11 里程碑 §四的 9 个坑 |
+
+⚠ **离线测试只断言编译出来的 SQL，不连库** ⇒ CI（只有 SQLite）也能跑；
+但**必须手工调 `_initialize_mysql()`** 复刻真连库时才会设的开关，否则测的是**另一种形态**（断言会假绿）。
+
+---
+
 ## 六、已完成 / 已失效（不再列为待办）
 
 | 曾经的条目 | 现在的状态 |
@@ -697,6 +720,7 @@ null ⇒ 条带走进**降级态** ⇒ CTA 消失、chip 变「—」⇒ 断言�
 | **B1 价格日历不追最新** | ✅ **V0.121.2 已修**（增量补齐 + 每次追平；实测 `ny` 最新 2026-10-14 → **2026-11-06**，回测覆盖 15 → 22 天） |
 | 5 处「显示假的」（V0.117.0 计划） | ✅ **全部落地**（V0.121.0 门禁那一半 + V0.121.1 数据那一半 + V0.121.2 诚实性那一半） |
 | **C6 宏观面从未被真正测过**（历史深度只有 201 天 / 4 个低频因子 ≤33 行） | ✅ **V0.124.0 已实测**：历史深度补到 **20 086 行**（11 因子 × 5 年 × 日历日）⇒ 三问 **16 个读数全部未过线**（通过 0 项）⇒ 结论：宏观面 35% 是「**描述当下**」的面 ⇒ **权重不动、因子方向不动**，见 M9 里程碑 |
+| **生产库仍是 SQLite**（并发写互相阻塞 / 备份要停写才有快照 / 两条备份链路各写各的目录） | ✅ **V0.126.0 已切到 MySQL 8.0.46**：结构 + 历史数据全迁（**25 张表 / 88 284 行**，逐表 SHA-256 一致），停机 **30 秒**；备份链路双方言统一（`mysqldump --single-transaction`）；MySQL 上**禁跑 Alembic** ⇒ 见 M11 里程碑 |
 | 功能对账（`feature-alignment.md` 的用途） | ✅ **已由门禁自动化**：`check_docs_claims.py` 每次都核对文档里的表名 / key / 页面 / 端点是否真实存在 |
 
 ---

@@ -4,6 +4,97 @@
 >
 > 详细 release notes 见 [docs/releases/](docs/releases/) 系列
 
+## [V0.126.0] · 2026-11-11
+
+`生产库从 SQLite 正式切到 MySQL 8.0.46 —— 结构 + 历史数据全迁，停机 30 秒` — docs · 详见 [M11 里程碑文档](docs/releases/milestones/m11-mysql-production-migration-v0.126.md)
+
+> 用户诉求原文：「当前主机已经安装了 MYSQL 我们准备数据迁移到 MYSQL 数据库」
+> 用户拍板的三件事：① **生产库正式切到 MySQL**（不是留个影子库）；
+> ② **结构 + 历史数据全迁**；③ 停机窗口**可停 5–30 分钟**（实测只用了 **30 秒**）。
+
+- 🗄️ **迁移本身**：25 张表 / **88 284 行**全量搬完，**逐表行数 + SHA-256 内容校验和**一致
+  - ⚠ **目标 schema 照「生产 SQLite 的 `sqlite_master`」，不是照 ORM** ——
+    ORM 与生产库有 **42 处差异**（如 `user_news_favorites.news_source` 在 ORM 里是
+    `String(32)`、库里还是更早的 `TEXT`）⇒ 用 `create_all` 生成 MySQL 结构等于
+    **顺手改掉 42 处**没人审过的差异
+  - **列类型按「精度等价」翻译**：`INTEGER→BIGINT`（int32 会溢出）/
+    `FLOAT→DOUBLE`（float32 会静默截断）/ `TEXT→LONGTEXT`（MySQL 的 TEXT 只有 64KB）/
+    `DATETIME→DATETIME(6)`（秒级会四舍五入掉微秒）
+  - **主键必须 `AUTO_INCREMENT`** —— SQLite 的单列 INTEGER 主键是 rowid 别名（自己发 id），
+    MySQL 的 `BIGINT PRIMARY KEY` **不发** ⇒ ORM 省略 id 插入会直接撞主键
+  - **不建外键约束** —— 生产 SQLite 的 `PRAGMA foreign_keys` 默认关 ⇒ 外键
+    **从来没被真正执行过**；在 MySQL 里真建 = **顺手改语义**（删会话会真的级联删消息）
+  - **MySQL 上不跑 Alembic** —— 那 32 个迁移是「从零建库」脚本，已有表的库上会中途失败
+    ⇒ 留下**半迁移 schema** 且版本号已推进 ⇒ 再也跑不回来。
+    两道防线：`main.py` 的 MySQL 分支只做**只读校验**（对不上就**启动失败并说清楚**）+
+    `migrations/env.py` **硬性拒绝**。MySQL 的 `alembic_version` 由迁移脚本从 SQLite 搬过去
+- 🔧 **方言无关的 upsert 抽象层**（`src/app/repositories/upsert.py`）
+  - SQLite 与 MySQL 的 upsert 语法**不兼容、也没有共同子集** ⇒ 以前 6 个仓储各自
+    `from sqlalchemy.dialects.sqlite import insert` 硬编码 ⇒ MySQL 下**直接语法报错**
+    （不是静默降级）。⇒ 差异收在一处，调用方只声明「按哪几列去重、冲突时更新哪几列」
+  - **三条必须守住的不变量**：① `index_elements` 必须与表上 UNIQUE 逐字一致
+    （MySQL 分支主动校验，没有就**直接抛错** —— 宁可启动失败也不要静默写重复行）
+    ② rowcount 语义不同（MySQL「更新且值变了」= 2）⇒ `affected_row_count()` 归一化
+    ③ **「引用本次要插入的那一行」覆盖的列不同**（见下）
+- 🐛 **顺带修掉的真缺陷**（都在 MySQL 上**静默失败**或**只在生产炸**）
+  - **`new.<col>` 只暴露 INSERT 列清单里出现过的列** —— SQLite 的 `excluded.<col>`
+    **含**被省略列的默认值，MySQL 的行别名**不含** ⇒ 少一列就是
+    `error 1054 Unknown column 'new.fetched_at' in 'field list'`
+    ⇒ **整个新闻流 upsert 失败**（且只在跑那行 SQL 时才炸，不会启动就炸）。
+    修法：对「payload 里没有、但要更新」的列改用该列的**隐式默认值**
+  - **会话时区** —— SQLite 的 `CURRENT_TIMESTAMP` 是 **UTC**，MySQL 的是**会话时区**
+    （本机 `time_zone=SYSTEM` ⇒ **CST/UTC+8**）⇒ 不置的话所有 `created_at` 整体
+    **偏移 8 小时**而且**不报任何错**。⇒ 连接层 `init_command="SET time_zone='+00:00'"`。
+    ⚠ **不能改 server 级 `default-time-zone`** —— 这台机器上还跑着别的库（`ruirui_app`）
+  - **`CLIENT_FOUND_ROWS`** —— SQLAlchemy 的 asyncmy/aiomysql 方言**实现了**
+    `_found_rows_client_flag()` 但基类**从不调用它**（只有 mysqldb 调用）⇒ 必须自己设
+  - **TEXT 列不能有字面量默认值**（MySQL error 1101）⇒ `server_default=""` 全部改成
+    表达式式 `DEFAULT ('')`（8.0.13+；SQLite 也接受带括号的常量表达式 ⇒ 两个库通吃）
+  - **`country_iso VARCHAR(3)` 长度不够**（MySQL error 1406）—— 库里存着 WGC 全球合计行的
+    伪 ISO `WGC_AGGR`（**8 字符**），SQLite **不校验** VARCHAR 长度所以一路存得好好的
+    ⇒ 放宽到 `VARCHAR(16)`（否则**整个 `cb_gold` 因子写不进去**）
+  - **UNIQUE / INDEX 不能建在 TEXT 上**（error 1170）⇒ 两个 `TEXT` 列改 `VARCHAR`
+  - **`strftime` 在 MySQL 8.0 上不存在** ⇒ `date_format`；
+    ⚠ **同一份表达式必须逐字同时进 `select()` 与 `group_by()`** —— SQLite 上
+    `group_by("ym")` 认的是**列名**不是别名 ⇒ 两个库会给出**不同的分组结果**
+  - **补注册 3 个漏掉的模型**（`news_feed` / `daily_money_flow_factor` /
+    `user_news_favorite`）⇒ 此前 `Base.metadata` 只有 20 张表 ⇒ 启动期 schema 校验会误判
+- 🐛 **顺带修掉的另一个真缺陷（与 MySQL 无关，是被新数据触发的）**
+  —— **COMEX 库存卡的「1 年」变化率恒为「—」**
+  - 根因：查询窗口被卡在 `latest - 365d` 上，而源是**交易日频**（周末/假日缺行）
+    ⇒ 恰好等于 `latest - 365d` 的那天**常常没有观测** ⇒ 基线被挡在窗口**之外**
+    ⇒ `_change` 找不到 `date <= target` 的点 ⇒ 1y 恒为 `None`
+  - 触发：2026-11-09 那天调度器写入了新的库存观测 ⇒ 回看窗口整体前移 3 天
+    ⇒ 窗口内最早的一条（2025-11-10）比基线目标（2025-11-09）**晚一天** ⇒ 1y 变「—」
+  - ⚠ **反向验证**：同一段计算在**迁移前的 SQLite 备份数据**上跑出**同样的 None**
+    ⇒ 与 MySQL 无关，纯粹是「最新观测日」与「源有没有那一行」决定的
+  - 修法：回看窗口多取 **10 天余量**（覆盖「长周末 + 美国假日」的连续缺行），
+    让「窗口内最后一个 ≤ target 的观测」能被找到
+  - 实测：1y 从「—」变成 `base=2025-11-07 / -39.05%`
+  - ⚠ 老单测用**每天一行**的序列（没有缺口）⇒ 这条边界永远测不到 ⇒ 补了 1 条
+    带缺口的回归测试（撤销修复 ⇒ **实测变红**）
+- 💾 **备份链路统一**：原来的实现 100% 是 SQLite 专用（`.backup()` + `PRAGMA`），
+  搬到 MySQL 上会**直接报错退出** ⇒ 备份链路**静默失效**（最坏的一种失效：定时器照常
+  「成功」，但其实一份备份都没生成）。⇒ 读 `.env.prod` 的 `DATABASE_URL` 前缀自动分流；
+  SQLite 分支**逐字保持旧行为**，MySQL 分支走 `mysqldump --single-transaction`
+  （InnoDB 一致性快照，**不停写**）。⚠ 两条备份工具此前**各写各的目录**
+  （`backup/` vs `backups/`）⇒ 同一个库有两份互不相干的备份 ⇒ 目录名已统一为 `backups`
+- 🧪 **5 条离线方言回归测试**（`tests/test_repositories/test_upsert_dialect.py`）
+  —— **只看编译出来的 SQL**，不连 MySQL ⇒ 纯离线、秒级 ⇒ CI（只有 SQLite）也能跑。
+  ⚠ **反向验证已做**：把 `_mysql_update_expressions` 改回直接用 `stmt.inserted[col]`
+  ⇒ 「payload 缺列」那条**变红**（编译结果里重新出现 `new.fetched_at`）
+- 🌐 **浏览器门禁复测**（DB 换了后端，值得重跑）：`_verify_nav_8` **27/0**、
+  `_verify_home_report` **49/0**、`_verify_home_verdict` **55/0**、
+  `_verify_home_metals` **39/0**（连跑 4 次）、`_verify_scoring_robust` **8/0**、
+  `_verify_report_archive` **43/0**、`_verify_central_bank_aggregate` **18/0**、
+  `_verify_top20` / `_verify_date_nav` 无失败项
+- 🧹 **MySQL 服务器清理**：临时用的 `gold_etf_schemacheck` / `ddlprobe` 两个 scratch 库
+  已删、授权已收回（应用账号只剩 `gold_etf` 一个库的权限）
+
+**回滚**：SQLite 库文件原样保留（`data/backups/gold_etf-cutover-20261111-151153.db`）
++ 一条 `cutover_rollback.sh` ⇒ 停服务 → `.env.prod` 切回 SQLite → 起服务，
+**不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置）。
+
 ## [V0.125.0] · 2026-11-10
 
 `首页加一条「今日市场研究报告」入口 —— 只显示最新上传的那一份，点标题直达报告本体` — docs · 详见 [M10 里程碑文档](docs/releases/milestones/m10-home-latest-report-v0.125.md)

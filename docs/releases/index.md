@@ -8,7 +8,7 @@
 >
 > **V0.120.5 起**：60 份逐版 release notes 已合并为**里程碑文档**（见 [milestones/](milestones/)）——
 > 本表的「详情」列现在指向**该能力所属里程碑**；逐版原始全文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
-> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**；**V0.122.0 起**新增第 8 份 **M7 · 因子符号校准（V0.122）**；**V0.123.0 起**新增第 9 份 **M8 · 资金流面证据复算（V0.123）**；**V0.124.0 起**新增第 10 份 **M9 · 宏观面证据复算（V0.124）**；**V0.125.0 起**新增第 11 份 **M10 · 首页研报入口（V0.125）**。
+> **V0.121.0 起**新增第 7 份里程碑文档 **M6 · 可信度修复（V0.121）**；**V0.122.0 起**新增第 8 份 **M7 · 因子符号校准（V0.122）**；**V0.123.0 起**新增第 9 份 **M8 · 资金流面证据复算（V0.123）**；**V0.124.0 起**新增第 10 份 **M9 · 宏观面证据复算（V0.124）**；**V0.125.0 起**新增第 11 份 **M10 · 首页研报入口（V0.125）**；**V0.126.0 起**新增第 12 份 **M11 · 生产库切到 MySQL（V0.126）**。
 
 ## §1 能力全景（按能力所属类别组织）
 
@@ -152,6 +152,7 @@
 | 通知中心（`/static/settings.html` 5 区） | V0.72.0 | [v0.86.0.md](milestones/m1-foundation-and-tooling-v0.79-v0.92.md) |
 | 公开部署（Docker 多阶段 + Nginx + Let's Encrypt） | V0.72.0 | [v0.86.0.md](milestones/m1-foundation-and-tooling-v0.79-v0.92.md) |
 | Chart.js 本地 vendor（`static/vendor/chart.umd.min.js`） | V0.74.3 | [v0.86.0.md](milestones/m1-foundation-and-tooling-v0.79-v0.92.md) |
+| **生产库切到 MySQL 8.0.46**（结构 + 历史数据全迁 25 张表 / 88 284 行，逐表 SHA-256 一致；停机 30 秒；方言无关 upsert 抽象层；双方言备份；MySQL 上**禁跑 Alembic**） | **V0.126.0** | [m11-mysql-production-migration-v0.126.md](milestones/m11-mysql-production-migration-v0.126.md) |
 
 ### 1.7 认证 / 多用户
 
@@ -224,7 +225,7 @@
 - **能力全景**（本表）回答"项目有什么、什么时候加的"
 - **[CHANGELOG.md](../../CHANGELOG.md)** 回答"发版节点"（发行时刻 + 类型分类）
 - **[docs/version-status.md](../version-status.md)** 回答"**现在到底是哪个版本**"（4 处版本号一致性 / 各来源覆盖矩阵 / 已知缺口 / 怎么自己查）
-- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（10 份里程碑文档，覆盖 V0.11 → 当前）
+- **[docs/releases/milestones/](milestones/)** 回答"历史里程碑 + 演进脉络"（12 份里程碑文档，覆盖 V0.11 → 当前）
 - **[docs/roadmap.md](../roadmap.md)** 回答"**现在要做什么**"（唯一活跃路线，逐条带实测判据）
 - **[docs/releases/milestones/](milestones/)** 里程碑文档回答"该阶段的实现细节（根因 / 修法 / 验证 / 教训）"
 
