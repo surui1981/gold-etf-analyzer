@@ -95,6 +95,18 @@
     「等到了再做」⇒ 产出完整备份
 - ✅ **备份的「可恢复性」验证**（不只是「文件在不在」）：把 dump 灌进临时库
   `gold_etf_restore_check` ⇒ **25/25 张表行数逐张相等、差异 0** ⇒ 备份能还原
+  - ⚠ **修完那两个缺陷后，链路由生产自己跑通了一次**：2026-11-12 开机补跑
+    （timer 04:23:55 触发 ⇒ unit 等到 mysqld 就绪 ⇒ **04:46:02 起跑** ⇒ `status=0`）
+    ⇒ 产出 **1 894 945 bytes / 25 张表**的真备份，20 字节的假文件不再出现
+    ⇒ 复验脚本已**入版本库**：`scripts/verify_backup_restore.sh`
+    （`sudo -S bash scripts/verify_backup_restore.sh`；建临时库要走管理员账号
+    `/etc/mysql/debian.cnf` ⇒ 应用账号只有自己那个库的权限，会 1044）
+  - ⚠⚠ **验证侧又踩了一次时区坑**：`created_at`/`updated_at` 存的是 **UTC**
+    （连接串 `init_command="SET time_zone='+00:00'"`），而 **dump 的 mtime 是本机时区
+    （CST）** ⇒ 拿 mtime 当「dump 时刻」截点会**差 8 小时** ⇒ 把 dump 之后才写的行
+    也算进去 ⇒ **误报 4 张表「对不上」**。统一 `date -u` 转成 UTC 后：
+    **25/25 相等**（21 张直比相等；另 4 张差的那 1 行 = dump 之后调度器写的，
+    脚本把每行时间戳打出来自证）
 - 🐛 **`watchdog.py` 手动跑会走错方言**：`get_settings()` 默认只读**项目根的 `.env`（dev）**，
   而生产用的 `.env.prod` **只在 systemd 的 `EnvironmentFile` 里生效** ⇒ 手动跑看门狗时
   若不注入 `DATABASE_URL`，它会以为生产库还是 SQLite ⇒ 备份**什么也不产出且不报错**

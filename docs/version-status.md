@@ -301,7 +301,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 浏览器门禁 | ✅ DB 换了后端 ⇒ 重跑 DB 相关页面：`_verify_nav_8` **27/0** · `_verify_home_report` **49/0** · `_verify_home_verdict` **55/0** · `_verify_home_metals` **39/0**（连跑 4 次）· `_verify_scoring_robust` **8/0** · `_verify_report_archive` **43/0** · `_verify_central_bank_aggregate` **18/0** · `_verify_top20` / `_verify_date_nav` 无失败项 |
 | 反向验证 | ✅ 撤销 `_mysql_update_expressions`（改回 `{col: stmt.inserted[col]}`）⇒ 编译结果里重新出现 `new.fetched_at` ⇒ **测试变红**（实测过 ⇒ 再改回）；另加一条 `test_mysql_dialect_uses_row_alias_form` 专门钉住「生产用的行别名形态」，防止其余断言因 SQLAlchemy 换形而**假绿** |
 | 回滚 | ✅ 备份文件 `data/backups/gold_etf-cutover-20261111-151153.db` **原样保留** + 回滚脚本 `scripts/rollback_to_sqlite.sh`（**已入版本库** —— `/tmp` 会被重启清掉，回滚路径不能只活在临时目录里）（停服务 → `.env.prod` 切回 SQLite → 用备份覆盖 `data/gold_etf.db` → 起服务）。⚠ 回滚**不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置） |
-| 备份链路 | ✅ **切库当天就抓到两个真缺陷并修掉**（详见 M11 §5.2.1）：① **开机补跑时 mysqld 还没起来**（timer 带 `Persistent=true` ⇒ 跨过 03:00 就在开机那一刻补跑；2026-11-12 04:24 实测 `Can't connect to MySQL server … (111)` ⇒ **当天备份没生成**）⇒ 脚本加 `wait_for_mysql()`（30 × 2s）+ unit 加 `After=/Wants=mysql.service`；② **失败时留下 20 字节的假备份**（`> "$out"` 先建文件）⇒ 改成**原子写**（`.tmp-*` → `gzip -t` + `CREATE TABLE` 计数校验 → 才 `mv` 就位），失败**一个文件都不留**。<br>✅ 另做**可恢复性验证**：把 dump 灌进临时库 `gold_etf_restore_check` ⇒ **25/25 张表行数逐张相等**（差异 0）⇒ 备份不只是存在，是**能还原**；`watchdog.py` 的 MySQL 分支也单独跑通（25 张表） |
+| 备份链路 | ✅ **切库当天就抓到两个真缺陷并修掉**（详见 M11 §5.2.1）：① **开机补跑时 mysqld 还没起来**（timer 带 `Persistent=true` ⇒ 跨过 03:00 就在开机那一刻补跑；2026-11-12 04:24 实测 `Can't connect to MySQL server … (111)` ⇒ **当天备份没生成**）⇒ 脚本加 `wait_for_mysql()`（30 × 2s）+ unit 加 `After=/Wants=mysql.service`；② **失败时留下 20 字节的假备份**（`> "$out"` 先建文件）⇒ 改成**原子写**（`.tmp-*` → `gzip -t` + `CREATE TABLE` 计数校验 → 才 `mv` 就位），失败**一个文件都不留**。<br>✅ 另做**可恢复性验证**：把 dump 灌进临时库 `gold_etf_restore_check` ⇒ **25/25 张表行数逐张相等**（差异 0）⇒ 备份不只是存在，是**能还原**；`watchdog.py` 的 MySQL 分支也单独跑通（25 张表）<br>✅ **修完之后，生产自己把这条链路跑通了一次**（2026-11-12 开机补跑：timer 04:23:55 触发 ⇒ unit 等到 mysqld 就绪 ⇒ **04:46:02 起跑** ⇒ `status=0` ⇒ 产出 **1 894 945 bytes / 25 张表**的真备份，20 字节的假文件不再出现）。复验脚本已**入版本库**：`scripts/verify_backup_restore.sh`（`sudo -S bash scripts/verify_backup_restore.sh`）⇒ 复验 **25/25 张表在「dump 时刻」口径上逐张相等**。⚠ 复验时又踩了一次**时区坑**：`created_at` 存的是 **UTC** 而 dump 的 mtime 是**本机 CST** ⇒ 拿 mtime 当截点会差 8 小时 ⇒ **误报 4 张表对不上** ⇒ 统一 `date -u` |
 | 文档 | ✅ 新增**第 12 份里程碑文档 M11 · 生产库切到 MySQL（V0.126）**（`docs/releases/milestones/m11-mysql-production-migration-v0.126.md`，含 9 个方言坑的逐条剖析）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) 记录本次迁移 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.126.0**`；启动日志 `MySQL schema 校验通过：25 张表，alembic_version=t2u3v4w5x6y（迁移工具已写入）` |
 
@@ -313,7 +313,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 |---|---|---|---|
 | `refs/heads/main`（**发版那一刻** = tag 的 `^{}`） | `25dbfc7` | `25dbfc7` | ✅ |
 | `refs/tags/v0.126.0` | tag 对象 `6190f76` | `6190f76` | ✅ |
-| `refs/tags/v0.126.0^{}` | `25dbfc7` | `25dbfc7` | ✅（tag 指向**发版** commit；其后这 2 条「推送状态」commit 会再推一次 ⇒ 远端 main 与本地 HEAD 始终相等） |
+| `refs/tags/v0.126.0^{}` | `25dbfc7` | `25dbfc7` | ✅（tag 指向**发版** commit；其后又补了几条收尾 commit（推送状态文档 + 备份复验脚本）⇒ 远端 main 与本地 HEAD 始终相等） |
 | tag 数（去掉 `^{}` 行） | **123** | **123** | ✅（上一轮 **122** ⇒ 本轮 +1） |
 
 > 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0

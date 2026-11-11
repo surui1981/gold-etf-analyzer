@@ -361,6 +361,45 @@ SQLite **不校验** VARCHAR 长度 ⇒ `country_iso VARCHAR(3)` 装着 8 字符
 | 新代码在 MySQL **晚点才起来**时 | ✅ 等到起来为止再做（实测：假 `mysql` 前 2 次失败 ⇒ 脚本打印「mysql 就绪（第 3 次尝试）」⇒ 随后产出完整备份，25 张表） |
 | 走 systemd 完整跑一遍（unit + 脚本） | ✅ `systemctl start gold-etf-analyzer-backup.service` ⇒ `status=0/SUCCESS`，产物 1 894 945 bytes / 25 张表 |
 
+### 5.2.2 ✅ 修复后的备份链路在生产上**自己跑通**了一次（2026-11-12 开机补跑）
+
+上面两个缺陷是当天 04:24 复现的；**修完之后，同一台机器的这次开机补跑自己成功了**
+—— 不是手工触发，是 timer 的 `Persistent=true` 补跑：
+
+| 环节 | 实测 |
+|---|---|
+| timer 触发 | 04:23:55（开机后 0 分钟，跨过了 03:00 ⇒ 补跑） |
+| unit 实际起跑 | **04:46:02**（`After=/Wants=mysql.service` 让它**等到 mysqld 真的就绪**）→ 04:46:04 结束 |
+| 结果 | `Result=success`、`ExecMainStatus=0` |
+| 产物 | `data/backups/gold_etf-2026-11-12.sql.gz` = **1 894 945 bytes**、`gzip -t` 通过、`CREATE TABLE` **25** == 库里真实表数 |
+| 旧的那个假文件 | **不存在了**（20 字节的 `.sql.gz` 已被同名的真备份覆盖 ⇒ 原子写的 `mv` 就位生效） |
+
+**可恢复性复验（新脚本，已入版本库）**：`scripts/verify_backup_restore.sh`
+（`sudo -S bash scripts/verify_backup_restore.sh` ⇒ 需要管理员账号建临时库，
+走 root-only 的 `/etc/mysql/debian.cnf`，不引入任何 MySQL 密码进 argv）：
+
+```
+共 25 张表：直比相等 21；按 dump 时刻口径相等 4；仍然对不上 0
+✅ 备份可恢复：25/25 张表在「dump 时刻」的口径上逐张相等
+```
+
+⚠ **这 4 张表的「差 1 行」不是缺陷，是「dump 之后应用还在写」** ——
+脚本把多出来的行的时间戳打出来自证：
+
+| 表 | 生产 − 恢复 | 多出来那行的时间戳（UTC） | = 本机时区 |
+|---|---|---|---|
+| `daily_snapshots` | 1 | 2026-11-11 20:55:58 | 04:55:58 CST（dump 是 04:46:03） |
+| `news_scores` | 1 | 2026-11-11 20:56:43 | 04:56:43 CST |
+| `scoring_daily_wide` | 1 | 业务日期 `date=2026-11-12` | 同上那次调度 |
+| `telemetry_events` | 1 | 2026-11-11 20:56:02 | 04:56:02 CST |
+
+⚠⚠ **本轮又踩了一次时区坑，值得单独记**：`created_at` / `updated_at` 存的是
+**UTC**（连接串 `init_command="SET time_zone='+00:00'"`），而 **dump 文件的 mtime 是
+本机时区（CST）** ⇒ 拿 mtime 直接当「dump 时刻」截点会**差 8 小时** ⇒
+把 dump 之后写的行也算进去 ⇒ 报出**假的「对不上」**（本轮第一次跑就是这样：
+25 张表里 4 张误报）。⇒ 脚本里统一 `date -u -d @$(stat -c %Y "$DUMP")` 转成 UTC。
+⇒ 这就是 §4.1「会话时区」那条方言坑在**验证侧**的翻版：**同一时刻有两种表示**。
+
 ### 5.3 MySQL 分支**不**做的事（写进代码，不是写进文档）
 
 | 事 | 在哪被挡住 |
