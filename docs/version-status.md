@@ -305,15 +305,36 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 文档 | ✅ 新增**第 12 份里程碑文档 M11 · 生产库切到 MySQL（V0.126）**（`docs/releases/milestones/m11-mysql-production-migration-v0.126.md`，含 9 个方言坑的逐条剖析）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) 记录本次迁移 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.126.0**`；启动日志 `MySQL schema 校验通过：25 张表，alembic_version=t2u3v4w5x6y（迁移工具已写入）` |
 
-#### 推送状态：⏳ **待推送**（本地工作区干净 + annotated tag `v0.126.0` 已就位）
+#### 推送状态：✅ **已推送**（`refs/heads/main` + tag `v0.126.0`）
+
+**结论先行：代码、门禁、文档、提交、tag 全部就绪，且已全部推到 GitHub。**
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main`（**发版那一刻** = tag 的 `^{}`） | `25dbfc7` | `25dbfc7` | ✅ |
+| `refs/tags/v0.126.0` | tag 对象 `6190f76` | `6190f76` | ✅ |
+| `refs/tags/v0.126.0^{}` | `25dbfc7` | `25dbfc7` | ✅（tag 指向**发版** commit；其后这 2 条「推送状态」commit 会再推一次 ⇒ 远端 main 与本地 HEAD 始终相等） |
+| tag 数（去掉 `^{}` 行） | **123** | **123** | ✅（上一轮 **122** ⇒ 本轮 +1） |
+
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
+> ⇒ 失败会被伪装成成功。本轮 `git push origin main v0.126.0` 的**真实退出码为 0**
+> （不接管道，直接取 `$?`），且回读 `refs/heads/main` 与本地 HEAD 相等、
+> tag 对象与 `^{}` 行都相等、远端 tag 数与本地相等。
+>
+> ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.126.0` 是 **tag 对象**的 SHA，
+> `refs/tags/v0.126.0^{}` 才是它指向的 **commit** SHA。统计数量必须把 `^{}` 行去掉再数。
+>
+> ⚠️ **main 的当前 SHA 不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 上表里的 `25dbfc7` 是**发版那一刻**的读数（＝ tag 的 `^{}`，可以写死）；
+> **当前**的远端 main 用 `git ls-remote origin refs/heads/main` 与 `git rev-parse HEAD` 对比。
 
 | 项 | 状态 |
 |---|---|
-| 本地 | ✅ **工作区干净**（`git status` 无未提交改动）+ 全部 commit 已落地（`feat` / `fix` / `test` / `style` / `chore` / `docs`）+ annotated tag `v0.126.0`（**tag 指向发版 commit**，推完回填实测 SHA） |
-| 阻塞 ① | ⚠ **凭据（当前唯一的阻塞）**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **没有 Contents: 写权限**。<br>⚠ **别被 `/repos/…` 读接口回的 `permissions` 骗了** —— 它给的是**用户的仓库角色**（实测 `admin:true`），**不是 token 自己的权限** ⇒ 拿它判断「能不能 push」会得到相反结论。<br>✅ **实测判据**：`PUT /repos/surui1981/gold-etf-analyzer/contents/_probe_write_test.txt`（body 故意非法 ⇒ 真有写权限也只是 422，**不会建文件**）⇒ **403 `Resource not accessible by personal access token`** ⇒ 确认该 token 的细粒度权限里没有 Contents:write；`git push` 的 403（`Permission to … denied to surui1981`）是同一件事的 git 侧表现。<br>⇒ **解法**：换一枚 classic PAT（`ghp_` 前缀），或把现有 fine-grained PAT 的 **Contents 改成 Read and write** |
-| 阻塞 ② | ✅ **网络当前是通的**（曾一度不通）：本机系统 DNS 解析不了 `github.com` ⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS」的老路；实测 `20.205.243.166` **探得通** ⇒ 收到的是 **403（凭据被拒）而不是超时** ⇒ 请求**确实到了** GitHub |
-| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（网络不通时 15s 一轮，凭据被拒后退到 60s 一轮；日志只在**状态变化**时记一行 + 每 10 分钟一条心跳 ⇒ 「静默」= 脚本死了，而不是「没事发生」）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
-| token 卫生 | ✅ 推完仍要 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`；**本轮推送前自查 5 处严格形态（`ghp_[A-Za-z0-9]{20,}`）全 0**：`~/.bash_history` 0 / `~/.gitconfig` 0 / 仓库 0 / `/tmp` 0 / memory 目录 0；`remote.origin.url` 不带 token |
+| 凭据 | ✅ **classic PAT**（`ghp_` 前缀）—— 只走 `GH_TOKEN` **环境变量** + `gh auth git-credential`（**不进 argv、不进 `remote.origin.url`、不落盘**）。⚠ 推之前先用**不写文件**的探针验了权限：`PUT /repos/…/contents/_probe_write_test.txt`（body 故意非法）⇒ 实得 **422 `content is not valid Base64`**（而不是 403）⇒ 说明**有** Contents:write ⇒ 探针**没有建文件** |
+| 通道 | ✅ DoH 拿 IP（`20.205.243.166`）+ `http.curloptResolve` 绕开系统 DNS（系统 DNS 解析不了 `github.com`）；后台重试脚本 `/tmp/push_v126.sh`（状态变化才记一行 + 每 10 分钟心跳）全程盯着 |
+| ⚠️ 之前被什么骗了 | ⚠️ gh keyring 里那枚 **fine-grained PAT** 回读 `/repos/…` 时给 `permissions.admin=true` ⇒ 看着像有写权限，**其实没有** —— 那个字段是**用户的仓库角色**，不是 token 自己的权限；用写探针才测出真相（403） |
+| token 卫生 | ✅ 推完：`shred -u` 掉临时 token 文件 + `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`；5 处严格形态（`ghp_[A-Za-z0-9]{20,}`）复核全 0：`~/.bash_history` / `~/.gitconfig` / 仓库（含未跟踪）/ `/tmp` / memory 目录 |
+| ⚠️ **必须轮换** | ⚠️ **这枚 PAT 已经出现在会话记录里**（用户直接贴的）⇒ **视为已泄漏，必须轮换**。⚠️ 会话的 `.jsonl` **清不掉**（那是唯一残留副本）⇒ 只能靠轮换 |
 
 ### 上一轮：V0.125.0（2026-11-10 发版）
 
