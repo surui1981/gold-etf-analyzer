@@ -38,19 +38,41 @@ CAPTURE_STATE_FILE = os.path.join(PROJECT_DIR, "capture_state.json")
 CAPTURE_TIMES = ["06:00", "16:00"]
 CAPTURE_WINDOW = 1800  # 触发时刻后 30 分钟内有效，避免跨天误触发
 
-# 数据库路径与备份目录（与主库同目录 backup/）
+# 数据库连接与备份目录（V0.126.0：SQLite / MySQL 双方言）
+#
+# ⚠ **MySQL 没有「库文件」**：原来 ``_DB_PATH`` 直接切 URL 再取 dirname，
+# 换成 MySQL 后会得到一个**不存在的路径** ⇒ 备份目录被算到错误的地方
+# （``/home/surui/backup`` 之类），备份写出去也没人知道。
+# ⇒ 两种方言各自算自己的「数据目录」：SQLite 跟库文件，MySQL 跟项目 data/。
 try:
     from app.config import get_settings  # 独立脚本运行时不强依赖
 
-    _DB_PATH = get_settings().database_url.split("///", 1)[-1]
+    _DB_URL = get_settings().database_url
 except Exception:  # noqa: BLE001
-    _DB_PATH = os.path.join(os.path.dirname(PROJECT_DIR), "data", "gold_etf.db")
-BACKUP_DIR = os.path.join(os.path.dirname(_DB_PATH), "backup")
+    _DB_URL = ""
+
+_DB_IS_MYSQL = _DB_URL.startswith(("mysql", "mariadb"))
+_DB_IS_SQLITE = _DB_URL.startswith("sqlite")
+
+if _DB_IS_SQLITE:
+    _DB_PATH = _DB_URL.split("///", 1)[-1]
+    _DATA_DIR = os.path.dirname(_DB_PATH)
+elif _DB_IS_MYSQL:
+    _DB_PATH = ""  # MySQL 没有库文件
+    _DATA_DIR = os.path.join(PROJECT_DIR, "data")
+else:
+    # 拿不到配置时兜底到项目 data/（⚠ 原来兜底到 **项目父目录**的 data/ —— 那是个路径 bug）
+    _DB_PATH = os.path.join(PROJECT_DIR, "data", "gold_etf.db")
+    _DATA_DIR = os.path.join(PROJECT_DIR, "data")
+# ⚠ V0.126.0：目录名与 ``scripts/daily_backup.sh`` 对齐（``backups`` 复数）——
+#   原来这里是 ``backup`` 单数 ⇒ 两个备份工具各写各的目录 ⇒ 同一个库有**两份**
+#   互不相干的备份，且谁也不知道对方那份还在不在。
+BACKUP_DIR = os.path.join(_DATA_DIR, "backups")
 BACKUP_KEEP = 7  # 保留最近 7 份
 
 # 快照归档：保留最近 N 天，更早的导出 JSON 到 archive/ 后删除
 SNAPSHOT_RETENTION_DAYS = 365
-ARCHIVE_DIR = os.path.join(os.path.dirname(_DB_PATH), "archive")
+ARCHIVE_DIR = os.path.join(_DATA_DIR, "archive")
 
 logger = logging.getLogger("watchdog")
 
@@ -177,45 +199,100 @@ def do_capture() -> dict:
 
 
 def archive_snapshots() -> None:
-    """归档超过保留期的每日快照：导出 JSON 到 archive/ 后删除（幂等）。"""
+    """归档超过保留期的每日快照：导出 JSON 到 archive/ 后删除（幂等）。
+
+    ⚠ **V0.126.0：改走 SQLAlchemy（双方言同一份 SQL）**。
+    原来直接 ``sqlite3.connect`` —— MySQL 下必然 ``sqlite3.OperationalError``。
+    这段 SQL 本身是标准 SQL（``SELECT`` / ``DELETE ... WHERE <``）⇒ 两个库通用。
+    """
     try:
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
         cutoff = (datetime.now() - timedelta(days=SNAPSHOT_RETENTION_DAYS)).strftime("%Y-%m-%d")
-        conn = sqlite3.connect(_DB_PATH, timeout=10)
-        try:
-            cols = [
-                "snapshot_date", "symbol", "close", "change_pct", "direction",
-                "tech_index", "macro_index", "news_index", "trend_index", "index_level",
-            ]
-            rows = conn.execute(
-                f"SELECT {', '.join(cols)} FROM daily_snapshots WHERE snapshot_date < ?",
-                (cutoff,),
-            ).fetchall()
-            if rows:
-                payload = [dict(zip(cols, r)) for r in rows]
-                dest = os.path.join(ARCHIVE_DIR, f"snapshots_{datetime.now():%Y%m%d}.json")
-                with open(dest, "w", encoding="utf-8") as fh:
-                    json.dump(payload, fh, ensure_ascii=False, indent=2)
-                conn.execute(
-                    "DELETE FROM daily_snapshots WHERE snapshot_date < ?", (cutoff,)
-                )
-                conn.commit()
-                logger.info(
-                    "snapshots archived: %d rows -> %s (retain %sd)",
-                    len(rows), dest, SNAPSHOT_RETENTION_DAYS,
-                )
-            else:
-                logger.debug("no snapshots older than %sd to archive", SNAPSHOT_RETENTION_DAYS)
-        finally:
-            conn.close()
+        cols = [
+            "snapshot_date", "symbol", "close", "change_pct", "direction",
+            "tech_index", "macro_index", "news_index", "trend_index", "index_level",
+        ]
+        rows = _fetch_snapshot_rows(cutoff, cols)
+        if rows:
+            payload = [dict(zip(cols, r)) for r in rows]
+            dest = os.path.join(ARCHIVE_DIR, f"snapshots_{datetime.now():%Y%m%d}.json")
+            with open(dest, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+            _delete_snapshot_rows(cutoff)
+            logger.info(
+                "snapshots archived: %d rows -> %s (retain %sd)",
+                len(rows), dest, SNAPSHOT_RETENTION_DAYS,
+            )
+        else:
+            logger.debug("no snapshots older than %sd to archive", SNAPSHOT_RETENTION_DAYS)
     except Exception as exc:  # noqa: BLE001
         logger.error("snapshot archive failed: %s", exc)
+
+
+def _fetch_snapshot_rows(cutoff: str, cols: list[str]) -> list[tuple]:
+    """读待归档的快照行（SQLite 直连；MySQL 走 SQLAlchemy）。"""
+    if _DB_IS_MYSQL:
+        return _run_sqlalchemy(
+            f"SELECT {', '.join(cols)} FROM daily_snapshots WHERE snapshot_date < :cutoff",
+            {"cutoff": cutoff},
+        )
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    try:
+        return conn.execute(
+            f"SELECT {', '.join(cols)} FROM daily_snapshots WHERE snapshot_date < ?",
+            (cutoff,),
+        ).fetchall()
+    finally:
+        conn.close()
+
+
+def _delete_snapshot_rows(cutoff: str) -> None:
+    """删除已归档的快照行。"""
+    if _DB_IS_MYSQL:
+        _run_sqlalchemy(
+            "DELETE FROM daily_snapshots WHERE snapshot_date < :cutoff",
+            {"cutoff": cutoff},
+            commit=True,
+        )
+        return
+    conn = sqlite3.connect(_DB_PATH, timeout=10)
+    try:
+        conn.execute("DELETE FROM daily_snapshots WHERE snapshot_date < ?", (cutoff,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _run_sqlalchemy(sql: str, params: dict, *, commit: bool = False) -> list[tuple]:
+    """在应用自己的连接层上跑一条 SQL（MySQL 分支用）。
+
+    ⚠ 用应用 engine ⇒ 时区/连接参数与线上完全一致（UTC session tz 等），
+    不会因为「看门狗另开一条连接」而与线上口径分叉。
+    """
+    import asyncio
+
+    from sqlalchemy import text
+
+    from app.repositories.db import async_session_factory
+
+    async def _run() -> list[tuple]:
+        async with async_session_factory() as session:
+            result = await session.execute(text(sql), params)
+            rows = [tuple(r) for r in result.all()]
+            if commit:
+                await session.commit()
+            return rows
+
+    return asyncio.run(_run())
 
 
 def backup_db(now: datetime) -> None:
     """每日备份主库（按日期命名，保留最近 BACKUP_KEEP 份）。"""
     try:
         os.makedirs(BACKUP_DIR, exist_ok=True)
+        if _DB_IS_MYSQL:
+            _backup_mysql(now)
+            return
         dst = os.path.join(BACKUP_DIR, f"gold_etf_{now:%Y%m%d}.db")
         if not os.path.exists(dst):
             if os.path.exists(_DB_PATH):
@@ -227,6 +304,74 @@ def backup_db(now: datetime) -> None:
             logger.info("db backup cleaned: %s", old)
     except Exception as exc:  # noqa: BLE001
         logger.error("db backup failed: %s", exc)
+
+
+def _backup_mysql(now: datetime) -> None:
+    """MySQL 备份：mysqldump --single-transaction（InnoDB 一致性快照，不停写）。
+
+    ⚠ 凭据走 0600 临时 defaults 文件（``--defaults-extra-file``）⇒ 密码不进 argv。
+    """
+    import gzip
+    import tempfile
+
+    dst = os.path.join(BACKUP_DIR, f"gold_etf_{now:%Y%m%d}.sql.gz")
+    fd, cnf = tempfile.mkstemp(prefix="gold-etf-watchdog-", suffix=".cnf")
+    os.close(fd)
+    try:
+        with open(cnf, "w", encoding="utf-8") as fh:
+            fh.write(_mysql_client_cnf())
+        os.chmod(cnf, 0o600)
+        proc = subprocess.run(
+            [
+                "mysqldump", f"--defaults-extra-file={cnf}",
+                "--single-transaction", "--quick",
+                "--routines", "--triggers", "--events",
+                "--default-character-set=utf8mb4",
+                "--hex-blob", "--no-tablespaces", "--tz-utc",
+                "--set-gtid-purged=OFF",
+                _mysql_db_name(),
+            ],
+            capture_output=True, check=False,
+        )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"mysqldump failed rc={proc.returncode}: "
+                f"{proc.stderr.decode('utf-8', 'replace')[:400]}"
+            )
+        with gzip.open(dst, "wb") as out:
+            out.write(proc.stdout)
+        logger.info("db backup created: %s (%d bytes raw)", dst, len(proc.stdout))
+    finally:
+        if os.path.exists(cnf):
+            os.remove(cnf)
+    # 保留最近 BACKUP_KEEP 份（MySQL 分支是 .sql.gz）
+    backups = sorted(glob.glob(os.path.join(BACKUP_DIR, "gold_etf_*.sql.gz")), reverse=True)
+    for old in backups[BACKUP_KEEP:]:
+        os.remove(old)
+        logger.info("db backup cleaned: %s", old)
+
+
+def _mysql_client_cnf() -> str:
+    """把 DATABASE_URL 拆成 my.cnf 片段（密码不进 argv、不进日志）。"""
+    import urllib.parse
+
+    parsed = urllib.parse.urlsplit(_DB_URL.replace("mysql+asyncmy://", "mysql://", 1))
+    host = parsed.hostname or "127.0.0.1"
+    port = parsed.port or 3306
+    user = urllib.parse.unquote(parsed.username or "")
+    pw = urllib.parse.unquote(parsed.password or "")
+    return (
+        "[client]\n"
+        f"host={host}\nport={port}\nuser={user}\npassword={pw}\n"
+        "default-character-set=utf8mb4\n"
+    )
+
+
+def _mysql_db_name() -> str:
+    import urllib.parse
+
+    parsed = urllib.parse.urlsplit(_DB_URL.replace("mysql+asyncmy://", "mysql://", 1))
+    return (parsed.path or "/").lstrip("/").split("?", 1)[0]
 
 
 def maybe_capture() -> None:
