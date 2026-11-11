@@ -137,6 +137,39 @@ async def test_snapshot_days_limits_returned_points_not_changes(db_session: Asyn
     assert by["1y"].change_pct is not None
 
 
+async def test_snapshot_one_year_baseline_survives_trading_day_gaps(
+    db_session: AsyncSession,
+) -> None:
+    """源是**交易日频**（周末/假日缺行）⇒ 恰好等于 ``latest-365d`` 的那天常常没有观测。
+
+    旧口径把查询窗口卡在 ``latest - 365d`` 上 ⇒ 基线被挡在窗口**之外** ⇒
+    ``_change`` 找不到 ``date <= target`` 的点 ⇒ **1y 恒为 None**。
+    线上实测复现（2026-11-09 新观测后）：1w/1m/3m 有值、1y 显示「—」。
+
+    ⚠ 这条**不是** MySQL 迁移引起的 —— 同一段计算在 SQLite 数据上跑出同样的 None
+    （基线取不到只取决于「最新观测日」与「源有没有那一行」）。
+    """
+    # 造一条**有缺口**的序列：整体每天一行，但**恰好缺掉 ``TODAY-365d`` 那一行**
+    # （模拟周末/假日）。
+    target = TODAY - timedelta(days=365)
+    rows = [
+        {"inv_date": d, "tonnes": 800.0 + (TODAY - d).days * 0.1, "ounces": None}
+        for d in (TODAY - timedelta(days=i) for i in range(500))
+        if d != target
+    ]
+    await _seed(db_session, rows)
+
+    out = await _svc(db_session).snapshot(days=90)
+    by = {c.window: c for c in out.changes}
+
+    assert by["1y"].change_pct is not None, "1y 基线应能穿过缺口找到"
+    # 基线 = 「窗口内最后一个 ≤ target 的观测」⇒ 缺口前面那一天
+    assert by["1y"].base_date == target - timedelta(days=1)
+    # 短窗口本来就有值，不能被这次修复带坏
+    for w in ("1w", "1m", "3m"):
+        assert by[w].change_pct is not None
+
+
 async def test_snapshot_points_sorted_ascending(db_session: AsyncSession) -> None:
     """序列必须升序 —— 前端直接画走势，倒序会画出折返线。"""
     await _seed(db_session, _series(latest=800.0, start=1000.0))

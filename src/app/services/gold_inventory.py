@@ -26,6 +26,15 @@ WINDOWS: tuple[tuple[str, int], ...] = (("1w", 7), ("1m", 30), ("3m", 90), ("1y"
 
 DEFAULT_DAYS = 90
 
+# 基线回看的**余量**（自然日）。
+# ⚠ 源是**交易日频**（周末/假日缺行）⇒ 恰好等于 ``latest - N 天`` 的那天**常常没有观测**。
+# 旧口径把查询窗口卡在 ``latest - max_lookback`` 上 ⇒ 基线正好落在窗口**之外**
+# ⇒ ``_change`` 找不到 ``date <= target`` 的点 ⇒ 1y 恒为 None
+# （线上 2026-11-09 新观测后复现：1w/1m/3m 有值、1y 显示「—」）。
+# ⇒ 多取一段余量，让「窗口内最后一个 ≤ target 的观测」能被找到。
+# 10 天覆盖「长周末 + 美国假日」的连续缺行（实测最长连缺 4 天）。
+BASELINE_TOLERANCE_DAYS = 10
+
 
 class GoldInventoryService:
     """COMEX 黄金库存服务。"""
@@ -118,7 +127,9 @@ class GoldInventoryService:
             )
 
         max_lookback = max(d for _, d in WINDOWS)
-        records = await self._repo.list_since(latest_rec.inv_date - timedelta(days=max_lookback))
+        records = await self._repo.list_since(
+            latest_rec.inv_date - timedelta(days=max_lookback + BASELINE_TOLERANCE_DAYS)
+        )
         if not records:
             return GoldInventoryOut(
                 source="COMEX",
