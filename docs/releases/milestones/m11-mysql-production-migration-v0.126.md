@@ -200,6 +200,7 @@ python scripts/migrate_sqlite_to_mysql.py --drop-target  # 回滚：删掉 MySQL
 | 行数 | `news_feed_items` 3 584 → **3 600**（+16 新行，与 upsert 计数一致） |
 | 时区 | 新行 `fetched_at = 2026-11-11 07:12:54` = **UTC**（日志本地时间 15:12:54 = UTC+8）⇒ **没偏 8 小时** |
 | 读接口 | `/api/v1/health` `/reports/latest` `/market/gold/trend` `/market/freshness` `/central-bank/summary` `/favorites/stats` 全 200 |
+| **切换后复核**（当日 15:4x 再跑一次 `--verify`） | **21 张表逐表 SHA-256 仍与切换瞬间的 SQLite 快照一致**；**4 张表不同** —— 全部因为**线上调度器在 MySQL 上持续写入**（不是迁移失真）：`gold_inventory_daily` 1 247 → **1 248**（+1 新观测）· `news_feed_items` 3 584 → **3 605**（+21 条新闻）· `telemetry_events` 61 936 → **62 156**（+220 条遥测）· `news_feed_daily` 26 → 26（**行数不变、内容变** ⇒ 每日聚合被调度器重算）。⇒ **迁移保真** 与 **应用在 MySQL 上真的在写** 同时得到验证 |
 
 ### 3.6 顺带修掉的另一个真缺陷：**COMEX 库存卡的「1 年」变化率恒为「—」**
 
