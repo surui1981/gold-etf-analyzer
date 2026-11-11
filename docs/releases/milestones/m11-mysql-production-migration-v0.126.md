@@ -16,7 +16,7 @@
 | SQLite 还在吗？ | 在，但**降级为开发/测试库**（`.env` 指向 `data/gold_etf.db`） | §一·3 |
 | 迁了多少？ | **25 张表 / 88 284 行**，每张表**行数 + SHA-256 内容校验和**逐项比对一致 | §三 |
 | 停机多久？ | **30 秒**（15:11:55 停 → 15:12:25 健康检查通过） | §三·4 |
-| 能回滚吗？ | 能 —— SQLite 库文件原样保留 + 一条 `cutover_rollback.sh` | §五 |
+| 能回滚吗？ | 能 —— SQLite 库文件原样保留 + 一条 `scripts/rollback_to_sqlite.sh`（**已入版本库**） | §五 |
 | 结构是照谁建的？ | 照**生产 SQLite 的 `sqlite_master`**（**不是** ORM）—— ORM 与生产库有 **42 处差异** | §二·1 |
 | 目标库的版本号谁写的？ | 迁移脚本把 SQLite 的 `alembic_version`（`t2u3v4w5x6y`）一并搬过去 | §二·3 |
 | MySQL 上还跑 Alembic 吗？ | **不跑** —— `migrations/env.py` 对 MySQL **硬性拒绝** | §二·4 |
@@ -298,7 +298,7 @@ SQLite **不校验** VARCHAR 长度 ⇒ `country_iso VARCHAR(3)` 装着 8 字符
 
 | 步骤 | 命令 |
 |---|---|
-| 回滚脚本 | `bash /tmp/cutover_rollback.sh`（或显式给备份路径） |
+| 回滚脚本 | `bash scripts/rollback_to_sqlite.sh`（**已入版本库** —— `/tmp` 会被重启清掉，回滚路径不能只活在临时目录里）（或显式给备份路径） |
 | 备份文件 | `data/backups/gold_etf-cutover-20261111-151153.db`（**原样保留**） |
 | 回滚动作 | 停服务 → `.env.prod` 切回 SQLite → 用备份覆盖 `data/gold_etf.db` → 起服务 |
 
@@ -317,6 +317,49 @@ SQLite **不校验** VARCHAR 长度 ⇒ `country_iso VARCHAR(3)` 装着 8 字符
 
 ⚠ 凭据走 **0600 临时 defaults 文件**（`--defaults-extra-file`）⇒ 密码不进 argv
 （`ps` 可见）、不进环境变量、不进日志。
+
+#### 备份链路的**实测**（切库当天补跑 —— 定时器那一次跑的是切库**前**的 SQLite 分支）
+
+| 验证 | 结果 |
+|---|---|
+| `bash scripts/daily_backup.sh`（**手工跑一次**，触发 MySQL 分支） | ✅ `data/backups/gold_etf-2026-11-11.sql.gz`（1 888 803 bytes，gzip 流完整，dump 内 `CREATE TABLE` **25** == 库里真实表数） |
+| **备份能不能真恢复**（把 dump 灌进临时库 `gold_etf_restore_check` 再逐表对行数） | ✅ **25/25 张表行数逐张相等，差异 0**（`daily_macro_factors` 20 108 · `telemetry_events` 62 156 · `news_feed_items` 3 605 …）⇒ 备份**不只是存在，是能还原**；临时库已删 |
+| `watchdog.py` 的 MySQL 分支（**单独调 `backup_db()`**，不启看门狗本体） | ✅ `data/backups/gold_etf_20261111.sql.gz`（gzip 内 18 398 425 bytes，`CREATE TABLE` **25**） |
+
+⚠ **本轮新发现的一个操作坑（已写进 `watchdog.py` 的模块 docstring）**：
+`watchdog.py` 的方言判定取自 `get_settings().database_url`，而 `get_settings()`
+默认只读**项目根的 `.env`（dev）** —— 生产用的 `.env.prod` **只在 systemd 的
+`EnvironmentFile` 里生效**。⇒ **手动跑**看门狗时若不注入 `DATABASE_URL`，
+它会以为生产库还是 SQLite ⇒ 备份走错分支（拷一个不存在的 `.db` ⇒
+**什么也不产出，且不报错**）。systemd 部署时环境变量已由 unit 注入，不受影响。
+
+⚠ 本机 **看门狗根本没在跑**（无 systemd unit、无 cron 项；`install_startup.ps1`
+是 Windows 方案）⇒ 真正生效的备份链路只有 `daily_backup.sh` 那条。
+本轮把它的 MySQL 分支**手工跑通并验证了可恢复**，就是为了不让定时器第一次
+跑 MySQL 分支时才发现问题。
+
+### 5.2.1 🐛 备份链路上的两个真缺陷（**机器重启当天就复现了**）
+
+> 上一段写的是「别让定时器第一次跑 MySQL 分支才发现问题」——
+> **它当天就发现了**：2026-11-12 04:23:59 机器重启（跨过 03:00）⇒
+> timer 带 `Persistent=true` ⇒ **开机那一刻**（04:24:00）补跑 ⇒ mysqld 还没起来。
+
+| # | 缺陷 | 证据 | 修法 |
+|---|---|---|---|
+| ① | **开机补跑时 mysqld 还没接受连接** ⇒ 备份直接失败 | `mysqldump: Got error: 2003: Can't connect to MySQL server on '127.0.0.1:3306' (111)`；`gold-etf-analyzer-backup.service` ⇒ `status=2/INVALIDARGUMENT`（⇒ **当天的备份根本没生成**） | ① 脚本内 `wait_for_mysql()`：连不上就重试（默认 **30 × 2s = 60s**）；② unit 加 `After=mysql.service` + `Wants=mysql.service`（双保险） |
+| ② | **失败时目录里留下一个 20 字节的假备份** —— `mysqldump … \| gzip -c > "$out"` 在 mysqldump 挂掉**之前**就把（空）文件创建出来了 | 实测 `data/backups/gold_etf-2026-11-12.sql.gz` = **20 字节**（gzip 空内容的体积）⇒ **看起来像备份，其实啥也不是**，还会占掉当天的备份位 | 改成**原子写**：先写 `.tmp-*` → `gzip -t` + `CREATE TABLE` 计数校验 → **校验通过才 `mv` 就位**；失败则**一个文件都不留**（SQLite 分支同样处理） |
+
+⚠ 缺陷 ② 是**最阴的那类**：备份目录里躺着一个「今天有备份」的假象，
+而真备份一个都没有。⇒ 这也印证了「备份不能只看有没有文件，要看**能不能恢复**」。
+
+**反向验证**（每条都要能变红）：
+
+| 验证 | 结果 |
+|---|---|
+| 旧代码在 mysqldump 失败时会不会留下文件 | ✅ **会** —— 20 字节的 `.sql.gz`（真·复现：2026-11-12 03:00 那次） |
+| 新代码在 MySQL 连不上时 | ✅ 退出码 **1**，**不产生任何文件**（实测：目录里既没有 `2026-11-12` 的备份，也没有 `.tmp` 残留） |
+| 新代码在 MySQL **晚点才起来**时 | ✅ 等到起来为止再做（实测：假 `mysql` 前 2 次失败 ⇒ 脚本打印「mysql 就绪（第 3 次尝试）」⇒ 随后产出完整备份，25 张表） |
+| 走 systemd 完整跑一遍（unit + 脚本） | ✅ `systemctl start gold-etf-analyzer-backup.service` ⇒ `status=0/SUCCESS`，产物 1 894 945 bytes / 25 张表 |
 
 ### 5.3 MySQL 分支**不**做的事（写进代码，不是写进文档）
 

@@ -300,18 +300,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 门禁 | ✅ `ruff check src tests scripts` **0** / `ruff format --check src tests` **0** / `check_pwa_assets`（SW `v0.126.0` == 应用版本，54 条 SHELL_ASSETS）/ `check_deps`（`src/` 14 个三方 import 全在 dependencies）/ `check_i18n_keys`（**0 missing / 582 in-scope**）/ `check_static_js`（22 页 + 39 脚本）/ `check_freshness_consistency` / `check_links`（**31** 份文档 / **446** 条内部链接 + 4 个锚点）/ `check_routes`（**20 条路由**全部返回期望 status）/ `check_version_sync`（4 处版本号 + CHANGELOG 降序 + 里程碑登记 + 基线） |
 | 浏览器门禁 | ✅ DB 换了后端 ⇒ 重跑 DB 相关页面：`_verify_nav_8` **27/0** · `_verify_home_report` **49/0** · `_verify_home_verdict` **55/0** · `_verify_home_metals` **39/0**（连跑 4 次）· `_verify_scoring_robust` **8/0** · `_verify_report_archive` **43/0** · `_verify_central_bank_aggregate` **18/0** · `_verify_top20` / `_verify_date_nav` 无失败项 |
 | 反向验证 | ✅ 撤销 `_mysql_update_expressions`（改回 `{col: stmt.inserted[col]}`）⇒ 编译结果里重新出现 `new.fetched_at` ⇒ **测试变红**（实测过 ⇒ 再改回）；另加一条 `test_mysql_dialect_uses_row_alias_form` 专门钉住「生产用的行别名形态」，防止其余断言因 SQLAlchemy 换形而**假绿** |
-| 回滚 | ✅ 备份文件 `data/backups/gold_etf-cutover-20261111-151153.db` **原样保留** + 回滚脚本 `/tmp/cutover_rollback.sh`（停服务 → `.env.prod` 切回 SQLite → 用备份覆盖 `data/gold_etf.db` → 起服务）。⚠ 回滚**不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置） |
+| 回滚 | ✅ 备份文件 `data/backups/gold_etf-cutover-20261111-151153.db` **原样保留** + 回滚脚本 `scripts/rollback_to_sqlite.sh`（**已入版本库** —— `/tmp` 会被重启清掉，回滚路径不能只活在临时目录里）（停服务 → `.env.prod` 切回 SQLite → 用备份覆盖 `data/gold_etf.db` → 起服务）。⚠ 回滚**不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置） |
+| 备份链路 | ✅ **切库当天就抓到两个真缺陷并修掉**（详见 M11 §5.2.1）：① **开机补跑时 mysqld 还没起来**（timer 带 `Persistent=true` ⇒ 跨过 03:00 就在开机那一刻补跑；2026-11-12 04:24 实测 `Can't connect to MySQL server … (111)` ⇒ **当天备份没生成**）⇒ 脚本加 `wait_for_mysql()`（30 × 2s）+ unit 加 `After=/Wants=mysql.service`；② **失败时留下 20 字节的假备份**（`> "$out"` 先建文件）⇒ 改成**原子写**（`.tmp-*` → `gzip -t` + `CREATE TABLE` 计数校验 → 才 `mv` 就位），失败**一个文件都不留**。<br>✅ 另做**可恢复性验证**：把 dump 灌进临时库 `gold_etf_restore_check` ⇒ **25/25 张表行数逐张相等**（差异 0）⇒ 备份不只是存在，是**能还原**；`watchdog.py` 的 MySQL 分支也单独跑通（25 张表） |
 | 文档 | ✅ 新增**第 12 份里程碑文档 M11 · 生产库切到 MySQL（V0.126）**（`docs/releases/milestones/m11-mysql-production-migration-v0.126.md`，含 9 个方言坑的逐条剖析）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) 记录本次迁移 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.126.0**`；启动日志 `MySQL schema 校验通过：25 张表，alembic_version=t2u3v4w5x6y（迁移工具已写入）` |
 
-#### 推送状态：⏳ **待推送**（本地已就绪：3 个 commit + annotated tag `v0.126.0`）
+#### 推送状态：⏳ **待推送**（本地工作区干净 + annotated tag `v0.126.0` 已就位）
 
 | 项 | 状态 |
 |---|---|
-| 本地 | ✅ 全部 commit 已落地（`fix(gold-inventory)` → `chore(release)` → `docs(v0.126.0)` ×4）+ annotated tag `v0.126.0`（**tag 指向 HEAD**，推完回填实测 SHA） |
-| 阻塞 ① | ⚠ **凭据**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**（历史上 `git push` 直接 403：`Permission to surui1981/gold-etf-analyzer.git denied to surui1981`）⇒ **只有 classic PAT（`ghp_` 前缀）能 push** |
-| 阻塞 ② | ⚠ **网络**：本机到 GitHub 的通道**此刻是断的**（系统 DNS 解析不了 `github.com`；DoH 能拿到 IP，但 `140.82.114.3` / `20.205.243.166` 两个 IP 都探测不通）⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS + 持续重试」的老路 |
-| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（每 15s 一次 DoH + 探测 + 推送）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
+| 本地 | ✅ **工作区干净**（`git status` 无未提交改动）+ 全部 commit 已落地（`feat` / `fix` / `test` / `style` / `chore` / `docs`）+ annotated tag `v0.126.0`（**tag 指向 HEAD**，推完回填实测 SHA） |
+| 阻塞 ① | ⚠ **凭据（当前唯一的阻塞）**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**（`git push` 直接 403：`Permission to surui1981/gold-etf-analyzer.git denied to surui1981`）⇒ **只有 classic PAT（`ghp_` 前缀）能 push** |
+| 阻塞 ② | ✅ **网络当前是通的**（曾一度不通）：本机系统 DNS 解析不了 `github.com` ⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS」的老路；实测 `20.205.243.166` **探得通** ⇒ 收到的是 **403（凭据被拒）而不是超时** ⇒ 请求**确实到了** GitHub |
+| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（网络不通时 15s 一轮，凭据被拒后退到 60s 一轮）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
 | token 卫生 | ✅ 推完仍要 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`；**本轮推送前自查 5 处严格形态（`ghp_[A-Za-z0-9]{20,}`）全 0**：`~/.bash_history` 0 / `~/.gitconfig` 0 / 仓库 0 / `/tmp` 0 / memory 目录 0；`remote.origin.url` 不带 token |
 
 ### 上一轮：V0.125.0（2026-11-10 发版）

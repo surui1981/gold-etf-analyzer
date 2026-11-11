@@ -79,6 +79,26 @@
   SQLite 分支**逐字保持旧行为**，MySQL 分支走 `mysqldump --single-transaction`
   （InnoDB 一致性快照，**不停写**）。⚠ 两条备份工具此前**各写各的目录**
   （`backup/` vs `backups/`）⇒ 同一个库有两份互不相干的备份 ⇒ 目录名已统一为 `backups`
+- 🐛 **备份链路上的两个真缺陷**（切库当天就复现了 —— 机器重启跨过 03:00 时，
+  timer 带 `Persistent=true` ⇒ **开机那一刻**补跑）
+  - ① **mysqld 还没接受连接，备份直接失败**
+    （实测 2026-11-12 04:24：`Can't connect to MySQL server on '127.0.0.1:3306' (111)`
+    ⇒ service `status=2` ⇒ **当天备份根本没生成**）⇒ 脚本加 `wait_for_mysql()`
+    （默认 **30 × 2s**）+ unit 加 `After=/Wants=mysql.service`
+  - ② **失败时留下一个 20 字节的假备份** —— `mysqldump … | gzip -c > "$out"`
+    在 mysqldump 挂掉**之前**就把（空）文件创建出来了 ⇒ 目录里躺着一个
+    「今天有备份」的假象，真备份一个都没有 ⇒ 改成**原子写**
+    （`.tmp-*` → `gzip -t` + `CREATE TABLE` 计数校验 → **才 `mv` 就位**），
+    失败则**一个文件都不留**（SQLite 分支同样处理）
+  - ⚠ **反向验证**：旧代码确实留下 20 字节坏文件（真·复现）；新代码在 MySQL
+    连不上时退出码 1 且**不留任何文件**；用假 `mysql`（前 2 次失败）验证
+    「等到了再做」⇒ 产出完整备份
+- ✅ **备份的「可恢复性」验证**（不只是「文件在不在」）：把 dump 灌进临时库
+  `gold_etf_restore_check` ⇒ **25/25 张表行数逐张相等、差异 0** ⇒ 备份能还原
+- 🐛 **`watchdog.py` 手动跑会走错方言**：`get_settings()` 默认只读**项目根的 `.env`（dev）**，
+  而生产用的 `.env.prod` **只在 systemd 的 `EnvironmentFile` 里生效** ⇒ 手动跑看门狗时
+  若不注入 `DATABASE_URL`，它会以为生产库还是 SQLite ⇒ 备份**什么也不产出且不报错**
+  ⇒ 已写进模块 docstring
 - 🧪 **5 条离线方言回归测试**（`tests/test_repositories/test_upsert_dialect.py`）
   —— **只看编译出来的 SQL**，不连 MySQL ⇒ 纯离线、秒级 ⇒ CI（只有 SQLite）也能跑。
   ⚠ **反向验证已做**：把 `_mysql_update_expressions` 改回直接用 `stmt.inserted[col]`
@@ -92,7 +112,7 @@
   已删、授权已收回（应用账号只剩 `gold_etf` 一个库的权限）
 
 **回滚**：SQLite 库文件原样保留（`data/backups/gold_etf-cutover-20261111-151153.db`）
-+ 一条 `cutover_rollback.sh` ⇒ 停服务 → `.env.prod` 切回 SQLite → 起服务，
++ 一条 `scripts/rollback_to_sqlite.sh`（**已入版本库** —— `/tmp` 会被重启清掉）⇒ 停服务 → `.env.prod` 切回 SQLite → 起服务，
 **不 bump 版本**（代码层两个方言都支持，回滚只是改一行配置）。
 
 ## [V0.125.0] · 2026-11-10
