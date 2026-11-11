@@ -12,6 +12,7 @@ dist/
 .env.local
 .env.prod
 .env.prod.local
+.env.mysql
 
 # Node（puppeteer-core 依赖）
 node_modules
