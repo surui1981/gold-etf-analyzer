@@ -304,9 +304,15 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 文档 | ✅ 新增**第 12 份里程碑文档 M11 · 生产库切到 MySQL（V0.126）**（`docs/releases/milestones/m11-mysql-production-migration-v0.126.md`，含 9 个方言坑的逐条剖析）+ 登记进 [docs/releases/index.md](releases/index.md)；[docs/roadmap.md](roadmap.md) 记录本次迁移 |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.126.0**`；启动日志 `MySQL schema 校验通过：25 张表，alembic_version=t2u3v4w5x6y（迁移工具已写入）` |
 
-#### 推送状态：⏳ 待推送
+#### 推送状态：⏳ **待推送**（本地已就绪：3 个 commit + annotated tag `v0.126.0`）
 
-（本节在推送完成后回填「远端回读」实测值。）
+| 项 | 状态 |
+|---|---|
+| 本地 | ✅ 3 个 commit（`fix(gold-inventory)` → `chore(release)` → `docs(v0.126.0)`）+ annotated tag `v0.126.0`（tag 对象 `8084f81` → commit `7f0f571` = HEAD） |
+| 阻塞 ① | ⚠ **凭据**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**（历史上 `git push` 直接 403：`Permission to surui1981/gold-etf-analyzer.git denied to surui1981`）⇒ **只有 classic PAT（`ghp_` 前缀）能 push** |
+| 阻塞 ② | ⚠ **网络**：本机到 GitHub 的通道**此刻是断的**（系统 DNS 解析不了 `github.com`；DoH 能拿到 IP，但 `140.82.114.3` / `20.205.243.166` 两个 IP 都探测不通）⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS + 持续重试」的老路 |
+| 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（每 15s 一次 DoH + 探测 + 推送）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
+| token 卫生 | ✅ 推完仍要 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history`；**本轮推送前自查 5 处严格形态（`ghp_[A-Za-z0-9]{20,}`）全 0**：`~/.bash_history` 0 / `~/.gitconfig` 0 / 仓库 0 / `/tmp` 0 / memory 目录 0；`remote.origin.url` 不带 token |
 
 ### 上一轮：V0.125.0（2026-11-10 发版）
 
