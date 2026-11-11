@@ -3,6 +3,14 @@
 背景：SQLAlchemy 的 ``create_all`` 只会创建新表，不会给已存在的表添加新列。
 历史版本升级后（如 V0.20 新增 daily_snapshots.news_index）会导致查询报错
 "no such column"，因此启动时按声明补齐缺失列，用户数据不丢失。
+
+⚠ **V0.126.0：本模块 100% 是 SQLite 专用**（``sqlite_master`` 查询 /
+``PRAGMA table_info`` / ``CREATE INDEX IF NOT EXISTS`` / ``DROP INDEX IF EXISTS``
+在 MySQL 上全是语法错）。
+⇒ 两个入口都改成**先判方言**：MySQL 直接跳过。
+⚠ MySQL 的结构**不走 Alembic**（``migrations/env.py`` 里已硬性拒绝），
+也不走本模块 —— 它由 ``scripts/migrate_sqlite_to_mysql.py`` 一次性建好，
+之后**只读不写**（结构变更要改脚本 + 重新迁移）。
 """
 
 from sqlalchemy import text
@@ -88,7 +96,12 @@ async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
 
     表不存在时跳过（部分老库 / 测试场景）：调用方应保证上游 Alembic / create_all
     已建表；此处仅做列级补齐。
+
+    ⚠ **V0.126.0：非 SQLite 直接跳过**（下面的 SQL 全是 SQLite 语法）。
     """
+    if engine.dialect.name != "sqlite":
+        logger.info("db migrate: dialect=%s ⇒ 跳过 SQLite 补列", engine.dialect.name)
+        return
     async with engine.connect() as conn:
         for table, columns in COLUMN_MIGRATIONS.items():
             # 表不存在则跳过（PRAGMA table_info 返回空，但 ALTER 会失败）
@@ -117,7 +130,14 @@ async def ensure_sqlite_columns(engine: AsyncEngine) -> None:
 
 
 async def ensure_sqlite_optimizations(engine: AsyncEngine) -> None:
-    """SQLite 性能优化：WAL 模式（高并发读写）+ 常用查询索引（幂等）。"""
+    """SQLite 性能优化：WAL 模式（高并发读写）+ 常用查询索引（幂等）。
+
+    ⚠ **V0.126.0：非 SQLite 直接跳过**（``PRAGMA`` / ``INDEX IF NOT EXISTS``
+    在 MySQL 上是语法错）。MySQL 的索引由建库脚本从生产 schema 一并带过去。
+    """
+    if engine.dialect.name != "sqlite":
+        logger.info("db migrate: dialect=%s ⇒ 跳过 SQLite 索引优化", engine.dialect.name)
+        return
     async with engine.connect() as conn:
         mode = (await conn.execute(text("PRAGMA journal_mode=WAL"))).scalar()
         if mode:

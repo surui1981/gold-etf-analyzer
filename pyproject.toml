@@ -13,6 +13,11 @@ dependencies = [
     "pydantic-settings>=2.6,<3.0",
     "sqlalchemy[asyncio]>=2.0.36,<3.0",
     "aiosqlite>=0.20,<1.0",
+    # V0.126.0：生产库迁到 MySQL。asyncmy 是**运行时**依赖（不是 dev extra）——
+    # 生产连的是 `mysql+asyncmy://`，缺了它引擎创建即 ImportError ⇒ 服务起不来。
+    # 选 asyncmy 而非 aiomysql：前者是 PyMySQL 的异步分支，MySQL 8 的
+    # caching_sha2_password 认证支持更完整（aiomysql 对该插件的支持有已知缺口）。
+    "asyncmy>=0.2.9,<0.3",
     "akshare>=1.14,<2.0",
     "alembic>=1.13,<2.0",
     # httpx 是运行时依赖（非仅测试用）：services/notify.py 模块级导入做 webhook/Server酱 推送，

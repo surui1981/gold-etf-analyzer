@@ -88,7 +88,21 @@ async def _migrate_db() -> None:
     注意：迁移前**不**调用 create_all。应用异步引擎与 Alembic 内部引擎会同时持有
     SQLite 连接，两个写者争同一文件写锁会导致迁移永久等待（启动 hang）。
     Alembic ``upgrade head`` 已负责建全表，仅在其失败时回退 create_all。
+
+    ⚠⚠ **V0.126.0：MySQL 分支完全不同 —— 绝不跑 Alembic、也绝不跑 create_all。**
+    MySQL 的 schema 是由 ``scripts/migrate_sqlite_to_mysql.py`` 建的：
+    它镜像**生产 SQLite 的 sqlite_master**（不是 ORM 元数据），并把
+    ``alembic_version`` 写成与 SQLite 一样的 head。
+    ⇒ 那 32 个 Alembic 迁移是按「**从零建库**」写的，在**已有表**的库上跑会
+    「table already exists」直接报错；更糟的是**中途失败会留下半迁移的 schema**
+    （前面几条已 apply、后面几条没 apply），而 Alembic 的版本号已经推进 ⇒
+    再也跑不回来。
+    ⇒ MySQL 分支只做**只读校验**：表齐不齐、alembic_version 对不对，对不上就
+    **启动失败并说清楚**（宁可起不来，也不要在生产库上"顺手修一下"）。
     """
+    if not settings.database_url.startswith("sqlite"):
+        await _verify_mysql_schema()
+        return
     try:
         await asyncio.to_thread(_run_alembic_upgrade)
         logger.info("alembic upgrade head: ok")
@@ -96,6 +110,43 @@ async def _migrate_db() -> None:
         logger.warning("alembic upgrade failed (%s), fallback create_all", exc)
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+
+
+async def _verify_mysql_schema() -> None:
+    """MySQL 分支的启动校验：schema 必须**已经**由迁移工具建好。
+
+    ⚠ 只读。**不**建表、**不**改表、**不**跑 Alembic。
+    对不上就抛异常让服务起不来 —— 因为「起不来但报错清楚」远比
+    「起来了但数据在错误的表里」安全。
+    """
+    from sqlalchemy import text
+
+    import app.models  # noqa: F401  注册全部 ORM 模型
+    from app.models.base import Base
+
+    expected = set(Base.metadata.tables)
+    async with engine.connect() as conn:
+        rows = await conn.execute(text("SHOW TABLES"))
+        actual = {r[0] for r in rows}
+        version_rows = await conn.execute(text("SELECT version_num FROM alembic_version"))
+        version = version_rows.scalar_one_or_none() if version_rows else None
+
+    missing = sorted(expected - actual)
+    if missing:
+        raise RuntimeError(
+            f"MySQL 库缺表：{missing}。"
+            "请先跑 scripts/migrate_sqlite_to_mysql.py --apply 完成迁移。"
+        )
+    logger.info(
+        "MySQL schema 校验通过：%d 张表，alembic_version=%s（迁移工具已写入）",
+        len(actual),
+        version,
+    )
+    if version is None:
+        logger.warning(
+            "MySQL 的 alembic_version 为空 —— 迁移工具写的是 SQLite 的 head 值；"
+            "不影响运行（MySQL 分支不跑 Alembic），但版本对不上时请核对。"
+        )
 
 
 async def _ensure_default_account() -> None:

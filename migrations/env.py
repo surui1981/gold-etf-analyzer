@@ -25,6 +25,19 @@ config = context.config
 # 数据库 URL 从应用配置读取（支持 DATABASE_URL 环境变量切换测试库）
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
+# ⚠⚠ V0.126.0：**禁止**对 MySQL 库跑 Alembic。
+# 那 32 个迁移是按「从零建库」写的，在已有表的库上会「table already exists」报错；
+# 更糟的是**中途失败会留下半迁移的 schema**（前几条 apply、后几条没 apply），
+# 而版本号已推进 ⇒ 再也跑不回来。
+# MySQL 的 schema 由 scripts/migrate_sqlite_to_mysql.py 负责（镜像生产 SQLite 的
+# sqlite_master，并写入同样的 alembic_version）。
+if get_settings().database_url.startswith(("mysql", "mariadb")):
+    raise RuntimeError(
+        "Alembic 不支持 MySQL 生产库：MySQL 的 schema 由 "
+        "scripts/migrate_sqlite_to_mysql.py 建立并维护，不走 Alembic。"
+        "（本项目里 SQLite 才是被 Alembic 管理的那个库。）"
+    )
+
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
