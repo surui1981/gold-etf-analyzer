@@ -132,7 +132,8 @@ def kill_stale(port: int) -> int:
     for pid in listening_pids(port):
         subprocess.run(
             ["taskkill", "/F", "/PID", str(pid)],
-            capture_output=True, timeout=15,
+            capture_output=True,
+            timeout=15,
         )
         logger.warning("Killed stale process pid=%s on port %s", pid, port)
         count += 1
@@ -191,7 +192,9 @@ def _save_capture_state(state: dict) -> None:
 def do_capture() -> dict:
     """调用采集接口，返回快照结果。"""
     req = urllib.request.Request(
-        CAPTURE_URL, data=b"", method="POST",
+        CAPTURE_URL,
+        data=b"",
+        method="POST",
         headers={"Content-Type": "application/json"},
     )
     with urllib.request.urlopen(req, timeout=300) as resp:
@@ -209,8 +212,16 @@ def archive_snapshots() -> None:
         os.makedirs(ARCHIVE_DIR, exist_ok=True)
         cutoff = (datetime.now() - timedelta(days=SNAPSHOT_RETENTION_DAYS)).strftime("%Y-%m-%d")
         cols = [
-            "snapshot_date", "symbol", "close", "change_pct", "direction",
-            "tech_index", "macro_index", "news_index", "trend_index", "index_level",
+            "snapshot_date",
+            "symbol",
+            "close",
+            "change_pct",
+            "direction",
+            "tech_index",
+            "macro_index",
+            "news_index",
+            "trend_index",
+            "index_level",
         ]
         rows = _fetch_snapshot_rows(cutoff, cols)
         if rows:
@@ -221,7 +232,9 @@ def archive_snapshots() -> None:
             _delete_snapshot_rows(cutoff)
             logger.info(
                 "snapshots archived: %d rows -> %s (retain %sd)",
-                len(rows), dest, SNAPSHOT_RETENTION_DAYS,
+                len(rows),
+                dest,
+                SNAPSHOT_RETENTION_DAYS,
             )
         else:
             logger.debug("no snapshots older than %sd to archive", SNAPSHOT_RETENTION_DAYS)
@@ -323,15 +336,22 @@ def _backup_mysql(now: datetime) -> None:
         os.chmod(cnf, 0o600)
         proc = subprocess.run(
             [
-                "mysqldump", f"--defaults-extra-file={cnf}",
-                "--single-transaction", "--quick",
-                "--routines", "--triggers", "--events",
+                "mysqldump",
+                f"--defaults-extra-file={cnf}",
+                "--single-transaction",
+                "--quick",
+                "--routines",
+                "--triggers",
+                "--events",
                 "--default-character-set=utf8mb4",
-                "--hex-blob", "--no-tablespaces", "--tz-utc",
+                "--hex-blob",
+                "--no-tablespaces",
+                "--tz-utc",
                 "--set-gtid-purged=OFF",
                 _mysql_db_name(),
             ],
-            capture_output=True, check=False,
+            capture_output=True,
+            check=False,
         )
         if proc.returncode != 0:
             raise RuntimeError(
@@ -401,7 +421,10 @@ def maybe_capture() -> None:
             _save_capture_state(state)
             logger.info(
                 "scheduled capture done (%s): close=%.3f trend=%.1f (%s)",
-                slot, snap.get("close", 0), snap.get("trend_index", 0), snap.get("index_level"),
+                slot,
+                snap.get("close", 0),
+                snap.get("trend_index", 0),
+                snap.get("index_level"),
             )
         except Exception as exc:  # noqa: BLE001
             logger.error("scheduled capture failed (%s): %s", slot, exc)
@@ -431,7 +454,8 @@ def main() -> None:
     parser.add_argument("--threshold", type=int, default=2, help="连续失败几次触发重启（默认 2）")
     parser.add_argument("--once", action="store_true", help="只检查一次后退出")
     parser.add_argument(
-        "--capture-times", default=",".join(CAPTURE_TIMES),
+        "--capture-times",
+        default=",".join(CAPTURE_TIMES),
         help="每日快照采集时刻，逗号分隔（默认 06:00,16:00）",
     )
     parser.add_argument("--no-capture", action="store_true", help="关闭内置定时采集")
@@ -444,8 +468,10 @@ def main() -> None:
     _setup_logging()
     logger.info(
         "Watchdog started (interval=%ss, threshold=%s, capture=%s, pid=%s)",
-        args.interval, args.threshold,
-        "off" if args.no_capture else "/".join(CAPTURE_TIMES), os.getpid(),
+        args.interval,
+        args.threshold,
+        "off" if args.no_capture else "/".join(CAPTURE_TIMES),
+        os.getpid(),
     )
 
     fails = 0

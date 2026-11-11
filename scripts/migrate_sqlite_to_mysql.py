@@ -176,9 +176,7 @@ class Table:
         return [c.name for c in self.columns]
 
 
-_CONSTRAINT_UNIQUE_RE = re.compile(
-    r"CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]*)\)", re.IGNORECASE
-)
+_CONSTRAINT_UNIQUE_RE = re.compile(r"CONSTRAINT\s+(\w+)\s+UNIQUE\s*\(([^)]*)\)", re.IGNORECASE)
 _COLUMN_UNIQUE_RE = re.compile(r"^\s*\w+\s+[^,]*\bUNIQUE\b", re.IGNORECASE)
 
 
@@ -200,12 +198,8 @@ def read_sqlite_schema(conn: sqlite3.Connection) -> list[Table]:
 
         # 列
         pk_cols: list[tuple[int, str]] = []
-        for cid, cname, ctype, notnull, dflt, pk in conn.execute(
-            f'PRAGMA table_info("{name}")'
-        ):
-            mysql_type = COLUMN_TYPE_OVERRIDES.get(
-                (name, cname), translate_type(ctype or "")
-            )
+        for _cid, cname, ctype, notnull, dflt, pk in conn.execute(f'PRAGMA table_info("{name}")'):
+            mysql_type = COLUMN_TYPE_OVERRIDES.get((name, cname), translate_type(ctype or ""))
             tbl.columns.append(
                 Column(
                     name=cname,
@@ -230,23 +224,15 @@ def read_sqlite_schema(conn: sqlite3.Connection) -> list[Table]:
         for col in tbl.columns:
             if col.name in {c for u in tbl.uniques for c in u.columns}:
                 continue
-            m = re.search(
-                rf"`?\"?{re.escape(col.name)}\"?\s+[^,]*?\bUNIQUE\b", ddl, re.IGNORECASE
-            )
+            m = re.search(rf"`?\"?{re.escape(col.name)}\"?\s+[^,]*?\bUNIQUE\b", ddl, re.IGNORECASE)
             if m:
-                tbl.uniques.append(
-                    Unique(name=f"uq_{name}_{col.name}", columns=[col.name])
-                )
+                tbl.uniques.append(Unique(name=f"uq_{name}_{col.name}", columns=[col.name]))
 
         # 单列 INTEGER 主键 ⇒ rowid 别名 ⇒ 需要 AUTO_INCREMENT
         tbl.autoincrement = (
             len(tbl.pk_columns) == 1
-            and next(
-                (c for c in tbl.columns if c.name == tbl.pk_columns[0]), None
-            )
-            is not None
-            and next(c for c in tbl.columns if c.name == tbl.pk_columns[0]).sqlite_type
-            == "INTEGER"
+            and next((c for c in tbl.columns if c.name == tbl.pk_columns[0]), None) is not None
+            and next(c for c in tbl.columns if c.name == tbl.pk_columns[0]).sqlite_type == "INTEGER"
         )
 
         tables.append(tbl)
@@ -318,14 +304,10 @@ def build_mysql_ddl(table: Table) -> str:
         cols.append(piece)
 
     if table.pk_columns:
-        pk_name = f"pk_{table.name}"
-        cols.append(
-            f"  PRIMARY KEY ({', '.join(_quote(c) for c in table.pk_columns)})"
-        )
+        cols.append(f"  PRIMARY KEY ({', '.join(_quote(c) for c in table.pk_columns)})")
     for uq in table.uniques:
         cols.append(
-            f"  CONSTRAINT {_quote(uq.name)} UNIQUE "
-            f"({', '.join(_quote(c) for c in uq.columns)})"
+            f"  CONSTRAINT {_quote(uq.name)} UNIQUE ({', '.join(_quote(c) for c in uq.columns)})"
         )
 
     body = ",\n".join(cols)
@@ -352,9 +334,7 @@ def build_mysql_indexes(table: Table) -> list[str]:
         sql = re.sub(r"^CREATE\s+UNIQUE\s+INDEX", "CREATE UNIQUE INDEX", sql, flags=re.I)
         sql = re.sub(r"^CREATE\s+INDEX", "CREATE INDEX", sql, flags=re.I)
         m = re.search(r"ON\s+\S+\s*\(([^)]*)\)", sql)
-        cols = tuple(
-            x.strip().strip('"`[]').split()[0] for x in m.group(1).split(",")
-        ) if m else ()
+        cols = tuple(x.strip().strip('"`[]').split()[0] for x in m.group(1).split(",")) if m else ()
         key = (is_unique, cols)
         if key in seen:
             continue
@@ -364,7 +344,7 @@ def build_mysql_indexes(table: Table) -> list[str]:
         if len(idx.name) > 60:
             sql = re.sub(
                 r"^(CREATE\s+(?:UNIQUE\s+)?INDEX\s+)\S+",
-                lambda mm: mm.group(1) + idx.name[:60],
+                lambda mm, _name=idx.name: mm.group(1) + _name[:60],
                 sql,
                 flags=re.I,
             )
@@ -397,8 +377,13 @@ def _parse_datetime(raw: str) -> datetime | None:
     raw = raw.strip()
     if not raw:
         return None
-    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f",
-                "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
+    for fmt in (
+        "%Y-%m-%d %H:%M:%S.%f",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%dT%H:%M:%S.%f",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d",
+    ):
         try:
             return datetime.strptime(raw, fmt)
         except ValueError:
@@ -558,9 +543,7 @@ async def _create_schema(conn, tables: list[Table]) -> None:
     print(f"[schema] 建表 {len(tables)} 张（含索引）")
 
 
-async def _copy_table(
-    conn, src: sqlite3.Connection, table: Table, src_cols: list[Column]
-) -> int:
+async def _copy_table(conn, src: sqlite3.Connection, table: Table, src_cols: list[Column]) -> int:
     """灌一张表（保留显式 id）。
 
     ⚠ 用 ``executemany``（SQLAlchemy 收到「参数是 dict 列表」时自动走），
@@ -568,9 +551,7 @@ async def _copy_table(
     2000 行 × 25 列 = 5 万个占位符，一次性塞进一条语句既慢又容易撞上限。
     """
     names = table.column_names
-    select_sql = (
-        f'SELECT {", ".join(chr(34) + n + chr(34) for n in names)} FROM "{table.name}"'
-    )
+    select_sql = f'SELECT {", ".join(chr(34) + n + chr(34) for n in names)} FROM "{table.name}"'
     insert_sql = (
         f"INSERT INTO `{table.name}` "
         f"({', '.join('`' + n + '`' for n in names)}) "
@@ -585,7 +566,7 @@ async def _copy_table(
         payload = []
         for raw in rows:
             item = {}
-            for col, val in zip(src_cols, raw):
+            for col, val in zip(src_cols, raw, strict=True):
                 item[col.name] = _conv_value(col, val)
             payload.append(item)
         await conn.execute(text(insert_sql), payload)
@@ -603,9 +584,7 @@ async def _fix_auto_increment(conn, table: Table) -> None:
     await conn.execute(text(f"ALTER TABLE `{table.name}` AUTO_INCREMENT = {nxt}"))
 
 
-async def _verify_table(
-    conn, src: sqlite3.Connection, table: Table
-) -> tuple[int, int, str, str]:
+async def _verify_table(conn, src: sqlite3.Connection, table: Table) -> tuple[int, int, str, str]:
     """逐表比对：行数 + 内容校验和。返回 (源行数, 目标行数, 源哈希, 目标哈希)。"""
     src_cols = table.columns
     names = table.column_names
@@ -614,7 +593,7 @@ async def _verify_table(
     src_hasher = hashlib.sha256()
     src_rows = 0
     cur = src.execute(
-        f'SELECT {", ".join(chr(34) + n + chr(34) for n in names)} '
+        f"SELECT {', '.join(chr(34) + n + chr(34) for n in names)} "
         f'FROM "{table.name}" ORDER BY {", ".join(chr(34) + c + chr(34) for c in order_cols)}'
     )
     while True:
@@ -622,7 +601,7 @@ async def _verify_table(
         if not rows:
             break
         src_rows += len(rows)
-        _hash_rows([dict(zip(names, r)) for r in rows], src_cols, src_hasher)
+        _hash_rows([dict(zip(names, r, strict=True)) for r in rows], src_cols, src_hasher)
 
     # ⚠ 目标侧用**游标分页**（WHERE pk > 上一页最后一个 pk），不用 OFFSET ——
     # OFFSET 60 万行那种深翻页是 O(n²)，大表能把校验拖成分钟级。
@@ -657,15 +636,13 @@ async def _verify_table(
             break
         dst_rows += len(rows)
         offset += len(rows)
-        _hash_rows([dict(zip(names, r)) for r in rows], src_cols, dst_hasher)
+        _hash_rows([dict(zip(names, r, strict=True)) for r in rows], src_cols, dst_hasher)
         last_key = rows[-1][0]
 
     return src_rows, dst_rows, src_hasher.hexdigest(), dst_hasher.hexdigest()
 
 
-async def run_migration(
-    source: str, url: str, *, apply: bool, verify: bool, drop: bool
-) -> int:
+async def run_migration(source: str, url: str, *, apply: bool, verify: bool, drop: bool) -> int:
     src = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
     tables = read_sqlite_schema(src)
     print(f"[source] {source}")

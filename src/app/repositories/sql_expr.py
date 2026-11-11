@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.upsert import session_dialect_name
 
-__all__ = ["year_month_expr", "date_expr", "supports_mysql"]
+__all__ = ["date_expr", "supports_mysql", "year_month_expr"]
 
 
 def supports_mysql(session: AsyncSession) -> bool:

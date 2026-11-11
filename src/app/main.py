@@ -134,8 +134,7 @@ async def _verify_mysql_schema() -> None:
     missing = sorted(expected - actual)
     if missing:
         raise RuntimeError(
-            f"MySQL 库缺表：{missing}。"
-            "请先跑 scripts/migrate_sqlite_to_mysql.py --apply 完成迁移。"
+            f"MySQL 库缺表：{missing}。请先跑 scripts/migrate_sqlite_to_mysql.py --apply 完成迁移。"
         )
     logger.info(
         "MySQL schema 校验通过：%d 张表，alembic_version=%s（迁移工具已写入）",
