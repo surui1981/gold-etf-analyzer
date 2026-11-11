@@ -57,6 +57,7 @@ from app.services.news import NewsScoreService
 from app.services.news_feed import NewsFeedService  # V0.102 今日要闻
 from app.services.portfolio import PortfolioAnalyticsService
 from app.services.position import PositionService
+from app.services.price_forecast import PriceForecastService
 from app.services.reports import ReportService  # V0.111.0 报告存档
 from app.services.resonance import ResonanceService
 from app.services.review import ReviewService
@@ -369,6 +370,19 @@ def get_review_service(
 ) -> ReviewService:
     """研判复盘服务依赖（价格日历 + 打分明细 + 趋势服务用于回填）。"""
     return ReviewService(gold=gold, news=news, trend=trend)
+
+
+# V0.127.0 —— 金价区间预测服务
+
+
+def get_price_forecast_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> PriceForecastService:
+    """金价区间预测服务依赖（价格日历 + 口径产物）。
+
+    ⚠ 服务内部自带 10 分钟缓存，key 含**最新收盘日** ⇒ 新收盘价一进来自动重算。
+    """
+    return PriceForecastService(session)
 
 
 # V0.70.0 P2 #7 —— 共振信号服务

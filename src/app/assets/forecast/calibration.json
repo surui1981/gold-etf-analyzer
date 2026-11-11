@@ -1,0 +1,101 @@
+{
+  "coverages": {
+    "50": {
+      "digest": null,
+      "n_out_of_sample": 250,
+      "n_recent": 120,
+      "n_train": 2068,
+      "nominal": 0.5,
+      "out_of_sample": 0.484,
+      "recent": 0.475,
+      "train": 0.5212765957446809,
+      "z": 0.6744897501960817
+    },
+    "80": {
+      "digest": null,
+      "n_out_of_sample": 250,
+      "n_recent": 120,
+      "n_train": 2068,
+      "nominal": 0.8,
+      "out_of_sample": 0.792,
+      "recent": 0.775,
+      "train": 0.7678916827852998,
+      "z": 1.2815515655446004
+    },
+    "90": {
+      "digest": null,
+      "n_out_of_sample": 250,
+      "n_recent": 120,
+      "n_train": 2068,
+      "nominal": 0.9,
+      "out_of_sample": 0.908,
+      "recent": 0.8916666666666667,
+      "train": 0.8626692456479691,
+      "z": 1.6448536269514722
+    },
+    "98": {
+      "digest": null,
+      "n_out_of_sample": 250,
+      "n_recent": 120,
+      "n_train": 2068,
+      "nominal": 0.98,
+      "out_of_sample": 0.988,
+      "recent": 1.0,
+      "train": 0.9559961315280464,
+      "z": 2.3263478740408408
+    }
+  },
+  "cross_check": {
+    "disagree_ratio": 0.5126353790613718,
+    "max_ratio": 1.1146358034362367,
+    "mean_ratio": 0.6362857791084879,
+    "min_ratio": 0.2976524803702525,
+    "n_samples": 277,
+    "note": "比值 = 类比带半宽 ÷ EWMA 带半宽。实测均值 ≈ 0.6（类比带尾部系统性更薄）。⚠ 「差 > 40%」是常态而非异常 ⇒ 运行时判据是「比值落在 [p05, p95] 之外」，不是「两法不相等」。",
+    "p05": 0.36000550159966016,
+    "p50": 0.5967068195186667,
+    "p95": 1.070715630258335
+  },
+  "digest": "sha256:654b828fd06e4fe72e10a6174195c060bfb4ecbc763ba90398b288477b5174ee",
+  "generated_at": "2026-11-11T21:16:50Z",
+  "generator": "scripts/calibrate_price_band.py",
+  "horizon": 20,
+  "method": "ewma_lognormal",
+  "notes": [
+    "覆盖率是 walk-forward 实测值：算基准日 D 的带子时只用 ≤ D 的数据。",
+    "out_of_sample = 最后 250 个预测日；train = 其之前；recent = 最后 120 个（样本外的子集）。",
+    "⚠ 实测覆盖率低于名义值是常态 —— UI 必须显示实测值，不得显示名义值。"
+  ],
+  "params": {
+    "ewma_lambda": 0.94,
+    "horizon": 20,
+    "min_sim": 30,
+    "tolerance": 0.25
+  },
+  "schema": "price-forecast-calibration/1",
+  "source": {
+    "first_date": "2016-11-14",
+    "last_date": "2026-11-11",
+    "rows": 2588,
+    "table": "gold_price_daily",
+    "target": "ny"
+  },
+  "spans": {
+    "out_of_sample": {
+      "from": "2025-10-27",
+      "n_samples": 250,
+      "to": "2026-10-14"
+    },
+    "recent": {
+      "from": "2026-04-30",
+      "n_samples": 120,
+      "to": "2026-10-14"
+    },
+    "train": {
+      "from": "2017-10-30",
+      "n_samples": 2068,
+      "to": "2025-10-24"
+    }
+  },
+  "target": "ny"
+}

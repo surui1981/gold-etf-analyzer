@@ -12,6 +12,7 @@ from app.api.v1.endpoints import (
     backtest,
     central_bank,
     decision,
+    forecast,  # V0.127.0 金价区间预测
     health,
     market,
     news,
@@ -55,4 +56,5 @@ api_router.include_router(push.router)  # V0.72.0 P3-b Web Push
 api_router.include_router(admin.router)  # V0.75.3 用户管理
 api_router.include_router(admin_token.router)  # V0.82 admin session cookie
 api_router.include_router(scoring_wide.router)  # V0.92.0 历史打分数据汇总
+api_router.include_router(forecast.router)  # V0.127.0 金价区间预测
 api_router.include_router(ai.router)  # V0.97.0 AI 智能分析

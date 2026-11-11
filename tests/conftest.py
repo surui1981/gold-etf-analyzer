@@ -37,6 +37,7 @@ async def _reset_db() -> None:
     from app.services import backtest_throttle as throttle
     from app.services import cache as served_cache
     from app.services import macro as macro_mod  # V0.79.0 Step E：模块级 _CACHE
+    from app.services import price_forecast as forecast_mod  # V0.127.0：区间预测缓存
     from app.services import task_registry  # V0.79.0 Step G
     from app.services.settings import clear_weights_cache
 
@@ -46,6 +47,9 @@ async def _reset_db() -> None:
     task_registry.clear()  # 异步任务注册表（V0.79.0 Step G）
     # V0.79.0 Step E：MacroFactorService._CACHE 是模块级 dict，跨测试必须清空
     macro_mod._CACHE = {"ts": 0.0, "result": None}
+    # V0.127.0：PriceForecastService._CACHE 是模块级 dict，跨测试必须清空
+    # （key 含最新收盘日与收盘价，但不同用例可能种下同样的日期 ⇒ 必须清）
+    forecast_mod.clear_cache()
     # V0.60.0：行情缓存（_cache_get/_cache_set）也是进程级 dict，跨测试必须清空
     with market_data._CACHE_LOCK:
         market_data._CACHE.clear()
