@@ -308,7 +308,7 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 状态 |
 |---|---|
-| 本地 | ✅ 3 个 commit（`fix(gold-inventory)` → `chore(release)` → `docs(v0.126.0)`）+ annotated tag `v0.126.0`（tag 对象 `8084f81` → commit `7f0f571` = HEAD） |
+| 本地 | ✅ 4 个 commit（`fix(gold-inventory)` → `chore(release)` → `docs(v0.126.0)` ×2）+ annotated tag `v0.126.0`（**tag 指向 HEAD**，推完回填实测 SHA） |
 | 阻塞 ① | ⚠ **凭据**：gh keyring 里只有一枚 **fine-grained PAT**（`github_pat_` 前缀）⇒ **无写权限**（历史上 `git push` 直接 403：`Permission to surui1981/gold-etf-analyzer.git denied to surui1981`）⇒ **只有 classic PAT（`ghp_` 前缀）能 push** |
 | 阻塞 ② | ⚠ **网络**：本机到 GitHub 的通道**此刻是断的**（系统 DNS 解析不了 `github.com`；DoH 能拿到 IP，但 `140.82.114.3` / `20.205.243.166` 两个 IP 都探测不通）⇒ 走「DoH 拿 IP + `http.curloptResolve` 绕 DNS + 持续重试」的老路 |
 | 已在跑 | ✅ `/tmp/push_v126.sh` 后台持续重试（每 15s 一次 DoH + 探测 + 推送）；**判据 = 远端回读**（`ls-remote` 的 `refs/heads/main` 与 `refs/tags/v0.126.0^{}`），**不信 `git push \| tail` 的退出码**（它恒为 0，失败会伪装成成功） |
