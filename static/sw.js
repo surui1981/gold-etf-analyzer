@@ -25,7 +25,7 @@
 //   ⚠ home.html / home.js / i18n 三语字典都改了 ⇒ 必须 bump VERSION（SHELL_CACHE 按版本号分桶，
 //     不 bump 就永远回放旧缓存）；zh-TW/en-US 不在 SHELL_ASSETS，靠 activate 的 stale 名单清理
 // V0.124.0 正式发版：宏观面证据复算（**第一次真正被测量** · 生产代码改动仅新增 1 个服务模块 + 回填脚本）：① **历史深度**：生产库 `daily_macro_factors` 从 201 天 / 4 个低频因子近空 → **11 因子 × 5 年 × 日历日 ≈ 2 万行**（point-in-time 重建，口径见 `services/macro_history.py`）② **发布时滞模型**（从生产表逐行反推、22 个采集日 × 3 源核对通过）：H.15/FRED = 下一个工作日 + 1 天、Yahoo = +1 天、低频四源 = 实测常量（us_gov_debt 122 / eu_gov_debt 119 / cn_gov_debt 665 / cb_gold 39 自然日）③ **第一次真正的三问复测**（生产打分口径 + 20 年重建 + h=60/20 + GLD/518880）：**16 个读数全部未通过**（macro_all / macro_daily / macro_lowfreq / zscore_all 候选）⇒ 宏观面 35% 权重是「**描述当下**」的读数，**不是前瞻指标** ⇒ **权重与因子方向一律不动**（roadmap C6 明令）④ 新增可复算脚本 `scripts/verify_macro_face.py` + 共用管线 `scripts/_evidence_core.py` + **23 条离线测试**（含正/负对照：合成真信号必须判过、白噪声必须判不过）⑤ **X1 交叉验证**：脚本重建 ≡ 生产表**逐行相等**（生产回填与证据脚本共用 `services/macro_history.py::build_observations` 单一真源）
-const VERSION = "v0.125.0";  // V0.125.0 · 首页「今日市场研究报告」入口：新增 GET /api/v1/reports/latest（最新上传的一份，空库返回 {"item": null}），首页新增 .home-report 区块（只显示最新一份，新标签页打开 /content）。⚠ 改 static/*.html|js|i18n 必须 bump VERSION —— 否则 cache-first 的 SHELL_CACHE 会永远回放旧 home.html / home.js（V0.100.1 教训）。
+const VERSION = "v0.126.0";  // V0.126.0 · 生产库从 SQLite 正式切到 MySQL 8.0.46（结构 + 历史数据全迁，25 张表 / 88k 行，逐表 SHA-256 校验和一致）。⚠ 本版**没改** static/*.html|js|css ⇒ SHELL_ASSETS 无变化；仍按惯例 bump VERSION，让已安装 PWA 的浏览器在 activate 阶段按 cache name 清掉旧 SHELL/RUNTIME 缓存。
 
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;
