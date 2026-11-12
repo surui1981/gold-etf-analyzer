@@ -486,13 +486,22 @@ def _read_json(path: Path) -> dict | None:
     return data if isinstance(data, dict) else None
 
 
-def load_shape(horizon: int = DEFAULT_HORIZON) -> list[float] | None:
-    """读形状曲线；产物缺失 / 口径不符 / 数据不合法 ⇒ ``None``（退回 √k 锥）。"""
+def load_shape(horizon: int = DEFAULT_HORIZON, target: str | None = None) -> list[float] | None:
+    """读形状曲线；产物缺失 / 口径不符 / 标的不符 / 数据不合法 ⇒ ``None``（退回 √k 锥）。
+
+    ⚠ ``target`` 是**标的维度**的护栏（V0.127.0 新加）：形状曲线是**按标的**离线
+    校准出来的（当前产物只覆盖 ``ny``）⇒ 拿 ny 的形状去画 etf / gram 的扇形，
+    等于「把别的标的的证据说成这个标的的证据」⇒ 必须挡掉，退回 √k 锥（退化基线）
+    并让调用方明示降级。
+    """
     data = _read_json(SHAPE_FILE)
     if not data:
         return None
     if int(data.get("horizon", -1)) != horizon:
         logger.warning("形状产物口径不符（horizon=%s ≠ %s）", data.get("horizon"), horizon)
+        return None
+    if target is not None and data.get("target") != target:
+        logger.warning("形状产物标的不符（%s ≠ %s）", data.get("target"), target)
         return None
     raw = data.get("shape")
     if not isinstance(raw, list) or len(raw) != horizon:
@@ -644,7 +653,7 @@ class PriceForecastService:
             raise ValueError(f"价格日历里 {target} 的数据不足 2 行")
 
         calibration = load_calibration(target)
-        shape = load_shape(horizon)
+        shape = load_shape(horizon, target=target)
         band = build_band(
             closes,
             horizon=horizon,

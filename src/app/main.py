@@ -782,6 +782,17 @@ async def trades_page() -> RedirectResponse:
     return RedirectResponse("/static/trades.html")
 
 
+@app.get("/price-forecast", include_in_schema=False)
+async def price_forecast_page() -> RedirectResponse:
+    """金价区间预测页（V0.127.0）。
+
+    回答「未来 N 个交易日金价大致在什么区间」—— **不预测涨跌**，
+    区间中心恒等于最新收盘价（``drift_mode="none"``）。
+    页面上的覆盖率是**实测**值（walk-forward 回放），不是名义值。
+    """
+    return RedirectResponse("/static/price-forecast.html")
+
+
 @app.get("/login", include_in_schema=False)
 async def login_page() -> RedirectResponse:
     """登录 / 注册页（V0.75.0）。

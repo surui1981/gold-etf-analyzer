@@ -116,3 +116,9 @@ class ForecastCalibrationOut(BaseModel):
     cross_check: dict = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
     available: bool = Field(True, description="产物是否存在（false ⇒ 页面显示「未校准」）")
+    # ── 扇形形状（前端「形状对照图」要画的两条线）──
+    # shape = 离线校准出的类比形状（k=horizon 归一为 1.0）；cone = 对数正态 √k 锥。
+    # ⚠ shape 缺失时为空数组 ⇒ 前端只画 √k 锥并显示「形状产物缺失」，
+    #   **不拿锥冒充类比形状**。
+    shape: list[float] = Field(default_factory=list, description="类比形状曲线（k=1..horizon）")
+    cone: list[float] = Field(default_factory=list, description="对数正态 √k 锥（退化基线）")

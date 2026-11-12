@@ -25,7 +25,9 @@ from app.services.price_forecast import (
     DEFAULT_HORIZON,
     DEFAULT_TARGET,
     PriceForecastService,
+    cone_shape,
     load_calibration,
+    load_shape,
 )
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
@@ -139,18 +141,28 @@ async def get_price_forecast(
 async def get_forecast_calibration(
     target: str = Query(DEFAULT_TARGET, pattern="^(ny|etf|gram)$", description="标的"),
 ) -> ForecastCalibrationOut:
-    """返回离线校准产物：各覆盖率档的实测覆盖率、样本量、两法交叉校验统计。"""
+    """返回离线校准产物：各覆盖率档的实测覆盖率、样本量、两法交叉校验统计。
+
+    ⚠ 附带**扇形形状曲线**（``shape``）与对数正态 √k 锥（``cone``）——
+    前端「形状对照图」要画的就是这两条线。``shape`` 缺失时返回空数组，
+    前端只画锥并明示「形状产物缺失」，**不拿锥冒充类比形状**。
+    """
     data = load_calibration(target)
+    horizon = int((data or {}).get("horizon", DEFAULT_HORIZON))
+    shape = load_shape(horizon, target=target) or []
+    cone = cone_shape(horizon)
     if not data:
         return ForecastCalibrationOut(
             target=target,
-            horizon=20,
+            horizon=horizon,
             available=False,
             notes=["no_calibration_artifact"],
+            shape=shape,
+            cone=cone,
         )
     return ForecastCalibrationOut(
         target=data.get("target", target),
-        horizon=int(data.get("horizon", 20)),
+        horizon=horizon,
         generated_at=data.get("generated_at"),
         method=data.get("method"),
         source=data.get("source") or {},
@@ -160,4 +172,6 @@ async def get_forecast_calibration(
         cross_check=data.get("cross_check") or {},
         notes=data.get("notes") or [],
         available=True,
+        shape=shape,
+        cone=cone,
     )
