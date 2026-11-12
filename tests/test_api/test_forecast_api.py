@@ -188,3 +188,37 @@ class TestCalibrationEndpoint:
         assert d["available"] is False
         assert d["shape"] == []
         assert len(d["cone"]) == d["horizon"]
+
+    async def test_exposes_shape_stability(self, client: AsyncClient) -> None:
+        """V0.127.1：跨窗口形状稳定性必须由接口给出来。
+
+        ⚠ 页面「已知失效条件」第 4 条的倍数以前是**写死**的
+        （训练段 0.99 倍 / 近 600 段 1.27 倍）⇒ 产物重算后会静默变成假话。
+        现在接口给的是**原始曲线**，页面现算（shape ÷ cone）。
+
+        断言的重点不是某个具体数字，而是：
+        ① 两个窗口都在、长度与 horizon 一致；
+        ② **能算出跨窗口的差异**（训练段短端比正态锥瘦，近 600 段更胖）
+           —— 这正是页面要披露的那件事，算不出来就说明数据没到位。
+        """
+        r = await client.get("/api/v1/forecast/calibration?target=ny")
+        d = r.json()
+        stab = d["shape_stability"]
+        assert set(stab) >= {"train", "recent_600"}, stab
+        for name in ("train", "recent_600"):
+            assert stab[name]["n_days"] > 0, stab[name]
+            assert len(stab[name]["shape"]) == d["horizon"], stab[name]
+
+        def k1_ratio(block: dict) -> float:
+            return block["shape"][0] / d["cone"][0]
+
+        # 训练段 ≈ 正态锥（短端不胖）⇒ 比值 < 1
+        assert k1_ratio(stab["train"]) < 1.0
+        # 近 600 段明显更胖 ⇒ 比值 > 训练段
+        assert k1_ratio(stab["recent_600"]) > k1_ratio(stab["train"])
+
+    async def test_shape_stability_is_target_guarded(self, client: AsyncClient) -> None:
+        """⚠ 稳定性证据是**按标的**校准的 ⇒ 换个标的必须为空（不是把 ny 的拿过来用）。"""
+        r = await client.get("/api/v1/forecast/calibration?target=gram")
+        d = r.json()
+        assert d["shape_stability"] == {}

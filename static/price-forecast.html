@@ -212,7 +212,7 @@
       <li data-i18n="forecast.fail_regime">regime 切换（波动率结构突变）时，实测覆盖率会下降 —— 纯类比带曾从训练段 78.5% 掉到样本外 55.4%；本页宽度不用类比法，正是为了抗这一点。</li>
       <li data-i18n="forecast.fail_holiday">未来交易日按「周一至周五」外推（不含美股假日修正，与仓库既有口径一致）。</li>
       <li data-i18n="forecast.fail_sample">历史不足或相似日不足时会降级并在页面上标出，不会静默换口径。</li>
-      <li data-i18n="forecast.fail_shape">形状（扇形的开合节奏）不是恒定结构：训练段（1992 天）k=1 处相对正态锥约 0.99 倍、近 600 段是 1.27 倍 —— 「短期更胖」是**近期行情**的现象。形状在 k=20 归一为 1.0 ⇒ 不影响 T+20 的区间宽度与实测覆盖率。</li>
+      <li data-i18n="forecast.fail_shape">形状（扇形的开合节奏）不是恒定结构：短端相对正态锥的倍数随窗口变化 ⇒ 「短期更胖」是近期行情的现象，不是恒定结构。形状在 k=20 归一为 1.0 ⇒ 不影响 T+20 的区间宽度与实测覆盖率。<span id="pfFailShapeRatios"></span></li>
     </ul>
   </section>
 

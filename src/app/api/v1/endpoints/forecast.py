@@ -28,6 +28,7 @@ from app.services.price_forecast import (
     cone_shape,
     load_calibration,
     load_shape,
+    load_shape_stability,
 )
 
 router = APIRouter(prefix="/forecast", tags=["forecast"])
@@ -151,6 +152,9 @@ async def get_forecast_calibration(
     horizon = int((data or {}).get("horizon", DEFAULT_HORIZON))
     shape = load_shape(horizon, target=target) or []
     cone = cone_shape(horizon)
+    # ⚠ 跨窗口稳定性证据（V0.127.1）：页面要靠它**现算**跨窗口的短端倍数，
+    #   写死的数字会随产物重算而变成假话。
+    stability = load_shape_stability(horizon, target=target) or {}
     if not data:
         return ForecastCalibrationOut(
             target=target,
@@ -159,6 +163,7 @@ async def get_forecast_calibration(
             notes=["no_calibration_artifact"],
             shape=shape,
             cone=cone,
+            shape_stability=stability,
         )
     return ForecastCalibrationOut(
         target=data.get("target", target),
@@ -174,4 +179,5 @@ async def get_forecast_calibration(
         available=True,
         shape=shape,
         cone=cone,
+        shape_stability=stability,
     )

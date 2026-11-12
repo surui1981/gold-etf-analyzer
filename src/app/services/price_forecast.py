@@ -523,6 +523,51 @@ def load_shape(horizon: int = DEFAULT_HORIZON, target: str | None = None) -> lis
     return vals
 
 
+def load_shape_stability(
+    horizon: int = DEFAULT_HORIZON, target: str | None = None
+) -> dict[str, dict] | None:
+    """读形状产物的**跨窗口稳定性**块 —— 同一算法在另两个窗口上的形状曲线。
+
+    ⚠ 护栏与 :func:`load_shape` **完全一致**（horizon 不符 / 标的不符 ⇒ ``None``）：
+    形状是**按标的**校准出来的 ⇒ 稳定性证据同样只能用在同一个标的上
+    （见 :func:`load_shape` 的注释）。
+
+    ⚠ 这块**不参与线上计算**（扇形宽度仍只由主窗口的 ``shape`` 决定），
+    只作「已知失效条件」的证据 ⇒ 缺失不降级任何东西，只是页面少一段披露。
+
+    返回 ``{窗口名: {"n_days": int, "shape": [float, ...]}}``；整体不可用 ⇒ ``None``。
+    """
+    data = _read_json(SHAPE_FILE)
+    if not data:
+        return None
+    if int(data.get("horizon", -1)) != horizon:
+        return None
+    if target is not None and data.get("target") != target:
+        return None
+    stab = data.get("shape_stability")
+    if not isinstance(stab, dict):
+        return None
+    out: dict[str, dict] = {}
+    for name, block in stab.items():
+        if not isinstance(block, dict):
+            continue
+        raw = block.get("shape")
+        if not isinstance(raw, list) or len(raw) != horizon:
+            continue
+        try:
+            vals = [float(v) for v in raw]
+        except (TypeError, ValueError):
+            continue
+        if any(v <= 0 for v in vals):
+            continue
+        try:
+            n_days = int(block.get("n_days") or 0)
+        except (TypeError, ValueError):
+            n_days = 0
+        out[str(name)] = {"n_days": n_days, "shape": vals}
+    return out or None
+
+
 def load_cross_check_band(calibration: dict | None) -> tuple[float, float] | None:
     """从校准产物里取两法宽度比的正常区间 ``(p05, p95)``。
 

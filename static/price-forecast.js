@@ -90,6 +90,56 @@
     return { min: min, max: max, text: min.toFixed(2) + "–" + max.toFixed(2) };
   }
 
+  /**
+   * **跨窗口**的短端倍数（k=fromK..toK）—— 同一算法在另一个窗口上的
+   * 「类比形状 ÷ 正态锥」。
+   *
+   * ⚠ 用途只有一个：把「形状不是恒定结构」这条**已知失效条件**的证据
+   *   **现算**出来（页面上的「训练段 ≈0.98 倍 / 近 600 段 ≈1.27 倍」）。
+   *   这两个数以前是写死的 ⇒ 产物重算后会静默变成假话（V0.127.1 教训）。
+   *
+   * ⚠ 窗口名必须与产物里的键一致（`shape_stability` 的键）：
+   *   `recent_600`（近 600 段）/ `train`（训练段）。
+   * ⚠ 找不到该窗口 / 数组长度对不上 ⇒ 返回 ``null`` ⇒ 页面降级为
+   *   「不含具体数字的表述」，**不拿主窗口的数字冒充别的窗口**。
+   */
+  function windowRatioRange(calib, windowName, fromK, toK) {
+    const stability = calib && calib.shape_stability;
+    const cone = calib && calib.cone;
+    if (!stability || typeof stability !== "object") return null;
+    const blk = stability[windowName];
+    if (!blk) return null;
+    const shape = blk.shape;
+    if (!Array.isArray(shape) || !Array.isArray(cone)) return null;
+    const lo = Math.max(1, fromK || 1);
+    const hi = Math.min(toK || 5, shape.length, cone.length);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let k = lo; k <= hi; k++) {
+      const c = Number(cone[k - 1]);
+      const s = Number(shape[k - 1]);
+      if (!isFinite(c) || !isFinite(s) || c <= 0) continue;
+      const r = s / c;
+      if (!isFinite(r)) continue;
+      if (r < min) min = r;
+      if (r > max) max = r;
+    }
+    if (!isFinite(min) || !isFinite(max)) return null;
+    const nDays = Number(blk.n_days) || 0;
+    return {
+      min: min,
+      max: max,
+      nDays: nDays,
+      text: min.toFixed(2) + "–" + max.toFixed(2),
+      // 供门禁/自检用：k=1 处的精确倍数
+      k1: (function () {
+        const c = Number(cone[0]);
+        const s = Number(shape[0]);
+        return isFinite(c) && isFinite(s) && c > 0 ? s / c : null;
+      })(),
+    };
+  }
+
   /* ───────────────── 格式化 ───────────────── */
 
   function fmtNum(v, digits) {
@@ -631,6 +681,50 @@
                   "类比形状已加载（无法从产物算出相对正态锥的倍数），到 10–20 日收敛。",
                 ))
           : T("forecast.shape_note_missing", "形状产物缺失 ⇒ 只画对数正态 √k 锥（退化基线）。");
+      }
+    }
+
+    // ⚠ 「已知失效条件」第 4 条里的跨窗口倍数**现算**（V0.127.1）
+    //   —— 以前写死「训练段 0.99 倍 / 近 600 段 1.27 倍」，
+    //   产物重算后会静默变成假话（实测值已是 0.98 / 1.27）。
+    //   找不到某个窗口 ⇒ 只写另一个；两个都没有 ⇒ 整段留空（句子的其余部分仍成立）。
+    const failRatios = document.getElementById("pfFailShapeRatios");
+    if (failRatios) {
+      const train = windowRatioRange(calib, "train", 1, 5);
+      const recent = windowRatioRange(calib, "recent_600", 1, 5);
+      const one = function (w) {
+        if (!w) return null;
+        const r = w.k1 != null ? w.k1 : w.min;
+        if (r == null || !isFinite(r)) return null;
+        return {
+          days: w.nDays || "—",
+          ratio: r.toFixed(2),
+        };
+      };
+      const tr = one(train);
+      const rc = one(recent);
+      // ⚠ 三个分支各用各的模板 —— 只缺一个窗口时不能共用双窗口模板，
+      //   否则缺失的占位符会以字面量 "{recentDays}" 显示在页面上。
+      if (tr && rc) {
+        failRatios.textContent = T(
+          "forecast.fail_shape_ratios",
+          "（实测 k=1：训练段 {trainDays} 天 ≈{trainRatio} 倍；近 600 段 {recentDays} 天 ≈{recentRatio} 倍）",
+          { trainDays: tr.days, trainRatio: tr.ratio, recentDays: rc.days, recentRatio: rc.ratio },
+        );
+      } else if (tr) {
+        failRatios.textContent = T(
+          "forecast.fail_shape_ratios_train",
+          "（实测 k=1：训练段 {trainDays} 天 ≈{trainRatio} 倍）",
+          { trainDays: tr.days, trainRatio: tr.ratio },
+        );
+      } else if (rc) {
+        failRatios.textContent = T(
+          "forecast.fail_shape_ratios_recent",
+          "（实测 k=1：近 600 段 {recentDays} 天 ≈{recentRatio} 倍）",
+          { recentDays: rc.days, recentRatio: rc.ratio },
+        );
+      } else {
+        failRatios.textContent = "";
       }
     }
 

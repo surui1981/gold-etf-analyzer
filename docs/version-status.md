@@ -286,17 +286,17 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 项 | 状态 |
 |---|---|
 | 内容 | ✅ **形状口径订正 hotfix** —— 起因是 V0.127.0 发版收尾核对文档与产物时，发现**同一件事的两份记录对不上**：里程碑 §3.2 的形状表与随包发布的 `assets/forecast/shape.json` 不一致，而且**该表自己内部就不自洽**（「类比 ÷ 正态」那一行乘不出上面两行）⇒ 查下去发现**页面文案也写错了** ⇒ 本版一并修掉，并把「写死的数字」换成「现算」 |
-| 🐛 修掉的 3 处 | ① **页面短端倍数写死且写错** —— 原文案「比正态锥更宽约 1.2–1.4 倍」，产物实测 **1.32–1.43 倍** ⇒ 改为 `price-forecast.js::shortEndRatioRange()` **从产物现算**（`shape` ÷ `cone`，k=1..5）；句式同时从「更宽」改成「相对正态锥为 {range} 倍（>1 表示更宽）」⇒ 比值若 < 1（更窄），句子不会变成假话；② **里程碑 §3.2 形状表**按产物实测重写（类比 31.9/52.4/65.8/76.6/90.1/100% ｜ 锥 22.4/38.7/50.0/70.7/86.6/100% ｜ 比值 1.43/1.35/1.32/1.08/1.04/1.00），并补一节「形状**没有**宽度那么稳健」；③ **页面「已知失效条件」补第 4 条** |
-| ⚠️ 「跨窗口同向」是**假的** | 三窗口短端比值（k=1..3）：产物主窗口 277 段 **1.43/1.35/1.32** ｜ 近 600 段（577 天）**1.27/1.21/1.20** ｜ **训练段（1992 天）0.99/0.99/1.02** ⇒ 「短期更胖」是**近年行情的现象**，不是恒定结构。⚠ **但宽度与覆盖率结论不受影响** —— 形状在 k=20 归一为 1.0，宽度仍由 EWMA 定，形状只作相对宽度的微调（最多少 1.4 倍） |
+| 🐛 修掉的 5 处 | ① **页面短端倍数写死且写错** —— 原文案「比正态锥更宽约 1.2–1.4 倍」，产物实测 **1.32–1.43 倍** ⇒ 改为 `price-forecast.js::shortEndRatioRange()` **从产物现算**（`shape` ÷ `cone`，k=1..5）；句式同时从「更宽」改成「相对正态锥为 {range} 倍（>1 表示更宽）」⇒ 比值若 < 1（更窄），句子不会变成假话；② **里程碑 §3.2 形状表**按产物实测重写（类比 31.9/52.4/65.8/76.6/90.1/100% ｜ 锥 22.4/38.7/50.0/70.7/86.6/100% ｜ 比值 1.43/1.35/1.32/1.08/1.04/1.00），并补一节「形状**没有**宽度那么稳健」；③ **页面「已知失效条件」补第 4 条**；④ **页面第 4 条里的跨窗口倍数也是写死的**（「训练段 0.99 倍 / 近 600 段 1.27 倍」，实测是 **0.98 / 1.27**）⇒ 新增 `load_shape_stability()`（**带标的护栏**）+ `/forecast/calibration` 暴露 `shape_stability` ⇒ 页面**现算**（`shape_stability` ÷ `cone`），**写死的地方一个不落**；⑤ **文档的跨窗口表整列错位** —— §四 把 k=1/3/5 三个值**填在 k=1/2/3 的列头下面**（读者会读成「近 600 段 k=2 = 1.21」，实际 1.25）⇒ 三个窗口**全部按 k=1..5 逐格重填**；另一处标题写「k=1..3」而列的是 k=1/3/5 ⇒ 一并改 |
+| ⚠️ 「跨窗口同向」是**假的** | 三窗口短端比值（k=1/3/5）：产物主窗口 277 段 **1.43/1.35/1.32** ｜ 近 600 段（577 天）**1.27/1.21/1.20** ｜ **训练段（1992 天）0.98/0.99/1.02** ⇒ 「短期更胖」是**近年行情的现象**，不是恒定结构。⚠ **但宽度与覆盖率结论不受影响** —— 形状在 k=20 归一为 1.0，宽度仍由 EWMA 定，形状只作相对宽度的微调（最多少 1.4 倍） |
 | ✅ **pytest 基线回绿** | V0.127.0 记的是「2277 passed / 3 failed」，那 3 条是**过期断言**（V0.121.4 把 `cb_gold` 静态值 1019 → **885.1**（修「全球合计 + 各国行」重复计数）、V0.122.0 把 `cot_gold_net` 翻成**负相关**（拥挤度口径），两次改口径都没同步测试）⇒ ① 两条宏观用例改成**引用 `STATIC_REF` 常量 + 验「常量 = 四个季度之和」**；② 资金流那条改成**逐因子按 `positive` 标志核对方向** ⇒ 红基线消失，「新失败即真回归」这条信号重新可用 |
 | 反向验证 | ✅ **3 条新断言全部做过反向验证**：① 把 `cb_gold` 静态值改回 1019 ⇒ `test_macro_evaluate_cb_gold_falls_back_when_no_injection` **变红**；② 破坏 `macro_thresholds.py` 的符号分支（`if True:`）⇒ **3 条变红**；③ 把页面倍数改回写死的「1.2–1.4」⇒ 浏览器门禁 **2 条变红**（恢复后 50/0 全绿） |
 | `__version__` | ✅ 已 bump 到 `0.127.1`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
-| 迁移 | ✅ **零 Alembic 迁移、零 DDL、零生产库写入**（只动 `static/` + `docs/` + `tests/` + 版本号） |
+| 迁移 | ✅ **零 Alembic 迁移、零 DDL、零生产库写入**（只动 `src/app/services/price_forecast.py` + `schemas/` + `endpoints/` + `static/` + `docs/` + `tests/` + 版本号） |
 | 静态资源 | ⚠ **改了 `static/price-forecast.html` + `static/price-forecast.js` + 3 个 `static/i18n/*.js`** ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION**（已 bump 到 `v0.127.1`）；无新增文件 ⇒ `SHELL_ASSETS` 仍是 **57** 条 |
-| 门禁 | ✅ `ruff check src tests scripts` **0** / `ruff format --check` **352 files already formatted** / `check_pwa_assets`（SW `v0.127.1` == 应用版本，57 条 SHELL_ASSETS）/ `check_i18n_keys`（**0 missing / 647 in-scope**）/ `check_version_sync` / `check_static_js` / `check_docs_claims` / `check_links` / `check_routes` |
-| 浏览器门禁 | ✅ `_verify_price_forecast.mjs` **50 passed / 0 failed**（较 V0.127.0 的 48 条**新增 2 条**：倍数 = 产物现算值 / 无残留旧文案）· `_verify_nav_8` **30/0** · `_verify_cmd_palette` **39/0** |
+| 门禁 | ✅ `ruff check src tests scripts` **0** / `ruff format --check` **352 files already formatted** / `check_pwa_assets`（SW `v0.127.1` == 应用版本，57 条 SHELL_ASSETS）/ `check_i18n_keys`（**0 missing / 650 in-scope**）/ `check_version_sync` / `check_static_js` / `check_docs_claims` / `check_links` / `check_routes` |
+| 浏览器门禁 | ✅ `_verify_price_forecast.mjs` **59 passed / 0 failed**（V0.127.0 的 48 条 → 50 条 → **59 条**：主窗口倍数现算 2 条 + **跨窗口倍数现算 6 条** + **三语本地化 3 条**）· `_verify_nav_8` **30/0** · `_verify_cmd_palette` **39/0** |
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.127.1**` |
-| 文档 | ✅ M12 §3.2 按产物重写 + 新增「形状没有宽度那么稳健」一节 + 教训 8/9 + §十一 加 V0.127.1 行 · [docs/price-forecast.md](price-forecast.md) §一/§四/§六 同步（§四新增三窗口比值表）· [docs/overview.md](overview.md) §2.3 · `CHANGELOG.md` 新增 V0.127.1 段（并订正 V0.127.0 段的「1.25–1.43」） |
+| 文档 | ✅ M12 §3.2 按产物重写 + 新增「形状没有宽度那么稳健」一节 + 教训 8/9/**10**（派生表要核列头）+ §十一 加 V0.127.1 行 · [docs/price-forecast.md](price-forecast.md) §一/§四（**三窗口表按 k=1..5 逐格重填**）/§六/§七 同步 · [docs/overview.md](overview.md) §2.3 · `CHANGELOG.md` 新增 V0.127.1 段（并订正 V0.127.0 段的「1.25–1.43」） |
 
 #### 推送状态：⏳ **待推送**（本会话无 classic PAT）
 

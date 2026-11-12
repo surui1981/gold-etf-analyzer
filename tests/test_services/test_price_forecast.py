@@ -18,6 +18,7 @@ E6 降级可见  相似日不足 ⇒ 标 ``vol_only`` + 原因          把 ``No
 
 from __future__ import annotations
 
+import json
 import math
 
 import pytest
@@ -385,3 +386,128 @@ class TestArtifactLoading:
         p.write_text('{"target": "etf"}', encoding="utf-8")
         monkeypatch.setattr(pf, "CALIBRATION_FILE", p)
         assert pf.load_calibration("ny") is None
+
+
+class TestShapeStability:
+    """V0.127.1：跨窗口形状稳定性（页面「已知失效条件」第 4 条的证据来源）。
+
+    ⚠ 页面上的跨窗口倍数以前是**写死**的 ⇒ 产物重算后会静默变成假话。
+    现在它由接口给出原始曲线，页面**现算**（shape ÷ cone）。
+    """
+
+    @staticmethod
+    def _write(tmp_path, monkeypatch, payload: dict) -> None:
+        p = tmp_path / "shape.json"
+        p.write_text(json.dumps(payload), encoding="utf-8")
+        monkeypatch.setattr(pf, "SHAPE_FILE", p)
+
+    @staticmethod
+    def _shape(v: float) -> list[float]:
+        return [v] * 19 + [1.0]
+
+    def test_loaded_from_artifact(self, tmp_path, monkeypatch) -> None:
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {
+                "target": "ny",
+                "horizon": 20,
+                "shape": self._shape(0.3),
+                "shape_stability": {
+                    "train": {"n_days": 1992, "shape": self._shape(0.22)},
+                    "recent_600": {"n_days": 577, "shape": self._shape(0.28)},
+                },
+            },
+        )
+        got = pf.load_shape_stability(20, target="ny")
+        assert got is not None
+        assert set(got) == {"train", "recent_600"}
+        assert got["train"]["n_days"] == 1992
+        assert len(got["train"]["shape"]) == 20
+        assert got["recent_600"]["n_days"] == 577
+
+    def test_missing_block_returns_none(self, tmp_path, monkeypatch) -> None:
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {"target": "ny", "horizon": 20, "shape": self._shape(0.3)},
+        )
+        assert pf.load_shape_stability(20, target="ny") is None
+
+    def test_broken_json_returns_none(self, tmp_path, monkeypatch) -> None:
+        p = tmp_path / "shape.json"
+        p.write_text("{not json", encoding="utf-8")
+        monkeypatch.setattr(pf, "SHAPE_FILE", p)
+        assert pf.load_shape_stability(20, target="ny") is None
+
+    def test_horizon_guard(self, tmp_path, monkeypatch) -> None:
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {
+                "target": "ny",
+                "horizon": 10,
+                "shape": [0.3] * 9 + [1.0],
+                "shape_stability": {
+                    "train": {"n_days": 5, "shape": [0.3] * 9 + [1.0]},
+                },
+            },
+        )
+        assert pf.load_shape_stability(20, target="ny") is None
+
+    def test_target_guard(self, tmp_path, monkeypatch) -> None:
+        """⚠ 与 :func:`load_shape` **同一套**标的护栏。
+
+        稳定性证据同样是**按标的**校准出来的 ⇒ 拿 ny 的跨窗口证据去讲 etf 的故事
+        = 「把别的标的的证据说成这个标的的证据」。
+        """
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {
+                "target": "ny",
+                "horizon": 20,
+                "shape": self._shape(0.3),
+                "shape_stability": {
+                    "train": {"n_days": 1992, "shape": self._shape(0.22)},
+                },
+            },
+        )
+        assert pf.load_shape_stability(20, target="ny") is not None
+        assert pf.load_shape_stability(20, target="etf") is None
+        assert pf.load_shape_stability(20, target="gram") is None
+        # 不传 target（老调用方）⇒ 不做标的护栏
+        assert pf.load_shape_stability(20) is not None
+
+    def test_bad_window_is_dropped(self, tmp_path, monkeypatch) -> None:
+        """某个窗口的 shape 不是数组 / 长度不对 / 有非正值 ⇒ 丢**该窗口**，不影响别的窗口。"""
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {
+                "target": "ny",
+                "horizon": 20,
+                "shape": self._shape(0.3),
+                "shape_stability": {
+                    "train": {"n_days": 1992, "shape": [1, 2, 3]},
+                    "bad": {"n_days": 1, "shape": [0.0] * 19 + [1.0]},
+                    "recent_600": {"n_days": 577, "shape": self._shape(0.28)},
+                },
+            },
+        )
+        got = pf.load_shape_stability(20, target="ny")
+        assert got is not None
+        assert set(got) == {"recent_600"}
+
+    def test_all_windows_bad_returns_none(self, tmp_path, monkeypatch) -> None:
+        self._write(
+            tmp_path,
+            monkeypatch,
+            {
+                "target": "ny",
+                "horizon": 20,
+                "shape": self._shape(0.3),
+                "shape_stability": {"train": {"n_days": 1, "shape": [1, 2, 3]}},
+            },
+        )
+        assert pf.load_shape_stability(20, target="ny") is None

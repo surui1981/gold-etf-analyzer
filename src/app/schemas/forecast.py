@@ -122,3 +122,13 @@ class ForecastCalibrationOut(BaseModel):
     #   **不拿锥冒充类比形状**。
     shape: list[float] = Field(default_factory=list, description="类比形状曲线（k=1..horizon）")
     cone: list[float] = Field(default_factory=list, description="对数正态 √k 锥（退化基线）")
+    # ── 跨窗口形状稳定性（V0.127.1 加）──
+    # 同一算法在**另两个窗口**（近 600 段 / 训练段）上的形状曲线。
+    # ⚠ 这块只作「已知失效条件」的证据，**不参与**线上扇形计算。
+    # ⚠ 页面上的跨窗口倍数必须**现算**（shape ÷ cone），不要写死
+    #   —— 产物重算后写死的数字会静默变假话（V0.127.1 教训）。
+    # ⚠ 缺失 ⇒ 空字典 ⇒ 页面降级为「不含具体数字的表述」。
+    shape_stability: dict = Field(
+        default_factory=dict,
+        description="跨窗口形状稳定性：{窗口名: {n_days: 样本天数, shape: [float, ...]}}",
+    )

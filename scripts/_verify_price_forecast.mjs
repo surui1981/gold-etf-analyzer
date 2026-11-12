@@ -233,6 +233,49 @@ ok("形状说明里的短端倍数 = 产物现算值", !!ratioNote && ratioNote.
 ok("形状说明没有残留写死的旧文案",
   !!ratioNote && !/1\.2–1\.4/.test(ratioNote.note), ratioNote?.note || "");
 
+// ⚠ V0.127.1：页面「已知失效条件」第 4 条里的**跨窗口倍数**也必须现算
+//   （旧实现写死「训练段 0.99 倍 / 近 600 段 1.27 倍」⇒ 产物重算后静默说错）
+const failShape = await page.evaluate(async () => {
+  const el = document.getElementById("pfFailShapeRatios");
+  if (!el) return null;
+  const text = (el.textContent || "").trim();
+  let calib = null;
+  try {
+    const r = await fetch("/api/v1/forecast/calibration?target=ny", { cache: "no-store" });
+    if (r.ok) calib = await r.json();
+  } catch (e) { /* 取不到就只验文本自身 */ }
+  const stab = calib && calib.shape_stability;
+  const cone = calib && calib.cone;
+  const k1 = (blk) => (blk && cone && cone[0] ? blk.shape[0] / cone[0] : null);
+  return {
+    text,
+    train: stab && stab.train ? k1(stab.train) : null,
+    recent: stab && stab.recent_600 ? k1(stab.recent_600) : null,
+    trainDays: stab && stab.train ? stab.train.n_days : null,
+    recentDays: stab && stab.recent_600 ? stab.recent_600.n_days : null,
+  };
+});
+ok("「已知失效条件」里的跨窗口倍数已渲染", !!failShape && failShape.text.length > 0,
+  JSON.stringify(failShape));
+if (failShape && failShape.train != null) {
+  ok("训练段倍数 = 产物现算值",
+    failShape.text.includes(failShape.train.toFixed(2)),
+    `期望 ${failShape.train.toFixed(2)}，实际 "${failShape.text}"`);
+  ok("训练段样本天数 = 产物现算值",
+    failShape.text.includes(String(failShape.trainDays)),
+    `期望 ${failShape.trainDays}，实际 "${failShape.text}"`);
+}
+if (failShape && failShape.recent != null) {
+  ok("近 600 段倍数 = 产物现算值",
+    failShape.text.includes(failShape.recent.toFixed(2)),
+    `期望 ${failShape.recent.toFixed(2)}，实际 "${failShape.text}"`);
+  ok("近 600 段样本天数 = 产物现算值",
+    failShape.text.includes(String(failShape.recentDays)),
+    `期望 ${failShape.recentDays}，实际 "${failShape.text}"`);
+}
+ok("跨窗口倍数没有残留未替换的占位符",
+  !!failShape && !/\{train|\{recent/.test(failShape.text), failShape?.text || "");
+
 // ─── 6. 校准表 ───
 console.log("\n【6】覆盖率校准表");
 const calib = await page.evaluate(() => {
@@ -294,10 +337,10 @@ console.log("\n【9】三语切换");
 await page.goto(`${BASE}/price-forecast`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector("#pfConclusion", { timeout: 20000 });
 await waitRange("#pfRange");
-for (const [lang, expect] of [
-  ["en-US", "Measured coverage"],
-  ["zh-TW", "實測覆蓋"],
-  ["zh-CN", "实测覆盖"],
+for (const [lang, expect, failExpect] of [
+  ["en-US", "Measured coverage", "measured at k=1"],
+  ["zh-TW", "實測覆蓋", "實測 k=1"],
+  ["zh-CN", "实测覆盖", "实测 k=1"],
 ]) {
   await page.evaluate(async (l) => { await window.I18n.setLang(l); }, lang);
   await new Promise((r) => setTimeout(r, 900));
@@ -306,6 +349,13 @@ for (const [lang, expect] of [
   ok(`${lang} 元信息已翻译`, meta.includes(expect), meta.replace(/\n/g, " | ").slice(0, 120));
   ok(`${lang} 区间仍是数字`, RANGE_RE.test(await page.$eval("#pfRange", (el) => el.textContent || "")));
   ok(`${lang} 无 undefined 泄漏`, !body.includes("undefined"));
+  // ⚠ V0.127.1：跨窗口倍数是 **JS 现算**的 ⇒ 切语言必须跟着重渲染，
+  //   否则会永久停在默认语言（记忆 i18n-imperative-render-race）。
+  const failText = await page.evaluate(() => {
+    const el = document.getElementById("pfFailShapeRatios");
+    return el ? (el.textContent || "").trim() : "";
+  });
+  ok(`${lang} 跨窗口倍数已本地化`, failText.includes(failExpect), failText.slice(0, 120));
 }
 await page.evaluate(async () => { await window.I18n.setLang("zh-CN"); });
 
