@@ -70,6 +70,9 @@
 | GET | `/api/v1/review/hint` | **打分校准提示（该分值区间历史命中率与上涨概率）** | `score`(0-100)、`days`、`target` |
 | GET | `/api/v1/review/horizons` | 可用判定窗口（T+1 / T+3 / T+5）与默认值 | - |
 | POST | `/api/v1/review/backfill` | **回填历史金价日历（幂等，建立对比基准）** | `days`(5-730)、`target` |
+| GET | `/price-forecast` | **金价区间预测页**（307 跳 `/static/price-forecast.html`，V0.127.0） | - |
+| GET | `/api/v1/forecast/price` | **未来 N 个交易日金价区间（扇形路径 + 实测覆盖率 + 交叉校验）** —— ⚠ **不预测涨跌**：中心恒等于最新收盘价（`drift_mode="none"`）；宽度 = EWMA 日波动率，形状 = 历史类比分位路径；返回的 `measured` 是 walk-forward **实测**覆盖率（不是名义值）。V0.127.0 只交付 `target=ny`，其余标的明确降级 | `target`(ny/etf/gram，默认 ny)、`horizon`(5-60，默认 20)、`coverage`(0.5/0.8/0.9/0.98，默认 0.8；其它值 400) |
+| GET | `/api/v1/forecast/calibration` | **区间校准产物**（各覆盖率档的实测覆盖率 + 样本量 + 两法交叉校验分位 + 扇形形状曲线 `shape` 与 √k 锥 `cone`）—— ⚠ 形状产物缺失时 `shape` 为空数组（前端只画锥并明示，**不拿锥冒充类比形状**） | `target`(ny/etf/gram，默认 ny) |
 | GET | `/api/v1/resonance/signal` | **当日共振信号（4 类 + confidence 0-100，P2 #7 V0.70.0；V0.75.1 起支持 `target` 切换黄金/白银口径）** | `target`（`ny`/`etf`/`gram`/`silver_etf`/`silver_ny`/`silver_gram`，默认 `etf`，非法值 422） |
 | GET | `/api/v1/resonance/history` | **共振信号历史回放（按日期倒序）** | `days`(1-365) |
 | GET | `/api/v1/resonance/strength-up` | **STRONG_UP 命中率统计（样本<20 时 sample_warning=true）** | `days`(1-730)、`horizon`(1-30) |
