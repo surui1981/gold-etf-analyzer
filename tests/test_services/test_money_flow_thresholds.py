@@ -117,11 +117,22 @@ async def test_月频因子的min_samples与周频不同():
 
 
 async def test_正相关因子best取P90():
+    """正相关因子：值越高越利多 ⇒ best 必须是大的一端。
+
+    ⚠ V0.122.0 起 ``cot_gold_net`` 是**负**相关（拥挤度口径：净多占 OI 越高越利空），
+      本用例原来拿它当正相关的样本 ⇒ 口径改了之后断言没同步，变成恒红。
+      ⇒ 改为**逐因子按 ``positive`` 标志核对方向**：因子增减符号改了，
+      测试自己跟着走，不会再因为「换了样本因子」而腐化。
+    """
     repo = _Repo({k: _series(200, 0, 100, k) for k in KEYS})
     calc = _calc(repo)
     th = await calc.get_or_compute("default", TODAY)
-    best, worst = th["cot_gold_net"]
-    assert best > worst, "正相关因子：值越高越利多 ⇒ best 必须是大的一端"
+    for k in KEYS:
+        best, worst = th[k]
+        if RULE_BY_KEY[k].get("positive", True):
+            assert best > worst, f"{k} 是正相关因子：值越高越利多 ⇒ best 必须是大的一端"
+        else:
+            assert best < worst, f"{k} 是负相关因子：值越低越利多 ⇒ best 必须是小的一端"
 
 
 async def test_负相关因子best取P10_方向不反():

@@ -3,7 +3,12 @@
 import pytest
 
 from app.schemas.common import DirectionSignal
-from app.services.macro import MACRO_FACTOR_RULES, MacroFactorService, _friendly_score
+from app.services.macro import (
+    MACRO_FACTOR_RULES,
+    STATIC_REF,
+    MacroFactorService,
+    _friendly_score,
+)
 
 _RULES = {r["key"]: r for r in MACRO_FACTOR_RULES}
 
@@ -328,8 +333,15 @@ async def test_macro_evaluate_cb_gold_falls_back_when_no_injection(monkeypatch, 
     # 不传 central_bank
     out = await MacroFactorService().evaluate()
     cb = next(f for f in out.factors if f.key == "cb_gold")
-    assert cb.value == "1019"  # STATIC_REF 硬编码
-    assert cb.source == "世界黄金协会 GDT Q2 2026（季度明细：Q1 56.5 / Q2 288.9）"
+    # ⚠ V0.121.4 起静态参考值 = 滚动 12 月**全球合计**
+    #   （旧值 1019 是「全球合计行 + 各国行」相加的**重复计数**，已修）。
+    #   这里不再写死数字 —— 断言「回退值 = STATIC_REF 常量」，
+    #   并用季度明细验「常量 = 四个季度之和」⇒ 重复计数若复发，这里会变红。
+    ref = STATIC_REF["cb_gold"]
+    assert cb.value == f"{ref['value']:g}"
+    assert cb.source == ref["note"]
+    quarters = (209.9, 57.7, 296.3, 321.2)  # 2025Q4 / 2026Q1 / Q2 / Q3
+    assert ref["value"] == pytest.approx(sum(quarters))
 
 
 # ───────────────────── V0.110.0 · 宏观因子手动校准 ─────────────────────
@@ -406,7 +418,9 @@ async def test_v01100_partial_override_keeps_auto_for_others(monkeypatch) -> Non
 
     assert values["dxy"][2] == "手动输入"
     assert values["vix"] == (18.5, "2026-08-28", "静态参考值")
-    assert values["cb_gold"][0] == 1019.0
+    # ⚠ 写死 1019 的断言在 V0.121.4 修掉「全球合计 + 各国行」重复计数后就是过期断言了
+    #   ⇒ 改为引用 STATIC_REF 常量（数字变了不必再改测试，但常量被改错会在这里变红）
+    assert values["cb_gold"][0] == STATIC_REF["cb_gold"]["value"]
 
 
 async def test_v01100_empty_override_set_changes_nothing(monkeypatch) -> None:
