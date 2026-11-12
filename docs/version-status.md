@@ -308,11 +308,16 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 远端 | 本地 | 一致 |
 |---|---|---|---|
-| `refs/heads/main` | （未推） | `5fb671b`（= 本地 HEAD） | ⏳ |
+| `refs/heads/main` | `75db870`（= 上一轮 V0.126.0 的发版 commit） | `55a644b`（本地 HEAD，**快照** —— 下一条 commit 一落地就变） | ⏳ 本轮 4 条 commit 未推 |
 | `refs/tags/v0.127.0` | （未推） | tag 对象 `0a8e33c` | ⏳ |
 | `refs/tags/v0.127.0^{}` | （未推） | `5fb671b`（= 发版 commit） | ⏳ |
 | tag 数（去掉 `^{}` 行） | **123** | **124** | ⏳ 差 1（本轮新 tag 未推） |
 | annotated / lightweight | — | **118 / 6**（= 124 ✅ 自洽） | ⏳ |
+
+> 📌 **main 与 tag 的 `^{}` 本来就不该相等** —— tag 打在**发版 commit**（`5fb671b`）上，
+> 其后还有 3 条**收尾 commit**（推送状态回填 / api-reference 补 3 个入口 / README·docs 数字回填）
+> ⇒ 推完后远端 main == 本地 HEAD，**但** 远端 tag 的 `^{}` 仍停在 `5fb671b`（这才是对的：
+> tag 标记的是**那一版的代码**，不是后来的文档修订）。
 
 > 📌 **tag 数 124 = 123 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
 > 但确实是真实存在的发布锚点，**而且它也是 annotated**）。
