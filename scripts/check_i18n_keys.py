@@ -95,6 +95,10 @@ V083_KEY_PREFIXES = (
     #   ⇒ I18n.t() 返回 **key 字面量** ⇒ 页面正文直接显示 "time.hour_ago"。
     #   门禁此前看不见，因为 `time.` 不在严格清单里。
     "time.",
+    # V0.127.0：金价区间预测（forecast.* 74 键 + home.scene_forecast*）
+    #   price-forecast.js 用本地包装器 T(key, fallback) 取 key（字典没命中就回退中文，
+    #   绝不渲染 key 字面量）⇒ 不进严格清单的话「忘了加 zh-TW」只会悄悄显示简体。
+    "forecast.",
 )
 
 

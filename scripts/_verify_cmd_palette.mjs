@@ -2,7 +2,7 @@
 // V0.112.0 验证：⌘K 命令面板（可见入口 / 自动派生清单 / 桌面+手机 / 三语）
 //
 // 覆盖：
-//  1. 18 个有顶栏的页都挂了 command-palette.js，且顶栏都有「⌘ 搜索」按钮
+//  1. 19 个有顶栏的页都挂了 command-palette.js，且顶栏都有「⌘ 搜索」按钮
 //  2. 点按钮能打开面板（此前**全站 0 个可见入口**，手机端等于没有）
 //  3. 清单是**自动派生**的：含 V0.68 硬编码清单里没有的 4 条
 //     （今日要闻 / 报告存档 / 数据健康 / AI），且场景分组与 SCENES 顺序一致
@@ -22,11 +22,13 @@ const BASE = process.env.BASE_URL || "http://127.0.0.1:8888";
 const CHROME =
   "/home/surui/.cache/puppeteer/chrome/linux-153.0.8010.36/chrome-linux64/chrome";
 
-// 18 个挂 topnav-mount 的页（与 check_cluster_render 的页面清单同源口径）
+// 19 个挂 topnav-mount 的页（与 check_cluster_render 的页面清单同源口径）
+// V0.127.0：新增 price-forecast（金价区间预测页）
 const PAGES = [
   "home", "headlines", "scoring", "trend", "backtest", "review",
   "portfolio", "trades", "news", "central_bank", "silver", "favorites",
   "report-archive", "report", "weights", "settings", "data-health", "ask",
+  "price-forecast",
 ];
 
 let pass = 0;
@@ -52,7 +54,7 @@ page.on("console", (m) => {
 });
 
 // ─── 1/2. 逐页：脚本挂载 + 按钮存在 + 点得开 ───
-console.log("【1】18 页逐页：挂载 + 可见入口 + 可打开");
+console.log("【1】19 页逐页：挂载 + 可见入口 + 可打开");
 let openedAll = 0;
 for (const name of PAGES) {
   await page.goto(`${BASE}/static/${name}.html`, { waitUntil: "networkidle2" });
@@ -76,7 +78,7 @@ for (const name of PAGES) {
   if (n < 10) ok(`${name} 清单条目数`, false, `只有 ${n} 条`);
   await page.evaluate(() => window.PM_CmdPalette.close());
 }
-ok("18 页全部能点开面板", openedAll === PAGES.length, `${openedAll}/${PAGES.length}`);
+ok("19 页全部能点开面板", openedAll === PAGES.length, `${openedAll}/${PAGES.length}`);
 console.log(`  （${PAGES.length} 页逐页检查完毕）`);
 
 // ─── 3. 清单是派生的，不是 V0.68 那份硬编码 ───
@@ -96,10 +98,11 @@ const items = await page.$$eval(".pm-cmd-item", (e) =>
   }))
 );
 
-// 18 而不是 19：帮助命令是**按需出现**的 —— help.js 只挂在 10 个页上
+// 19 而不是 20：帮助命令是**按需出现**的 —— help.js 只挂在 10 个页上
 //（ask/central_bank/news/data-health/portfolio/settings/scoring/trades/weights/trend），
-// home.html 没有它，所以少一条。有 help.js 的页上应是 19（见下方 trend.html 那段）。
-ok("清单共 18 条（17 导航 + 刷新；本页无 help.js）", items.length === 18, `实际 ${items.length}`);
+// home.html 没有它，所以少一条。有 help.js 的页上应是 20（见下方 trend.html 那段）。
+// V0.127.0：决策场景新增第 5 个子页「金价区间」(/price-forecast) ⇒ 导航条目 17 → 18。
+ok("清单共 19 条（18 导航 + 刷新；本页无 help.js）", items.length === 19, `实际 ${items.length}`);
 ok("按场景分组", secs.length === 9, `实际 ${secs.length} 组：${secs.join(" / ")}`);
 
 // 这 4 条是 V0.68 硬编码清单里**没有**的，正是「两代导航都没跟上」的实证
@@ -108,9 +111,10 @@ for (const must of ["今日要闻", "报告存档", "数据健康", "智能分�
 }
 ok("含首页", items.some((i) => i.label.includes("首页")));
 
-// 去重：8 场景 + 13 子页 = 21 个 path，但 4 个场景 path 与某子页重合 → 17 条
+// 去重：8 场景 + 14 子页 = 22 个 path，但 4 个场景 path 与某子页重合 → 18 条
+// （V0.127.0：决策场景的第 5 个子页 /price-forecast 是**新** path，不与场景 path 重合 ⇒ 17 → 18）
 const hints = items.map((i) => i.hint).filter((h) => h.startsWith("/"));
-ok("17 个导航 URL 且无重复", hints.length === 17 && new Set(hints).size === 17,
+ok("18 个导航 URL 且无重复", hints.length === 18 && new Set(hints).size === 18,
    `${hints.length} 条 / ${new Set(hints).size} 个唯一`);
 
 // 分组顺序应与 SCENES 顺序一致（首页/今日要闻/决策/持仓/情报/报告存档/配置/AI）
@@ -175,7 +179,7 @@ console.log("\n【4】动作命令真的接了线");
 const actLabels = items.slice(-1).map((i) => i.label);
 ok("动作组含刷新", actLabels.some((l) => l.includes("刷新")), JSON.stringify(actLabels));
 
-// help.js 页上才有帮助命令（按需出现，见上面 18/19 条的说明）
+// help.js 页上才有帮助命令（按需出现，见上面 19/20 条的说明）
 await page.goto(`${BASE}/static/trend.html`, { waitUntil: "networkidle2" });
 await page.waitForSelector(".nav-btn-cmd");
 const trendItems = await page.evaluate(async () => {
@@ -187,7 +191,7 @@ const trendItems = await page.evaluate(async () => {
   window.PM_CmdPalette.close();
   return { n, lastLabel };
 });
-ok("有 help.js 的页是 19 条", trendItems.n === 19, `实际 ${trendItems.n}`);
+ok("有 help.js 的页是 20 条", trendItems.n === 20, `实际 ${trendItems.n}`);
 ok("动作组含帮助（trend 有 help.js）", trendItems.lastLabel.includes("引导"), trendItems.lastLabel);
 
 // 帮助命令 → 功能导览弹窗真的打开（V0.68 调的是不存在的 PM_Help.show()）

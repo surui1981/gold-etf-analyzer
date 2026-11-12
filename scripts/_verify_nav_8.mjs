@@ -165,7 +165,7 @@ ok("数据健康子页自身高亮", !!healthTab?.active, JSON.stringify(subOnHe
 const hTitle = await page.evaluate(() => document.body.innerText.slice(0, 200));
 ok("数据健康页内容正常（非 404）", !/404 Not Found/i.test(hTitle), hTitle.slice(0, 60));
 
-// ─── 4. 首页 8 张板块 ───
+// ─── 4. 首页 9 张板块 ───
 console.log("\n【4】首页板块");
 await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
 await page.waitForSelector(".home-scene", { timeout: 15000 });
@@ -178,7 +178,8 @@ const cards = await page.$$eval(".home-scene", (els) =>
 );
 // V0.111.1 定稿：首页 8 张板块。数据健康虽是「配置」的子页，但仍保留自己的首页卡
 // （它有独立的摘要信息，是用户常回看的页面）—— 所以首页卡与顶 nav **不是**一一对应。
-ok("首页 8 张场景卡", cards.length === 8, `实际 ${cards.length}：${cards.map((c) => c.title).join(" / ")}`);
+// V0.127.0：新增「金价区间」卡（未来 20 交易日扇形区间）⇒ 8 → 9 张。
+ok("首页 9 张场景卡", cards.length === 9, `实际 ${cards.length}：${cards.map((c) => c.title).join(" / ")}`);
 ok("首页有数据健康卡", cards.some((c) => c.title.includes("数据健康")), cards.map((c) => c.title).join(" / "));
 ok("AI 卡在最后", (cards[cards.length - 1]?.title || "").includes("AI 智能分析"), cards[cards.length - 1]?.title);
 ok("无 undefined 泄漏", !cards.some((c) => c.title.includes("undefined")));
@@ -189,8 +190,14 @@ ok("配置卡列出 3 个子项（含数据健康）", cfg?.items.length === 3 &
 const hl = cards.find((c) => c.title.includes("数据健康"));
 ok("数据健康卡指向 /data-health 别名", hl?.href === "/data-health", hl?.href);
 
+// V0.127.0：新增「金价区间」卡 ⇒ 断言它在，且指向 /price-forecast
+const fc = cards.find((c) => (c.href || "").includes("price-forecast"));
+ok("首页有金价区间卡", !!fc, cards.map((c) => c.title).join(" / "));
+ok("金价区间卡指向 /price-forecast", fc?.href === "/price-forecast", fc?.href);
+ok("金价区间卡列出 3 个子项", fc?.items.length === 3, JSON.stringify(fc?.items));
+
 // 首页卡顺序 = 顶 nav 去掉「首页」，再在「配置」后补回「数据健康」
-const EXPECTED_CARDS = ["今日要闻", "决策", "持仓", "情报", "报告存档", "配置", "数据健康", "AI 智能分析"];
+const EXPECTED_CARDS = ["今日要闻", "决策", "金价区间", "持仓", "情报", "报告存档", "配置", "数据健康", "AI 智能分析"];
 const gotCards = cards.map((c) => EXPECTED_CARDS.find((x) => c.title.includes(x)) || `?(${c.title})`);
 ok("首页卡顺序与顶 nav 一致", JSON.stringify(gotCards) === JSON.stringify(EXPECTED_CARDS), gotCards.join(" → "));
 

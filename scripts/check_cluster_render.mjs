@@ -1044,7 +1044,7 @@ await Promise.all(pending);
   ok("topnav.js :: 8 个顶级场景", sceneCount === 8, `actual=${sceneCount}`);
 
   const paths = (sceneBlock.match(/path:\s*"/g) || []).length;
-  ok("topnav.js :: 8 场景 + 13 子页 = 21 个导航目标", paths === 21, `actual=${paths}`);
+  ok("topnav.js :: 8 场景 + 14 子页 = 22 个导航目标", paths === 22, `actual=${paths}`);
 
   // V0.112.0：命令面板的命令清单从这里派生。SCENES 若不再导出，open() 时拿不到
   // 导航结构，面板会静默退化成「只有刷新/帮助两条」—— 那是个不会报错的坏状态，

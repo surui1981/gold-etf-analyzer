@@ -215,6 +215,7 @@ def test_no_hardcoded_chinese_in_freshness_js() -> None:
         "settings.html",
         "data-health.html",
         "login.html",
+        "price-forecast.html",  # V0.127.0 金价区间预测
     ],
 )
 def test_html_pages_have_data_i18n(html_name: str) -> None:

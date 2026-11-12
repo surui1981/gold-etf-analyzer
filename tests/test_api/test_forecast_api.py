@@ -159,3 +159,32 @@ class TestCalibrationEndpoint:
         assert r.status_code == 200
         d = r.json()
         assert d["available"] is False
+
+    async def test_returns_shape_and_cone(self, client: AsyncClient) -> None:
+        """V0.127.0：前端「形状对照图」要画的两条线必须由接口给出来。
+
+        - ``shape`` = 离线校准出的**类比形状**（k=horizon 归一为 1.0）；
+        - ``cone``  = 对数正态 √k 锥（退化基线）。
+
+        ⚠ 两者都必须存在且等长；**缺失时前端只画锥并明示「形状产物缺失」**，
+        绝不拿锥冒充类比形状（那是把「没有证据」说成「有证据」）。
+        """
+        r = await client.get("/api/v1/forecast/calibration?target=ny")
+        d = r.json()
+        assert len(d["shape"]) == d["horizon"], d["shape"]
+        assert len(d["cone"]) == d["horizon"], d["cone"]
+        # 归一：k=horizon 处必须为 1.0（两条线都是）
+        assert d["shape"][-1] == pytest.approx(1.0, abs=1e-3)
+        assert d["cone"][-1] == pytest.approx(1.0, abs=1e-6)
+        # 锥的闭式值 √(k/H)：k=1 时 ≈ 0.2236
+        assert d["cone"][0] == pytest.approx(math.sqrt(1 / d["horizon"]), abs=1e-6)
+        # 类比形状在短期比锥更胖（实测 1.25–1.31×）⇒ k=1 处 shape > cone
+        assert d["shape"][0] > d["cone"][0]
+
+    async def test_shape_absent_still_returns_cone(self, client: AsyncClient) -> None:
+        """形状产物缺失时：``shape`` 为空数组、``cone`` 仍在（前端画退化基线 + 提示）。"""
+        r = await client.get("/api/v1/forecast/calibration?target=gram")
+        d = r.json()
+        assert d["available"] is False
+        assert d["shape"] == []
+        assert len(d["cone"]) == d["horizon"]

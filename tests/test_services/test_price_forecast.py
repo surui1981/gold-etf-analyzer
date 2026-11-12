@@ -363,6 +363,23 @@ class TestArtifactLoading:
         got = pf.load_shape(20)
         assert got is not None and got[-1] == 1.0
 
+    def test_shape_of_another_target_is_rejected(self, tmp_path, monkeypatch) -> None:
+        """V0.127.0：形状曲线是**按标的**校准的 ⇒ 标的不符必须退回 √k 锥。
+
+        ⚠ 拿 ny 的形状去画 etf / gram 的扇形 = 「把别的标的的证据说成这个标的的证据」。
+        """
+        p = tmp_path / "shape.json"
+        p.write_text(
+            '{"target": "ny", "horizon": 20, "shape": ' + str([0.3] * 19 + [1.0]) + "}",
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(pf, "SHAPE_FILE", p)
+        assert pf.load_shape(20, target="ny") is not None
+        assert pf.load_shape(20, target="etf") is None
+        assert pf.load_shape(20, target="gram") is None
+        # 不传 target（老调用方）⇒ 不做标的护栏
+        assert pf.load_shape(20) is not None
+
     def test_calibration_target_mismatch_returns_none(self, monkeypatch, tmp_path) -> None:
         p = tmp_path / "calibration.json"
         p.write_text('{"target": "etf"}', encoding="utf-8")

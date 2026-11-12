@@ -53,6 +53,7 @@ ROOT_ALIASES = [
     ("/headlines", "/static/headlines.html"),  # V0.102 今日要闻
     ("/favorites", "/static/favorites.html"),  # V0.103 我的收藏
     ("/report-archive", "/static/report-archive.html"),  # V0.111.0 报告存档
+    ("/price-forecast", "/static/price-forecast.html"),  # V0.127.0 金价区间预测
 ]
 
 
