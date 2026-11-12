@@ -298,31 +298,39 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.127.1**` |
 | 文档 | ✅ M12 §3.2 按产物重写 + 新增「形状没有宽度那么稳健」一节 + 教训 8/9/**10**（派生表要核列头）+ §十一 加 V0.127.1 行 · [docs/price-forecast.md](price-forecast.md) §一/§四（**三窗口表按 k=1..5 逐格重填**）/§六/§七 同步 · [docs/overview.md](overview.md) §2.3 · `CHANGELOG.md` 新增 V0.127.1 段（并订正 V0.127.0 段的「1.25–1.43」） |
 
-#### 推送状态：⏳ **待推送**（本会话无 classic PAT）
+#### 推送状态：✅ **已推送**（2026-11-12 · classic PAT）
 
-**结论先行：代码、门禁、文档、提交、tag 全部就绪；**推送这一步还差一枚 classic PAT**
-（gh keyring 里那枚 **fine-grained PAT 没有写权限** —— 实测 `git push --dry-run` 返回
-`Permission to surui1981/gold-etf-analyzer.git denied to surui1981.` / HTTP **403**）。
+**结论先行：代码、门禁、文档、提交、tag 全部就绪，**已用一枚 classic PAT 推上远端**，
+并**以远端回读确认**（不是看 `git push` 的退出码）。
 
 | 项 | 远端 | 本地 | 一致 |
 |---|---|---|---|
-| `refs/heads/main` | `75db870`（= 上一轮 V0.126.0 的发版 commit） | 本地 HEAD（**快照** —— 下一条 commit 一落地就变） | ⏳ 本轮 commit 未推 |
-| `refs/tags/v0.127.0` | （未推） | tag 对象 `0a8e33c` | ⏳ |
-| `refs/tags/v0.127.0^{}` | （未推） | `5fb671b`（= V0.127.0 的发版 commit） | ⏳ |
-| `refs/tags/v0.127.1` | （未推） | tag 对象 `da0eaf9` | ⏳ |
-| `refs/tags/v0.127.1^{}` | （未推） | `7ade81f`（= V0.127.1 的发版 commit） | ⏳ |
-| tag 数（去掉 `^{}` 行） | **123** | **125** | ⏳ 差 2（本轮 2 个 tag 未推） |
-| annotated / lightweight | — | **119 / 6**（= 125 ✅ 自洽） | ⏳ |
+| `refs/heads/main`（**发版那一刻** = tag `v0.127.1` 的 `^{}`） | `7ade81f` | `7ade81f` | ✅（tag 指向**发版** commit；其后又补了几条收尾 commit（实测数字回填 + 推送状态回填）⇒ 远端 main 与本地 HEAD 始终相等） |
+| `refs/tags/v0.127.0` | `0a8e33c` | tag 对象 `0a8e33c` | ✅ |
+| `refs/tags/v0.127.0^{}` | `5fb671b` | `5fb671b`（= V0.127.0 的发版 commit） | ✅ |
+| `refs/tags/v0.127.1` | `da0eaf9` | tag 对象 `da0eaf9` | ✅ |
+| `refs/tags/v0.127.1^{}` | `7ade81f` | `7ade81f`（= V0.127.1 的发版 commit） | ✅ |
+| tag 数（去掉 `^{}` 行） | **125** | **125** | ✅ 差 0 |
+| annotated / lightweight | — | **119 / 6**（= 125 ✅ 自洽） | ✅ |
 
 > 📌 **推送方式**（**token 不进 argv、不落盘、不进 `remote.origin.url`**）：
 > `export GH_TOKEN=…` + `git -c credential.helper='!gh auth git-credential' push origin main v0.127.0 v0.127.1`；
 > 推完 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history` 并复核 5 处 token 痕迹。
 > ⚠ **只有 classic `ghp_` 能推**（fine-grained 的 `permissions.admin` 是**用户的仓库角色**，
-> 不是 token 自己的权限）。
+> 不是 token 自己的权限）—— 本轮先用 gh keyring 里那枚 fine-grained PAT 试过，
+> 实测 `git push` 返回 `Permission to surui1981/gold-etf-analyzer.git denied to surui1981.` / HTTP **403**。
 >
 > 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
 > ⇒ 失败会被伪装成成功。推完必须回读 `refs/heads/main`（== 本地 HEAD）、
 > 两个 tag 的对象与 `^{}` 行、远端 tag 数（== 本地）。
+>
+> ⚠️ **main 的当前 SHA 不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 上表里的 `7ade81f` 是**发版那一刻**的读数（＝ tag `v0.127.1` 的 `^{}`，可以写死）；
+> **当前**的远端 main 用 `git ls-remote origin refs/heads/main` 与 `git rev-parse HEAD` 对比。
+>
+> ⚠ **那枚 classic PAT 已经出现在会话记录里** ⇒ 用完**必须轮换**（本地清不掉：
+> `~/.bash_history` / `~/.gitconfig` / 仓库内 / memory 目录 / `auto-mode-classifier-error.txt`
+> 五处复查均 **0 命中**，但会话 `.jsonl` 里的副本清不掉）。
 
 ### 上一轮：V0.127.0（2026-11-12 发版）
 
