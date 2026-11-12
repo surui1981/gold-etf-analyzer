@@ -23,7 +23,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 **测试与代码质量**
 
 ```bash
-python -m pytest -v          # 866+ 用例（离线回归 822+ passed，排除 2 个联网 fetcher 文件 44 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0）
+python -m pytest -v          # 2285 用例（离线口径 2235，排除 2 个联网 fetcher 文件 50 用例）：服务层 + API 集成 + scheduler / cache / intraday / help / providers / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0）
 ruff check src tests          # 静态检查
 ruff format src tests         # 格式化
 ```

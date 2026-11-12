@@ -56,7 +56,7 @@ if TYPE_CHECKING:  # 仅供 _start_in_process_server 的返回注解用，运行
 # ──────────────── 期望状态表（事实真相；与 test_main_app.py ROOT_ALIASES 同步） ────────────────
 
 
-# 18 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应；
+# 19 个页面 alias（与 src/app/main.py 的 @app.get 路径一一对应；
 # V0.91.0 新增 /report —— 复盘报告 PDF 导出页；V0.92.0 新增 /scoring —— 打分汇总）
 EXPECTED_ALIAS_PATHS: list[str] = [
     "/",

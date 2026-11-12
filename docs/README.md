@@ -1,6 +1,6 @@
 # 文档导航
 
-> **目标读者**：所有人（这是 docs/ 的入口）｜ **最近更新**：2026-11-05
+> **目标读者**：所有人（这是 docs/ 的入口）｜ **最近更新**：2026-11-12
 >
 > 本文件回答两个问题：**「我要找 X，该打开哪个文件？」** 和 **「这个文件还算不算数？」**。
 > 其余文档一律不再重复回答这两个问题。
@@ -18,6 +18,7 @@
 | 理解模块划分与数据源 | [architecture.md](architecture.md) |
 | 查接口字段与返回结构 | [api-reference.md](api-reference.md) |
 | **弄懂综合趋势评估指数怎么算的** | [composite-trend-index.md](composite-trend-index.md) |
+| **弄懂金价区间预测（未来 20 交易日）怎么算的** | [price-forecast.md](price-forecast.md) |
 | **调评估参数 / 加新参数** | [parameter-evaluation.md](parameter-evaluation.md) |
 | **调权重（前端可改的那部分）** | 应用内 `/weights` 页 → [api-reference.md](api-reference.md) 的 settings 段 |
 | **知道下一步要做什么** | [roadmap.md](roadmap.md) ← **唯一活跃路线** |
@@ -43,12 +44,13 @@ docs/
 │   ├── deployment.md            怎么部署
 │   ├── parameter-evaluation.md  评估参数清单与调参建议
 │   ├── composite-trend-index.md 综合趋势评估指数：计算方式与主要参考
+│   ├── price-forecast.md       金价区间预测：中心/宽度/形状口径 + 实测覆盖率
 │   ├── version-status.md        应用版本状态（单一真源：现在到底是哪个版本）
 │   └── roadmap.md               路线图（唯一权威的「下一步」，逐条带实测判据）
 │
 ├── releases/
 │   ├── index.md                 能力 × 版本对照表（哪个能力哪个版本加的）
-│   └── milestones/              8 份里程碑文档（V0.11 → 当前，演进脉络）
+│   └── milestones/              13 份里程碑文档（M0–M12，V0.11 → 当前，演进脉络）
 │
 ├── parameter-evaluation/        参数调优的专项报告（逐份带日期与 commit）
 └── reports/                     决策链存档（历史评估汇总 + 时点快照）
@@ -62,7 +64,7 @@ docs/
    `feature-alignment`），合并成**一份** [roadmap.md](roadmap.md)。
 2. **`releases/` 与 `parameter-evaluation/` 只增不改。**
    V0.120.5 起 `releases/` 下**不再有逐版 release notes** ——
-   60 份小版本合并为**里程碑文档**（V0.121.0 起共 7 份）；逐版原始全文在 **git 历史**里
+   60 份小版本合并为**里程碑文档**（V0.121.0 起；**现共 13 份**）；逐版原始全文在 **git 历史**里
    （tag 与原文件名同名：`git show v0.118.0:docs/releases/v0.118.0.md`）。
 3. **`reports/` 是「决策链存档」**，记述性内容允许写出当时错误或已废弃的实体名 ——
    这是它被排除在 `check_docs_claims.py` 扫描范围之外的原因（见该脚本 `SKIP_FILES`）。
@@ -74,9 +76,10 @@ docs/
 | 文档 | 状态 | 备注 |
 |------|------|------|
 | `roadmap.md` | 活跃 | V0.120.5 重写：合并 6 份旧规划文档并逐条实测复核；V0.121.0 更新为 3 批发版编排（基线 V0.121.0） |
-| `releases/milestones/` | 归档 | 8 份里程碑文档，覆盖 V0.11 → 当前（M0–M5 + **M6 可信度修复 V0.121** + **M7 因子符号校准 V0.122**） |
+| `releases/milestones/` | 归档 | **13 份**里程碑文档，覆盖 V0.11 → 当前（M0–M12：M6 可信度修复 V0.121 · M7 因子符号校准 V0.122 · M8 资金流面证据 V0.123 · M9 宏观面证据 V0.124 · M10 首页研报 V0.125 · M11 MySQL 迁移 V0.126 · **M12 金价区间预测 V0.127**） |
 | `releases/index.md` | 活跃 | 「详情」列现在指向**该能力所属里程碑**（不再是逐版文件） |
 | `composite-trend-index.md` | 活跃 | 2026-11-08 新建：综合趋势评估指数的四面加权公式、5+11+6 个因子的打分公式、数据源总表、7 条口径纪律与完整算例 |
+| `price-forecast.md` | 活跃 | 2026-11-12 新建（V0.127.0）：金价区间预测的**口径真源** —— 中心（无漂移）/ 宽度（EWMA）/ 形状（历史类比）三件套 + 离线 walk-forward 实测覆盖率 + 已知失效条件；⚠ **不预测涨跌** |
 | `parameter-evaluation.md` | 活跃 | 参数清单完整；建议值章节的基线是 V0.77.2，重估时需按当前代码复核 |
 | `version-status.md` | 活跃 | **发版必更**（`check_version_sync.py` 校验它声明的基线 == 应用版本） |
 

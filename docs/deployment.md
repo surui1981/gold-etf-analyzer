@@ -43,6 +43,16 @@ $EDITOR .env.prod
 - `CORS_ORIGINS`：`https://your-domain.com`（不要带尾斜杠）
 - `SMTP_*` / `SERVERCHAN_SENDKEY`：可选；留空 = 禁用对应渠道
 
+> ⚠️ **数据库引擎由 `.env.prod` 的 `DATABASE_URL` 决定**（V0.126.0 起支持两种）：
+> - `sqlite:///app/data/gold_etf.db` —— **Docker 公开部署的默认**（compose 里的 `app_data` named volume）；
+> - `mysql+asyncmy://…` —— **MySQL 8**，自托管生产在用（V0.126.0 起本机生产库就是 MySQL）。
+>
+> ⚠️ **备份命令随引擎而变**（照抄另一条 ⇒ 备份是假的或恢复不了）：
+> SQLite ⇒ `sqlite3 … .backup()`；MySQL ⇒ `mysqldump --single-transaction`（不停写的一致性快照）。
+> `scripts/daily_backup.sh` **读 `.env.prod` 自动分流**（systemd 部署用它）；
+> 而 `docker-compose.prod.yml` 里的 `backup-cron` 服务是 **SQLite 专用** ——
+> 用 MySQL 时别指望它，用上面的脚本。
+
 ## 4. 初始化 HTTPS 证书
 
 首次部署用 `deploy/init-letsencrypt.sh`（webroot 挑战）：
@@ -136,11 +146,30 @@ docker compose -f docker-compose.prod.yml logs --tail 500 app
 # 列出备份
 ls backups/ | sort
 
-# 恢复（先停 app）
+# 恢复（先停 app）—— ⚠️ 下面是 **SQLite** 引擎的写法
 docker compose -f docker-compose.prod.yml stop app
 sqlite3 data/gold_etf.db ".restore backups/gold_etf-2026-09-21.db"
 docker compose -f docker-compose.prod.yml start app
 ```
+
+> ⚠️ **MySQL 8 部署不能照抄上面三条**（那是 SQLite 的 `.restore`）——
+> MySQL 的备份是 `mysqldump --single-transaction` 出来的 `.sql.gz`，恢复是灌回去：
+>
+> ```bash
+> # 备份（systemd 部署：读 .env.prod 自动分流 SQLite / MySQL）
+> bash scripts/daily_backup.sh                    # → data/backups/gold_etf-<日期>.sql.gz（MySQL）或 .db（SQLite）
+>
+> # 恢复（MySQL）：先停 app，再把 dump 灌回去
+> gzip -dc data/backups/gold_etf-2026-11-11.sql.gz | mysql --defaults-extra-file=/path/to/0600-my.cnf gold_etf
+> ```
+>
+> ⚠️ **MySQL 凭据不进 argv**：用 `--defaults-extra-file`（**必须是程序名之后的第一个选项**）指向一个 0600 的临时文件，
+> 密码既不落在 `ps` 里、也不进日志；用完 `shred -u` 掉。
+>
+> ⚠️ **备份要验「能不能恢复」，不只看「文件在不在」**（V0.126.0 实测教训）：
+> 失败时曾留下一个 **20 字节的假 `.sql.gz`**（`mysqldump` 挂掉前空文件已创建）——
+> 现在脚本改成**原子写**（先写 `.tmp-*` → 校验 → 才 `mv` 就位，失败则一个文件都不留）。
+> 但你要判断的仍然是「**能不能灌回去**」：灌进临时库逐表对行数。
 
 ### 升级
 

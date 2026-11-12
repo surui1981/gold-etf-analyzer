@@ -45,6 +45,7 @@ src/app/
 │   ├── snapshot.py      # 每日评估快照服务
 │   ├── settings.py      # 权重配置持久化
 │   ├── central_bank.py  # 央行购金业务编排（T12M / Top / 范围筛选）
+│   ├── price_forecast.py # 金价区间预测（EWMA 定宽 × 类比定形；中心无漂移，V0.127.0）
 │   ├── cache.py         # served cache（首屏直接命中）
 │   ├── auth.py          # 认证：bcrypt 口令 / 密码策略 / 登录限流 / 会话签发校验撤销（V0.75.0）
 │   └── scheduler.py     # 每日 07:00 BJT 快照 + 央行月度 1/15/末日 07:30 BJT 自动拉取
@@ -63,13 +64,13 @@ src/app/
 │   ├── central_bank_data.py  # WGC HTML chart JS fetcher（季度合计 + H1 按国家）
 │   ├── user.py          # 用户与会话仓储（邮箱唯一约束 / 会话撤销 / 过期清理，V0.75.0）
 │   └── db.py            # async 引擎与会话工厂
-├── api/v1/endpoints/    # health / analysis / market / position / portfolio / account / trades / decision / settings / snapshot / news / review / central_bank / telemetry / resonance / backtest / push / **auth（V0.75.0）**
+├── api/v1/endpoints/    # health / analysis / market / position / portfolio / account / trades / decision / settings / snapshot / news / review / central_bank / telemetry / resonance / backtest / push / **forecast（V0.127.0）** / **auth（V0.75.0）**
 ├── middleware/          # trace（X-Request-ID）/ rate_limit（per-IP 限速）/ admin_auth（X-Admin-Token）/ **auth + csrf（V0.75.0）**
-├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入）
+├── scripts/             # CLI 工具（import_central_bank: WGC 数据全量导入 / backfill_price_calendar: 金价深度回填 / calibrate_price_band: 离线校准区间口径）
 └── utils/               # logger / market_clock / db_migrate（启动幂等补列）
-static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html / silver.html / backtest.html / data-health.html / settings.html / offline.html / **login.html（V0.75.0）**
-                         #   + account.js / freshness.js / help.js / **auth.js（V0.75.0）** / **synthesis-card.js（V0.75.1）** / **news-score-widget.js（V0.76.0）** / resonance-card.js / responsive.css
-tests/                   # pytest（**866+ 用例** / 16+ 测试目录，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0 起））
+static/                  # trend.html / portfolio.html / trades.html / weights.html / news.html / central_bank.html / review.html / silver.html / backtest.html / data-health.html / settings.html / offline.html / **price-forecast.html（V0.127.0）** / **login.html（V0.75.0）**
+                         #   + account.js / freshness.js / help.js / **price-forecast.js（V0.127.0）** / **auth.js（V0.75.0）** / **synthesis-card.js（V0.75.1）** / **news-score-widget.js（V0.76.0）** / resonance-card.js / responsive.css
+tests/                   # pytest（**2285 用例** / 12 个测试目录，含 fetcher / scheduler / 服务 / API / help / providers / cache / intraday / 业绩分析 / 多账本 / 多时间框架 / 消息面槽位 / 研判复盘 / 共振信号 / 克数持仓 / 白银 / 回测 / i18n / 埋点 / push / 仪表盘布局 / 认证（V0.75.0 起））
 ```
 
 ### 3.3 数据流

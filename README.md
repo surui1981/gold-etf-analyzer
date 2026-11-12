@@ -2,14 +2,14 @@
 
 > 面向**个人黄金投资者**的一站式数据参考平台：汇聚**纽约金 / 上海金 / 黄金ETF** 价格，融合**技术面 · 宏观面 · 消息面 · 资金流面**给出 0-100 量化多空指数，搭配**个人持仓盈亏管理**、**ETF 买卖决策**、**AI 问答**与**每日评估快照历史**——全部数据留在你自己的机器上。
 
-> **目标读者**：用户 + 开发者（首屏）｜ **状态**：活跃 ｜ **最近更新**：2026-11-08
+> **目标读者**：用户 + 开发者（首屏）｜ **状态**：活跃 ｜ **最近更新**：2026-11-12
 
 | | |
 |---|---|
-| **当前版本** | **V0.121.4**（2026-11-07）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
-| **测试基线** | **2073 个用例**（含 10 道脚本门禁）· 离线口径 **2023**（按文件名排除 2 个联网 fetcher 文件） |
-| **页面 / 路由** | **22 个静态页**（含 1 个 `admin/users.html` 子页）· **116 条 REST 路径 / 136 个操作** · 顶栏 **8 个场景 + 13 个子页** |
-| **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换）· 1486 / 1372 / 1487 key（繁中覆盖 **92.3%**） |
+| **当前版本** | **V0.127.0**（2026-11-12）· 详见 [GitHub Releases](https://github.com/surui1981/gold-etf-analyzer/releases) |
+| **测试基线** | **2285 个用例**（含 10 道脚本门禁）· 离线口径 **2235**（按文件名排除 2 个联网 fetcher 文件） |
+| **页面 / 路由** | **23 个静态页**（含 1 个 `admin/users.html` 子页）· **119 条 REST 路径 / 139 个操作** · 顶栏 **8 个场景 + 14 个子页** |
+| **语言** | 简体中文 / 繁體中文 / English（顶栏一键切换）· 1569 / 1570 / 1455 key（繁中覆盖 **92.7%**） |
 
 > 📖 **使用文档**（按目标读者标注，按需查阅）：
 > - [docs/README.md](docs/README.md) — **文档导航**（"我要找 X 该打开哪个" + 目录结构 + 写作约定）
@@ -18,13 +18,14 @@
 > - [docs/architecture.md](docs/architecture.md) — 技术架构 + 数据源（**开发者**）
 > - [docs/api-reference.md](docs/api-reference.md) — API 参考 + 核心模型（**双方**）
 > - [docs/composite-trend-index.md](docs/composite-trend-index.md) — **综合趋势评估指数怎么算出来的**（四面加权公式 + 22 个因子的打分公式 + 数据源总表 + 7 条口径纪律 + 完整算例）
+> - [docs/price-forecast.md](docs/price-forecast.md) — **金价区间预测的口径真源**（中心/宽度/形状怎么定 + 离线 walk-forward 实测覆盖率 + 已知失效条件）—— ⚠ **不预测涨跌**
 > - [docs/development.md](docs/development.md) — 测试 + 改进计划 + 备注（**开发者**）
 > - [docs/deployment.md](docs/deployment.md) — 公开部署 runbook（**用户/运维**）
 >
 > 🗺️ **项目路线与历史**：
 > - [docs/roadmap.md](docs/roadmap.md) — **唯一活跃路线图**（逐条带可复现的实测判据）
 > - [docs/releases/index.md](docs/releases/index.md) — **能力 × 版本对照表**（"哪个能力在哪个版本落地"的单源）
-> - [docs/releases/milestones/](docs/releases/milestones/) — **8 份里程碑文档**（演进脉络：为什么当初这么做）
+> - [docs/releases/milestones/](docs/releases/milestones/) — **13 份里程碑文档**（演进脉络：为什么当初这么做）
 > - [docs/version-status.md](docs/version-status.md) — **当前到底是哪个版本**（4 处版本号 + 推送状态的单一真源）
 > - [CHANGELOG.md](CHANGELOG.md) — Keep-a-Changelog 发版条目（发行节点）
 > - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 参数清单与调参建议（**活跃**）
@@ -49,6 +50,7 @@
 ## 一图速览
 
 - 📊 **三大市场一屏对比** — 纽约金（COMEX）/ 上海金（Au99.99）/ 黄金 ETF（518880），实时报价 + 趋势曲线 + 价差对照
+- 📐 **金价区间预测（未来 20 个交易日）** — 扇形**趋势导航线** + **实测**覆盖率（walk-forward 回放，不是名义值）+ 类比形状 vs 正态锥对照；⚠ **不预测涨跌**：区间中心恒等于最新收盘价，宽度由滚动波动率给出、形状由历史类比给出（V0.127.0）
 - 🎯 **综合趋势评估指数** — 技术 25% × 宏观 35% × 消息面 25% × 资金流面 15% 加权，0-100 量化多空，等级红绿着色
 - 🔬 **5 维技术 + 11 因子宏观 + 6 因子资金流** — 结构 / 动量 / 支撑 / 动能 / 回撤 · 美元 / 美债 2Y·10Y·30Y / 10Y-2Y 利差 / 10Y 实际利率 / VIX / 央行购金 / 美·中·欧政府债务/GDP · CFTC 净多 / ETF 净申赎 / 美元流动性 / A 股融资 / M1−M2 剪刀差，**权重可调**（V0.119.0 / V0.120.0）
 - 📰 **消息面每日 3 次打分** — 越晚权重越高（1:2:3 加权），12 个依据标签 + 自由备注；**首页可直接打分**（内嵌打分器，不跳页）
@@ -61,24 +63,25 @@
 - 📁 **报告存档** — 上传 HTML 报告 + 元数据登记 + 分类检索 + 复盘 PDF 导出
 - ⚖️ **权重与参数配置** — 4 个面的权重 + 技术面**组权重**（默认组内平均模式）+ 宏观因子**手动校准**（含 `as_of` 与优先级链）
 - 📲 **推送 + PWA + Web Push** — 4 类告警规则（指数跨档 / 单日波动 ≥X% / 自定义时段 / T+N 命中），4 渠道：浏览器 / Web Push / 邮件 / 微信
-- 🧭 **命令面板（⌘K / Ctrl+K）** — 清单**从顶栏导航惰性派生**（8 场景 + 13 子页），不另抄一份
+- 🧭 **命令面板（⌘K / Ctrl+K）** — 清单**从顶栏导航惰性派生**（8 场景 + 14 子页），不另抄一份
 - 📱 **移动端适配** — 390px 逐页实测（横向溢出 / 聚焦遮挡 / 触摸目标三类静默失效有门禁兜着）
 - 🌐 **三语切换** — 简体中文 / 繁體中文 / English，顶栏一键切换
-- 🔒 **数据本地化** — 持仓、账本、消息面打分、推送订阅全部 SQLite 本地存，**不上云**
+- 🔒 **数据本地化** — 持仓、账本、消息面打分、推送订阅全部存**你自己的服务器**（SQLite / MySQL 8 二选一，V0.126.0 起生产用 MySQL），**不上第三方云**
 - 🩺 **数据健康** — 各行情源实时性 / 覆盖率 / 降级状态一览（多页顶栏状态条 + 独立诊断页）
 
-## 页面导览（22 个静态页）
+## 页面导览（23 个静态页）
 
-顶栏是 **8 个场景 + 13 个子页** 的两层结构；下表按场景列出。
+顶栏是 **8 个场景 + 14 个子页** 的两层结构；下表按场景列出。
 
 | 场景 | 页面 | URL | 一句话功能 |
 |------|------|-----|-----------|
-| **首页** | 场景化首页 | `/home` | 首页 hero + **综合评估结论块** + 贵金属三卡（金价 / 库存 / 央行购金）+ 8 张板块卡 |
+| **首页** | 场景化首页 | `/home` | 首页 hero + **综合评估结论块** + 贵金属三卡（金价 / 库存 / 央行购金）+ 9 张板块卡 |
 | **今日要闻** | 财经快讯 | `/headlines` | 4 源容灾快讯 · 按日聚合 + 日期导航 + 5 类筛选 + 收藏 |
 | **决策** | 趋势追踪 | `/static/trend.html` | **主入口**：综合研判结论卡 + 内嵌消息面打分器 + 综合指数 + 四面拆解 + K 线 + 宏观因子 |
 | | 打分汇总 | `/scoring` | 历史打分汇总 + 命中分析（T+0/T+1/T+3/T+5）+ verdict card |
 | | 参数回测 | `/static/backtest.html` | 权重网格 × 阈值带扫描 + 夏普 / 回撤 / 校准曲线 |
 | | 研判复盘 | `/review` | 历史打分 vs 金价对齐 + 命中率 + 校准曲线 |
+| | **金价区间** | `/price-forecast` | **未来 20 个交易日金价区间**（扇形趋势导航线 + **实测**覆盖率 + 形状对照）—— ⚠ **不预测涨跌**，中心恒等于当前收盘价 |
 | **持仓** | 持仓与决策 | `/portfolio` | 当前持仓 + 实时盈亏 + 买卖决策（带理由明细） |
 | | 交易历史 | `/trades` | 多账本多条件筛选 + 已实现盈亏 + CSV 导出 |
 | **情报** | 消息面评估 | `/news` | 每日 3 次打分（越晚权重越高）+ 投行参考来源 + 跨日历史 |
@@ -201,7 +204,7 @@
 - **3 语言**：简体中文（默认）/ 繁體中文 / English
 - **切换位置**：顶栏语言选择器
 - **持久化**：`localStorage.pm_lang`，刷新保留
-- **覆盖率**：zh-CN **1486** key · en-US **1487** key · **zh-TW 1372 key（92.3%）**
+- **覆盖率**：zh-CN **1569** key · en-US **1570** key · **zh-TW 1455 key（92.7%）**
 - **格式化**：`Intl.NumberFormat` / `Intl.DateTimeFormat` locale-aware（货币、日期、相对时间）
 
 ## 隐私 & 安全
@@ -233,7 +236,7 @@
 | 认证 | 服务端 sessions 表 + HttpOnly cookie + CSRF 双提交 · 兼容开关 `AUTH_ENABLED` |
 | 推送 | SMTP（aiosmtplib SSL/STARTTLS）+ Server酱（httpx）+ Web Push（pywebpush / VAPID） |
 | 部署 | Docker 多阶段 + docker-compose.prod.yml（app / nginx / certbot / backup-cron）+ Nginx + Certbot · 或 systemd 直跑 |
-| 测试 | pytest **2073** 用例 · ruff check / format · **10 道脚本门禁**（见下） |
+| 测试 | pytest **2285** 用例 · ruff check / format · **10 道脚本门禁**（见下） |
 | CI | GitHub Actions · Python 3.13 matrix · uv 缓存 · tag 触发多阶段镜像构建 + smoke test |
 
 ## 快速开始
@@ -265,7 +268,7 @@ python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8888
 ## 测试与门禁
 
 ```bash
-python -m pytest -v                                      # 全量 2073 用例；离线口径 2023（按文件名排除 2 个联网 fetcher）
+python -m pytest -v                                      # 全量 2285 用例；离线口径 2235（按文件名排除 2 个联网 fetcher）
 ruff check src tests                                     # lint
 ruff format src tests                                    # format
 ```
@@ -294,11 +297,17 @@ ruff format src tests                                    # format
 
 ## 版本历程
 
-> 逐版完整记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/releases/milestones/](docs/releases/milestones/)（8 份里程碑文档）。
+> 逐版完整记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/releases/milestones/](docs/releases/milestones/)（13 份里程碑文档）。
 > **V0.120.5 起**逐版 release notes 已合并进里程碑文档，逐版原文在 git 历史里（`git show <tag>:docs/releases/<文件>`）。
 
 | 版本 | 日期 | 亮点 |
 |------|------|------|
+| **V0.127.0** | 2026-11-12 | **金价区间预测**（未来 20 个交易日 + **趋势导航线**扇形图）—— **不预测涨跌**，中心恒等于当前收盘价；区间**宽度**取 EWMA 波动率、**形状**取历史类比（类比带实测偏窄 ⇒ 宽度不用它），**实测覆盖率写进 UI**（名义 80% 实测 77.9%）；价格日历深度回填 97 → **2588 行** |
+| **V0.126.0** | 2026-11-11 | **生产库从 SQLite 正式切到 MySQL 8.0.46** —— 25 张表 / 88 284 行逐表 SHA-256 校验一致，停机窗口实测 30 秒 |
+| **V0.125.0** | 2026-11-10 | 首页新增「今日市场研究报告」入口（只显示最新上传的那一份，点标题直达报告本体） |
+| **V0.124.0** | 2026-11-09 | **权重最大的宏观面（35%）第一次被真正测过** —— 16 个读数**全部**未过三问 ⇒ 结论「它描述当下，不预判未来」⇒ 权重与因子方向**一律不动** |
+| **V0.123.0** | 2026-11-09 | 资金流面证据复算 —— V0.122 顺手给出的「改号后变成前瞻主导」推论**是错的**，用生产打分口径重测后推翻 |
+| **V0.122.0** | 2026-11-08 | 因子符号校准 —— 修掉 `cot_gold_net` 的符号错误（+ → −） |
 | **V0.121.4** | 2026-11-07 | **央行购金口径治本** —— 季度合计此前是「WGC 全球合计行 + 各国明细行」相加的**重复计数**（2026Q2 实测 336.7 vs 真值 288.9）⇒ 改为合计行独立标记、永不相加；**2026Q3 = 321.2 吨**、滚动 12 月 **885.1 吨**、国家数 **24**；报告版本逐版回退 + 按图表结构识别合计图/国别图 |
 | **V0.121.3** | 2026-11-07 | 命中分析桶聚合被**抄了三份**，两处漏填「上涨/下跌/方向已知」⇒ API 返回 0 ⇒ 抽出共用口径；宽表按补齐后的价格日历重算（`price_direction` 28 → 45 行） |
 | **V0.121.2** | 2026-11-07 | 诚实性与数据链批次：价格日历增量补齐（不再「有数据就整段跳过」）· 组权重滑块从**装饰**变成真生效 · 三页误导性时效调用清理 · AI token 统计（顺带修好 `/ask` 流式**从未真正生效**的 `userMsg` 作用域 bug） |
@@ -354,7 +363,7 @@ ruff format src tests                                    # format
 - 🗺️ **项目路线与历史**：
   - [docs/roadmap.md](docs/roadmap.md) — 唯一活跃路线图（逐条带实测判据）
   - [docs/releases/index.md](docs/releases/index.md) — 能力 × 版本对照表（单源）
-  - [docs/releases/milestones/](docs/releases/milestones/) — 8 份里程碑文档（演进脉络）
+  - [docs/releases/milestones/](docs/releases/milestones/) — 13 份里程碑文档（演进脉络）
   - [docs/version-status.md](docs/version-status.md) — 当前版本状态（单一真源）
   - [docs/parameter-evaluation.md](docs/parameter-evaluation.md) — 参数清单与调参建议
   - [CHANGELOG.md](CHANGELOG.md) — 发版条目
