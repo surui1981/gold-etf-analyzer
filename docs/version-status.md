@@ -308,10 +308,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 项 | 远端 | 本地 | 一致 |
 |---|---|---|---|
-| `refs/heads/main` | （未推） | `git rev-parse HEAD` | ⏳ |
-| `refs/tags/v0.127.0` | （未推） | tag 对象 SHA | ⏳ |
-| `refs/tags/v0.127.0^{}` | （未推） | 发版 commit SHA | ⏳ |
+| `refs/heads/main` | （未推） | `5fb671b`（= 本地 HEAD） | ⏳ |
+| `refs/tags/v0.127.0` | （未推） | tag 对象 `0a8e33c` | ⏳ |
+| `refs/tags/v0.127.0^{}` | （未推） | `5fb671b`（= 发版 commit） | ⏳ |
 | tag 数（去掉 `^{}` 行） | **123** | **124** | ⏳ 差 1（本轮新 tag 未推） |
+| annotated / lightweight | — | **118 / 6**（= 124 ✅ 自洽） | ⏳ |
+
+> 📌 **tag 数 124 = 123 个版本号 tag + 1 个 `v0.97.2-hotfix`**（后者不是版本号形态的 tag，
+> 但确实是真实存在的发布锚点，**而且它也是 annotated**）。
+>
+> 📌 **缺口计数复核**（§二「已知且故意保留的缺口」那三行，本轮按同一口径重算）：
+> 有 tag 但 CHANGELOG 无段 = **63**；有 CHANGELOG 段但无 tag = **2**（V0.101.0 / V0.102.0，
+> 这两个是**从未 bump 过版本号**的功能批次标签）；有 `__version__` bump 但 CHANGELOG 无段 = **32**
+> ⇒ 与上一版**逐项相同**（本版三样都齐全 ⇒ 不改变任何一项缺口）。
 
 > 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
 > ⇒ 失败会被伪装成成功。推完必须回读 `refs/heads/main`（== 本地 HEAD）、
