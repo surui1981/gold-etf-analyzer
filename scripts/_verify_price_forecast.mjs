@@ -206,6 +206,33 @@ if (shape) {
     `analog ${shape.analogLast} / cone ${shape.coneLast}`);
 }
 
+// ⚠ V0.127.1：页面说明里的「短端胖多少倍」必须**等于产物现算值**
+//   （旧实现把 1.2–1.4 写死在文案里 ⇒ 与产物实测 1.32–1.43 对不上）
+const ratioNote = await page.evaluate(() => {
+  const c = document.getElementById("pfShapeChart");
+  const note = document.getElementById("pfShapeNote");
+  if (!c || !note) return null;
+  const inst = Chart.getChart(c);
+  if (!inst) return null;
+  const s = inst.data.datasets[0]?.data || [];
+  const cone = inst.data.datasets[1]?.data || [];
+  let min = Infinity;
+  let max = -Infinity;
+  for (let k = 0; k < Math.min(5, s.length, cone.length); k++) {
+    if (!cone[k]) continue;
+    const r = s[k] / cone[k];
+    if (!isFinite(r)) continue;
+    if (r < min) min = r;
+    if (r > max) max = r;
+  }
+  if (!isFinite(min) || !isFinite(max)) return null;
+  return { text: min.toFixed(2) + "–" + max.toFixed(2), note: (note.textContent || "").trim() };
+});
+ok("形状说明里的短端倍数 = 产物现算值", !!ratioNote && ratioNote.note.includes(ratioNote.text),
+  JSON.stringify(ratioNote));
+ok("形状说明没有残留写死的旧文案",
+  !!ratioNote && !/1\.2–1\.4/.test(ratioNote.note), ratioNote?.note || "");
+
 // ─── 6. 校准表 ───
 console.log("\n【6】覆盖率校准表");
 const calib = await page.evaluate(() => {

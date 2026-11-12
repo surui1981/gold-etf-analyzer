@@ -41,9 +41,9 @@
   // 字典命中优先；字典没命中时**不要**渲染 key 字面量 ⇒ 用代码里的 fb 兜底。
   // ⚠ 不能写成 `(I18n.t(key) || fb)`：I18n.t 找不到时返回的是 **key 本身**
   //   （真值）⇒ fb 永远用不上，页面会显示 "forecast.range_label"。
-  function T(key, fallback) {
+  function T(key, fallback, params) {
     if (window.I18n && typeof window.I18n.t === "function") {
-      const v = window.I18n.t(key);
+      const v = window.I18n.t(key, params);
       if (v && v !== key) return v;
     }
     return fallback != null ? fallback : key;
@@ -53,6 +53,41 @@
     return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
     })[c]);
+  }
+
+  /* ───────────────── 形状比值（从产物现算，不写死） ───────────────── */
+
+  /**
+   * 短端（k=fromK..toK）**类比形状 ÷ 正态锥** 的倍数区间。
+   *
+   * ⚠ 为什么不写死：形状是**离线校准**出来的产物（`assets/forecast/shape.json`），
+   *   每次重算都可能给出不同的短端胖瘦（形状只对被校准的那个窗口成立）
+   *   ⇒ 写死的文案必然随产物腐化。
+   *   实测教训（V0.127.0 → V0.127.1）：文案写死成「1.2–1.4 倍」，
+   *   而产物实测是 **1.32–1.43 倍** ⇒ 文档与页面同时说错。
+   *
+   * ⚠ 文案**不假设方向**：比值可能 > 1（更宽）也可能 < 1（更窄）
+   *   ⇒ 句式用「相对正态锥为 {range} 倍（>1 表示更宽）」，不写死「更宽」。
+   */
+  function shortEndRatioRange(calib, fromK, toK) {
+    const shape = calib && calib.shape;
+    const cone = calib && calib.cone;
+    if (!Array.isArray(shape) || !Array.isArray(cone)) return null;
+    const lo = Math.max(1, fromK || 1);
+    const hi = Math.min(toK || 5, shape.length, cone.length);
+    let min = Infinity;
+    let max = -Infinity;
+    for (let k = lo; k <= hi; k++) {
+      const c = Number(cone[k - 1]);
+      const s = Number(shape[k - 1]);
+      if (!isFinite(c) || !isFinite(s) || c <= 0) continue;
+      const r = s / c;
+      if (!isFinite(r)) continue;
+      if (r < min) min = r;
+      if (r > max) max = r;
+    }
+    if (!isFinite(min) || !isFinite(max)) return null;
+    return { min: min, max: max, text: min.toFixed(2) + "–" + max.toFixed(2) };
   }
 
   /* ───────────────── 格式化 ───────────────── */
@@ -582,8 +617,19 @@
       renderShapeChart(shapeCanvas, shape, (calib && calib.cone) || null);
       const note = document.getElementById("pfShapeNote");
       if (note) {
+        // ⚠ 倍数**从产物现算**（V0.127.1）—— 写死的「1.2–1.4 倍」与产物实测（1.32–1.43）不符
+        const ratio = shortEndRatioRange(calib, 1, 5);
         note.textContent = shape
-          ? T("forecast.shape_note", "类比形状在短期（1–5 交易日）比正态锥更宽约 1.2–1.4 倍，到 10–20 日收敛。")
+          ? (ratio
+              ? T(
+                  "forecast.shape_note",
+                  "类比形状在短期（1–5 交易日）相对正态锥为 {range} 倍（>1 表示更宽），到 10–20 日收敛。",
+                  { range: ratio.text },
+                )
+              : T(
+                  "forecast.shape_note_noratio",
+                  "类比形状已加载（无法从产物算出相对正态锥的倍数），到 10–20 日收敛。",
+                ))
           : T("forecast.shape_note_missing", "形状产物缺失 ⇒ 只画对数正态 √k 锥（退化基线）。");
       }
     }
