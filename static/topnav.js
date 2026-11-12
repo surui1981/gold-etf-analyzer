@@ -62,6 +62,9 @@
         { path: "/scoring",            ico: "🎯", i18n: "nav.scoring",   fb: "打分汇总",     activeFor: ["/scoring", "/static/scoring.html"] },
         { path: "/static/backtest.html", ico: "🧪", i18n: "nav.backtest", fb: "参数回测",     activeFor: ["/static/backtest.html"] },
         { path: "/review",             ico: "🔍", i18n: "nav.review",    fb: "研判复盘",     activeFor: ["/review", "/static/review.html"] },
+        // V0.127.0：未来 20 交易日的金价区间预测（扇形导航线 + 实测覆盖率）。
+        //   挂在「决策」场景下 —— 它回答的是「接下来大概在什么区间」，与决策同族。
+        { path: "/price-forecast",     ico: "📐", i18n: "nav.forecast",  fb: "金价区间",     activeFor: ["/price-forecast", "/static/price-forecast.html"] },
       ],
     },
     {
@@ -127,6 +130,7 @@
     "/static/settings.html":    { i18n: "brand.gold",     fb: "通知中心 · 黄金 ETF" },
     "/static/headlines.html":   { i18n: "brand.headlines", fb: "今日要闻 · 黄金 ETF" },
     "/static/favorites.html":   { i18n: "brand.favorites", fb: "我的收藏 · 黄金 ETF" },
+    "/static/price-forecast.html": { i18n: "brand.forecast", fb: "金价区间预测 · 黄金 ETF" },
   };
   var DEFAULT_BRAND = { i18n: "brand.gold", fb: "黄金价格投资辅助工具" };
 

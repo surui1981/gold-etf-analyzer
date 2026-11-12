@@ -102,6 +102,12 @@
     display: flex; gap: 6px; flex-wrap: wrap; }
   .scene-links li { padding: 3px 10px; background: var(--bg); border-radius: 8px;
     font-size: 12px; color: var(--muted); }
+  /* V0.127.0：磁贴里的「当前区间」一行（由 price-forecast.js 填） */
+  .scene-live { margin-top: auto; padding: 6px 10px; font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-variant-numeric: tabular-nums; }
+  .scene-live.is-warn { background: #fff8e6; border-color: #f5d77a; color: #b35309; }
+  [data-theme="dark"] .scene-live.is-warn { background: #3a2f12; color: #f5d97a; }
 
   /* AI 场景卡占满 + 渐变 */
   .home-scene.scene-ai { grid-column: 1 / -1;
@@ -400,6 +406,20 @@
       </ul>
     </a>
 
+    <a class="home-scene scene-forecast" href="/price-forecast">
+      <div class="scene-ico">📐</div>
+      <h2 class="scene-title" data-i18n="home.scene_forecast">金价区间</h2>
+      <p class="scene-desc" data-i18n="home.scene_forecast_desc">未来 20 交易日大致区间</p>
+      <ul class="scene-links">
+        <li data-i18n="home.scene_forecast_1">趋势导航线</li>
+        <li data-i18n="home.scene_forecast_2">实测覆盖率</li>
+        <li data-i18n="home.scene_forecast_3">形状对照</li>
+      </ul>
+      <!-- V0.127.0：当前区间一句话（由 /static/price-forecast.js 填）。
+           ⚠ 取数失败时显示「暂不可用」而不是留空 —— 空着会被读成「没数据」。 -->
+      <div class="scene-live" id="fcTileRange">—</div>
+    </a>
+
     <a class="home-scene scene-portfolio" href="/portfolio">
       <div class="scene-ico">💼</div>
       <h2 class="scene-title" data-i18n="home.scene_portfolio">持仓</h2>
@@ -596,6 +616,8 @@
 <script src="/static/toast.js" defer></script>
 <script src="/static/net-status.js" defer></script>
 <script src="/static/home.js" defer></script>
+<!-- V0.127.0 金价区间预测磁贴（当前区间一句话 + 与独立页/趋势页共用同一份逻辑） -->
+<script src="/static/price-forecast.js" defer></script>
 <!-- V0.112.0 · 命令面板：顶栏「⌘ 搜索」按钮 + ⌘K/Ctrl+K。
      此前只有 9/18 个页挂了本脚本，其余页面的顶栏搜索按钮点了没反应 ——
      而按钮是 C1 给全部 18 页加的。派生时读 topnav.js 导出的 PM_Topnav.SCENES，

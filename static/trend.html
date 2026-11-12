@@ -221,6 +221,32 @@
     box-shadow: 0 1px 2px rgba(0,0,0,.15); }
   .subnav a.active .sub-ico { opacity: 1; }
 
+  /* ── V0.127.0 金价区间预测摘要卡（与独立页共用 /static/price-forecast.js）── */
+  .pf-sum-head { display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+  .pf-sum-title { font-size: 14.5px; font-weight: 700; }
+  .pf-sum-link { font-size: 12.5px; color: var(--accent, #2563eb); text-decoration: none; }
+  .pf-sum-link:hover { text-decoration: underline; }
+  .pf-sum-range { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .pf-sum-num { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pf-sum-unit { font-size: 11.5px; color: var(--muted); }
+  .pf-sum-text { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
+  .pf-sum-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .pf-chart-wrap { position: relative; height: 220px; }
+  .pf-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    font-variant-numeric: tabular-nums; }
+  .pf-chip-method { background: rgba(22,163,74,0.10); border-color: rgba(22,163,74,0.35);
+    color: #15803d; }
+  [data-theme="dark"] .pf-chip-method { color: #86efac; }
+  .pf-chip-ok { background: rgba(22,163,74,0.08); border-color: rgba(22,163,74,0.28);
+    color: #15803d; }
+  [data-theme="dark"] .pf-chip-ok { color: #86efac; }
+  /* amber：交叉校验不一致 / 降级 —— 不是「失败」，但用户必须看见 */
+  .pf-chip-warn { background: #fff8e6; border-color: #f5d77a; color: #b35309; }
+  [data-theme="dark"] .pf-chip-warn { background: #3a2f12; color: #f5d97a; }
+  .pf-empty { color: var(--muted); font-size: 13px; padding: 18px 0; }
+
 </style>
 <link rel="stylesheet" href="/static/responsive.css">
 <link rel="stylesheet" href="/static/help.css">
@@ -406,6 +432,15 @@
     <div id="chartArea"><div class="loading" data-i18n="trend.chart_loading">正在加载行情数据…</div></div>
     <div class="summary" id="summary"></div>
   </div>
+
+  <!-- V0.127.0 · 金价区间预测摘要卡（未来 20 交易日 · 趋势导航线）
+       ⚠ 本页**不预测涨跌** —— 中心线恒等于最新收盘价（drift_mode=none）。
+       ⚠ 共享逻辑在 /static/price-forecast.js（与独立页 /price-forecast、首页磁贴
+         共用同一份，避免三处各抄一遍必然腐化）。
+       ⚠ 摘要卡由 JS 拼 DOM（不在 i18n.apply 的扫描范围内）⇒ 必须自己处理
+         「切语言后重渲染」（price-forecast.js 已监听 i18n:change）。 -->
+  <section class="panel" id="pfSummaryCard" style="margin-bottom:16px"
+           aria-label="未来 20 交易日金价区间导航线"></section>
 
   <footer data-i18n="brand.footer">gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
 </div>
@@ -1221,5 +1256,8 @@ window.addEventListener("news-score-changed", () => {
   <script src="/static/decision-explainer.js" defer></script>
   <!-- V0.76.0 首页内嵌消息面打分器（客户评价） -->
   <script src="/static/news-score-widget.js" defer></script>
+  <!-- V0.127.0 金价区间预测摘要卡（未来 20 交易日导航线）
+       ⚠ 与独立页 /price-forecast、首页磁贴**共用同一份**逻辑（只写一份）。 -->
+  <script src="/static/price-forecast.js" defer></script>
 </body>
 </html>
