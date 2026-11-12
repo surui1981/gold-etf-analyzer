@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.126.0** ｜ **最近更新**：2026-11-11 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.126.0`）**
+> **基线：V0.127.0** ｜ **最近更新**：2026-11-12 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.127.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.126.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.126.0`**
+**当前版本 = 0.127.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.127.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.126.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.126.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.126.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.126.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.127.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.127.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.127.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.127.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.126.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.127.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-11 重启加载 V0.126.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-12 重启加载 V0.127.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -73,10 +73,10 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 
 | 来源 | 数量 | 回答什么问题 |
 |---|---|---|
-| `__version__` bump 史 | **87** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
-| [CHANGELOG.md](../CHANGELOG.md) | **62** 段 / 61 个唯一版本号 | 发版史的**人读**记录 |
-| [docs/releases/](releases/) | **12** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
-| git tag | **123** 个（**本地 123 / 远端 123** ✅ 一致） | 按版本 checkout 的锚点 |
+| `__version__` bump 史 | **88** 个版本 | 哪些版本真正 bump 过版本号（= 发过版） |
+| [CHANGELOG.md](../CHANGELOG.md) | **63** 段 / 62 个唯一版本号 | 发版史的**人读**记录 |
+| [docs/releases/](releases/) | **13** 份**里程碑文档**（V0.120.5 起替代逐版 notes） | 阶段的演进脉络（根因 / 修法 / 验证 / 教训） |
+| git tag | **124** 个（**本地 124 / 远端 123** ⚠ 本轮 tag 尚未推送） | 按版本 checkout 的锚点 |
 
 > ⚠️ **上表 4 个计数是 V0.121.0 逐项实测改写的** —— 上一版写的是
 > 「74 / 49 段·48 个 / 58 份 / 113 个」，其中 **3 个都偏低**
@@ -90,7 +90,8 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > V0.123.0 同理 ⇒ 83→84、58 段→59 段、119→120，**另加 1 份里程碑文档**（M8）⇒ 8→9 份；
 > V0.124.0 同理 ⇒ 84→85、59 段→60 段、120→121，**另加 1 份里程碑文档**（M9）⇒ 9→10 份；
 > V0.125.0 同理 ⇒ 85→86、60 段→61 段、121→122，**另加 1 份里程碑文档**（M10）⇒ 10→11 份；
-> V0.126.0 同理 ⇒ 86→87、61 段→62 段、122→123，**另加 1 份里程碑文档**（M11）⇒ 11→12 份。）
+> V0.126.0 同理 ⇒ 86→87、61 段→62 段、122→123，**另加 1 份里程碑文档**（M11）⇒ 11→12 份；
+> V0.127.0 同理 ⇒ 87→88、62 段→63 段、123→124，**另加 1 份里程碑文档**（M12）⇒ 12→13 份。）
 >
 > **60 段 ≠ 59 个唯一版本号**：`V0.97.2` 有 2 段 —— `## [V0.97.2 hotfix]` 在前、
 > `## [V0.97.2]` 在后。hotfix **没有 bump 版本号**（该段自己写明了这点），
@@ -279,7 +280,56 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.126.0（2026-11-11 发版）
+### 本轮：V0.127.0（2026-11-12 发版）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **金价区间预测（未来 20 个交易日）+ 趋势导航线** —— 用户诉求：「现在，我们增加一个金价区间预测功能，主要通过得到的当前数据不断修正未来 20 个交易日金价大致在什么区间，例如在 4100 美元到 4200 美元这样。并形成趋势导航线」；中途追加：「当前主页方块导航栏有 7 个，20 日金价预测走势可以变成第八个」。本版交付：**独立页 `/price-forecast`** + **趋势页摘要卡** + **首页第 8 张内容类磁贴**（三处共用 `static/price-forecast.js`） |
+| 用户拍板 | ✅ 四件事：① 区间中心**默认无漂移**（倾斜方案先测证据）；② 宽度**历史类比为主 + 波动率模型交叉校验**；③ 落点**趋势页摘要卡 + 独立新页**；④ 标的**先做 COMEX 纽约金**，接口按 `target` 参数化 |
+| ⚠️ **用数据否决了偏好的一半** | ✅ 用户拍板「宽度以历史类比为主」⇒ 实测**不成立**：类比带 P10–P90 名义 80%，训练段 75.0% / **样本外只有 45.8%**；在训练段校准到 78.5% 后样本外掉到 **55.4%** ⇒ **校准不泛化**（regime 切换）。⇒ 最终算法 = **EWMA 定宽 × 类比定形**：宽度取 EWMA 日对数收益 σ（λ=0.94，训练段 76.7% / 样本外 **77.9%** ⇒ 跨窗口几乎不变），形状取类比法的逐日分位路径（实测短端比正态锥**胖 1.25–1.43 倍**，跨窗口同向） |
+| 实测覆盖率**写进 UI** | ✅ 四档 walk-forward 实测（训练段 / 样本外 / 近段）：50% → 52.1 / **48.4** / 47.5 ｜ **80%（默认）→ 76.8 / 79.2 / 77.5** ｜ 90% → 86.3 / **90.8** / 89.2 ｜ 98% → 95.6 / **98.8** / 100.0。⚠ **实测低于名义是常态** ⇒ 页面显示**实测**值（证据门 E4） |
+| 期望管理 | ⚠ 用户举的「4100–4200」只有 **±1.3%** 宽 ⇒ 大约相当于 **13% 覆盖口径**；诚实的 **50% 档就已经是 3798–4194**，**80% 档是 3632–4385** ⇒ UI **默认给 80%**（并标出实测 79.2%），同时提供 50/80/90/98 切换 |
+| 生产侧 | ✅ **金价日历深度回填**（前置）：`gold_price_daily` 的 `ny` **97 行 → 2588 行**（2016-11-14 起）⇒ **零 DDL**、幂等可重跑、`source="import"`、写入前已备份；口径产物**入库** `src/app/assets/forecast/{shape,calibration}.json`（`data/` 被 gitignore ⇒ 产物必须放 `src/app/assets/`） |
+| 证据门 | ✅ **E1–E6 六条**（无前视 / 相似日不越界 / 宽度跨窗口稳定 / UI 显示实测覆盖率 / 中心无漂移 / 降级可见），**每条都做过反向验证**（撤销 ⇒ 必须变红） |
+| 🐛 修掉的两个真缺陷 | ① **形状产物不按标的隔离** —— `load_shape()` 不看 `target` ⇒ 拿 `ny` 的形状画 `etf`/`gram` 的扇形 =「把别的标的的证据说成这个标的的证据」⇒ 加 `target` 护栏，不符即退回 √k 锥并明示；② **Canvas "already in use"** —— 切语言时 `mountConclusion()` 重跑、旧 Chart 实例没人销毁 ⇒ 扇形图 / 校准表 / 形状图**全部停止更新**（浏览器门禁抓到的）⇒ 改成从 canvas 反查实例再销毁（与「调用方记不记得实例」无关） |
+| `__version__` | ✅ 已 bump 到 `0.127.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 Alembic 迁移、零 DDL**；生产 MySQL 仍只做只读校验 |
+| 静态资源 | ⚠ **改了 `static/price-forecast.html` + `static/price-forecast.js`（新建）+ `static/home.html` + `static/trend.html` + `static/topnav.js` + 3 个 `static/i18n/*.js`** ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION**（已 bump 到 `v0.127.0`），并把 3 个新资源加进 `SHELL_ASSETS` + activate 的 stale 清理列表（⚠ `topnav.js` 虽在 SHELL_ASSETS，`caches.match()` 仍可能先命中 RUNTIME_CACHE 的旧副本 ⇒ 也要显式删） |
+| 测试 | ✅ `pytest` **2277 passed / 3 failed** —— 3 条（`test_macro_service.py` × 2 + `test_money_flow_thresholds.py` × 1）**在 HEAD 上同样失败** ⇒ **预存失败，非本轮回归**（用 `git worktree add --detach` 对拍确认）；定向 `tests/test_services/test_price_forecast.py` + `tests/test_api/test_forecast_api.py` **164 passed / 0 failed** |
+| 门禁 | ✅ `ruff check src tests scripts` **0** / `ruff format --check src tests` **0**（320 files already formatted）/ `check_pwa_assets`（SW `v0.127.0` == 应用版本，**57** 条 SHELL_ASSETS）/ `check_i18n_keys`（**0 missing / 645 in-scope**）/ `check_static_js`（23 页 + 40 脚本）/ `check_freshness_consistency` / `check_links`（**33** 份文档 / **465** 条内部链接 + 4 个锚点）/ `check_routes`（**21** 条路由）/ `check_deps`（`src/` 14 个三方 import）/ `check_docs_claims`（**211** 处引用）/ `check_version_sync`（**9 passed / 0 failed**） |
+| 浏览器门禁 | ✅ **新建** `scripts/_verify_price_forecast.mjs`（**48 条断言** / 10 组：独立页 / 实测覆盖率 / 扇形图 / 覆盖率切换 / 形状对照 / 校准表 / 趋势页摘要卡 / 首页磁贴 / 三语 / 无 4xx-5xx）⇒ **48 passed / 0 failed**；`_verify_nav_8` **30/0**（首页 8 → **9** 张卡）· `_verify_cmd_palette` **39/0**（**19** 页）· `check_cluster_render`（8 场景 + 14 子页 = **22** 个导航目标） |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.127.0**`；线上实测 `GET /api/v1/forecast/price?target=ny&horizon=20&coverage=0.8` → `base_date 2026-11-11 / base_close 3991.0 / σ 1.6433%（年化 26.09%）/ 80% 区间 **3632.27 – 4385.16** / method ewma_shape / **drift_mode none** / shape_source analog` |
+| 文档 | ✅ 新增**第 13 份里程碑文档 M12 · 金价区间预测与趋势导航线（V0.127）** + 新增**口径真源** [docs/price-forecast.md](price-forecast.md) + [docs/roadmap.md](roadmap.md) 新增 **D3**（方向倾斜的前置：回填消息面历史 + point-in-time 重放每日综合指数） |
+| ❌ **本版不做** | **方向倾斜（Phase B）** —— 区间中心**恒等于最新收盘价**（`drift_mode="none"`）。前置实测不满足：`daily_snapshots` 只有 **67 行**、消息面 `news_scores` 只有 **37 行** ⇒ h=20 非重叠采样后只剩 **3 个样本** ⇒ **不可测** ⇒ 不做（详见 M12 §七） |
+
+#### 推送状态：⏳ **待推送**（本会话无 classic PAT）
+
+**结论先行：代码、门禁、文档、提交、tag 全部就绪；**推送这一步还差一枚 classic PAT**。
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main` | （未推） | `git rev-parse HEAD` | ⏳ |
+| `refs/tags/v0.127.0` | （未推） | tag 对象 SHA | ⏳ |
+| `refs/tags/v0.127.0^{}` | （未推） | 发版 commit SHA | ⏳ |
+| tag 数（去掉 `^{}` 行） | **123** | **124** | ⏳ 差 1（本轮新 tag 未推） |
+
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
+> ⇒ 失败会被伪装成成功。推完必须回读 `refs/heads/main`（== 本地 HEAD）、
+> tag 对象与 `^{}` 行（都相等）、远端 tag 数（== 本地）。
+>
+> ⚠️ **annotated tag 在 `ls-remote` 里占两行** —— `refs/tags/v0.127.0` 是 **tag 对象**的 SHA，
+> `refs/tags/v0.127.0^{}` 才是它指向的 **commit** SHA。统计数量必须把 `^{}` 行去掉再数。
+>
+> ⚠️ **main 的当前 SHA 不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 只有 tag 的 `^{}` 行（指向发版 commit）可以写死。
+>
+> 📌 推送方式（**token 不进 argv、不落盘、不进 `remote.origin.url`**）：
+> `export GH_TOKEN=…` + `git -c credential.helper='!gh auth git-credential' push origin main v0.127.0`；
+> 推完 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history` 并复核 5 处 token 痕迹。
+> ⚠️ gh keyring 里那枚 **fine-grained PAT 没有写权限**（`permissions.admin` 是**用户的仓库角色**，
+> 不是 token 自己的权限）⇒ 只有 classic `ghp_` 能推。
+
+### 上一轮：V0.126.0（2026-11-11 发版）
 
 | 项 | 状态 |
 |---|---|
