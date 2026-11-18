@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.127.1** ｜ **最近更新**：2026-11-12 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.127.1`）**
+> **基线：V0.128.0** ｜ **最近更新**：2026-11-18 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.0`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.127.1**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.127.1`**
+**当前版本 = 0.128.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.0`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.127.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.127.1` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.127.1` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.127.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.0` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.0` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.127.1   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.128.0   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-12 重启加载 V0.127.1）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-18 重启加载 V0.128.0）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -281,7 +281,63 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.127.1（2026-11-12 发版 · 口径订正 hotfix）
+### 本轮：V0.128.0（2026-11-18 发版 · 经济危机金价拟合曲线）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **经济危机金价拟合曲线**（历史形态参照 · **不是预测**）—— 用户提供核心算法（来源：PM-Evaluator / gold-window-app 的 `buildCycleFitAverage()`）并要求在本应用部署：历史危机周期按「距金价阶段高点月数」对齐、高点归一=100、逐月**等权平均**成模板 → 按当前周期位置缩放（拟合线**精确穿过当前点**）→ 外推未来 N 个月 |
+| ⚠ 硬约束 | ✅ 用户给的算法原文自带免责声明「**历史形态参照 + 情景假设**，不是统计回归、不是预测」⇒ 当**硬约束**执行：页面不出现「预测 / 目标价 / 预计金价」，接口也不输出方向性字段（有断言钉住：`signal` / `direction` / `bullish` / `target_price` 等一律不许出现） |
+| 与 V0.127.0 的张力 | ✅ **两个功能方向性相反** —— 扇形图刻意「不预测涨跌」（中心恒等于最新收盘价），形态拟合**有方向** ⇒ **不画在同一个面板**；独立成页 + 页首写清区别，避免被读成「区间预测 + 目标价」 |
+| 后端 | ✅ `src/app/services/crisis_cycle_fit.py`（**零依赖纯 Python**，`src/` 禁 numpy/pandas）+ `schemas/forecast.py`（`CrisisFitOut`）+ `GET /api/v1/forecast/crisis-fit?target=ny&horizon=30&drift=0.003`；**零 DDL、零生产库写入**（只读 `gold_price_daily`） |
+| 前端 | ✅ `static/crisis-fit.html` + `static/crisis-fit.js`：结论卡（终点 + **drift=0 对照** + **锚点敏感度** + **各轮终点区间** + provenance）+ 拟合图（拟合线 / 模板×缩放 / 各轮终点散点）+ 模板图（等权模板 + 每轮原始路径）+ 失效条件 + 方法口径；3 语字典各 +72 键 |
+| 🏠 首页磁贴 | ✅ 用户拍板：首页「金价区间」磁贴**整体改成「形态拟合」**（标题 / 描述 / 3 个子项 / 实时行 / href 全换）。⚠ **扇形图没有消失** —— 独立页 `/price-forecast`、趋势页摘要卡、顶栏「决策 → 金价区间」、命令面板都还在；只是**首页不再有它的磁贴** |
+| 路由 | ✅ `/crisis-fit` → 307 `/static/crisis-fit.html`（`main.py` + `check_routes.py` + `ROOT_ALIASES` **三处同步**） |
+| 📏 诚实边界 | ✅ **常驻页面**（不是折叠里的脚注）：① 等权均值**受 2008 后 QE 大牛市影响偏乐观**；② `drift`（+0.3%/月）是**研究示意假设** ⇒ 永远并列 drift=0 的终点；③ **锚点敏感性**（锚点 ±1 月的终点区间，超过 10% 标 amber）；④ **模板 clamp 边界**（超过 `template_max_t` 是平台外推，没有历史信息）；⑤ **模板支撑轮数**（每个 t 由几轮周期平均而来） |
+| 证据门 | ✅ **E1–E8**（每条都做过**反向验证**：撤销 ⇒ 必须变红）：E1 无前视 / E2 锚点可复算 / E3 当前周期不进模板 / E4 曲线穿过当前点 / E5 锚点敏感度 / E6 drift=0 对照 / E7 无产物⇒待数据且不画曲线 / E8 两功能不混 |
+| 🐛 截图抓出的 2 个真 bug | ① **拟合线的 x 轴错位** —— 轴是「距锚点月数 t」，但拟合线被按「距当前点」索引 ⇒ 整条曲线**左移 t0 个月**（2026-11 的值画在 2026-01 上）⇒ 改成按 t 索引 + 轴长用 `t0+horizon`；② **终点散点全挤在左边** —— category 轴上给数字 x 会被 Chart.js 自己解释 ⇒ 改成给**标签字符串**。两条都补了门禁断言（x 轴起点 = t0；散点**像素**位置 = 最后一个类目）并做过反向验证（撤销 ⇒ 变红） |
+| ⚠️ 断言自证踩坑 | 散点位置的断言**先**比的是原始 x 值 ⇒ 数字恰好等于索引 ⇒ 断言**自证通过**（假绿）⇒ 改成比 **Chart.js 解析后的像素**；参考点也踩了坑：`getPixelForTick(索引)` 在 category 轴上返回 **0**（左边缘）⇒ 必须用 `getPixelForValue(索引)`（实测 981 = 右边缘） |
+| 门禁 | ✅ 新建 `scripts/_verify_crisis_fit.mjs`（**42 条**）+ 服务单测 **30 条** + API 单测 **7 条**（合计 **37 条新用例**） |
+| 反向验证 | ✅ ① **后端去掉 drift=0 对照 ⇒ API 用例变红**；② **前端不渲染 drift=0 ⇒ 浏览器门禁 3 条变红**；③ **无产物时伪造曲线 + 重启服务 ⇒ 浏览器门禁 3 条变红 + API 用例 2 条变红**；④ 撤销后全绿 |
+| ⚠️ 反向验证踩的坑 | ① **浏览器门禁 mock 了接口 ⇒ 后端改动它看不见** ⇒ 后端断言放在 API 用例里（那里直接 import 真代码）；② **浏览器门禁打的是活着的服务** ⇒ **改后端必须先重启**再跑门禁，否则验的是旧进程里的代码 ⇒ 撤销改动门禁照样全绿（实测踩过一轮，已写进门禁头注） |
+| 数据 | ✅ **已用免费源解决并入库** —— **世界银行 Pink Sheet**（Commodity Price Data）月度 `Gold` 列（$/troy oz，London fix 月均），覆盖 **1960-01 → 2024-12**（含 1974/1980 ⇒ 东财 COMEX 日线只到 1990 取不到）；`scripts/build_crisis_cycles.py` 自动选周期（局部高点 + prominence≥10% + 同 episode 归并 + 回撤≥15% + 早于当前周期起点，**无人工挑选**）⇒ **8 轮**：1969-05 / **1974-12** / **1980-01** / 1983-02 / 1990-02 / 1999-10 / 2008-03 / **2011-09**；产物 `src/app/assets/forecast/crisis_cycles.json`（24 KB）**入库**；⚠ 口径差异（伦敦现货 vs 仓库 COMEX 期货）写进 `provenance` |
+| 降级 | ✅ 历史周期产物缺失 ⇒ 接口 `available=false` + `reason` ⇒ 页面显示「待数据」并说明**为什么不画曲线**（画一条编出来的线比没有更糟）；校验器会剔除不合规周期（跳月 / 高点月非最高 / 与当前周期重叠）并告警，**绝不静默修补**。⚠ 门禁里这条**必须显式 mock 降级响应**（产物入库后「靠文件缺失测降级」会假红 —— 实测踩过） |
+| `__version__` | ✅ 已 bump 到 `0.128.0`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 静态资源 | ⚠ **改了 `static/crisis-fit.html` + `static/crisis-fit.js` + `static/home.html` + 3 个 `static/i18n/*.js`** ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION**（已 bump 到 `v0.128.0`）；新页进 `SHELL_ASSETS`（**60** 条）+ activate 的 stale 清理名单 |
+| 文档 | ✅ 新增 [docs/crisis-cycle-fit.md](crisis-cycle-fit.md)（**口径真源**：算法逐条 + 产物格式契约 + 失效条件 + 证据门）+ 新增**第 13 份里程碑 M13** + `docs/releases/index.md` 登记 + roadmap **D4** + `CHANGELOG.md` V0.128.0 段 |
+
+### 上一轮：V0.127.2（2026-11-16 发版 · a11y 数据表落点 hotfix）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ **a11y 数据表兜底的落点修复** —— 用户报「金价区间页有个数据表，打开的时候浮在页面上方」⇒ 实测确认是图表的 **a11y 数据表兜底**（`<details><summary>数据表（辅助技术可读）</summary>`），展开后整张表**盖住**扇形图、形状图、校准表和所有说明文字 |
+| 🐛 根因 | `chart-a11y.js::insertTableFallback()` 把 `<details>` 插在 `canvas` 后面 ⇒ 落进**图表容器内部**。而图表容器几乎都是**固定高度**的盒子（`.pf-chart-wrap{height:380px}` / `.chart-wrap{height:300px}` / 内联 `height:320px`），容器高度是给 canvas 留的 ⇒ 兜底表只能**溢出**：收起时 summary 压住下方第一行文字，展开时整张表浮在页面上方 |
+| 🔧 改法 | **实测溢出容器 ⇒ 把兜底表挪到容器之后**（同一父级里）⇒ 回到正常文档流，展开时把下方内容**推下去**而不是盖住它。⚠ 挪动后 `<details>` 不再是 canvas 的兄弟节点 ⇒ 幂等判据从「`nextElementSibling` 是 fallback」换成 **id 标记**（`data-pm-a11y-for` / `data-pm-a11y-table`）+ 清掉同源旧表；⚠ Chart.js 初次 resize 可能异步 ⇒ **下一帧再核一次** |
+| 同源另两处 | ✅ **一共命中 3 处**：`/scoring` 命中分析图（容器是内联 `height:320px`）+ **趋势页摘要卡的迷你扇形图**（`.pf-chart-wrap.pf-chart-sm`，`trend.html` 里 `height:220px`）⇒ 修在**共享组件** `chart-a11y.js` ⇒ 一处修好三处；三处都实测复现、都被修掉 |
+| 门禁 | ✅ **共 6 条新断言**：`_verify_price_forecast.mjs` 新增【3.5】**2 条**（收起时**不溢出容器** + 展开后**不遮挡**任何说明/图表/表格）+【7】**1 条**（趋势页摘要卡的迷你图同样在固定高度容器里 ⇒ 同样复现）⇒ **59 → 62 passed / 0 failed**；`_verify_scoring_robust.mjs` 新增【C】**3 条**（同款判据 + 独立限流桶）⇒ **8 → 11 passed / 0 failed** |
+| ⚠️ 判据踩坑 | 判据用**几何重叠**而不是「下一个兄弟」—— 反向验证时兜底表被塞回容器里，它在 DOM 上**没有**下一个兄弟（它是容器的最后一个子节点）⇒ 兄弟判据**假绿**（实测踩过一轮，改成重叠判据后才真正变红） |
+| 反向验证 | ✅ **5 条断言做过反向验证**（把 `placeFallback()` 短路掉 ⇒ 恢复老行为）：price-forecast 门禁 **3 条变红**（59→62 中的 3 条；溢出量 `hostBottom 1029.9 → dBottom 1053.9`；遮挡命中 `pfFanNote` / `pfShapeChart` / 校准表 / `panel-title` 等 14 处；摘要卡那条同样变红）；scoring 门禁 **2 条变红**（溢出 `hostBottom 1300.4 → dBottom 1324.4`；遮挡命中 `hit-mini-grid` 等 4 处）⇒ 恢复后全绿 |
+| `__version__` | ✅ 已 bump 到 `0.127.2`（4 处同步：`__init__.py` / `pyproject.toml` / `uv.lock` / `sw.js`） |
+| 迁移 | ✅ **零 Alembic 迁移、零 DDL、零生产库写入**（只动 `static/chart-a11y.js` + 2 个门禁脚本 + 文档 + 版本号） |
+| 静态资源 | ⚠ **改了 `static/chart-a11y.js`** ⇒ 按 V0.100.1 规则**必须 bump `sw.js` VERSION**（已 bump 到 `v0.127.2`）；`chart-a11y.js` 不在 `SHELL_ASSETS` 里（走 RUNTIME_CACHE 的 cache-first）⇒ VERSION 一变，旧缓存随 activate 清掉 ⇒ 无需改 SHELL_ASSETS（仍是 **57** 条） |
+| 服务 | ✅ **已用 systemd 重启**（`sudo systemctl restart gold-etf-analyzer.service`）⇒ `/openapi.json` → `info.version = **0.127.2**` |
+| 文档 | ✅ CHANGELOG 新增 V0.127.2 段 · M12 §十一 加 V0.127.2 行 + **教训 11**（「固定高度的容器会吃掉溢出内容」）+ 发版区间更新为 V0.127.0 – V0.127.2 |
+
+#### 推送状态：📦 **随 V0.128.0 同批发布**（同一个 tag `v0.128.0`）
+
+⚠ **没有独立的 `v0.127.2` tag** —— 本版的 a11y 落点修复是形态拟合新页的**前置**
+（新页的兜底表同样会落进固定高度的图表容器），两批改动一并入库，
+避免出现「有版本段、无 tag」的缺口。推送状态见下方 V0.128.0 的推送状态表。
+
+> 📌 **推送方式**（**token 不进 argv、不落盘、不进 `remote.origin.url`**）：
+> `export GH_TOKEN=…` + `git -c credential.helper='!gh auth git-credential' push origin main v0.127.2`；
+> 推完 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history` 并复核 5 处 token 痕迹。
+>
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— `git push | tail` 的退出码恒为 0
+> ⇒ 失败会被伪装成成功。推完必须回读 `refs/heads/main`（== 本地 HEAD）、tag 的对象与 `^{}` 行、远端 tag 数（== 本地）。
+>
+> ⚠️ **main 的当前 SHA 不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+
+### 上一轮：V0.127.1（2026-11-12 发版 · 口径订正 hotfix）
 
 | 项 | 状态 |
 |---|---|

@@ -118,6 +118,8 @@
 | **金价区间预测**（`GET /api/v1/forecast/price` + `GET /api/v1/forecast/calibration`）—— 中心恒等于最新收盘价（**无漂移** `drift_mode="none"`），宽度取 EWMA 日波动率（λ=0.94）、形状取历史类比分位路径；覆盖率 50/80/90/98 四档**实测**（80% 档样本外 **79.2%**），口径产物入库 `src/app/assets/forecast/` | **V0.127.0** | [m12-price-range-forecast-v0.127.md](milestones/m12-price-range-forecast-v0.127.md) |
 | **趋势导航线（扇形图）+ 独立页 `/price-forecast`**（结论卡 + 覆盖率切换 + 形状对照图 + 校准表 + 已知失效条件） | **V0.127.0** | [m12-price-range-forecast-v0.127.md](milestones/m12-price-range-forecast-v0.127.md) |
 | **金价日历深度回填**（生产 `gold_price_daily` 的 `ny` 从 **97 行 → 2588 行**，2016-11-14 起，零 DDL、幂等可重跑） | **V0.127.0** | [m12-price-range-forecast-v0.127.md](milestones/m12-price-range-forecast-v0.127.md) |
+| **经济危机金价拟合曲线**（`GET /api/v1/forecast/crisis-fit`）—— 历史危机周期**等权模板** → 缩放**精确穿过当前点** → 外推 N 个月；⚠ **历史形态参照，不是预测**；drift=0 对照 / 各轮终点区间 / 锚点敏感度 / 模板 clamp 边界 **常驻页面** | **V0.128.0** | [m13-crisis-cycle-fit-v0.128.md](milestones/m13-crisis-cycle-fit-v0.128.md) |
+| **独立页 `/crisis-fit`** + 首页「形态拟合」磁贴（取代原「金价区间」磁贴；⚠ 扇形图的独立页/趋势页摘要卡/顶栏/命令面板入口**全部保留**） | **V0.128.0** | [m13-crisis-cycle-fit-v0.128.md](milestones/m13-crisis-cycle-fit-v0.128.md) |
 | 区间中心「方向倾斜」（Phase B） | ❌ **不做**（前置未满足：消息面历史仅 37 天 ⇒ 综合指数无法 point-in-time 重放 ⇒ 不可测） | [m12-price-range-forecast-v0.127.md](milestones/m12-price-range-forecast-v0.127.md) §七 |
 
 ### 1.5 UI / UX

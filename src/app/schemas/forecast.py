@@ -132,3 +132,99 @@ class ForecastCalibrationOut(BaseModel):
         default_factory=dict,
         description="跨窗口形状稳定性：{窗口名: {n_days: 样本天数, shape: [float, ...]}}",
     )
+
+
+# ────────────────────────────── V0.128.0 经济危机金价拟合曲线 ──────────────────────────────
+# ⚠ 这是「历史形态参照 + 情景假设」，**不是预测、不是统计回归、不是目标价**。
+#   任何「看多/看空/预计金价」语义都不该出现在这套 schema 里。
+
+
+class CrisisFitPointOut(BaseModel):
+    """拟合曲线上的一个月。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    t: int = Field(description="距锚点月的月数（锚点 = 0）")
+    month: str = Field(description="日历月 YYYY-MM")
+    norm: float = Field(description="归一指数（锚点月的月均价 = 100）")
+    price: float = Field(description="隐含美元价（锚点月均价 × norm / 100）")
+
+
+class CrisisCycleEndOut(BaseModel):
+    """单轮历史周期各自外推到终点的结果（= 离散区间）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    norm: float
+    price: float
+
+
+class CrisisFitSensitivityOut(BaseModel):
+    """锚点敏感性（证据门 E5）：锚点月 ±1 时终点的隐含价。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    anchor_minus1_price: float | None = None
+    anchor_plus1_price: float | None = None
+    low: float | None = None
+    high: float | None = None
+    spread_pct: float | None = Field(default=None, description="锚点 ±1 月造成的终点相对波动（%）")
+
+
+class CrisisFitOut(BaseModel):
+    """经济危机金价拟合曲线的接口响应。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    target: str
+    available: bool = Field(
+        description="是否算出了曲线（false ⇒ 页面显示「样本不足」并写明 reason）"
+    )
+    reason: str | None = Field(default=None, description="降级原因（如 no_crisis_cycles_artifact）")
+    horizon_months: int
+    drift: float = Field(description="每月漂移假设（研究示意参数；页面必须同时给出 drift=0 对照）")
+
+    # ── 当前周期定位 ──
+    anchor_month: str | None = Field(default=None, description="锚点月（默认 = 月均价最高的月）")
+    anchor_avg: float | None = None
+    peak_date: str | None = Field(default=None, description="锚点对应的日线峰值日期")
+    peak_price: float | None = None
+    last_month: str | None = None
+    last_avg: float | None = None
+    t0: int | None = Field(default=None, description="锚点月 → 末月的月数")
+    cur_norm: float | None = Field(default=None, description="当前周期的归一位置（锚点 = 100）")
+
+    # ── 曲线 ──
+    template: list[list[float]] = Field(
+        default_factory=list, description="等权平均模板 [[t, norm], ...]（形态参照的本体）"
+    )
+    template_counts: list[int] = Field(
+        default_factory=list, description="每个 t 由几轮周期平均而来（尾部轮数少 ⇒ 证据薄）"
+    )
+    template_max_t: int | None = Field(
+        default=None, description="模板覆盖的最大 t（超过它就是**平台外推**，没有历史信息）"
+    )
+    cycle_paths: list[dict] = Field(
+        default_factory=list,
+        description="每轮周期各自的归一路径（模板的原料；页面要展示「均值是由什么平均出来的」）",
+    )
+    curve: list[CrisisFitPointOut] = Field(default_factory=list)
+    endpoint: CrisisFitPointOut | None = None
+    endpoint_drift0: CrisisFitPointOut | None = Field(
+        default=None, description="★ drift=0 的同一终点（页面常驻对照 —— drift 是假设不是结论）"
+    )
+    gain_pct: float | None = None
+    cycle_ends: list[CrisisCycleEndOut] = Field(
+        default_factory=list, description="单轮周期各自的终点（= 离散区间）"
+    )
+    sensitivity: CrisisFitSensitivityOut | None = Field(
+        default=None, description="锚点 ±1 月的终点敏感度"
+    )
+
+    # ── 证据与告警 ──
+    provenance: dict = Field(
+        default_factory=dict, description="周期数据的来源（来源/覆盖区间/口径）"
+    )
+    warnings: list[str] = Field(default_factory=list, description="被剔除的周期与原因")
+    generated_at: str | None = None

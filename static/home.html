@@ -102,7 +102,7 @@
     display: flex; gap: 6px; flex-wrap: wrap; }
   .scene-links li { padding: 3px 10px; background: var(--bg); border-radius: 8px;
     font-size: 12px; color: var(--muted); }
-  /* V0.127.0：磁贴里的「当前区间」一行（由 price-forecast.js 填） */
+  /* V0.128.0：磁贴里的「形态拟合结论」一行（由 crisis-fit.js 填） */
   .scene-live { margin-top: auto; padding: 6px 10px; font-size: 12px;
     background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
     color: var(--text); font-variant-numeric: tabular-nums; }
@@ -406,18 +406,21 @@
       </ul>
     </a>
 
-    <a class="home-scene scene-forecast" href="/price-forecast">
-      <div class="scene-ico">📐</div>
-      <h2 class="scene-title" data-i18n="home.scene_forecast">金价区间</h2>
-      <p class="scene-desc" data-i18n="home.scene_forecast_desc">未来 20 交易日大致区间</p>
+    <!-- V0.128.0：这张磁贴从「金价区间（扇形图）」改成了「形态拟合」。
+         ⚠ 扇形图（V0.127.0）并没有消失 —— 它的独立页 /price-forecast、趋势页摘要卡、
+            顶栏「决策 → 金价区间」、命令面板都还在；只是**首页不再有它的磁贴**。 -->
+    <a class="home-scene scene-forecast" href="/crisis-fit">
+      <div class="scene-ico">📉</div>
+      <h2 class="scene-title" data-i18n="home.scene_crisis">形态拟合</h2>
+      <p class="scene-desc" data-i18n="home.scene_crisis_desc">危机周期参照 · 未来 30 个月</p>
       <ul class="scene-links">
-        <li data-i18n="home.scene_forecast_1">趋势导航线</li>
-        <li data-i18n="home.scene_forecast_2">实测覆盖率</li>
-        <li data-i18n="home.scene_forecast_3">形状对照</li>
+        <li data-i18n="home.scene_crisis_1">拟合曲线</li>
+        <li data-i18n="home.scene_crisis_2">等权模板</li>
+        <li data-i18n="home.scene_crisis_3">各轮终点区间</li>
       </ul>
-      <!-- V0.127.0：当前区间一句话（由 /static/price-forecast.js 填）。
-           ⚠ 取数失败时显示「暂不可用」而不是留空 —— 空着会被读成「没数据」。 -->
-      <div class="scene-live" id="fcTileRange">—</div>
+      <!-- V0.128.0：形态拟合结论一行（由 /static/crisis-fit.js 填）。
+           ⚠ 没有周期数据时显示「待周期数据入库」—— **不回退**显示别的口径的数。 -->
+      <div class="scene-live" id="cfTileRange">—</div>
     </a>
 
     <a class="home-scene scene-portfolio" href="/portfolio">
@@ -617,7 +620,7 @@
 <script src="/static/net-status.js" defer></script>
 <script src="/static/home.js" defer></script>
 <!-- V0.127.0 金价区间预测磁贴（当前区间一句话 + 与独立页/趋势页共用同一份逻辑） -->
-<script src="/static/price-forecast.js" defer></script>
+<script src="/static/crisis-fit.js" defer></script>
 <!-- V0.112.0 · 命令面板：顶栏「⌘ 搜索」按钮 + ⌘K/Ctrl+K。
      此前只有 9/18 个页挂了本脚本，其余页面的顶栏搜索按钮点了没反应 ——
      而按钮是 C1 给全部 18 页加的。派生时读 topnav.js 导出的 PM_Topnav.SCENES，

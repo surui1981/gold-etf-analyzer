@@ -190,14 +190,20 @@ ok("配置卡列出 3 个子项（含数据健康）", cfg?.items.length === 3 &
 const hl = cards.find((c) => c.title.includes("数据健康"));
 ok("数据健康卡指向 /data-health 别名", hl?.href === "/data-health", hl?.href);
 
-// V0.127.0：新增「金价区间」卡 ⇒ 断言它在，且指向 /price-forecast
-const fc = cards.find((c) => (c.href || "").includes("price-forecast"));
-ok("首页有金价区间卡", !!fc, cards.map((c) => c.title).join(" / "));
-ok("金价区间卡指向 /price-forecast", fc?.href === "/price-forecast", fc?.href);
-ok("金价区间卡列出 3 个子项", fc?.items.length === 3, JSON.stringify(fc?.items));
+// V0.128.0：首页第 8 张卡从「金价区间（扇形图）」改成了「形态拟合」（用户 2026-11-18 拍板）
+// ⇒ 断言跟着改口径（改了口径必须同轮同步断言）。
+// ⚠ 扇形图**没有消失**：独立页 /price-forecast、趋势页摘要卡、顶栏「决策 → 金价区间」、
+//    命令面板都还在 —— 只是首页不再有它的磁贴。
+const fc = cards.find((c) => (c.href || "").includes("crisis-fit"));
+ok("首页有形态拟合卡", !!fc, cards.map((c) => c.title).join(" / "));
+ok("形态拟合卡指向 /crisis-fit", fc?.href === "/crisis-fit", fc?.href);
+ok("形态拟合卡列出 3 个子项", fc?.items.length === 3, JSON.stringify(fc?.items));
+ok("首页已无金价区间卡（扇形图只留页内入口）",
+  !cards.some((c) => (c.href || "").includes("price-forecast")),
+  cards.map((c) => c.href).join(" / "));
 
 // 首页卡顺序 = 顶 nav 去掉「首页」，再在「配置」后补回「数据健康」
-const EXPECTED_CARDS = ["今日要闻", "决策", "金价区间", "持仓", "情报", "报告存档", "配置", "数据健康", "AI 智能分析"];
+const EXPECTED_CARDS = ["今日要闻", "决策", "形态拟合", "持仓", "情报", "报告存档", "配置", "数据健康", "AI 智能分析"];
 const gotCards = cards.map((c) => EXPECTED_CARDS.find((x) => c.title.includes(x)) || `?(${c.title})`);
 ok("首页卡顺序与顶 nav 一致", JSON.stringify(gotCards) === JSON.stringify(EXPECTED_CARDS), gotCards.join(" → "));
 

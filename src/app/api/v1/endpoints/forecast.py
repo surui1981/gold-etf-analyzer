@@ -10,14 +10,26 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_price_forecast_service
+from app.dependencies import get_db_session, get_price_forecast_service
 from app.schemas.forecast import (
+    CrisisCycleEndOut,
+    CrisisFitOut,
+    CrisisFitPointOut,
+    CrisisFitSensitivityOut,
     ForecastCalibrationOut,
     ForecastCrossCheckOut,
     ForecastMeasuredOut,
     ForecastPointOut,
     PriceForecastOut,
+)
+from app.services.crisis_cycle_fit import (
+    DEFAULT_DRIFT,
+    DEFAULT_HORIZON_MONTHS,
+    MAX_DRIFT,
+    MIN_DRIFT,
+    build_crisis_fit,
 )
 from app.services.price_forecast import (
     COVERAGE_Z,
@@ -180,4 +192,95 @@ async def get_forecast_calibration(
         shape=shape,
         cone=cone,
         shape_stability=stability,
+    )
+
+
+@router.get(
+    "/crisis-fit",
+    response_model=CrisisFitOut,
+    summary="经济危机金价拟合曲线（历史形态参照，**不是预测**）",
+)
+async def get_crisis_fit(
+    target: str = Query(
+        DEFAULT_TARGET,
+        pattern="^(ny|etf|gram)$",
+        description="标的：ny=COMEX 纽约金（默认）/ etf=518880 / gram=上海金",
+    ),
+    horizon: int = Query(
+        DEFAULT_HORIZON_MONTHS,
+        ge=6,
+        le=60,
+        description="外推月数（6-60；默认 30）",
+    ),
+    drift: float = Query(
+        DEFAULT_DRIFT,
+        ge=MIN_DRIFT,
+        le=MAX_DRIFT,
+        description="每月漂移假设（研究示意参数；默认 0.003 = +0.3%/月）",
+    ),
+    session: AsyncSession = Depends(get_db_session),
+) -> CrisisFitOut:
+    """把历史危机周期的等权模板套到当前周期上，外推未来 N 个月。
+
+    ⚠⚠⚠ **这是「历史形态参照 + 情景假设」，不是预测、不是统计回归、不是目标价。**
+    响应里的 ``drift`` 是**假设**（页面必须同时给出 ``endpoint_drift0`` 对照），
+    ``provenance`` 是周期数据的来源，``warnings`` 是被剔除的不合规周期。
+
+    降级（``available=false``）时给出明确 ``reason``，前端据此显示「样本不足」
+    而不是画一条假线。
+    """
+    from app.repositories.review import GoldPriceRepository
+
+    repo = GoldPriceRepository(session)
+    rows = await repo.list_range(target)
+    daily_nodes = [
+        {"date": r.price_date.isoformat(), "last": float(r.close)}
+        for r in rows
+        if r.close is not None
+    ]
+    result = build_crisis_fit(
+        daily_nodes,
+        target=target,
+        horizon=horizon,
+        drift=drift,
+    )
+
+    def _point(pt: dict | None) -> CrisisFitPointOut | None:
+        if not pt:
+            return None
+        return CrisisFitPointOut(
+            t=int(pt["t"]), month=str(pt["month"]), norm=float(pt["norm"]), price=float(pt["price"])
+        )
+
+    fit = result.fit
+    return CrisisFitOut(
+        target=target,
+        available=result.available,
+        reason=result.reason,
+        horizon_months=result.horizon_months,
+        drift=result.drift,
+        anchor_month=result.anchor_month,
+        anchor_avg=result.anchor_avg,
+        peak_date=result.peak_date,
+        peak_price=result.peak_price,
+        last_month=result.last_month,
+        last_avg=result.last_avg,
+        t0=result.t0,
+        cur_norm=result.cur_norm,
+        template=[[int(t), round(float(v), 2)] for t, v in result.template],
+        template_counts=[int(c) for c in result.template_counts],
+        cycle_paths=result.cycle_paths,
+        template_max_t=result.template_max_t,
+        curve=[_point(pt) for pt in (fit.curve if fit else [])],
+        endpoint=_point(fit.endpoint) if fit else None,
+        endpoint_drift0=_point(result.fit_drift0.endpoint) if result.fit_drift0 else None,
+        gain_pct=fit.gain_pct if fit else None,
+        cycle_ends=[
+            CrisisCycleEndOut(name=str(e["name"]), norm=float(e["norm"]), price=float(e["price"]))
+            for e in (fit.cycle_ends if fit else [])
+        ],
+        sensitivity=(CrisisFitSensitivityOut(**result.sensitivity) if result.sensitivity else None),
+        provenance=result.provenance,
+        warnings=result.warnings,
+        generated_at=result.generated_at.isoformat(),
     )

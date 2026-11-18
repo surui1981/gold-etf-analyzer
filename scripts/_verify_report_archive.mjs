@@ -116,7 +116,7 @@ const cards = await page.$$eval(".home-scene", (els) =>
 );
 // V0.111.1 定稿：首页 8 张板块。数据健康归到「配置」子页但仍保留自己的首页卡，
 // 所以首页卡数（8）与顶 nav 场景数（8）相等，却不是一一对应。
-ok("首页 8 张场景卡", cards.length === 8, `实际 ${cards.length}`);
+ok("首页 9 张场景卡", cards.length === 9, `实际 ${cards.length}`);
 const archiveCard = cards.find((c) => c.href === "/report-archive");
 ok("存在 scene-archive 卡", !!archiveCard);
 ok("卡片标题非 undefined", archiveCard && !archiveCard.title.includes("undefined"), archiveCard?.title);

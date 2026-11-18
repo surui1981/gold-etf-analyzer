@@ -50,6 +50,9 @@ await page.setViewport({ width: 1352, height: 900 });
 //        ⇒ 门禁稳定报红，看起来像「scoring 渲染坏了」，实际是门禁自己的 mock 失效了。
 //   绕过 SW 后两次导航都直接走网络 ⇒ 拦截稳定生效 ⇒ 门禁可重入。
 await page.setBypassServiceWorker(true);
+// ⚠ 独立限流桶（X-Forwarded-For）：服务端按 IP 做 600 req/min 滑动窗口限速，
+//   多个门禁连着跑会互相抢额度 ⇒ 429 ⇒ 假失败。见记忆 browser-gate-429-rate-limit。
+await page.setExtraHTTPHeaders({ "X-Forwarded-For": "198.51.100.78" });
 
 const pageErrors = [];
 page.on("pageerror", (e) => pageErrors.push(String(e && e.message ? e.message : e)));
@@ -139,6 +142,53 @@ ok("正常 payload 零 pageerror", pageErrors.length === 0, JSON.stringify(pageE
 ok("正常 payload 渲染出方向卡（没被修成永远空态）", normalCase.hasGrid, JSON.stringify(normalCase).slice(0, 160));
 ok("正常 payload 两个方向都在", normalCase.hasUp && normalCase.hasDown, JSON.stringify(normalCase).slice(0, 160));
 ok("正常 payload 描述行带 sample 与命中率", /sample=12/.test(normalCase.desc), normalCase.desc);
+
+// ─── C. 真实数据 ⇒ a11y 数据表兜底不能「浮在页面上方」（V0.127.2）───
+// ⚠ A/B 两个场景都 mock 了 hit-stats（没有 buckets）⇒ 命中分析图**不渲染**，
+//   也就没有 a11y 兜底表 ⇒ 这里必须放行**真实接口**（关掉拦截）才测得到。
+console.log("\n【C】命中分析图的 a11y 数据表落点（不溢出固定高度容器）");
+page.removeAllListeners("request");
+await page.setRequestInterception(false);
+await page.goto(`${BASE}/static/scoring.html`, { waitUntil: "networkidle2" });
+await page.waitForSelector('[data-tab="hit"]');
+await page.click('[data-tab="hit"]');
+await page.waitForFunction(
+  () => !!document.querySelector('details.pm-chart-fallback[data-pm-a11y-for="hitChart"]'),
+  { timeout: 25000 },
+).catch(() => {});
+const a11yCase = await page.evaluate(() => {
+  const d = document.querySelector('details.pm-chart-fallback[data-pm-a11y-for="hitChart"]');
+  if (!d) return { has: false };
+  const host = d.parentElement;
+  const hb = host.getBoundingClientRect();
+  const db = d.getBoundingClientRect();
+  d.open = true;
+  const r = d.getBoundingClientRect();
+  const covered = [];
+  document.querySelectorAll("canvas, table, h2, .desc, .hit-mini, .hit-mini-grid, .stat-grid").forEach((t) => {
+    if (d.contains(t)) return;
+    const tr = t.getBoundingClientRect();
+    if (!tr.width || !tr.height) return;
+    const ix = Math.min(r.right, tr.right) - Math.max(r.left, tr.left);
+    const iy = Math.min(r.bottom, tr.bottom) - Math.max(r.top, tr.top);
+    if (ix > 2 && iy > 2) {
+      covered.push({ el: t.id || t.className || t.tagName, ix: +ix.toFixed(1), iy: +iy.toFixed(1) });
+    }
+  });
+  return {
+    has: true,
+    over: db.bottom > hb.bottom + 1 || db.right > hb.right + 1,
+    hostBottom: +hb.bottom.toFixed(1),
+    dBottom: +db.bottom.toFixed(1),
+    covered,
+  };
+});
+ok("命中分析图有 a11y 数据表兜底", a11yCase.has === true, JSON.stringify(a11yCase).slice(0, 200));
+ok("命中分析的 a11y 数据表没有溢出图表容器", a11yCase.has === true && a11yCase.over !== true,
+  JSON.stringify(a11yCase).slice(0, 200));
+ok("命中分析的 a11y 数据表展开后不遮挡下方内容",
+  a11yCase.has === true && (a11yCase.covered || []).length === 0,
+  JSON.stringify(a11yCase.covered || []).slice(0, 200));
 
 await browser.close();
 console.log(`\n${"=".repeat(56)}`);

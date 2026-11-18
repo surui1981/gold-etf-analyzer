@@ -89,7 +89,7 @@ const geom = await page.evaluate(() => {
     blockLeftInHero: Math.round(b.left - h.left),
     blockW: Math.round(b.width),
     blockRightGap: Math.round(h.right - b.right),
-    // 8 张场景卡没被动过
+    // 9 张场景卡没被动过
     scenesCount: document.querySelectorAll(".home-scene").length,
     firstSceneIsHeadlines: (document.querySelector(".home-scene")?.className || "")
       .includes("scene-headlines"),
@@ -107,7 +107,7 @@ ok("结论块落在 hero 右半边（不是叠在文案上）",
   geom ? `left=${geom.blockLeftInHero} heroW=${geom.heroW}` : "");
 ok("结论块没有溢出 hero 右边界",
   !!geom && geom.blockRightGap >= 0, geom ? `gap=${geom.blockRightGap}` : "");
-ok("板块卡仍是 8 张（没动场景 grid）", geom?.scenesCount === 8, `实际 ${geom?.scenesCount}`);
+ok("板块卡仍是 9 张（没动场景 grid）", geom?.scenesCount === 9, `实际 ${geom?.scenesCount}`);
 ok("grid 首张仍是今日要闻磁贴", !!geom?.firstSceneIsHeadlines);
 ok("贵金属区仍在底部今日要闻之前", !!geom?.metalsBeforeBottom);
 

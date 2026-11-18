@@ -95,7 +95,7 @@ const order = await page.evaluate(() => {
 ok("取到 DOM 顺序信息", order !== null);
 ok("贵金属区在底部今日要闻（.home-bottom）之前", !!order?.beforeNewsList);
 ok("今日要闻新闻列表仍在", !!order?.hasNewsList);
-ok("板块卡仍为 8 张（未动 grid）", order?.scenesCount === 8, `实际 ${order?.scenesCount}`);
+ok("板块卡仍为 9 张（未动 grid）", order?.scenesCount === 9, `实际 ${order?.scenesCount}`);
 ok("grid 首张仍是今日要闻磁贴", !!order?.gridFirstIsHeadlines);
 
 // ─── 2. 三张卡都有真实数值 ───

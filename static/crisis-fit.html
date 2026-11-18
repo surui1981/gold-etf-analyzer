@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title data-i18n="crisis.page_title">经济危机金价拟合曲线 · 历史形态参照</title>
+<!-- V0.69.0 FOUC 防护 -->
+<script>(function(){
+  try {
+    var k="pm_theme_mode", v=localStorage.getItem(k)||"light";
+    if(["light","dark","auto","hc"].indexOf(v)<0) v="light";
+    var eff=v==="auto"?(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"):v;
+    document.documentElement.setAttribute("data-theme",eff);
+  } catch(e){ document.documentElement.setAttribute("data-theme","light"); }
+})();</script>
+<!-- Chart.js + a11y 封装必须在 crisis-fit.js 之前同步加载 -->
+<script src="/static/vendor/chart.umd.min.js"></script>
+<script src="/static/chart-a11y.js"></script>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="manifest" href="/static/manifest.json">
+<link rel="icon" href="/static/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" data-i18n="crisis.brand" content="金价形态拟合">
+<script src="/static/theme.js" defer></script>
+<!-- V0.73.0 i18n FOUC guard -->
+<script>(function(){
+  try {
+    var k="pm_lang", v=localStorage.getItem(k);
+    if(v && ["zh-CN","zh-TW","en-US"].indexOf(v)>=0){
+      document.documentElement.setAttribute("lang", v);
+    }
+  } catch(e){}
+})();</script>
+<script src="/static/i18n/zh-CN.js"></script>
+<script src="/static/i18n.js" defer></script>
+<!-- V0.75.0：认证客户端（CSRF 头注入 + 会话门禁 + 顶栏账号菜单） -->
+<script src="/static/auth.js" defer></script>
+<style>
+  /* V0.69.0：CSS 变量已迁至 /static/theme.css */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text); padding: 24px;
+  }
+  .wrap { max-width: 1040px; margin: 0 auto; }
+  /* 顶部导航（统一）· 从 central_bank.html 复制（V0.92.0 技术债：每个业务页各抄一份）
+     ⚠ 不抄的后果实测过：theme.css 只有高对比覆盖 ⇒ 顶 nav 会**挤成一团**（brand 与链接重叠）。 */
+  .topnav { position: sticky; top: 0; z-index: 100; display: flex; flex-direction: column; gap: 8px;
+    background: linear-gradient(180deg, #1f2329 0%, #262b33 100%); border-radius: 12px;
+    padding: 10px 16px 8px; margin-bottom: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.18),
+      0 1px 0 rgba(255,255,255,.04) inset; }
+  .topnav .topnav-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .topnav .brand { display:inline-flex; align-items:center; gap:8px; font-weight: 700; font-size: 15px;
+    color: #f5d97a; letter-spacing: .5px; text-decoration: none; }
+  .topnav .brand-dot { width:8px; height:8px; border-radius:50%; background:var(--accent,#806014);
+    box-shadow:0 0 8px rgba(245,217,122,.55); }
+  .topnav .links { display: flex; gap: 4px; flex-wrap: wrap; }
+  .topnav a { display:inline-flex; align-items:center; gap:5px; color: #d6d9dd; text-decoration: none;
+    font-size: 13px; padding: 5px 11px; border-radius: 7px; transition: background .15s, color .15s;
+    border: 1px solid transparent; }
+  .topnav a .nav-ico { font-size:13px; opacity:.85; }
+  .topnav a:hover { background: rgba(255,255,255,.10); color: #fff; border-color: rgba(255,255,255,.06); }
+  .topnav a.active { background: var(--accent); color: #1f2329; font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+  .topnav a.active .nav-ico { opacity:1; }
+  /* Hero */
+  .hero { background: linear-gradient(135deg, #fffaf0 0%, #ffffff 60%, #f7f8fa 100%);
+    border: 1px solid #f0e2b6; border-radius: 12px; padding: 20px 24px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .hero h1 { font-size: 24px; }
+  .hero .tagline { color: var(--accent); font-weight: 600; font-size: 14px; margin: 8px 0 6px; }
+  .hero .intro { color: #4b5563; font-size: 13px; line-height: 1.8; max-width: 840px; }
+  .hero .notice { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.7; }
+  /* Panel 通用 */
+  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px; margin-bottom: 16px; }
+  .panel-title { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 10px;
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  /* ── V0.128.0 形态拟合 ── */
+  .cf-conclusion { border-left: 4px solid var(--accent); }
+  .cf-range { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .cf-range-num { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums;
+    line-height: 1.15; letter-spacing: .5px; }
+  .cf-range-unit { font-size: 12px; color: var(--muted); }
+  .cf-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12.5px; color: var(--muted); }
+  .cf-meta .cf-drift0 { font-weight: 600; color: var(--text); }
+  .cf-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .cf-chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--muted);
+    font-variant-numeric: tabular-nums; }
+  .cf-sens { margin-top: 12px; font-size: 12.5px; line-height: 1.8; color: #4b5563;
+    border-top: 1px dashed var(--border); padding-top: 10px; }
+  .cf-sens-warn { color: #b35309; }
+  .cf-sens-flag { font-weight: 700; }
+  .cf-ends { margin-top: 12px; border-top: 1px dashed var(--border); padding-top: 10px; }
+  .cf-ends-head { font-size: 12.5px; color: #4b5563; }
+  .cf-ends-range { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 6px 0; }
+  .cf-ends-list { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
+  .cf-ends-list li { display: flex; gap: 6px; color: var(--muted); }
+  .cf-ends-list .num { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cf-prov { list-style: none; margin-top: 12px; border-top: 1px dashed var(--border);
+    padding-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.9; }
+  .cf-prov .cf-warn { color: #b35309; }
+  .cf-error { color: #b35309; font-size: 12.5px; margin-bottom: 8px; }
+  .cf-pending-hint { font-size: 12.5px; color: var(--muted); line-height: 1.8; }
+  /* ⚠ 图表容器高度固定 ⇒ a11y 数据表兜底会被挤出容器。
+     V0.127.2 起 chart-a11y 会把它挪到容器之后（回到正常文档流）⇒ 这里仍可固定高度。 */
+  .cf-chart-wrap { position: relative; height: 380px; }
+  .cf-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.7; }
+  .cf-method { margin: 0 0 12px; padding-left: 20px; }
+  .cf-method li { font-size: 12.5px; line-height: 1.9; color: #4b5563; }
+  .cf-sub { font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+</style>
+<link rel="stylesheet" href="/static/responsive.css">
+<link rel="stylesheet" href="/static/help.css">
+<link rel="stylesheet" href="/static/print.css" media="print">
+<link rel="stylesheet" href="/static/toast.css">
+<link rel="stylesheet" href="/static/pwa.css">
+</head>
+<body>
+<!-- 共享顶 nav（topnav.js 同步注入）—— 按 V0.103.1 约定放在 .wrap 之外 -->
+<div id="topnav-mount"></div>
+<div id="subnav-mount"></div>
+<script src="/static/topnav.js"></script>
+
+<div class="wrap">
+  <!-- V0.128.0 经济危机金价拟合曲线：**历史形态参照 + 情景假设**，
+       ⚠ 不是预测、不是统计回归、不是目标价（与 V0.127.0 的「区间扇形图」方向性相反）。 -->
+  <header class="hero">
+    <h1 data-i18n="crisis.hero_title">📉 经济危机金价拟合曲线</h1>
+    <div class="tagline" data-i18n="crisis.hero_tagline">历史形态参照 · 不是预测</div>
+    <div class="intro" data-i18n="crisis.hero_intro">把历史危机周期按「距金价阶段高点月数」对齐、以高点归一为 100、逐月等权平均成一条模板，再按当前周期所处的位置缩放（拟合线精确穿过当前点），最后外推未来若干个月。它回答的是「**如果历史形态重演，路径大概长什么样**」，而不是「金价会到多少」。</div>
+    <div class="notice" data-i18n="crisis.hero_notice">⚠ 等权平均受 2008 年后 QE 大牛市影响**偏乐观**；drift（每月漂移）是**研究示意假设**，页面上永远并列给出 drift=0 的结果。仅供研究参考，不构成投资建议。</div>
+  </header>
+
+  <!-- 结论卡 -->
+  <section class="panel cf-conclusion" id="cfConclusion" aria-label="形态拟合结论">
+    <div class="panel-title" data-i18n="crisis.conclusion_title">形态拟合结论（历史形态参照）</div>
+    <div class="cf-error" id="cfError" hidden></div>
+    <div class="cf-range">
+      <span class="cf-range-num" id="cfRange">—</span>
+      <span class="cf-range-unit" data-i18n="crisis.unit">美元/盎司</span>
+    </div>
+    <div class="cf-meta" id="cfMeta"></div>
+    <div class="cf-chips" id="cfChips"></div>
+    <div class="cf-sens" id="cfSensitivity"></div>
+    <div class="cf-ends" id="cfCycleEnds"></div>
+    <ul class="cf-prov" id="cfProvenance"></ul>
+  </section>
+
+  <!-- 拟合图 -->
+  <section class="panel">
+    <div class="panel-title" data-i18n="crisis.fit_title">📈 形态拟合曲线 · 与各轮周期的终点</div>
+    <div class="cf-chart-wrap"><canvas id="cfFitChart"></canvas></div>
+    <div class="cf-note" id="cfFitNote"></div>
+  </section>
+
+  <!-- 模板图 -->
+  <section class="panel">
+    <div class="panel-title" data-i18n="crisis.template_title">🧭 等权平均模板 · 与每轮周期的原始路径</div>
+    <div class="cf-chart-wrap"><canvas id="cfTemplateChart"></canvas></div>
+    <div class="cf-note" id="cfTemplateNote"></div>
+  </section>
+
+  <!-- 边界与方法 -->
+  <section class="panel">
+    <div class="panel-title" data-i18n="crisis.limits_title">⚠️ 这条曲线什么时候不成立</div>
+    <ul class="cf-method">
+      <li data-i18n="crisis.limit_1">**等权平均不是加权最优**：2008 年后 QE 时代的大牛市周期会整体抬高模板 ⇒ 结论偏乐观；样本只有几轮时，一条周期就能左右结果。</li>
+      <li data-i18n="crisis.limit_2">**锚点决定一切**：锚点取「日线最高收盘价所在月」；当前金价若就在高位，t 很小 ⇒ 模板最早期主导 ⇒ 锚点换一个月，结论可能差很多（页面给出该敏感度）。</li>
+      <li data-i18n="crisis.limit_3">**模板之外没有信息**：模板只覆盖到各轮周期结束的那几个月，之后是插值器的**平台外推**（页面在图注里标出边界）。</li>
+      <li data-i18n="crisis.limit_4">**drift 是假设不是结论**：+0.3%/月只是研究示意参数；页面上永远并列给出 drift=0 的终点，请对比着看。</li>
+      <li data-i18n="crisis.limit_5">**周期样本本身有选择偏差**：哪些危机被算作「周期」由人决定；换一批周期，模板就会变。</li>
+    </ul>
+
+    <div class="cf-sub" data-i18n="crisis.method_title">📖 方法与口径</div>
+    <ul class="cf-method">
+      <li data-i18n="crisis.method_1">对齐：每轮周期以它的金价阶段高点月为 t=0，高点价归一为 100；只取 t ≥ 0 的部分。</li>
+      <li data-i18n="crisis.method_2">平均：逐月**等权**平均（缺一轮就少一轮，不补 0）；页面上给出每个 t 由几轮周期支撑。</li>
+      <li data-i18n="crisis.method_3">缩放：按当前周期相对锚点的位置缩放，使拟合线**精确穿过当前点**（不重新拟合历史）。</li>
+      <li data-i18n="crisis.method_4">外推：norm(t) = 模板(t) × 缩放 × (1+drift)^(t−t0)；隐含价 = 锚点月均价 × norm / 100。</li>
+      <li data-i18n="crisis.method_5">离散度：把每轮周期各自外推到终点，得到区间（**不是置信区间**，是「均值被单轮影响的范围」）。</li>
+      <li data-i18n="crisis.method_6">无前视：当前周期只用 ≤ 末月的日线；模板只用历史周期，**当前周期不进模板**（重合的历史周期会被剔除并告警）。</li>
+    </ul>
+  </section>
+
+  <footer data-i18n="brand.footer">gold-etf-analyzer · 红涨绿跌 · 仅供研究参考，不构成投资建议</footer>
+</div>
+
+<script src="/static/crisis-fit.js" defer></script>
+<script src="/static/toast.js" defer></script>
+<script src="/static/net-status.js" defer></script>
+<script src="/static/command-palette.js" defer></script>
+</body>
+</html>

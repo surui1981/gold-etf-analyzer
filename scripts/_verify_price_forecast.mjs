@@ -10,9 +10,13 @@
 //  5. 形状对照图有 2 条线（类比形状 + √k 锥），且类比形状在 k=1 处比锥更胖
 //  6. 校准表 4 行（50/80/90/98），且当前档高亮
 //  7. 趋势页摘要卡渲染出区间（不是空 panel）
-//  8. 首页磁贴渲染出区间文案，且磁贴指向 /price-forecast
+//  8. 扇形图的**入口**（V0.128.0 起首页磁贴改成「形态拟合」⇒ 断言改为
+//     「独立页 + 顶栏「决策 → 金价区间」仍在，首页磁贴已让出」）
 //  9. 三语切换（查 textContent，不是 data-lang —— 记忆 i18n-init-await）
 // 10. 无 4xx/5xx、无 console error、无 undefined 泄漏
+// 11. a11y 数据表兜底的**落点**：收起时不溢出图表容器 / 展开后不遮挡下方内容
+//     （V0.127.2：兜底表曾被塞进固定高度的 .pf-chart-wrap ⇒ 展开时整张表
+//      浮在页面上方，把图表、说明、校准表全糊住）
 //
 // ⚠ 必须打 8888（主入口）。8889/gold/ 是备用入口且全站 /api/v1/* 404，
 //   在那里跑只会得到与本改动无关的假失败。见记忆 lan-only-deployment。
@@ -138,9 +142,68 @@ ok("扇形图有 a11y 描述", await page.evaluate(() => {
   return !!c && c.getAttribute("role") === "img" && !!c.getAttribute("aria-label");
 }));
 ok("扇形图有数据表兜底", await page.evaluate(() => {
-  const c = document.getElementById("pfFanChart");
-  return !!c && !!c.parentElement.querySelector("details.pm-chart-fallback table");
+  // ⚠ V0.127.2：兜底表**不再放在 canvas 的父容器里** —— 那个容器是固定高度的
+  //   图表盒子，兜底表塞进去会溢出（展开时浮在页面上方）。
+  //   ⇒ 改用 data-pm-a11y-for 关联到具体 canvas，只断言「有这张表」，
+  //   位置由下面【3.5】的两条断言单独管。
+  const d = document.querySelector('details.pm-chart-fallback[data-pm-a11y-for="pfFanChart"]');
+  return !!d && !!d.querySelector("table") && d.querySelectorAll("tbody tr").length === 20;
 }));
+
+// ─── 3.5 a11y 数据表不能「浮在页面上方」（V0.127.2）───
+// ⚠ 判据来自实测 bug：<details> 兜底表被塞进**固定高度**的图表容器
+//   （.pf-chart-wrap{height:380px}）⇒ 溢出容器 —— 收起时 summary 压住下方说明，
+//   展开时整张表浮在页面上方，把图表/说明/校准表全糊住。
+//   ⇒ 两条断言：**收起**时不溢出容器 + **展开**后不遮挡紧跟其后的内容。
+console.log("\n【3.5】a11y 数据表落点（不溢出容器 / 不遮挡下方）");
+const a11yPlace = await page.evaluate(() => {
+  const ds = Array.from(document.querySelectorAll("details.pm-chart-fallback"));
+  const overflow = ds
+    .map((d) => {
+      const host = d.parentElement;
+      const hb = host.getBoundingClientRect();
+      const db = d.getBoundingClientRect();
+      return {
+        host: host.id || host.className || host.tagName,
+        hostBottom: +hb.bottom.toFixed(1),
+        dBottom: +db.bottom.toFixed(1),
+        over: db.bottom > hb.bottom + 1 || db.right > hb.right + 1,
+      };
+    })
+    .filter((x) => x.over);
+  // 展开后：**任何**该被看见的元素（说明文字 / 图表 / 表格 / 标题）都不能被兜底表压住。
+  // ⚠ 判据用「几何重叠」而不是「下一个兄弟」—— 反向验证时兜底表被塞回容器里，
+  //   它在 DOM 上**没有**下一个兄弟（它是容器的最后一个子节点），
+  //   用兄弟判据会假绿（实测踩过）。
+  const covered = [];
+  const targets = document.querySelectorAll(".pf-note, .panel-title, .pf-sub, canvas, table");
+  ds.forEach((d) => {
+    d.open = true;
+    const r = d.getBoundingClientRect();
+    targets.forEach((t) => {
+      if (d.contains(t)) return; // 兜底表自己的内容不算
+      const tr = t.getBoundingClientRect();
+      if (!tr.width || !tr.height) return;
+      const ix = Math.min(r.right, tr.right) - Math.max(r.left, tr.left);
+      const iy = Math.min(r.bottom, tr.bottom) - Math.max(r.top, tr.top);
+      if (ix > 2 && iy > 2) {
+        covered.push({
+          el: t.id || t.className || t.tagName,
+          ix: +ix.toFixed(1),
+          iy: +iy.toFixed(1),
+        });
+      }
+    });
+  });
+  return { n: ds.length, overflow, covered };
+});
+ok("a11y 数据表没有溢出图表容器", a11yPlace.n > 0 && a11yPlace.overflow.length === 0,
+  JSON.stringify(a11yPlace.overflow));
+ok("a11y 数据表展开后不遮挡下方内容", a11yPlace.covered.length === 0,
+  JSON.stringify(a11yPlace.covered));
+// 收回收起态，后面的断言按收起态跑
+await page.evaluate(() =>
+  document.querySelectorAll("details.pm-chart-fallback").forEach((d) => (d.open = false)));
 
 // ─── 4. 覆盖率切换 ───
 console.log("\n【4】覆盖率切换（50/80/90/98）");
@@ -314,23 +377,48 @@ ok("摘要卡迷你扇形图有数据", await page.evaluate(() => {
   const inst = Chart.getChart(c);
   return !!inst && inst.data.datasets[0].data.length === 20;
 }));
+// ⚠ V0.127.2：摘要卡的迷你图同样在**固定高度**的 .pf-chart-wrap 里
+//   ⇒ 它的 a11y 兜底表也会溢出（实测同样复现）⇒ 这里也钉一条。
+ok("摘要卡的数据表兜底不溢出图表容器", await page.evaluate(() => {
+  const d = document.querySelector('details.pm-chart-fallback[data-pm-a11y-for="pfSummaryChart"]');
+  if (!d) return false;
+  const host = d.parentElement;
+  const hb = host.getBoundingClientRect();
+  const db = d.getBoundingClientRect();
+  return db.bottom <= hb.bottom + 1 && db.right <= hb.right + 1;
+}));
 
-// ─── 8. 首页磁贴 ───
-console.log("\n【8】首页磁贴");
+// ─── 8. 扇形图的入口（V0.128.0 起：首页磁贴改成「形态拟合」）───
+// ⚠ 用户 2026-11-18 拍板：主页「金价区间」磁贴 ⇒ 改成「形态拟合」（V0.128.0）。
+//   ⇒ 扇形图**没有消失**，但**首页不再有它的磁贴** —— 保留的入口是：
+//   独立页 /price-forecast、趋势页摘要卡、顶栏「决策 → 金价区间」、命令面板。
+//   ⇒ 这里把断言从「磁贴里有区间」改成「**剩下的入口都在**」。
+console.log("\n【8】扇形图的入口（首页磁贴已让给形态拟合）");
+await page.goto(`${BASE}/price-forecast`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector("#pfConclusion", { timeout: 20000 });
+await waitRange("#pfRange");
+ok("独立页仍渲染区间", RANGE_RE.test(await page.$eval("#pfRange", (el) => el.textContent || "")));
+
+ok("顶栏「决策」下有「金价区间」入口且指向 /price-forecast", await page.evaluate(() => {
+  // ⚠ 「金价区间」是**决策 scene 的子页** ⇒ 渲染在**底 subnav**（.subnav-tabs）里，
+  //   不是顶栏（.topnav）—— 断言要两处都找。
+  const links = Array.from(document.querySelectorAll(".topnav a, .subnav a"));
+  const hit = links.find((a) => (a.getAttribute("href") || "").includes("price-forecast"));
+  return !!hit;
+}));
+
 await page.goto(`${BASE}/home`, { waitUntil: "domcontentloaded" });
-await page.waitForSelector("#fcTileRange", { timeout: 20000 });
-await waitRange("#fcTileRange", 20000).catch(() => {});
-const tileText = await page.$eval("#fcTileRange", (el) => (el.textContent || "").trim());
-ok("磁贴渲染出区间", RANGE_RE.test(tileText), `实际 "${tileText}"`);
-ok("磁贴无 undefined", !/undefined/.test(tileText), tileText);
-ok("磁贴在「金价区间」卡里", await page.evaluate(() => {
+await new Promise((r) => setTimeout(r, 2500));
+const homeTile = await page.evaluate(() => {
   const tile = document.querySelector(".home-scene.scene-forecast");
-  return !!tile && tile.getAttribute("href") === "/price-forecast";
-}));
-ok("磁贴可点（跳到区间页）", await page.evaluate(() => {
-  const tile = document.querySelector(".home-scene.scene-forecast");
-  return !!tile && tile.tagName === "A" && !!tile.getAttribute("href");
-}));
+  return {
+    href: tile ? tile.getAttribute("href") : null,
+    live: document.getElementById("fcTileRange") ? true : false,
+  };
+});
+ok("首页磁贴已不再指向扇形图（改成形态拟合）",
+  homeTile.href !== "/price-forecast" && homeTile.live === false,
+  JSON.stringify(homeTile));
 
 // ─── 9. 三语切换 ───
 console.log("\n【9】三语切换");

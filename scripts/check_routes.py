@@ -78,6 +78,7 @@ EXPECTED_ALIAS_PATHS: list[str] = [
     "/favorites",  # V0.103 我的收藏（/api/v1/favorites/* 9 端点）
     "/report-archive",  # V0.111.0 报告存档（页面 + /api/v1/reports/* 9 端点，V0.125.0 加 /latest）
     "/price-forecast",  # V0.127.0 金价区间预测（未来 N 交易日扇形区间 + 实测覆盖率）
+    "/crisis-fit",  # V0.128.0 经济危机金价拟合曲线（历史形态参照，不是预测）
     # V0.99.0：白银 silver 已存在 RESTful alias（V0.73.0 N+16 起，sge 端点不新增 alias）
     # V0.100：综合指数 pending 改造不新增 alias
     # V0.102：今日要闻新增 /headlines alias（页面 + /api/v1/news-feed/* 5 端点）

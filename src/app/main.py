@@ -793,6 +793,17 @@ async def price_forecast_page() -> RedirectResponse:
     return RedirectResponse("/static/price-forecast.html")
 
 
+@app.get("/crisis-fit", include_in_schema=False)
+async def crisis_fit_page() -> RedirectResponse:
+    """经济危机金价拟合曲线页（V0.128.0）。
+
+    ⚠ 这一页是「**历史形态参照 + 情景假设**」，**不是预测、不是目标价** ——
+    与 ``/price-forecast``（区间扇形图，刻意不预测涨跌）**方向性相反**，
+    所以两者**不画在同一个面板里**。
+    """
+    return RedirectResponse("/static/crisis-fit.html")
+
+
 @app.get("/login", include_in_schema=False)
 async def login_page() -> RedirectResponse:
     """登录 / 注册页（V0.75.0）。

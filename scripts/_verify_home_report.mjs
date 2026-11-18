@@ -157,9 +157,9 @@ const layout = await page.evaluate(() => {
   };
 });
 ok("存在 #homeReport 条带", layout.hasSection);
-ok("条带不在 .home-scenes 网格里（保住 4 个门禁的「8 张场景卡」断言）",
+ok("条带不在 .home-scenes 网格里（保住 4 个门禁的「9 张场景卡」断言）",
   !layout.insideScenes);
-ok("场景卡仍是 8 张", layout.scenesCount === 8, `实际 ${layout.scenesCount}`);
+ok("场景卡仍是 9 张", layout.scenesCount === 9, `实际 ${layout.scenesCount}`);
 ok("条带排在 .home-scenes 之后", layout.afterScenes);
 ok("条带排在 .home-metals 之前", layout.beforeMetals);
 ok("标题渲染为「今日市场研究报告」", layout.title === "今日市场研究报告", `实际 "${layout.title}"`);

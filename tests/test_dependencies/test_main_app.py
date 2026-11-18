@@ -54,6 +54,7 @@ ROOT_ALIASES = [
     ("/favorites", "/static/favorites.html"),  # V0.103 我的收藏
     ("/report-archive", "/static/report-archive.html"),  # V0.111.0 报告存档
     ("/price-forecast", "/static/price-forecast.html"),  # V0.127.0 金价区间预测
+    ("/crisis-fit", "/static/crisis-fit.html"),  # V0.128.0 经济危机金价拟合曲线
 ]
 
 

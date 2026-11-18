@@ -1,0 +1,236 @@
+#!/usr/bin/env python
+"""构建「历史危机金价周期」产物（V0.128.0）。
+
+产物：``src/app/assets/forecast/crisis_cycles.json``
+消费方：``src/app/services/crisis_cycle_fit.py``（``load_crisis_cycles``）⇒ 线上只读产物，**不联网**。
+
+数据源（**免费、可复核**）
+--------------------------
+**世界银行 Pink Sheet**（Commodity Price Data）月度表的 ``Gold`` 列（$/troy oz）：
+``https://thedocs.worldbank.org/en/doc/5d903e848db1d1b83e0ec8f744e55570-0350012021/related/CMO-Historical-Data-Monthly.xlsx``
+
+⚠ 为什么不用东财的 COMEX 黄金日线（``push2his``）做模板：
+它只到 **1990-01** ⇒ 拿不到 1974 / 1980 这两轮最经典的黄金周期。
+Pink Sheet 的月度金价到 **1960-01** ⇒ 1974/1980 都在。
+⚠ 口径差异：Pink Sheet 是**伦敦现货 fix 月均**；仓库自己的当前周期用的是
+**COMEX 期货**（``gold_price_daily`` / ``target='ny'``）⇒ **形状可比、绝对价位不可比**。
+算法对每轮周期各自归一（高点=100）⇒ 模板只贡献**形状**，不贡献价位 ✔。
+
+周期选取规则（**可复现，不人工挑选**）
+--------------------------------------
+1. **局部高点**：月序列在某月 ±``WINDOW``(6) 个月窗口内最高；
+2. **显著性**：该高点比窗口内最低点高 ≥ ``MIN_PROMINENCE``(10%) ⇒ 去掉平盘噪声；
+3. **高点归并**：两个候选高点相隔 < ``MERGE_MONTHS``(18) 个月 ⇒ 视为同一轮行情，**取更高者**；
+4. **熊市过滤**：高点之后 36 个月内最大回撤 ≥ ``MIN_DRAWDOWN``(15%) ⇒ 只要「顶 → 熊」的周期；
+5. **样本边界**：周期必须**整体早于**当前周期起点（``--current-start``，默认 2016-11）——
+   当前周期**绝不能**进模板（自我拟合 ⇒ 证据门 E3）；
+6. **序列长度**：从高点月起到价格**回到该高点**（或 ``MAX_MONTHS``(60) 个月上限）为止。
+
+用法
+----
+```bash
+# 联网拉取并生成（默认写到 src/app/assets/forecast/crisis_cycles.json）
+PYTHONPATH=src:. .venv/bin/python scripts/build_crisis_cycles.py
+
+# 离线：用已下载的 xlsx 复现（可复核）
+PYTHONPATH=src:. .venv/bin/python scripts/build_crisis_cycles.py --offline /tmp/pink.xlsx
+
+# 只看会选出哪些周期（不写文件）
+PYTHONPATH=src:. .venv/bin/python scripts/build_crisis_cycles.py --dry-run
+```
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+import tempfile
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "src"))
+
+from app.services.crisis_cycle_fit import (  # noqa: E402
+    DEFAULT_TARGET,
+    month_index,
+    months_between,
+)
+
+PINK_SHEET_URL = (
+    "https://thedocs.worldbank.org/en/doc/5d903e848db1d1b83e0ec8f744e55570-0350012021"
+    "/related/CMO-Historical-Data-Monthly.xlsx"
+)
+OUT_FILE = ROOT / "src" / "app" / "assets" / "forecast" / "crisis_cycles.json"
+
+WINDOW = 6  # 局部高点判定窗口（±6 个月）
+MIN_PROMINENCE = 10.0  # 高点相对窗口最低点的最小涨幅（%）
+MERGE_MONTHS = 18  # 高点归并窗口（月）
+MIN_DRAWDOWN = 15.0  # 高点后 36 个月内的最小回撤（%）
+MAX_MONTHS = 60  # 单轮周期的最长序列（月）
+DRAWDOWN_LOOKAHEAD = 36  # 回撤观察窗（月）
+
+
+def fetch_pink_sheet() -> Path:
+    """下载 Pink Sheet 到临时文件（``--offline`` 可跳过）。"""
+    import requests
+
+    print(f"下载 Pink Sheet … {PINK_SHEET_URL}")
+    with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+        path = Path(tmp.name)
+    r = requests.get(PINK_SHEET_URL, timeout=120)
+    r.raise_for_status()
+    path.write_bytes(r.content)
+    print(f"  → {path}（{len(r.content):,} bytes）")
+    return path
+
+
+def load_gold_monthly(xlsx_path: Path) -> tuple[list[dict], str]:
+    """从 Pink Sheet 的「Monthly Prices」表读 ``Gold`` 列（$/troy oz）。"""
+    import pandas as pd
+
+    df = pd.read_excel(xlsx_path, sheet_name="Monthly Prices", header=None)
+    header_row = next(i for i in range(20) if df.iat[i, 1] == "Crude oil, average")
+    names = [str(df.iat[header_row, c]) for c in range(df.shape[1])]
+    gold_col = names.index("Gold")
+    updated = str(df.iat[3, 0])
+
+    out: list[dict] = []
+    for i in range(header_row + 2, len(df)):
+        mk = df.iat[i, 0]
+        val = df.iat[i, gold_col]
+        if not isinstance(mk, str) or not re.fullmatch(r"\d{4}M\d{2}", mk):
+            continue
+        if not isinstance(val, (int, float)):  # "…" = 该月缺失
+            continue
+        y, m = mk.split("M")
+        out.append({"month": f"{int(y)}-{int(m):02d}", "price": round(float(val), 2)})
+    return out, updated
+
+
+def find_peaks(series: list[dict]) -> list[dict]:
+    """按文档里的 4 条规则挑出周期高点。"""
+    px = [s["price"] for s in series]
+    months = [s["month"] for s in series]
+
+    cands: list[dict] = []
+    for i in range(WINDOW, len(series) - WINDOW):
+        win = px[i - WINDOW : i + WINDOW + 1]
+        if px[i] < max(win) or px[i] <= min(win):
+            continue
+        prominence = (px[i] / min(win) - 1) * 100
+        if prominence < MIN_PROMINENCE:
+            continue
+        fut = px[i : i + DRAWDOWN_LOOKAHEAD + 1]
+        drawdown = (min(fut) / px[i] - 1) * 100
+        if drawdown > -MIN_DRAWDOWN:
+            continue
+        cands.append(
+            {
+                "idx": i,
+                "month": months[i],
+                "price": px[i],
+                "prominence": round(prominence, 1),
+                "drawdown": round(drawdown, 1),
+            }
+        )
+
+    # 高点归并：相隔 < MERGE_MONTHS 的视为同一轮行情，取更高者
+    cands.sort(key=lambda c: month_index(c["month"]))
+    merged: list[dict] = []
+    for c in cands:
+        if merged and month_index(c["month"]) - month_index(merged[-1]["month"]) < MERGE_MONTHS:
+            if c["price"] > merged[-1]["price"]:
+                merged[-1] = c
+            continue
+        merged.append(c)
+    return merged
+
+
+def build_cycle(series: list[dict], peak: dict) -> dict:
+    """一轮周期 = 高点月 → 价格回到高点（或 ``MAX_MONTHS`` 上限）。"""
+    px = [s["price"] for s in series]
+    months = [s["month"] for s in series]
+    i = peak["idx"]
+    end = i
+    limit = min(len(series), i + MAX_MONTHS + 1)
+    while end + 1 < limit:
+        nxt = end + 1
+        if px[nxt] >= px[i]:  # 回到高点 ⇒ 周期结束
+            break
+        end = nxt
+    rows = [[months[k], px[k]] for k in range(i, end + 1)]
+    return {
+        "name": f"{peak['month']} 起的一轮金价周期",
+        "short": peak["month"].replace("-", ""),
+        "goldPeak": peak["month"],
+        "peakPrice": peak["price"],
+        "prominence_pct": peak["prominence"],
+        "max_drawdown_pct": peak["drawdown"],
+        "series": rows,
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="构建历史危机金价周期产物")
+    ap.add_argument("--offline", help="用本地已下载的 Pink Sheet xlsx（不联网）")
+    ap.add_argument("--out", default=str(OUT_FILE), help="产物输出路径")
+    ap.add_argument("--current-start", default="2016-11", help="当前周期起点（其后的周期不进模板）")
+    ap.add_argument("--target", default=DEFAULT_TARGET)
+    ap.add_argument("--dry-run", action="store_true", help="只打印会选出的周期，不写文件")
+    args = ap.parse_args()
+
+    xlsx = Path(args.offline) if args.offline else fetch_pink_sheet()
+    series, updated = load_gold_monthly(xlsx)
+    print(f"月度金价：{len(series)} 行，{series[0]['month']} → {series[-1]['month']}（{updated}）")
+
+    peaks = find_peaks(series)
+    cycles = []
+    for p in peaks:
+        # ⚠ 样本边界：周期必须整体早于当前周期起点
+        end_month = None
+        cyc = build_cycle(series, p)
+        end_month = cyc["series"][-1][0]
+        if months_between(end_month, args.current_start) < 0:
+            continue
+        cycles.append(cyc)
+
+    print(f"\n选出 {len(cycles)} 轮周期（当前周期起点 {args.current_start} 之前）：")
+    for c in cycles:
+        print(
+            f"  {c['goldPeak']}  峰价 {c['peakPrice']:>8.2f}  "
+            f"prominence {c['prominence_pct']:>5.1f}%  回撤 {c['max_drawdown_pct']:>6.1f}%  "
+            f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}"
+        )
+
+    if args.dry_run:
+        return 0
+
+    payload = {
+        "schema_version": 1,
+        "target": args.target,
+        "horizon_months": 30,
+        "price_basis": "monthly_average",
+        "provenance": {
+            "source": "世界银行 Pink Sheet（Commodity Price Data）月度表 Gold 列",
+            "url": PINK_SHEET_URL,
+            "coverage": f"{series[0]['month']} → {series[-1]['month']}（月度金价 $/troy oz）",
+            "method": "London fix 月均；周期按「±6 月局部高点 + prominence≥10% + 同episode归并 + "
+            "后续36月回撤≥15% + 早于当前周期起点」自动识别（无人工挑选）",
+            "updated": updated,
+            "exported_at": "2026-11-18",
+            "note": "当前周期用仓库自己的 COMEX 期货价（gold_price_daily/target=ny），"
+            "与本模板的伦敦现货口径不同 ⇒ 只影响绝对价位，形状（归一后）可比",
+        },
+        "cycles": cycles,
+    }
+    out = Path(args.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"\n已写入 {out}（{out.stat().st_size:,} bytes，{len(cycles)} 轮周期）")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

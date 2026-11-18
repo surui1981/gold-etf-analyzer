@@ -190,6 +190,20 @@ ok(
 );
 
 // ── 断言 ⑤：首页要闻卡已渲染完（骨架屏消失）──
+// ⚠ V0.127.2：骨架屏是**异步消失**的 —— 要闻接口还没回来时，卡里就是 5 个骨架 li。
+//   原来只看一次 ⇒ 接口慢一点就**假红**（实测踩到：skeleton=5 real=0，重跑两次即绿）。
+//   ⇒ 先等终态（骨架消失），再断言；等不到才按失败报（不静默豁免）。
+await page
+  .waitForFunction(
+    () => {
+      const list = document.getElementById("homeNewsList");
+      if (!list) return false;
+      const items = Array.from(list.querySelectorAll("li"));
+      return items.length > 0 && !items.some((li) => li.classList.contains("home-news-skeleton"));
+    },
+    { timeout: 25000 },
+  )
+  .catch(() => {});
 const newsState = await page.evaluate(() => {
   const list = document.getElementById("homeNewsList");
   if (!list) return { missing: true };
