@@ -357,8 +357,116 @@
       const maxCount = counts.length ? Math.max.apply(null, counts) : null;
       note.textContent = T(
         "crisis.template_support",
-        "模板每个 t 由 {min}–{max} 轮周期平均而来（轮数越少 ⇒ 证据越薄；t 越大轮数通常越少）。",
-        { min: minCount == null ? "—" : minCount, max: maxCount == null ? "—" : maxCount },
+        "模板每个 t 由 {min}–{max} 轮周期平均而来（轮数越少 ⇒ 证据越薄；t 越大轮数通常越少）。拟合只取 **{from} 之后**的周期，更早的在下一张图作参照。",
+        {
+          min: minCount == null ? "—" : minCount,
+          max: maxCount == null ? "—" : maxCount,
+          from: (data.fit_window && data.fit_window.start) || "—",
+        },
+      );
+    }
+    return chart;
+  }
+
+  /**
+   * 参照集图表：**拟合窗口之前**的更早周期（用户 2026-11-18 拍板：
+   * 「拟合只用 2000 年以后，更早的周期放到别的图表显示」）。
+   * ⚠ 这些周期**不进模板**（不进等权平均）⇒ 图注要写明，
+   *    否则用户会以为模板里也含了它们。
+   */
+  function renderReferenceChart(canvas, data) {
+    if (!canvas || !window.Chart) return null;
+    destroyChartOn(canvas);
+
+    const paths = Array.isArray(data.reference_paths) ? data.reference_paths : [];
+    if (!paths.length) {
+      const note = document.getElementById("cfRefNote");
+      if (note) note.textContent = T("crisis.ref_missing", "没有更早的参照周期。");
+      return null;
+    }
+
+    let maxT = 0;
+    paths.forEach((p) => {
+      (p.points || []).forEach((pt) => { maxT = Math.max(maxT, Number(pt[0])); });
+    });
+    const labels = [];
+    for (let t = 0; t <= maxT; t++) labels.push(String(t));
+
+    const datasets = paths.map((p, i) => ({
+      label: p.name || "cycle" + i,
+      data: (p.points || []).map((pt) => Number(pt[1])),
+      borderColor: "rgba(120,120,120,0.55)",
+      borderWidth: 1.2,
+      pointRadius: 0,
+      tension: 0.2,
+      fill: false,
+    }));
+
+    const chart = new window.Chart(canvas, {
+      type: "line",
+      data: { labels: labels, datasets: datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "nearest", intersect: false },
+        scales: {
+          y: {
+            title: { display: true, text: T("crisis.template_y", "相对高点（高点=100）") },
+            ticks: { callback: (v) => Number(v).toFixed(0) },
+          },
+          x: {
+            title: { display: true, text: T("crisis.template_x", "距各轮高点月数（t）") },
+            ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 },
+          },
+        },
+        plugins: {
+          legend: { position: "top", labels: { boxWidth: 12, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (c) => {
+                const v = c.parsed.y;
+                if (v == null) return c.dataset.label + ": —";
+                return c.dataset.label + ": " + Number(v).toFixed(1);
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (window.ChartA11y) {
+      window.ChartA11y.wrapChart(canvas, {
+        label: T("crisis.ref_a11y", "更早的危机周期（参照用，不参与拟合）"),
+        table: {
+          columns: [
+            T("crisis.col_t", "t（距高点月数）"),
+            T("crisis.col_ref", "参照周期归一值"),
+          ],
+          rows: (function () {
+            const rows = [];
+            for (let t = 0; t <= maxT; t++) {
+              rows.push([
+                String(t),
+                paths
+                  .map((p) => {
+                    const hit = (p.points || []).find((pt) => Number(pt[0]) === t);
+                    return hit ? Number(hit[1]).toFixed(1) : "—";
+                  })
+                  .join(" / "),
+              ]);
+            }
+            return rows;
+          })(),
+        },
+      });
+    }
+
+    const note = document.getElementById("cfRefNote");
+    if (note) {
+      note.textContent = T(
+        "crisis.ref_note",
+        "这 {n} 轮是**拟合窗口之前**的更早周期（{from} 起）—— **只作参照，不参与等权平均**（模板只用拟合窗口内的那几轮）。看它们的形状，是为了对照「现代形态和当年的形态差多少」。",
+        { n: paths.length, from: (data.reference_window && data.reference_window.start) || "—" },
       );
     }
     return chart;
@@ -506,6 +614,31 @@
       }
     }
 
+    // ⚠ 外推终点的支撑轮数（薄了必须说）—— 拟合收窄到 2000 年以后后，
+    //   3 轮里有 2 轮很短（11 / 18 个月）⇒ t≥18 之后只剩 1 轮撑着。
+    const supEl = document.getElementById("cfSupport");
+    if (supEl) {
+      const sup = data.support_at_horizon;
+      if (sup == null) {
+        supEl.className = "cf-sup";
+        supEl.textContent = "";
+      } else if (sup <= 1) {
+        supEl.className = "cf-sup cf-sup-warn";
+        supEl.textContent = T(
+          "crisis.support_thin",
+          "⚠ 外推终点只由 **{n} 轮**周期支撑（拟合窗口收窄到 2000 年以后，其中两轮很快就收复了）⇒ 长程外推几乎等于「那一轮怎么走」，不是「几轮的平均」。",
+          { n: sup },
+        );
+      } else {
+        supEl.className = "cf-sup";
+        supEl.textContent = T(
+          "crisis.support_ok",
+          "外推终点由 {n} 轮周期支撑（模板每个 t 的支撑轮数见图注）。",
+          { n: sup },
+        );
+      }
+    }
+
     // 锚点敏感性（证据门 E5）
     if (sensEl) {
       const s = data.sensitivity;
@@ -570,6 +703,7 @@
     // 图表
     renderFitChart(document.getElementById("cfFitChart"), data);
     renderTemplateChart(document.getElementById("cfTemplateChart"), data);
+    renderReferenceChart(document.getElementById("cfRefChart"), data);
   }
 
   /* ───────────────── 首页磁贴 ───────────────── */

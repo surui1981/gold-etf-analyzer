@@ -99,6 +99,8 @@
   .cf-ends-list { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
   .cf-ends-list li { display: flex; gap: 6px; color: var(--muted); }
   .cf-ends-list .num { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .cf-sup { margin-top: 10px; font-size: 12px; line-height: 1.8; color: #4b5563; }
+  .cf-sup-warn { color: #b35309; font-weight: 600; }
   .cf-prov { list-style: none; margin-top: 12px; border-top: 1px dashed var(--border);
     padding-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.9; }
   .cf-prov .cf-warn { color: #b35309; }
@@ -145,6 +147,7 @@
     </div>
     <div class="cf-meta" id="cfMeta"></div>
     <div class="cf-chips" id="cfChips"></div>
+    <div class="cf-sup" id="cfSupport"></div>
     <div class="cf-sens" id="cfSensitivity"></div>
     <div class="cf-ends" id="cfCycleEnds"></div>
     <ul class="cf-prov" id="cfProvenance"></ul>
@@ -162,6 +165,13 @@
     <div class="panel-title" data-i18n="crisis.template_title">🧭 等权平均模板 · 与每轮周期的原始路径</div>
     <div class="cf-chart-wrap"><canvas id="cfTemplateChart"></canvas></div>
     <div class="cf-note" id="cfTemplateNote"></div>
+  </section>
+
+  <!-- 更早的周期（参照，不参与拟合） -->
+  <section class="panel">
+    <div class="panel-title" data-i18n="crisis.ref_title">🕰️ 更早的周期 · 只作参照，不参与拟合</div>
+    <div class="cf-chart-wrap"><canvas id="cfRefChart"></canvas></div>
+    <div class="cf-note" id="cfRefNote"></div>
   </section>
 
   <!-- 边界与方法 -->

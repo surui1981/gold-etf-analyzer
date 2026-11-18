@@ -117,6 +117,38 @@ class TestCrisisFitEndpoint:
     async def test_bad_target_is_422(self, client: AsyncClient) -> None:
         assert (await client.get("/api/v1/forecast/crisis-fit?target=xxx")).status_code == 422
 
+    async def test_fit_window_excludes_reference_cycles(self, client: AsyncClient, seeded) -> None:
+        """★ 拟合窗口收窄（V0.128.1）：模板**只**用拟合窗口内的周期。
+
+        ⚠ 这条断言必须放在**API 用例**里（而不是浏览器门禁）：门禁 mock 了接口 ⇒
+        后端混进参照集它看不见（实测踩过：反向验证时门禁照样 46/0 全绿）。
+        """
+        r = await client.get("/api/v1/forecast/crisis-fit?target=ny&horizon=30")
+        assert r.status_code == 200
+        d = r.json()
+        asset = svc.load_crisis_cycles(target="ny", horizon=30)
+        assert asset is not None
+        n_fit = len(asset.get("cycles") or [])
+        n_ref = len(asset.get("reference_cycles") or [])
+        assert n_fit >= 3 and n_ref >= 1
+        # 模板只由拟合集构成 ⇒ t=0 的支撑轮数 == 拟合轮数（不是拟合+参照）
+        assert d["template_counts"][0] == n_fit, (
+            f"模板混进了参照集：t=0 支撑 {d['template_counts'][0]} 轮，"
+            f"拟合集只有 {n_fit} 轮"
+        )
+        assert len(d["cycle_paths"]) == n_fit
+        # 参照集单独给出来（只展示，不进模板）
+        assert len(d["reference_paths"]) == n_ref
+        assert d["fit_window"].get("start")
+        assert d["reference_window"].get("start")
+
+    async def test_support_at_horizon_is_reported(self, client: AsyncClient, seeded) -> None:
+        """外推终点的支撑轮数必须报出来（薄了页面要能告警）。"""
+        r = await client.get("/api/v1/forecast/crisis-fit?target=ny&horizon=30")
+        d = r.json()
+        assert d["support_at_horizon"] is not None
+        assert d["support_at_horizon"] >= 1
+
     async def test_no_directional_semantics(self, client: AsyncClient, seeded, monkeypatch) -> None:
         """⚠ 接口不得输出方向性判断字段（那是另一个功能的事）。"""
         monkeypatch.setattr(svc, "load_crisis_cycles", lambda **kw: ASSET)

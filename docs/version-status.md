@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.128.0** ｜ **最近更新**：2026-11-18 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.0`）**
+> **基线：V0.128.1** ｜ **最近更新**：2026-11-19 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.1`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.128.0**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.0`**
+**当前版本 = 0.128.1**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.1`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.0` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.0` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.0` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.0` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.1` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.1` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.1` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.1` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.128.0   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.128.1   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-18 重启加载 V0.128.0）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-19 重启加载 V0.128.1）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -281,7 +281,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.128.0（2026-11-18 发版 · 经济危机金价拟合曲线）
+### 本轮：V0.128.1（2026-11-19 发版 · 拟合窗口收窄 + 更早周期作参照）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 用户拍板「**只需要 2000 年到现在几次金价破裂的周期拟合，其他周期放到别的图表显示**」⇒ 模板（等权平均）**只取 2000-01 之后**的周期（**3 轮**：2006-05 / 2008-03 / 2011-09）；更早的 **6 轮**（1969-05 / 1974-12 / 1980-01 / 1983-02 / 1990-02 / 1999-10）移到**单独一张参照图**，只展示、不进拟合 |
+| 产物结构 | ✅ `crisis_cycles.json` 拆成 `cycles`（拟合集）+ `reference_cycles`（参照集）+ `fit_window` / `reference_window`；生成脚本加 `--fit-start`（默认 2000-01） |
+| 🔧 阈值调整 | ⚠ **「金价破裂」阈值 15% → 10%** —— 2000 年以后没有真正的熊市（2006 −13%、2008 −21%、2011 −31%），15% 会把现代周期只剩 **2 轮**（不够拟合）⇒ 10% 才能凑出 3 轮 |
+| ⚠️ 后果显式化 | ✅ 3 轮里有 2 轮很快收复（11 / 18 个月）⇒ **t ≥ 18 之后只剩 1 轮支撑** ⇒ 长程外推几乎等于「那一轮怎么走」⇒ 接口新增 `support_at_horizon` ⇒ 页面在支撑 ≤1 时**常驻告警** |
+| 前端 | ✅ 新增第三张图「更早的周期 · 只作参照，不参与拟合」（6 条归一路径 + 图注写明窗口与「不进等权平均」）；模板图注写明拟合窗口起点；结论卡加支撑告警 |
+| 门禁 | ✅ `_verify_crisis_fit.mjs` **+4 条**（42 → **46 passed / 0 failed**）+ API 用例 **+2**（9 条）。⚠ 拟合集隔离那条断言放在 **API 用例**里 —— 浏览器门禁 mock 了接口 ⇒ 后端混进参照集它看不见（实测踩过：反向验证时门禁照样 46/0 全绿） |
+| `__version__` | ✅ 已 bump 到 `0.128.1`（4 处同步） |
+
+### 上一轮：V0.128.0（2026-11-18 发版 · 经济危机金价拟合曲线）
 
 | 项 | 状态 |
 |---|---|

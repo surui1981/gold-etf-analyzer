@@ -208,6 +208,21 @@ class Template:
             self.at = make_interpolator(self.template)
 
 
+def support_at(counts: Sequence[int], t: int) -> int:
+    """模板在第 ``t`` 个月由几轮周期支撑。
+
+    ⚠ 超出模板覆盖范围（``t >= len(counts)``）⇒ 那里是**平台外推** ⇒
+    实质上只有**最长那一轮**撑着 ⇒ 记 1（不是 0）。
+    """
+    if not counts:
+        return 0
+    if t < 0:
+        return int(counts[0])
+    if t >= len(counts):
+        return 1
+    return int(counts[t])
+
+
 def build_template(cycles: Sequence[Cycle]) -> Template:
     """把每轮周期按「距金价阶段高点月数」对齐、高点归一为 100，逐月**等权平均**。
 
@@ -532,7 +547,13 @@ class CrisisFitResult:
     cur_norm: float | None = None
     template: list[tuple[int, float]] = field(default_factory=list)
     template_counts: list[int] = field(default_factory=list)  # 每个 t 由几轮周期平均而来
-    cycle_paths: list[dict] = field(default_factory=list)  # 每轮周期的归一路径（均值的原料）
+    cycle_paths: list[dict] = field(default_factory=list)  # 拟合集每轮周期的归一路径（均值的原料）
+    reference_paths: list[dict] = field(
+        default_factory=list
+    )  # 参照集（更早的周期）的归一路径，只展示
+    fit_window: dict = field(default_factory=dict)  # 拟合窗口（哪段历史参与等权平均）
+    reference_window: dict = field(default_factory=dict)  # 参照窗口（只展示、不进拟合）
+    support_at_horizon: int | None = None  # 外推终点处由几轮周期支撑（薄了必须让页面看见）
     template_max_t: int | None = None
     template_max_t: int | None = None
     provenance: dict = field(default_factory=dict)
@@ -577,6 +598,13 @@ def build_crisis_fit(
     cycles, warnings = validate_cycles(
         asset.get("cycles"), current_months=[m.month for m in months]
     )
+    # ⚠ 参照集（更早的周期）：**只展示、不进模板** —— 用户 2026-11-18 拍板
+    #   「拟合只用 2000 年以后，更早的周期放到别的图表显示」。
+    #   仍要过同一套校验（不合规的剔除并告警），免得把坏数据画到页面上。
+    ref_cycles, ref_warnings = validate_cycles(
+        asset.get("reference_cycles") or [], current_months=[m.month for m in months]
+    )
+    warnings = list(warnings) + list(ref_warnings)
     provenance = asset.get("provenance") or {}
 
     if len(cycles) < MIN_CYCLES:
@@ -627,6 +655,16 @@ def build_crisis_fit(
             "spread_pct": round((hi - lo) / base_price * 100.0, 1) if base_price else None,
         }
 
+    # 参照集的归一路径（各轮各自归一，高点=100）—— 只给第二张图用
+    ref_template = build_template(ref_cycles) if ref_cycles else Template(template=[])
+    reference_paths = [
+        {
+            "name": ref_template.names[i] if i < len(ref_template.names) else f"cycle{i}",
+            "points": [[int(t), round(float(v), 2)] for t, v in ref_template.paths[i]],
+        }
+        for i in range(len(ref_template.paths))
+    ]
+
     return CrisisFitResult(
         available=True,
         reason=None,
@@ -637,6 +675,10 @@ def build_crisis_fit(
         fit_drift0=fit0,
         sensitivity=sensitivity,
         template=template.template,
+        reference_paths=reference_paths,
+        fit_window=asset.get("fit_window") or {},
+        reference_window=asset.get("reference_window") or {},
+        support_at_horizon=support_at(template.counts, int(fit.meta.get("t0") or 0) + horizon),
         template_counts=template.counts,
         cycle_paths=[
             {

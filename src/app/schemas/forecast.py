@@ -207,7 +207,19 @@ class CrisisFitOut(BaseModel):
     )
     cycle_paths: list[dict] = Field(
         default_factory=list,
-        description="每轮周期各自的归一路径（模板的原料；页面要展示「均值是由什么平均出来的」）",
+        description="**拟合集**每轮周期各自的归一路径（模板的原料；页面要展示「均值是由什么平均出来的」）",
+    )
+    reference_paths: list[dict] = Field(
+        default_factory=list,
+        description="**参照集**（拟合窗口之前的更早周期）的归一路径 —— 只展示，**不进模板**",
+    )
+    support_at_horizon: int | None = Field(
+        default=None,
+        description="外推终点处由几轮周期支撑（少 ⇒ 长程外推几乎等于「某一轮怎么走」，页面必须标出）",
+    )
+    fit_window: dict = Field(default_factory=dict, description="拟合窗口（哪段历史参与等权平均）")
+    reference_window: dict = Field(
+        default_factory=dict, description="参照窗口（哪段历史只作展示、不进拟合）"
     )
     curve: list[CrisisFitPointOut] = Field(default_factory=list)
     endpoint: CrisisFitPointOut | None = None

@@ -1741,7 +1741,7 @@ window.PM_I18N_en_US = {
   "crisis.template_y": "Relative to the peak (peak = 100)",
   "crisis.template_clamped": "The template only covers up to t={maxT} ({n} cycles support it); past t={maxT} it is **clamped** — there is no historical information there, the shape comes from the interpolator's end clamp.",
   "crisis.template_covered": "The template covers up to t={maxT}, so the whole extrapolation range sits inside the historical shape's information.",
-  "crisis.template_support": "Each t of the template is averaged from {min}–{max} cycles (fewer cycles ⇒ thinner evidence; later t usually has fewer).",
+  "crisis.template_support": "Each t of the template is averaged from {min}–{max} cycles (fewer cycles ⇒ thinner evidence; later t usually has fewer). Only cycles **after {from}** enter the fit — earlier ones are reference-only on the next chart.",
   "crisis.fit_a11y": "Economic-crisis gold cycle-fit curve (historical shape reference, not a forecast)",
   "crisis.template_a11y": "Equal-weight template of historical crisis cycles and each cycle's own path",
   "crisis.col_month": "Month",
@@ -1760,4 +1760,12 @@ window.PM_I18N_en_US = {
   "home.scene_crisis_1": "Fit curve",
   "home.scene_crisis_2": "Equal-weight template",
   "home.scene_crisis_3": "Per-cycle endpoint range",
+  /* ── V0.128.1：拟合窗口收窄到 2000 年以后 + 更早周期作参照 ── */
+  "crisis.ref_title": "🕰️ Earlier cycles · reference only, not part of the fit",
+  "crisis.ref_missing": "No earlier reference cycles.",
+  "crisis.ref_note": "These {n} cycles are from **before the fit window** (from {from}) — **reference only, they are not in the equal-weight average** (the template uses only the cycles inside the fit window). Looking at their shapes is a way to compare 'how today's shape differs from the old one'.",
+  "crisis.ref_a11y": "Earlier crisis cycles (reference only, not part of the fit)",
+  "crisis.col_ref": "Reference cycle (normalised)",
+  "crisis.support_thin": "⚠ The extrapolation endpoint is supported by only **{n} cycle** (the fit window starts in 2000 and two of them recovered quickly) ⇒ the long-horizon path is nearly 'how that one cycle went', not 'the average of several'.",
+  "crisis.support_ok": "The extrapolation endpoint is supported by {n} cycles (see the note for the support per t).",
 };

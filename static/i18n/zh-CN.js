@@ -1746,7 +1746,7 @@ window.PM_I18N_ZH_CN = {
   "crisis.template_y": "相对高点（高点=100）",
   "crisis.template_clamped": "模板只覆盖到 t={maxT}（{n} 轮周期支撑）；t={maxT} 之后是**平台外推** —— 那里没有历史信息，曲线形状由插值器的端点夹取决定。",
   "crisis.template_covered": "模板覆盖到 t={maxT}，整条外推区间都在历史形态的信息范围内。",
-  "crisis.template_support": "模板每个 t 由 {min}–{max} 轮周期平均而来（轮数越少 ⇒ 证据越薄；t 越大轮数通常越少）。",
+  "crisis.template_support": "模板每个 t 由 {min}–{max} 轮周期平均而来（轮数越少 ⇒ 证据越薄；t 越大轮数通常越少）。拟合只取 **{from} 之后**的周期，更早的在下一张图作参照。",
   "crisis.fit_a11y": "经济危机金价拟合曲线（历史形态参照，非预测）",
   "crisis.template_a11y": "历史危机周期的等权平均模板与各轮原始路径",
   "crisis.col_month": "月份",
@@ -1765,4 +1765,12 @@ window.PM_I18N_ZH_CN = {
   "home.scene_crisis_1": "拟合曲线",
   "home.scene_crisis_2": "等权模板",
   "home.scene_crisis_3": "各轮终点区间",
+  /* ── V0.128.1：拟合窗口收窄到 2000 年以后 + 更早周期作参照 ── */
+  "crisis.ref_title": "🕰️ 更早的周期 · 只作参照，不参与拟合",
+  "crisis.ref_missing": "没有更早的参照周期。",
+  "crisis.ref_note": "这 {n} 轮是**拟合窗口之前**的更早周期（{from} 起）—— **只作参照，不参与等权平均**（模板只用拟合窗口内的那几轮）。看它们的形状，是为了对照「现代形态和当年的形态差多少」。",
+  "crisis.ref_a11y": "更早的危机周期（参照用，不参与拟合）",
+  "crisis.col_ref": "参照周期归一值",
+  "crisis.support_thin": "⚠ 外推终点只由 **{n} 轮**周期支撑（拟合窗口收窄到 2000 年以后，其中两轮很快就收复了）⇒ 长程外推几乎等于「那一轮怎么走」，不是「几轮的平均」。",
+  "crisis.support_ok": "外推终点由 {n} 轮周期支撑（模板每个 t 的支撑轮数见图注）。",
 };

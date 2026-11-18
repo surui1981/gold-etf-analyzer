@@ -1644,7 +1644,7 @@ window.PM_I18N_zh_TW = {
   "crisis.template_y": "相對高點（高點=100）",
   "crisis.template_clamped": "模板只覆蓋到 t={maxT}（{n} 輪週期支撐）；t={maxT} 之後是**平台外推** —— 那裡沒有歷史資訊，曲線形狀由插值器的端點夾取決定。",
   "crisis.template_covered": "模板覆蓋到 t={maxT}，整條外推區間都在歷史形態的資訊範圍內。",
-  "crisis.template_support": "模板每個 t 由 {min}–{max} 輪週期平均而來（輪數越少 ⇒ 證據越薄；t 越大輪數通常越少）。",
+  "crisis.template_support": "模板每個 t 由 {min}–{max} 輪週期平均而來（輪數越少 ⇒ 證據越薄；t 越大輪數通常越少）。擬合只取 **{from} 之後**的週期，更早的在下一張圖作參照。",
   "crisis.fit_a11y": "經濟危機金價擬合曲線（歷史形態參照，非預測）",
   "crisis.template_a11y": "歷史危機週期的等權平均模板與各輪原始路徑",
   "crisis.col_month": "月份",
@@ -1663,4 +1663,12 @@ window.PM_I18N_zh_TW = {
   "home.scene_crisis_1": "擬合曲線",
   "home.scene_crisis_2": "等權模板",
   "home.scene_crisis_3": "各輪終點區間",
+  /* ── V0.128.1：拟合窗口收窄到 2000 年以后 + 更早周期作参照 ── */
+  "crisis.ref_title": "🕰️ 更早的週期 · 只作參照，不參與擬合",
+  "crisis.ref_missing": "沒有更早的參照週期。",
+  "crisis.ref_note": "這 {n} 輪是**擬合視窗之前**的更早週期（{from} 起）—— **只作參照，不參與等權平均**（模板只用擬合視窗內的那幾輪）。看它們的形狀，是為了對照「現代形態和當年的形態差多少」。",
+  "crisis.ref_a11y": "更早的危機週期（參照用，不參與擬合）",
+  "crisis.col_ref": "參照週期歸一值",
+  "crisis.support_thin": "⚠ 外推終點只由 **{n} 輪**週期支撐（擬合視窗收窄到 2000 年以後，其中兩輪很快就收復了）⇒ 長程外推幾乎等於「那一輪怎麼走」，不是「幾輪的平均」。",
+  "crisis.support_ok": "外推終點由 {n} 輪週期支撐（模板每個 t 的支撐輪數見圖註）。",
 };

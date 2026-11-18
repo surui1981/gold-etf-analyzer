@@ -67,9 +67,13 @@ OUT_FILE = ROOT / "src" / "app" / "assets" / "forecast" / "crisis_cycles.json"
 WINDOW = 6  # 局部高点判定窗口（±6 个月）
 MIN_PROMINENCE = 10.0  # 高点相对窗口最低点的最小涨幅（%）
 MERGE_MONTHS = 18  # 高点归并窗口（月）
-MIN_DRAWDOWN = 15.0  # 高点后 36 个月内的最小回撤（%）
+MIN_DRAWDOWN = 10.0  # 「金价破裂」= 高点后 36 个月内回撤 ≥ 10%
 MAX_MONTHS = 60  # 单轮周期的最长序列（月）
 DRAWDOWN_LOOKAHEAD = 36  # 回撤观察窗（月）
+
+#: **拟合窗口起点**：只有这之后的周期参与模板（等权平均）；
+#: 更早的周期仍收进产物，但只作**参照**（另一张图展示，不进拟合）。
+FIT_START = "2000-01"
 
 
 def fetch_pink_sheet() -> Path:
@@ -109,13 +113,17 @@ def load_gold_monthly(xlsx_path: Path) -> tuple[list[dict], str]:
     return out, updated
 
 
-def find_peaks(series: list[dict]) -> list[dict]:
-    """按文档里的 4 条规则挑出周期高点。"""
+def peak_candidates(series: list[dict], start: str | None = None) -> list[dict]:
+    """局部高点候选（**未归并**）—— 显著性 + 「破裂」幅度两条过滤。
+
+    ``start`` 给定时只保留该月之后的高点。
+    """
     px = [s["price"] for s in series]
     months = [s["month"] for s in series]
+    lo_idx = 0 if not start else next((i for i, m in enumerate(months) if m >= start), len(series))
 
     cands: list[dict] = []
-    for i in range(WINDOW, len(series) - WINDOW):
+    for i in range(max(WINDOW, lo_idx), len(series) - WINDOW):
         win = px[i - WINDOW : i + WINDOW + 1]
         if px[i] < max(win) or px[i] <= min(win):
             continue
@@ -135,9 +143,16 @@ def find_peaks(series: list[dict]) -> list[dict]:
                 "drawdown": round(drawdown, 1),
             }
         )
+    return cands
 
-    # 高点归并：相隔 < MERGE_MONTHS 的视为同一轮行情，取更高者
-    cands.sort(key=lambda c: month_index(c["month"]))
+
+def merge_peaks(cands: list[dict]) -> list[dict]:
+    """高点归并：相隔 < ``MERGE_MONTHS`` 的视为同一轮行情，取更高者。
+
+    ⚠ **必须分批归并**：跨批次归并会用窗口边界「吞掉」边界附近的一轮行情
+    （1999-10 会把 2001-09 那次 9/11 尖峰合并掉）。
+    """
+    cands = sorted(cands, key=lambda c: month_index(c["month"]))
     merged: list[dict] = []
     for c in cands:
         if merged and month_index(c["month"]) - month_index(merged[-1]["month"]) < MERGE_MONTHS:
@@ -146,6 +161,11 @@ def find_peaks(series: list[dict]) -> list[dict]:
             continue
         merged.append(c)
     return merged
+
+
+def find_peaks(series: list[dict], start: str | None = None) -> list[dict]:
+    """按文档里的规则挑出周期高点（候选 → 归并）。"""
+    return merge_peaks(peak_candidates(series, start=start))
 
 
 def build_cycle(series: list[dict], peak: dict) -> dict:
@@ -177,6 +197,11 @@ def main() -> int:
     ap.add_argument("--offline", help="用本地已下载的 Pink Sheet xlsx（不联网）")
     ap.add_argument("--out", default=str(OUT_FILE), help="产物输出路径")
     ap.add_argument("--current-start", default="2016-11", help="当前周期起点（其后的周期不进模板）")
+    ap.add_argument(
+        "--fit-start",
+        default=FIT_START,
+        help="拟合窗口起点（更早的周期只作参照，不进模板）",
+    )
     ap.add_argument("--target", default=DEFAULT_TARGET)
     ap.add_argument("--dry-run", action="store_true", help="只打印会选出的周期，不写文件")
     args = ap.parse_args()
@@ -185,24 +210,34 @@ def main() -> int:
     series, updated = load_gold_monthly(xlsx)
     print(f"月度金价：{len(series)} 行，{series[0]['month']} → {series[-1]['month']}（{updated}）")
 
-    peaks = find_peaks(series)
-    cycles = []
-    for p in peaks:
-        # ⚠ 样本边界：周期必须整体早于当前周期起点
-        end_month = None
-        cyc = build_cycle(series, p)
-        end_month = cyc["series"][-1][0]
-        if months_between(end_month, args.current_start) < 0:
-            continue
-        cycles.append(cyc)
+    # ── 两批：拟合集（fit_start 之后）与参照集（之前，只展示、不进模板）──
+    all_cands = peak_candidates(series)
 
-    print(f"\n选出 {len(cycles)} 轮周期（当前周期起点 {args.current_start} 之前）：")
-    for c in cycles:
-        print(
-            f"  {c['goldPeak']}  峰价 {c['peakPrice']:>8.2f}  "
-            f"prominence {c['prominence_pct']:>5.1f}%  回撤 {c['max_drawdown_pct']:>6.1f}%  "
-            f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}"
-        )
+    def _build(cands: list[dict], label: str) -> list[dict]:
+        out: list[dict] = []
+        for p in merge_peaks(cands):
+            cyc = build_cycle(series, p)
+            # ⚠ 样本边界：周期必须整体早于当前周期起点（当前周期绝不能进模板）
+            if months_between(cyc["series"][-1][0], args.current_start) < 0:
+                continue
+            out.append(cyc)
+        print(f"\n{label}：{len(out)} 轮")
+        for c in out:
+            print(
+                f"  {c['goldPeak']}  峰价 {c['peakPrice']:>8.2f}  "
+                f"prominence {c['prominence_pct']:>5.1f}%  回撤 {c['max_drawdown_pct']:>6.1f}%  "
+                f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}"
+            )
+        return out
+
+    cycles = _build(
+        [c for c in all_cands if c["month"] >= args.fit_start],
+        f"拟合集（{args.fit_start} 之后，当前周期起点 {args.current_start} 之前）",
+    )
+    reference_cycles = _build(
+        [c for c in all_cands if c["month"] < args.fit_start],
+        f"参照集（{args.fit_start} 之前，只展示、不进拟合）",
+    )
 
     if args.dry_run:
         return 0
@@ -212,23 +247,30 @@ def main() -> int:
         "target": args.target,
         "horizon_months": 30,
         "price_basis": "monthly_average",
+        "fit_window": {"start": args.fit_start, "end": args.current_start},
+        "reference_window": {"start": series[0]["month"], "end": args.fit_start},
         "provenance": {
             "source": "世界银行 Pink Sheet（Commodity Price Data）月度表 Gold 列",
             "url": PINK_SHEET_URL,
             "coverage": f"{series[0]['month']} → {series[-1]['month']}（月度金价 $/troy oz）",
             "method": "London fix 月均；周期按「±6 月局部高点 + prominence≥10% + 同episode归并 + "
-            "后续36月回撤≥15% + 早于当前周期起点」自动识别（无人工挑选）",
+            "后续36月回撤≥10%（金价破裂）+ 早于当前周期起点」自动识别（无人工挑选）；"
+            f"拟合只取 {args.fit_start} 之后的周期，更早的进 reference_cycles（只展示、不进模板）",
             "updated": updated,
             "exported_at": "2026-11-18",
             "note": "当前周期用仓库自己的 COMEX 期货价（gold_price_daily/target=ny），"
             "与本模板的伦敦现货口径不同 ⇒ 只影响绝对价位，形状（归一后）可比",
         },
         "cycles": cycles,
+        "reference_cycles": reference_cycles,
     }
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"\n已写入 {out}（{out.stat().st_size:,} bytes，{len(cycles)} 轮周期）")
+    print(
+        f"\n已写入 {out}（{out.stat().st_size:,} bytes；"
+        f"拟合 {len(cycles)} 轮 / 参照 {len(reference_cycles)} 轮）"
+    )
     return 0
 
 
