@@ -130,11 +130,11 @@ class TestCrisisFitEndpoint:
         assert asset is not None
         n_fit = len(asset.get("cycles") or [])
         n_ref = len(asset.get("reference_cycles") or [])
-        assert n_fit >= 3 and n_ref >= 1
+        # ⚠ 拟合集现在只有 2 轮（用户 2026-11-19 显式指定）⇒ 下限是 2 不是 3
+        assert n_fit >= 2 and n_ref >= 1
         # 模板只由拟合集构成 ⇒ t=0 的支撑轮数 == 拟合轮数（不是拟合+参照）
         assert d["template_counts"][0] == n_fit, (
-            f"模板混进了参照集：t=0 支撑 {d['template_counts'][0]} 轮，"
-            f"拟合集只有 {n_fit} 轮"
+            f"模板混进了参照集：t=0 支撑 {d['template_counts'][0]} 轮，拟合集只有 {n_fit} 轮"
         )
         assert len(d["cycle_paths"]) == n_fit
         # 参照集单独给出来（只展示，不进模板）
@@ -148,6 +148,54 @@ class TestCrisisFitEndpoint:
         d = r.json()
         assert d["support_at_horizon"] is not None
         assert d["support_at_horizon"] >= 1
+
+    async def test_fit_set_is_explicitly_specified(self, client: AsyncClient, seeded) -> None:
+        """★ 拟合集是**显式指定**的那 2 轮（用户 2026-11-19 拍板），不是自动挑的。
+
+        ⚠ 这条断言放在 **API 用例**里（浏览器门禁 mock 了接口 ⇒ 后端混进别的周期它看不见）。
+        """
+        r = await client.get("/api/v1/forecast/crisis-fit?target=ny&horizon=30")
+        assert r.status_code == 200
+        d = r.json()
+        asset = svc.load_crisis_cycles(target="ny", horizon=30)
+        assert asset is not None
+        assert d["fit_selection"] == "explicit"
+        assert d["fit_anchors"] == ["1999-10", "2008-03"]
+        assert d["fit_cycle_count"] == 2
+        # 模板只由这 2 轮构成
+        assert len(d["cycle_paths"]) == 2
+        assert d["template_counts"][0] == 2
+        # 锚点与名字都要对得上（页面要显示「拟合的是哪两轮」）
+        anchors = [p.get("anchor") for p in d["cycle_paths"]]
+        assert anchors == ["1999-10", "2008-03"]
+        names = " ".join(p["name"] for p in d["cycle_paths"])
+        assert "互联网" in names and "房地产" in names
+
+    async def test_reference_cycles_are_era_labelled(self, client: AsyncClient, seeded) -> None:
+        """参照集分两类：2000 年前（参考性最低）与 2000 年后未入选（对照用）。"""
+        r = await client.get("/api/v1/forecast/crisis-fit?target=ny&horizon=30")
+        d = r.json()
+        refs = d["reference_paths"]
+        assert refs, "参照集不该为空"
+        eras = {p.get("era") for p in refs}
+        assert "pre_2000" in eras
+        # pre_2000 的必须带「参考性最低」的理由
+        weak = [p for p in refs if p.get("era") == "pre_2000"]
+        assert all(p.get("reason") for p in weak)
+        # 参照集**不进**模板
+        assert d["template_counts"][0] == d["fit_cycle_count"]
+
+    async def test_endpoint_beyond_template_is_flagged(self, client: AsyncClient, seeded) -> None:
+        """★ 终点落在模板覆盖之外时**必须报出来**（平台外推 ⇒ 那里没有历史信息）。"""
+        r = await client.get("/api/v1/forecast/crisis-fit?target=ny&horizon=30")
+        d = r.json()
+        assert d["template_max_t"] is not None
+        end_t = (d["t0"] or 0) + d["horizon_months"]
+        expect = end_t > d["template_max_t"]
+        assert d["endpoint_beyond_template"] is expect, (
+            f"终点 t={end_t} / 模板到 t={d['template_max_t']} ⇒ "
+            f"endpoint_beyond_template 应为 {expect}"
+        )
 
     async def test_no_directional_semantics(self, client: AsyncClient, seeded, monkeypatch) -> None:
         """⚠ 接口不得输出方向性判断字段（那是另一个功能的事）。"""

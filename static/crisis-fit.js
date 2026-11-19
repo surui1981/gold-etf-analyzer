@@ -392,15 +392,20 @@
     const labels = [];
     for (let t = 0; t <= maxT; t++) labels.push(String(t));
 
-    const datasets = paths.map((p, i) => ({
-      label: p.name || "cycle" + i,
-      data: (p.points || []).map((pt) => Number(pt[1])),
-      borderColor: "rgba(120,120,120,0.55)",
-      borderWidth: 1.2,
-      pointRadius: 0,
-      tension: 0.2,
-      fill: false,
-    }));
+    // ⚠ 两类参照的**参考性不同**：2000 年前（固定汇率体系）⇒ 参考性最低 ⇒ 虚线 + 更淡
+    const datasets = paths.map((p, i) => {
+      const weakest = p.era === "pre_2000";
+      return {
+        label: weakest ? (p.name || "cycle" + i) + " ⚠" : p.name || "cycle" + i,
+        data: (p.points || []).map((pt) => Number(pt[1])),
+        borderColor: weakest ? "rgba(148,148,148,0.42)" : "rgba(120,120,120,0.7)",
+        borderWidth: weakest ? 1 : 1.3,
+        borderDash: weakest ? [4, 3] : [],
+        pointRadius: 0,
+        tension: 0.2,
+        fill: false,
+      };
+    });
 
     const chart = new window.Chart(canvas, {
       type: "line",
@@ -463,10 +468,13 @@
 
     const note = document.getElementById("cfRefNote");
     if (note) {
+      const nWeak = paths.filter((p) => p.era === "pre_2000").length;
+      const nOther = paths.length - nWeak;
       note.textContent = T(
         "crisis.ref_note",
-        "这 {n} 轮是**拟合窗口之前**的更早周期（{from} 起）—— **只作参照，不参与等权平均**（模板只用拟合窗口内的那几轮）。看它们的形状，是为了对照「现代形态和当年的形态差多少」。",
-        { n: paths.length, from: (data.reference_window && data.reference_window.start) || "—" },
+        "这 {n} 轮**都不参与等权平均**（模板只用拟合集那 {f} 轮）。其中 {w} 轮来自 2000 年以前（虚线）—— 固定汇率/布雷顿森林体系下的金价被行政管制，**参考性最低**；另 {o} 轮是现代市场但未入选（对照用）。",
+        { n: paths.length, f: data.fit_cycle_count == null ? "—" : data.fit_cycle_count,
+          w: nWeak, o: nOther },
       );
     }
     return chart;
@@ -557,6 +565,21 @@
     if (chipsEl) {
       const bits = [];
       bits.push(chip("cf-chip", T("crisis.chip_anchor", "锚点月") + " " + (data.anchor_month || "—")));
+      // ★ 拟合集是哪几轮（**显式指定**，不是自动挑的）—— 用户要看得见「在拟合什么」
+      const fitPaths = Array.isArray(data.cycle_paths) ? data.cycle_paths : [];
+      fitPaths.forEach((p) => {
+        const label = p.name || p.anchor || "";
+        bits.push(
+          chip(
+            "cf-chip cf-chip-fit",
+            T("crisis.chip_fit_cycle", "拟合集") + " " + label +
+              (p.anchor ? "（锚 " + p.anchor + "）" : ""),
+          ),
+        );
+      });
+      if (data.fit_cycle_count != null) {
+        bits.push(chip("cf-chip cf-chip-fit", T("crisis.chip_fit_n", "拟合集轮数") + " " + data.fit_cycle_count));
+      }
       if (data.peak_date) {
         bits.push(
           chip("cf-chip", T("crisis.chip_peak", "锚点对应日线峰值") + " " + data.peak_date + " " + fmtPrice(data.peak_price)),
@@ -614,6 +637,24 @@
       }
     }
 
+    // ⚠★ 终点落在**模板覆盖之外**（平台外推 —— 那里没有历史信息）⇒ 必须说
+    const beyondEl = document.getElementById("cfBeyond");
+    if (beyondEl) {
+      const beyond = data.endpoint_beyond_template === true;
+      const maxT = data.template_max_t;
+      beyondEl.className = beyond ? "cf-sup cf-sup-warn" : "cf-sup";
+      if (beyond) {
+        beyondEl.textContent = T(
+          "crisis.beyond_template",
+          "⚠ **终点已超出模板覆盖**（模板只到 t={maxT}，你的终点在 t={end}）⇒ 外推的最后 {n} 个月是**平台外推**：那里没有任何历史信息，曲线形状由插值器的端点夹取决定 —— 这个终点不是「形态参照出来的」，只是「把模板最后的形状拉平再乘漂移」。",
+          { maxT: maxT == null ? "—" : maxT, end: (Number(data.t0) || 0) + (Number(data.horizon_months) || 0),
+            n: (Number(data.t0) || 0) + (Number(data.horizon_months) || 0) - (maxT == null ? 0 : maxT) },
+        );
+      } else {
+        beyondEl.textContent = "";
+      }
+    }
+
     // ⚠ 外推终点的支撑轮数（薄了必须说）—— 拟合收窄到 2000 年以后后，
     //   3 轮里有 2 轮很短（11 / 18 个月）⇒ t≥18 之后只剩 1 轮撑着。
     const supEl = document.getElementById("cfSupport");
@@ -626,7 +667,7 @@
         supEl.className = "cf-sup cf-sup-warn";
         supEl.textContent = T(
           "crisis.support_thin",
-          "⚠ 外推终点只由 **{n} 轮**周期支撑（拟合窗口收窄到 2000 年以后，其中两轮很快就收复了）⇒ 长程外推几乎等于「那一轮怎么走」，不是「几轮的平均」。",
+          "⚠ 外推终点只由 **{n} 轮**周期支撑（拟合集是显式指定的那 2 轮，其中一轮的序列很快就结束了）⇒ 长程外推几乎等于「那一轮怎么走」，不是「几轮的平均」。",
           { n: sup },
         );
       } else {

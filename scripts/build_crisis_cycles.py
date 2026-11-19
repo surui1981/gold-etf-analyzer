@@ -75,6 +75,17 @@ DRAWDOWN_LOOKAHEAD = 36  # 回撤观察窗（月）
 #: 更早的周期仍收进产物，但只作**参照**（另一张图展示，不进拟合）。
 FIT_START = "2000-01"
 
+#: ★ **显式指定的拟合锚点**（用户 2026-11-19 拍板：「只要 2000 年互联网危机 +
+#:   2008 年房地产危机这两轮」）。
+#: - ``1999-10`` = 互联网泡沫**前夜**的金价高点（310.72）—— ⚠ 不是泡沫顶点（2000-03），
+#:   因为金价在泡沫破裂时并没有「破裂特征」（2000-03 → 2001-04 金价横盘 12 个月）；
+#:   用金价高点做锚点才与 2008 轮（2008-03）**同口径** ⇒ 两轮形状可比。
+#: - ``2008-03`` = 房地产危机中金价的高点（968.43），雷曼前 6 个月。
+#:
+#: ⚠ 指定锚点**必须**是「±6 月窗口内的局部高点」⇒ 脚本会校验，不合法直接报错
+#:   （防止手滑写错月份而无人发现）。
+FIT_ANCHORS = ("1999-10", "2008-03")
+
 
 def fetch_pink_sheet() -> Path:
     """下载 Pink Sheet 到临时文件（``--offline`` 可跳过）。"""
@@ -202,6 +213,11 @@ def main() -> int:
         default=FIT_START,
         help="拟合窗口起点（更早的周期只作参照，不进模板）",
     )
+    ap.add_argument(
+        "--fit-anchors",
+        default=",".join(FIT_ANCHORS),
+        help="★ 显式指定的拟合锚点（逗号分隔的 YYYY-MM）；必须是合法的局部高点",
+    )
     ap.add_argument("--target", default=DEFAULT_TARGET)
     ap.add_argument("--dry-run", action="store_true", help="只打印会选出的周期，不写文件")
     args = ap.parse_args()
@@ -210,33 +226,103 @@ def main() -> int:
     series, updated = load_gold_monthly(xlsx)
     print(f"月度金价：{len(series)} 行，{series[0]['month']} → {series[-1]['month']}（{updated}）")
 
-    # ── 两批：拟合集（fit_start 之后）与参照集（之前，只展示、不进模板）──
+    # ── 两批：拟合集（**显式指定**）与参照集（更早的，只展示、不进模板）──
     all_cands = peak_candidates(series)
+    months_all = [s["month"] for s in series]
 
-    def _build(cands: list[dict], label: str) -> list[dict]:
+    def _cycle_at(anchor: str, label: str) -> dict:
+        """按**指定锚点**取一轮周期（锚点必须是合法的局部高点）。"""
+        if anchor not in months_all:
+            raise SystemExit(f"锚点 {anchor} 不在月度序列里")
+        i = months_all.index(anchor)
+        win = [
+            series[k]["price"] for k in range(max(0, i - WINDOW), min(len(series), i + WINDOW + 1))
+        ]
+        peak = series[i]["price"]
+        if peak < max(win):
+            raise SystemExit(
+                f"锚点 {anchor} 不是 ±{WINDOW} 月窗口内的局部高点"
+                f"（该月 {peak}，窗口最高 {max(win)}）—— 指定锚点必须真的是金价高点"
+            )
+        c = build_cycle(
+            series,
+            {
+                "idx": i,
+                "month": anchor,
+                "price": peak,
+                "prominence": round((peak / min(win) - 1) * 100, 1),
+                "drawdown": round(
+                    (
+                        min(
+                            series[k]["price"]
+                            for k in range(i, min(len(series), i + DRAWDOWN_LOOKAHEAD + 1))
+                        )
+                        / peak
+                        - 1
+                    )
+                    * 100,
+                    1,
+                ),
+            },
+        )
+        c["name"] = label
+        c["short"] = anchor.replace("-", "")
+        c["role"] = "fit"
+        return c
+
+    def _build_ref(cands: list[dict], label: str) -> list[dict]:
         out: list[dict] = []
         for p in merge_peaks(cands):
             cyc = build_cycle(series, p)
             # ⚠ 样本边界：周期必须整体早于当前周期起点（当前周期绝不能进模板）
             if months_between(cyc["series"][-1][0], args.current_start) < 0:
                 continue
+            cyc["role"] = "reference"
+            # ⚠ 参照集分两类，**参考性不同**：
+            #   · 2000 年前 ⇒ 固定汇率/布雷顿森林体系，金价被行政管制
+            #     ⇒ 形态与现代市场不可直接类比 ⇒ **参考性最低**（用户 2026-11-19 口径）；
+            #   · 2000 年后但未入选拟合集 ⇒ 是现代市场，只是没被选中 ⇒ 对照用。
+            if p["month"] < FIT_START:
+                cyc["era"] = "pre_2000"
+                cyc["reference_only_reason"] = "固定汇率/布雷顿森林体系下的金价，参考性最低"
+            else:
+                cyc["era"] = "post_2000_unselected"
+                cyc["reference_only_reason"] = "现代市场周期，未入选拟合集（对照用）"
             out.append(cyc)
         print(f"\n{label}：{len(out)} 轮")
         for c in out:
+            tag = "（参考性最低）" if c.get("era") == "pre_2000" else ""
             print(
                 f"  {c['goldPeak']}  峰价 {c['peakPrice']:>8.2f}  "
                 f"prominence {c['prominence_pct']:>5.1f}%  回撤 {c['max_drawdown_pct']:>6.1f}%  "
-                f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}"
+                f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}{tag}"
             )
         return out
 
-    cycles = _build(
-        [c for c in all_cands if c["month"] >= args.fit_start],
-        f"拟合集（{args.fit_start} 之后，当前周期起点 {args.current_start} 之前）",
-    )
-    reference_cycles = _build(
-        [c for c in all_cands if c["month"] < args.fit_start],
-        f"参照集（{args.fit_start} 之前，只展示、不进拟合）",
+    anchors = [a.strip() for a in args.fit_anchors.split(",") if a.strip()]
+    labels = {
+        "1999-10": "2000 互联网泡沫（金价高点 1999-10）",
+        "2008-03": "2008 房地产危机（金价高点 2008-03）",
+    }
+    cycles = []
+    for a in anchors:
+        c = _cycle_at(a, labels.get(a, f"{a} 起的一轮金价周期"))
+        # ⚠ 样本边界：拟合集也必须整体早于当前周期起点
+        if months_between(c["series"][-1][0], args.current_start) < 0:
+            raise SystemExit(f"拟合锚点 {a} 的序列伸进了当前周期（{c['series'][-1][0]}）⇒ 自我拟合")
+        cycles.append(c)
+    print(f"\n拟合集（**显式指定** {len(cycles)} 轮，只有它们进等权平均）：")
+    for c in cycles:
+        print(
+            f"  {c['goldPeak']}  {c['name']}  峰价 {c['peakPrice']:>8.2f}  "
+            f"序列 {len(c['series']):>2d} 月 → {c['series'][-1][0]}"
+        )
+
+    # 参照集 = 自动识别出的、更早的周期，**排除**已被指定进拟合集的锚点
+    used = set(anchors)
+    reference_cycles = _build_ref(
+        [c for c in all_cands if c["month"] not in used],
+        "参照集（不参与拟合的其它周期，只展示）",
     )
 
     if args.dry_run:
@@ -248,14 +334,18 @@ def main() -> int:
         "horizon_months": 30,
         "price_basis": "monthly_average",
         "fit_window": {"start": args.fit_start, "end": args.current_start},
-        "reference_window": {"start": series[0]["month"], "end": args.fit_start},
+        "reference_window": {"start": series[0]["month"], "end": args.current_start},
+        "fit_anchors": anchors,
+        "fit_selection": "explicit",
         "provenance": {
             "source": "世界银行 Pink Sheet（Commodity Price Data）月度表 Gold 列",
             "url": PINK_SHEET_URL,
             "coverage": f"{series[0]['month']} → {series[-1]['month']}（月度金价 $/troy oz）",
-            "method": "London fix 月均；周期按「±6 月局部高点 + prominence≥10% + 同episode归并 + "
-            "后续36月回撤≥10%（金价破裂）+ 早于当前周期起点」自动识别（无人工挑选）；"
-            f"拟合只取 {args.fit_start} 之后的周期，更早的进 reference_cycles（只展示、不进模板）",
+            "method": "London fix 月均。★ **拟合集是显式指定的**（用户 2026-11-19 拍板）："
+            f"{', '.join(anchors)} —— 互联网泡沫（金价高点 1999-10，泡沫前夜）+ "
+            "房地产危机（金价高点 2008-03）；只有这两轮进等权平均。"
+            "参照集由「±6 月局部高点 + prominence≥10% + 同episode归并 + 后续36月回撤≥10%」"
+            "自动识别（无人工挑选），只展示、不进模板；它们在固定汇率体系下 ⇒ 参考性最低",
             "updated": updated,
             "exported_at": "2026-11-18",
             "note": "当前周期用仓库自己的 COMEX 期货价（gold_price_daily/target=ny），"

@@ -293,9 +293,21 @@ class TestDegradation:
         assert res.reason == "no_price_data"
 
     def test_too_few_cycles(self) -> None:
-        res = svc.build_crisis_fit(DAILY, asset=_asset(_asset()["cycles"][:2]))
+        """⚠ 下限是 **2** 轮（用户 2026-11-19 显式指定的就是 2 轮）⇒ 1 轮才不够。
+
+        2 轮时「等权平均」的统计意义有限（不是 3 轮以上那种平均），
+        但每一轮都有明确的历史含义 ⇒ 仍然可用，由页面如实说明。
+        """
+        res = svc.build_crisis_fit(DAILY, asset=_asset(_asset()["cycles"][:1]))
         assert res.available is False
         assert res.reason == "insufficient_cycles"
+
+    def test_two_cycles_is_enough(self) -> None:
+        """2 轮（互联网泡沫 + 房地产危机）⇒ 可用，但接口要报出轮数与支撑情况。"""
+        res = svc.build_crisis_fit(DAILY, asset=_asset(_asset()["cycles"][:2]))
+        assert res.available is True
+        assert res.fit_cycle_count == 2
+        assert res.template_counts[0] == 2
 
     def test_all_cycles_invalid_reports_warnings(self) -> None:
         bad = _cycle("BAD", "2011-09", 1900)

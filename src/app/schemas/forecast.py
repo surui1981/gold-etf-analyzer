@@ -218,6 +218,22 @@ class CrisisFitOut(BaseModel):
         description="外推终点处由几轮周期支撑（少 ⇒ 长程外推几乎等于「某一轮怎么走」，页面必须标出）",
     )
     fit_window: dict = Field(default_factory=dict, description="拟合窗口（哪段历史参与等权平均）")
+    fit_anchors: list[str] = Field(
+        default_factory=list, description="★ 拟合集的锚点（显式指定的那几轮周期）"
+    )
+    fit_selection: str = Field(
+        default_factory=str, description='"explicit" = 拟合集是**显式指定**的（不是自动挑的）'
+    )
+    fit_cycle_count: int | None = Field(
+        default=None, description="拟合集有几轮（2 轮 ⇒ 等权平均的统计意义有限，页面要说明）"
+    )
+    endpoint_beyond_template: bool = Field(
+        default=False,
+        description="★ 终点是否落在**模板覆盖之外**（那里是平台外推 —— 没有历史信息）",
+    )
+    template_max_t: int | None = Field(
+        default=None, description="模板覆盖到的最大 t（超出它就是平台外推）"
+    )
     reference_window: dict = Field(
         default_factory=dict, description="参照窗口（哪段历史只作展示、不进拟合）"
     )

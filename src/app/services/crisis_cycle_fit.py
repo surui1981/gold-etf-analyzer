@@ -35,8 +35,11 @@ DEFAULT_TARGET = "ny"
 DEFAULT_HORIZON_MONTHS = 30
 DEFAULT_DRIFT = 0.003
 
-#: 模板至少要有几轮周期才有意义（少于 3 轮 ⇒ 等权均值≈单轮）
-MIN_CYCLES = 3
+#: 模板至少要有几轮周期才有意义。
+#: ⚠ V0.128.1 起为 **2**：用户显式指定的就是「2000 互联网 + 2008 房地产」两轮
+#:   （每一轮都有明确的历史含义，不是「凑数」）⇒ 但 2 轮时等权平均的**统计意义有限**，
+#:   所以服务会额外产出 ``fit_cycle_count`` 与告警，让页面能如实说明。
+MIN_CYCLES = 2
 
 #: 漂移假设的上下界（防止前端传 5 这种把曲线吹上天）
 MIN_DRIFT = -0.02
@@ -159,6 +162,11 @@ class Cycle:
     gold_peak: str
     peak_price: float | None
     series: list[tuple[str, float]]
+    #: ``pre_2000`` = 固定汇率体系下的金价（**参考性最低**）；``post_2000_unselected`` =
+    #: 现代市场但未入选拟合集；``fit`` = 参与等权平均。
+    era: str = ""
+    #: 为什么只是「参照」（页面要如实说明）
+    reference_only_reason: str = ""
 
 
 def make_interpolator(points: Sequence[tuple[float, float]]) -> Callable[[float], float | None]:
@@ -263,7 +271,8 @@ def build_template(cycles: Sequence[Cycle]) -> Template:
     return Template(
         template=template,
         maps=maps,
-        names=[c.short or c.name for c in cycles],
+        # ⚠ 显示用 **name**（人话，如「2000 互联网泡沫（金价高点 1999-10）」）而不是 short（199910）
+        names=[c.name or c.short for c in cycles],
         at=make_interpolator(template),
         counts=counts,
         paths=[sorted(norm.items()) for norm in maps],
@@ -516,6 +525,8 @@ def validate_cycles(
                 gold_peak=str(gold_peak),
                 peak_price=peak_price,
                 series=series,
+                era=str(item.get("era") or ""),
+                reference_only_reason=str(item.get("reference_only_reason") or ""),
             )
         )
 
@@ -552,6 +563,13 @@ class CrisisFitResult:
         default_factory=list
     )  # 参照集（更早的周期）的归一路径，只展示
     fit_window: dict = field(default_factory=dict)  # 拟合窗口（哪段历史参与等权平均）
+    fit_anchors: list[str] = field(default_factory=list)  # ★ 拟合集的锚点（显式指定的那几轮）
+    fit_cycle_count: int | None = None  # 拟合集有几轮（2 轮 ⇒ 等权平均的统计意义有限，页面要说明）
+    endpoint_beyond_template: bool = (
+        False  # ★ 终点是否落在**模板覆盖之外**（= 平台外推，没有历史信息）
+    )
+    template_max_t: int | None = None  # 模板覆盖到的最大 t
+    fit_selection: str = field(default_factory=str)  # "explicit" = 显式指定（不是自动挑的）
     reference_window: dict = field(default_factory=dict)  # 参照窗口（只展示、不进拟合）
     support_at_horizon: int | None = None  # 外推终点处由几轮周期支撑（薄了必须让页面看见）
     template_max_t: int | None = None
@@ -661,6 +679,8 @@ def build_crisis_fit(
         {
             "name": ref_template.names[i] if i < len(ref_template.names) else f"cycle{i}",
             "points": [[int(t), round(float(v), 2)] for t, v in ref_template.paths[i]],
+            "era": ref_cycles[i].era if i < len(ref_cycles) else "",
+            "reason": ref_cycles[i].reference_only_reason if i < len(ref_cycles) else "",
         }
         for i in range(len(ref_template.paths))
     ]
@@ -679,15 +699,24 @@ def build_crisis_fit(
         fit_window=asset.get("fit_window") or {},
         reference_window=asset.get("reference_window") or {},
         support_at_horizon=support_at(template.counts, int(fit.meta.get("t0") or 0) + horizon),
+        fit_anchors=list(asset.get("fit_anchors") or []),
+        fit_cycle_count=len(cycles),
+        endpoint_beyond_template=bool(
+            template.template
+            and (int(fit.meta.get("t0") or 0) + horizon) > template.template[-1][0]
+        ),
+        template_max_t=(template.template[-1][0] if template.template else None),
+        fit_selection=asset.get("fit_selection") or "",
         template_counts=template.counts,
         cycle_paths=[
             {
                 "name": template.names[i] if i < len(template.names) else f"cycle{i}",
                 "points": [[int(t), round(float(v), 2)] for t, v in template.paths[i]],
+                "anchor": cycles[i].gold_peak if i < len(cycles) else "",
+                "anchor_price": cycles[i].peak_price if i < len(cycles) else None,
             }
             for i in range(len(template.paths))
         ],
-        template_max_t=(template.template[-1][0] if template.template else None),
         provenance=provenance,
         warnings=warnings,
         anchor_month=fit.meta.get("anchor_month"),

@@ -1761,11 +1761,15 @@ window.PM_I18N_en_US = {
   "home.scene_crisis_2": "Equal-weight template",
   "home.scene_crisis_3": "Per-cycle endpoint range",
   /* ── V0.128.1：拟合窗口收窄到 2000 年以后 + 更早周期作参照 ── */
-  "crisis.ref_title": "🕰️ Earlier cycles · reference only, not part of the fit",
   "crisis.ref_missing": "No earlier reference cycles.",
-  "crisis.ref_note": "These {n} cycles are from **before the fit window** (from {from}) — **reference only, they are not in the equal-weight average** (the template uses only the cycles inside the fit window). Looking at their shapes is a way to compare 'how today's shape differs from the old one'.",
   "crisis.ref_a11y": "Earlier crisis cycles (reference only, not part of the fit)",
   "crisis.col_ref": "Reference cycle (normalised)",
-  "crisis.support_thin": "⚠ The extrapolation endpoint is supported by only **{n} cycle** (the fit window starts in 2000 and two of them recovered quickly) ⇒ the long-horizon path is nearly 'how that one cycle went', not 'the average of several'.",
+  "crisis.support_thin": "⚠ The extrapolation endpoint is supported by only **{n} cycle** (the fit set is the two explicitly chosen ones, and one of them's series ends early) ⇒ the long-horizon path is nearly 'how that one cycle went', not 'the average of several'.",
   "crisis.support_ok": "The extrapolation endpoint is supported by {n} cycles (see the note for the support per t).",
+  /* ── V0.128.1：拟合集 = 显式指定的 2 轮 + 参照集分层 + 终点超出模板告警 ── */
+  "crisis.ref_title": "🕰️ Other cycles not used in the fit · reference only",
+  "crisis.chip_fit_cycle": "Fit set",
+  "crisis.chip_fit_n": "Fit cycles",
+  "crisis.beyond_template": "⚠ **The endpoint is beyond the template's coverage** (the template stops at t={maxT}, your endpoint is at t={end}) ⇒ the last {n} months of the extrapolation are **clamped** — there is no historical information there; the shape comes from the interpolator's end clamp. This endpoint is not 'derived from the shape' — it is 'the template's last shape flattened, times the drift'.",
+  "crisis.ref_note": "None of these {n} cycles enter the equal-weight average (the template uses only the {f} fit cycles). {w} of them are from before 2000 (dashed) — gold was administratively fixed under Bretton Woods / the fixed-rate regime, so they are **of the least relevance**; the other {o} are modern-market cycles that were not selected (for comparison).",
 };
