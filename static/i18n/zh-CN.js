@@ -1690,6 +1690,7 @@ window.PM_I18N_ZH_CN = {
   "forecast.load_failed": "⚠️ 取数失败：",
   "forecast.tile_unavailable": "区间暂不可用（取数失败）",
   "nav.forecast": "金价区间",
+  "nav.crisis_fit": "形态拟合",
   "brand.forecast": "金价区间预测 · 黄金 ETF",
   /* ── V0.128.0 经济危机金价拟合曲线（历史形态参照 · 不是预测）── */
   "crisis.page_title": "经济危机金价拟合曲线 · 历史形态参照",

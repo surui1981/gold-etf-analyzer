@@ -207,6 +207,30 @@ const EXPECTED_CARDS = ["今日要闻", "决策", "形态拟合", "持仓", "情
 const gotCards = cards.map((c) => EXPECTED_CARDS.find((x) => c.title.includes(x)) || `?(${c.title})`);
 ok("首页卡顺序与顶 nav 一致", JSON.stringify(gotCards) === JSON.stringify(EXPECTED_CARDS), gotCards.join(" → "));
 
+// ─── 4.5 决策场景的 subnav 含「形态拟合」（V0.128.3）───
+// ⚠ 必须去**决策场景**的页面测（/scoring）—— 上一版误插到「配置」段（/weights），
+//   那页 subnav 当然是权重配置 ⇒ 断言必然红（反向验证时才发现）。
+console.log("\n【4.5】决策 subnav 含「形态拟合」");
+await page.goto(`${BASE}/scoring`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector(".subnav a, .subnav-item, .subnav .tab", { timeout: 15000 });
+const decisionSubs = await page.$$eval(".subnav a, .subnav-item, .subnav .tab", (els) =>
+  els.map((e) => ({ text: (e.textContent || "").trim(), href: e.getAttribute("href") || "" })));
+ok("决策 subnav 含「形态拟合」", decisionSubs.some((s) => s.text.includes("形态拟合")),
+  decisionSubs.map((s) => s.text).join(" / "));
+ok("「形态拟合」指向 /crisis-fit", decisionSubs.some((s) => s.href === "/crisis-fit"),
+  JSON.stringify(decisionSubs.map((s) => s.href)));
+// ⚠ 在 /crisis-fit 页上，「形态拟合」子页必须**高亮**（activeFor 配对了）
+// ⚠⚠ waitForSelector **必须 catch**：若 /crisis-fit 不在任何 activeFor 里，
+//   topnav 认不出当前场景 ⇒ **subnav 根本不渲染** ⇒ 等选择器会抛异常 ⇒
+//   **整个门禁崩掉、连「结果」行都不输出** ⇒ 看起来像「没跑」而不是「红」
+//   （记忆：崩的门禁不是门禁）。catch 之后由下面的断言如实报红。
+await page.goto(`${BASE}/crisis-fit`, { waitUntil: "domcontentloaded" });
+await page.waitForSelector(".subnav a, .subnav-item, .subnav .tab", { timeout: 15000 }).catch(() => {});
+const activeSub = await page.$$eval(".subnav a.active, .subnav-item.active, .subnav .tab.active", (els) =>
+  els.map((e) => (e.textContent || "").trim()));
+ok("在 /crisis-fit 时「形态拟合」子页高亮",
+  activeSub.some((t) => t.includes("形态拟合")), JSON.stringify(activeSub));
+
 // ─── 5. 三语 ───
 console.log("\n【5】三语");
 for (const [lang, expect] of [["en-US", "Data Health"], ["zh-TW", "數據健康"], ["zh-CN", "数据健康"]]) {

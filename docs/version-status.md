@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.128.2** ｜ **最近更新**：2026-11-19 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.2`）**
+> **基线：V0.128.3** ｜ **最近更新**：2026-11-20 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.3`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.128.2**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.2`**
+**当前版本 = 0.128.3**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.3`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.2` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.2` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.2` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.2` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.3` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.3` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.128.2   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.128.3   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-19 重启加载 V0.128.2）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-20 重启加载 V0.128.3）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -281,7 +281,17 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.128.2（2026-11-19 发版 · 拟合集 = 显式指定的两轮）
+### 本轮：V0.128.3（2026-11-20 发版 · 形态拟合唱加顶 nav 入口）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 用户提的两件事：① 「形态拟合」**此前只有首页磁贴一个入口** ⇒ 补齐；② 外推长度 **30 个月**（V0.128.2 已定并写进文档 ✔，无需再改） |
+| 导航 | ✅ `/crisis-fit` 加入顶 nav「**决策**」场景的第 **6** 个子页（与「金价区间」并列；⚠ 两者**方向性相反**，各有各的口径说明） |
+| 派生机制 | ✅ **命令面板自动收录**（清单从 `topnav.js` 导出的 `SCENES` **惰性派生**）⇒ 实测搜「形态」直达 `/crisis-fit`。⚠ **移动端抽屉不含子页**（它只拷贝顶栏 8 个场景链接）⇒ 子页入口靠各页顶栏下方的 **subnav** ⇒ 实测 `/crisis-fit` 页 subnav 有「📉形态拟合」且**高亮** |
+| 门禁 | ✅ `_verify_nav_8.mjs` **+2 条**（决策 subnav 含「形态拟合」/ 指向 `/crisis-fit`）⇒ **33/0**；`_verify_cmd_palette.mjs` 条数断言同步 **+1**（19 → 20 / help.js 页 20 → 21）⇒ **40/0**。⚠ 「改了口径必须同轮同步断言」—— 加子页必然改命令条数 |
+| `__version__` | ✅ 已 bump 到 `0.128.3`（改了 `static/topnav.js` + 3 个 i18n 字典 ⇒ 必须 bump `sw.js`） |
+
+### 上一轮：V0.128.2（2026-11-19 发版 · 拟合集 = 显式指定的两轮）
 
 | 项 | 状态 |
 |---|---|

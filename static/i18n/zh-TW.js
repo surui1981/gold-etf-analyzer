@@ -1588,6 +1588,7 @@ window.PM_I18N_zh_TW = {
   "forecast.load_failed": "⚠️ 取數失敗：",
   "forecast.tile_unavailable": "區間暫不可用（取數失敗）",
   "nav.forecast": "金價區間",
+  "nav.crisis_fit": "形態擬合",
   "brand.forecast": "金價區間預測 · 黃金 ETF",
   /* ── V0.128.0 經濟危機金價擬合曲線（歷史形態參照 · 不是預測）── */
   "crisis.page_title": "經濟危機金價擬合曲線 · 歷史形態參照",

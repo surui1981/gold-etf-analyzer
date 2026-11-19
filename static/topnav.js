@@ -65,6 +65,11 @@
         // V0.127.0：未来 20 交易日的金价区间预测（扇形导航线 + 实测覆盖率）。
         //   挂在「决策」场景下 —— 它回答的是「接下来大概在什么区间」，与决策同族。
         { path: "/price-forecast",     ico: "📐", i18n: "nav.forecast",  fb: "金价区间",     activeFor: ["/price-forecast", "/static/price-forecast.html"] },
+        // V0.128.0：经济危机金价拟合曲线（历史形态参照，⚠ 不是预测）。
+        //   挂在「决策」下 —— 它回答「历史形态重演的话路径大概长什么样」，与决策同族。
+        //   ⚠ 与上面的「金价区间」**方向性相反**（扇形图刻意不预测涨跌，本页有方向）
+        //   ⇒ 两页各有各的口径说明，别让用户把它们当成同一个东西的两个版本。
+        { path: "/crisis-fit",          ico: "📉", i18n: "nav.crisis_fit", fb: "形态拟合",     activeFor: ["/crisis-fit", "/static/crisis-fit.html"] },
       ],
     },
     {

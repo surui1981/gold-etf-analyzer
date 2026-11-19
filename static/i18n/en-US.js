@@ -1685,6 +1685,7 @@ window.PM_I18N_en_US = {
   "forecast.load_failed": "⚠️ Failed to load: ",
   "forecast.tile_unavailable": "Range unavailable (fetch failed)",
   "nav.forecast": "Price Range",
+  "nav.crisis_fit": "Cycle fit",
   "brand.forecast": "Price Range Forecast · Gold ETF",
   /* ── V0.128.0 Economic-crisis gold cycle fit (historical shape reference — NOT a forecast) ── */
   "crisis.page_title": "Economic-crisis gold cycle fit · historical shape reference",
