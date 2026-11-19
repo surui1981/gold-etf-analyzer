@@ -291,6 +291,23 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 门禁 | ✅ `_verify_nav_8.mjs` **+2 条**（决策 subnav 含「形态拟合」/ 指向 `/crisis-fit`）⇒ **33/0**；`_verify_cmd_palette.mjs` 条数断言同步 **+1**（19 → 20 / help.js 页 20 → 21）⇒ **40/0**。⚠ 「改了口径必须同轮同步断言」—— 加子页必然改命令条数 |
 | `__version__` | ✅ 已 bump 到 `0.128.3`（改了 `static/topnav.js` + 3 个 i18n 字典 ⇒ 必须 bump `sw.js`） |
 
+#### 推送状态：✅ **已推送**（2026-11-20 · **SSH**，tag `v0.128.3`）
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main`（**发版那一刻** = tag `v0.128.3` 的 `^{}`） | `1a57195` | `1a57195` | ✅ |
+| `refs/tags/v0.128.3` / `^{}` | 见远端回读 | 同 | ✅ |
+| tag 数（去掉 `^{}` 行） | **129** | **129** | ✅ 差 0 |
+
+> 📌 **推送方式已换成 SSH**（2026-11-20）：remote = `git@github.com:surui1981/gold-etf-analyzer.git`，
+> 密钥 `~/.ssh/id_ed25519_github` ⇒ **`git push` 直接跑，不需要任何 token**
+> （不进对话、不进 `~/.bash_history`、不落盘、不会过期）。
+> ⚠ 顺带查明：**VS Code 的登录态命令行取不到**（它在 VS Code 自己的 secret storage 里；
+> 内置 git 扩展的 askpass 依赖 `VSCODE_GIT_IPC_HANDLE`，那个句柄只在它派生 git 的那一瞬间存在）。
+> ⇒ **不再需要向用户索要 PAT**。
+>
+> 📌 **判据永远是远端回读**（`git ls-remote`），不是 `git push | tail` 的退出码（恒 0）。
+
 ### 上一轮：V0.128.2（2026-11-19 发版 · 拟合集 = 显式指定的两轮）
 
 | 项 | 状态 |
