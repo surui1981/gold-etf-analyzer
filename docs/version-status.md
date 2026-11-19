@@ -294,6 +294,36 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 | 反向验证 | ✅ ① 去掉「终点超出模板」告警 ⇒ 浏览器门禁 1 条变红；② 参照图不区分 era ⇒ 1 条变红；③ 后端让参照集混进拟合集 ⇒ **API 用例 2 条变红**（「t=0 支撑 9 轮，拟合集只有 2 轮」） |
 | `__version__` | ✅ 已 bump 到 `0.128.2`（4 处同步） |
 
+#### 推送状态：✅ **已推送**（2026-11-19 · classic PAT，tags `v0.128.1` + `v0.128.2`）
+
+**结论先行：V0.128.1 与 V0.128.2 两批改动已全部推上远端**，以**远端回读**确认
+（不是看 `git push` 的退出码 —— `git push | tail` 的退出码恒为 0 ⇒ 失败会被伪装成成功）。
+
+| 项 | 远端 | 本地 | 一致 |
+|---|---|---|---|
+| `refs/heads/main`（**发版那一刻** = tag `v0.128.2` 的 `^{}`） | `7da62dd` | `7da62dd` | ✅ |
+| `refs/tags/v0.128.0` / `^{}` | `6fb1cfb` / `7c50855` | 同 | ✅ |
+| `refs/tags/v0.128.1` / `^{}` | `5b759ae` / `ed365ca` | 同 | ✅ |
+| `refs/tags/v0.128.2` / `^{}` | `676b7676` / `7da62dd` | 同 | ✅ |
+| tag 数（去掉 `^{}` 行） | **128** | **128** | ✅ 差 0 |
+
+> 📌 **推送方式**（**token 不进 argv、不落盘、不进 `remote.origin.url`**）：
+> `export GH_TOKEN=…` + `git -c credential.helper='!gh auth git-credential' push origin main v0.128.1 v0.128.2`；
+> 推完 `sed -i -e '/ghp_/d' -e '/GH_TOKEN/d' ~/.bash_history` 并复核 5 处 token 痕迹。
+> ⚠ **只有 classic `ghp_` 能推**（fine-grained 的 `permissions.admin` 是**用户的仓库角色**，
+> 不是 token 自己的权限）—— 实测 fine-grained 会返回
+> `Permission to surui1981/gold-etf-analyzer.git denied to surui1981.` / HTTP **403**。
+>
+> 📌 **判据不是「`git push` 没报错」**，而是**远端回读** —— 推完必须回读 `refs/heads/main`
+> （== 本地 HEAD）、每个 tag 的对象与 `^{}` 行、远端 tag 数（== 本地）。
+>
+> ⚠️ **main 的当前 SHA 不写死在这条判据里**：写进去的那条 commit 自己就会推动 HEAD ⇒ 判据当场失效。
+> 上表里的 `7da62dd` 是**发版那一刻**的读数（＝ tag `v0.128.2` 的 `^{}`，可以写死）；
+> **当前**的远端 main 用 `git ls-remote origin refs/heads/main` 与 `git rev-parse HEAD` 对比。
+>
+> ⚠ **那枚 classic PAT 已经出现在会话记录里** ⇒ 用完**必须轮换**（本地 5 处复查均 **0 命中**，
+> 但会话 `.jsonl` 里的副本清不掉 ⇒ 只能靠轮换）。
+
 ### 上一轮：V0.128.1（2026-11-19 发版 · 拟合窗口收窄 + 更早周期作参照）
 
 | 项 | 状态 |
