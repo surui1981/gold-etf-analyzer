@@ -190,6 +190,41 @@ ok("命中分析的 a11y 数据表展开后不遮挡下方内容",
   a11yCase.has === true && (a11yCase.covered || []).length === 0,
   JSON.stringify(a11yCase.covered || []).slice(0, 200));
 
+// ─── C. 金价列必须有真实数值（V0.128.4 修的故障）───
+// ⚠ 2026-11-24 用户报「scoring 页面的金价数据没有同步更新」。
+//   根因：``gold_price_daily`` 没有调度器刷新 ⇒ 停在 11-11 ⇒
+//   ``scoring_daily_wide.gold_ny_close`` 为 NULL ⇒ 该列整列「—」。
+//   ⇒ 断言「最近几行（交易日）必须有金价数值」—— 只查**前几行**，
+//   因为周末/源缺口（实测 11-21 源里没有） legitimately 是「—」。
+console.log("\n【D】金价列必须有真实数值");
+await page.goto(`${BASE}/static/scoring.html`, { waitUntil: "networkidle2", timeout: 60000 });
+await page.waitForSelector("table tbody tr", { timeout: 20000 });
+await new Promise((r) => setTimeout(r, 2500));
+const goldCol = await page.evaluate(() => {
+  const ths = Array.from(document.querySelectorAll("table thead th"));
+  const idx = ths.findIndex((th) => (th.textContent || "").includes("NY金"));
+  if (idx < 0) return { noCol: true };
+  const rows = Array.from(document.querySelectorAll("table tbody tr")).slice(0, 6);
+  const vals = rows.map((tr) => {
+    const tds = tr.querySelectorAll("td");
+    return {
+      date: (tds[0]?.textContent || "").trim(),
+      gold: (tds[idx]?.textContent || "").trim(),
+    };
+  });
+  return { idx, vals };
+});
+ok("表格有「NY金美元/盎司收盘」列", !goldCol.noCol, JSON.stringify(goldCol).slice(0, 200));
+const withPrice = (goldCol.vals || []).filter((v) => v.gold && v.gold !== "—");
+ok("最近几行有真实金价数值（不是整列「—」）", withPrice.length >= 3,
+  JSON.stringify(goldCol.vals));
+ok("金价数值是合理的美元/盎司量级",
+  withPrice.every((v) => {
+    const n = Number(String(v.gold).replace(/,/g, ""));
+    return isFinite(n) && n > 500 && n < 20000;
+  }),
+  JSON.stringify(withPrice));
+
 await browser.close();
 console.log(`\n${"=".repeat(56)}`);
 console.log(`  结果：${pass} passed, ${fail} failed`);

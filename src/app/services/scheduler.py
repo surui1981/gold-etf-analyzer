@@ -754,3 +754,195 @@ async def gold_inventory_loop() -> None:
         )
         await asyncio.sleep(wait)
         await _refresh_gold_inventory()
+
+
+# ───────────────────── V0.128.4 · 价格日历自动刷新 ─────────────────────
+# ⚠⚠ **为什么需要它（V0.128.4 修的故障）**
+#
+# 2026-11-24 用户报「scoring 页面的金价数据没有同步更新」。实测根因链：
+#
+#   ① ``gold_price_daily``（价格日历）**没有任何调度器**去刷新它 ——
+#      它只在「跑回测」或「研判复盘」时按需回填（``backtest.ensure_price_calendar`` /
+#      ``review.py``）⇒ **没人跑回测 ⇒ 价格日历就停在过去某天**；
+#   ② ``scoring_daily_wide.gold_ny_close`` 从 ``gold_price_daily`` 取
+#      ⇒ 日历停了，宽表那一列就是 NULL；
+#   ③ scoring 页面的「NY金美元/盎司收盘」列 ⇒ 整列显示「—」。
+#
+# 实测数据（修复前）：``ny`` 停在 2026-11-11（落后 13 天），
+# ``scoring_daily_wide`` 75 行里 **30 行 gold_ny_close 为 NULL**。
+#
+# ⇒ 本调度器：**每日刷新价格日历**（增量、只认真实行情）→ **重建受影响的宽表行**
+#   → 页面那一列自动跟上。
+#
+# ⚠ 为什么刷新后**还要重建宽表**：宽表是**已落库的历史行**，日历补上之后
+#   旧行的 ``gold_ny_close`` 不会自己变 ⇒ 必须重算那几行（``ScoringWideService.rebuild``）。
+PRICE_CALENDAR_TRIGGER_HOUR_BJT = 8
+PRICE_CALENDAR_TRIGGER_MINUTE_BJT = 40  # 08:40 BJT（排在 07:00 快照 / 08:10 库存之后）
+PRICE_CALENDAR_AUTO_REFRESH_ENV = "PRICE_CALENDAR_AUTO_REFRESH"
+PRICE_CALENDAR_BOOTSTRAP_DELAY_SECONDS = 60.0
+#: 每次刷新的回看窗口（自然日）—— 取「最近 10 个交易日」足够补上缺口，
+#: 又不会把整段历史重写一遍（实测：--deep 会重写 2580 行，收益极低、风险不小）。
+PRICE_CALENDAR_WINDOW_DAYS = 30
+#: 刷完价格日历后，重建最近这么多天的宽表行（补上 gold_ny_close）
+PRICE_CALENDAR_REBUILD_DAYS = 10
+
+
+def _is_price_calendar_auto_refresh_enabled() -> bool:
+    """读环境变量判断价格日历自动刷新是否启用（默认启用）。"""
+    raw = os.environ.get(PRICE_CALENDAR_AUTO_REFRESH_ENV, "1").strip().lower()
+    return raw not in ("0", "false", "no", "off", "")
+
+
+def next_price_calendar_run_utc(now_utc: datetime | None = None) -> datetime:
+    """计算下一次价格日历刷新的 UTC 时间（每日 08:40 BJT）。"""
+    now = now_utc or datetime.now(timezone.utc)
+    now_bjt = now.astimezone(BJT)
+    cand = now_bjt.replace(
+        hour=PRICE_CALENDAR_TRIGGER_HOUR_BJT,
+        minute=PRICE_CALENDAR_TRIGGER_MINUTE_BJT,
+        second=0,
+        microsecond=0,
+    )
+    if cand > now_bjt:
+        return cand.astimezone(timezone.utc)
+    return (cand + timedelta(days=1)).astimezone(timezone.utc)
+
+
+async def _refresh_price_calendar() -> int:
+    """执行一次「刷新价格日历 + 重建宽表」。
+
+    Returns:
+        写入 ``gold_price_daily`` 的行数；失败返回 0。
+
+    ⚠ **只认真实行情**（与 ``backtest.ensure_price_calendar`` 同一纪律）：
+    取数失败时 ``TrendService`` 会**静默降级为 mock** ⇒ mock 收盘价写进日历
+    ⇒ 宽表/回测/区间预测全都基于**编造的价格**给出看似正常的结论 ⇒ 宁可留空。
+    """
+    from app.repositories.db import async_session_factory
+    from app.repositories.market_data import MarketDataRepository
+    from app.repositories.review import GoldPriceRepository
+    from app.services.price_source import TRUSTED_PRICE_SOURCES, resolve_price_source
+    from app.services.trend import TrendService
+
+    written = 0
+    try:
+        # ⚠ TrendService 需要行情仓储；轻路径（fetch_price_bars）只用它取 K 线，
+        #   宏观/消息/资金流面都不参与 ⇒ 直接构造最小实例即可（不牵出外网）。
+        trend = TrendService(MarketDataRepository())
+        bars, sources = await trend.fetch_price_bars(days=PRICE_CALENDAR_WINDOW_DAYS, target="ny")
+        source = resolve_price_source(sources, "ny")
+        if source not in TRUSTED_PRICE_SOURCES:
+            logger.warning(
+                "price calendar refresh skipped: source=%r not in %s（不写假价格）",
+                source,
+                sorted(TRUSTED_PRICE_SOURCES),
+            )
+            return 0
+        if not bars:
+            return 0
+        async with async_session_factory() as session:
+            gold_repo = GoldPriceRepository(session)
+            written = await gold_repo.upsert_many(target="ny", bars=bars, source=source)
+            await session.commit()
+        logger.info(
+            "price calendar refreshed: target=ny written=%d source=%s last=%s",
+            written,
+            source,
+            bars[-1][0] if bars else None,
+        )
+    except Exception as exc:
+        logger.error("price calendar refresh failed: %s", exc)
+        return 0
+
+    # ── 重建最近几天的宽表行（补上 gold_ny_close）──
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.news import NewsScoreRepository
+        from app.repositories.scoring_wide import ScoringWideRepository
+        from app.repositories.snapshot import SnapshotRepository
+        from app.services.scoring_wide import ScoringWideService
+
+        rebuilt = 0
+        async with async_session_factory() as session:
+            wide_repo = ScoringWideRepository(session)
+            svc = ScoringWideService(
+                wide_repo,
+                SnapshotRepository(session),
+                NewsScoreRepository(session),
+                GoldPriceRepository(session),
+            )
+            # ⚠⚠ **只重建「已存在」的行** —— `rebuild()` 对没有 snapshot 的日期
+            #   会**新建**一行（trend/news 全 NULL，只有金价）⇒ 那不是「补金价」，
+            #   而是在宽表里**凭空造一天没有打分的记录**（实测会多出 11-23 这种行）。
+            #   ⇒ 先取宽表里已有的日期，只重建这些。
+            existing = set(await wide_repo.list_dates())
+            today = datetime.now(BJT).date()
+            for i in range(PRICE_CALENDAR_REBUILD_DAYS):
+                d = today - timedelta(days=i)
+                if d not in existing:
+                    continue
+                if await svc.rebuild(d) is not None:
+                    rebuilt += 1
+        logger.info("scoring_daily_wide rebuilt after price calendar refresh: %d rows", rebuilt)
+    except Exception as exc:
+        logger.error("scoring_daily_wide rebuild after price refresh failed: %s", exc)
+    return written
+
+
+async def price_calendar_loop() -> None:
+    """无限循环：每日 08:40 BJT 刷新价格日历（+ 重建宽表）。
+
+    通过环境变量 ``PRICE_CALENDAR_AUTO_REFRESH`` 控制开关；默认启用。
+    启动后 60s 做一次 bootstrap —— **仅当价格日历确实落后**才抓，
+    否则跳过（重启不该每次都打外网）。
+    """
+    if not _is_price_calendar_auto_refresh_enabled():
+        logger.info(
+            "Price calendar auto-refresh DISABLED by env %s=0; "
+            "use 'python -m scripts.backfill_price_calendar --env-file .env.mysql --target ny --days 30 --apply' manually.",
+            PRICE_CALENDAR_AUTO_REFRESH_ENV,
+        )
+        return
+
+    logger.info(
+        "Price calendar auto-refresh scheduler started: daily at %02d:%02d BJT "
+        "(env %s controls switch)",
+        PRICE_CALENDAR_TRIGGER_HOUR_BJT,
+        PRICE_CALENDAR_TRIGGER_MINUTE_BJT,
+        PRICE_CALENDAR_AUTO_REFRESH_ENV,
+    )
+
+    await asyncio.sleep(PRICE_CALENDAR_BOOTSTRAP_DELAY_SECONDS)
+    try:
+        from app.repositories.db import async_session_factory
+        from app.repositories.review import GoldPriceRepository
+
+        async with async_session_factory() as session:
+            gold_repo = GoldPriceRepository(session)
+            last = await gold_repo.latest("ny")
+        stale = last is None or (datetime.now(BJT).date() - last.price_date).days > 3
+        if stale:
+            logger.info(
+                "price calendar bootstrap: last=%s stale ⇒ fetching",
+                last.price_date if last else None,
+            )
+            await _refresh_price_calendar()
+        else:
+            logger.info(
+                "price calendar bootstrap skipped: already current (last=%s)",
+                last.price_date if last else None,
+            )
+    except Exception as exc:
+        logger.error("price calendar bootstrap failed: %s", exc)
+
+    while True:
+        next_run = next_price_calendar_run_utc()
+        wait = max(0.0, (next_run - datetime.now(timezone.utc)).total_seconds())
+        logger.info(
+            "Price calendar scheduler: next run at %s (in %.0f seconds, %.1f hours)",
+            next_run.isoformat(),
+            wait,
+            wait / 3600,
+        )
+        await asyncio.sleep(wait)
+        await _refresh_price_calendar()

@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.128.3** ｜ **最近更新**：2026-11-20 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.3`）**
+> **基线：V0.128.4** ｜ **最近更新**：2026-11-24 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.4`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.128.3**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.3`**
+**当前版本 = 0.128.4**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.4`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.3` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.3` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.3` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.3` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.4` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.4` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.128.3   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.128.4   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-20 重启加载 V0.128.3）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-24 重启加载 V0.128.4）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -281,7 +281,19 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.128.3（2026-11-20 发版 · 形态拟合唱加顶 nav 入口）
+### 本轮：V0.128.4（2026-11-24 发版 · 修「scoring 页金价数据不更新」）
+
+| 项 | 状态 |
+|---|---|
+| 内容 | ✅ 用户报「`/static/scoring.html` 页面的金价数据没有进行同步更新」⇒ 实测根因**不在页面**，在**数据链**：① `gold_price_daily` **没有任何调度器**刷新（只在跑回测/研判时按需回填）⇒ 停在 **2026-11-11**；② `scoring_daily_wide.gold_ny_close` 从日历取 ⇒ 一停就 NULL；③ 页面「NY金美元/盎司收盘」列 ⇒ 整列「—」（75 行里 **30 行 NULL**） |
+| 新增调度器 | ✅ `price_calendar_loop`（每日 **08:40 BJT**）：增量取最近 30 个交易日 → **只认真实行情**（`mock` 一律拒写）→ 写库 → **自动重建受影响的宽表行**（补 `gold_ny_close`）。bootstrap 只在确实落后时抓；`PRICE_CALENDAR_AUTO_REFRESH=0` 可关 |
+| ⚠️ 两个纪律 | ① **mock 一律拒写** —— 取数失败时 `TrendService` 会**静默降级为 mock** ⇒ 假价格进日历 ⇒ 宽表/回测/区间预测全都基于**编造的价格**给出看似正常的结论 ⇒ 宁可留空；② **只重建「已存在」的行** —— `rebuild()` 对没有 snapshot 的日期会**新建**一行（那是凭空造一天没打分的记录） |
+| 数据已补齐 | ✅ 写库前**已备份生产库**（`gold_etf-2026-11-24.sql.gz`，2.3 MB / 25 表）⇒ `gold_price_daily` 的 `ny` **2588 → 2597 行**、最新到 **2026-11-24**；`scoring_daily_wide` 的 `gold_ny_close` **NULL 30 行 → 19 行**（剩下 19 个**全是周末** + 1 个源的真实缺口 11-21 ⇒ 那些「—」是**诚实的**） |
+| 门禁 | ✅ `_verify_scoring_robust.mjs` 新增【D】**3 条**（有该列 / 最近几行有真实数值 / 数值量级合理）⇒ **14/0**；新增 `tests/test_services/test_scheduler_price_calendar.py` **12 条**（触发时间 / 环境变量开关 / ★mock 拒写 / ★只重建已存在的行） |
+| ⚠️ 反向验证踩坑 | ✅ 两条断言**先写了错的**：① mock 场景返回**空列表**（被 `if not bars` 先挡）⇒ 改成返回**假价格**才是真危险；② 假会话工厂**抛异常**，而调度器 `except Exception` 会吞 ⇒ 断言分辨不出「尝试写」和「没写」⇒ 改成**记录调用**。修正后两条反向验证都真正变红 |
+| `__version__` | ✅ 已 bump 到 `0.128.4`（4 处同步） |
+
+### 上一轮：V0.128.3（2026-11-20 发版 · 形态拟合唱加顶 nav 入口）
 
 | 项 | 状态 |
 |---|---|

@@ -437,6 +437,27 @@ async def _start_daily_scheduler() -> None:
     except Exception as exc:
         logger.error("gold inventory scheduler failed to start: %s", exc)
 
+    # V0.128.4 ── 价格日历自动刷新协程；每日 08:40 BJT
+    # ⚠ 没有它，价格日历只在「跑回测 / 研判复盘」时按需回填
+    #   ⇒ 没人跑回测 ⇒ scoring 页的「NY金收盘」列长期是「—」（2026-11-24 实测故障）。
+    try:
+        from app.services.scheduler import (
+            PRICE_CALENDAR_AUTO_REFRESH_ENV,
+            PRICE_CALENDAR_TRIGGER_HOUR_BJT,
+            PRICE_CALENDAR_TRIGGER_MINUTE_BJT,
+            price_calendar_loop,
+        )
+
+        _spawn_background(price_calendar_loop())
+        logger.info(
+            "price calendar scheduler started (%02d:%02d BJT daily, env %s)",
+            PRICE_CALENDAR_TRIGGER_HOUR_BJT,
+            PRICE_CALENDAR_TRIGGER_MINUTE_BJT,
+            PRICE_CALENDAR_AUTO_REFRESH_ENV,
+        )
+    except Exception as exc:
+        logger.error("price calendar scheduler failed to start: %s", exc)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
