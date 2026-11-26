@@ -209,6 +209,15 @@ class MacroFactorOut(BaseModel):
     weight: float = Field(..., ge=0, le=1)
     contribution: float = Field(..., ge=0, le=100)
     detail: str
+    saturated: str | None = Field(
+        default=None,
+        description="'bottom' / 'top' / null —— 该因子是否**贴边**（滚动窗口的极值）。"
+        "实测 6 个因子里有 3 个常年贴边 ⇒ 面的分数实际由它们主导",
+    )
+    lag_days: int | None = Field(default=None, description="读数的观测日距今多少**日历日**")
+    stale_by_lag: bool = Field(
+        default=False, description="滞后是否已超过该因子的 max_lag_days（月度因子 45 天）"
+    )
 
 
 class MacroIndexOut(BaseModel):
@@ -294,6 +303,22 @@ class MoneyFlowFactorOut(BaseModel):
         "剔除因子后按剩余权重归一化，故 Σcontribution = 本次指数分。",
     )
     detail: str
+    # ── V0.128.5：把「贴边」与「滞后」**显式化**（实测 6 个因子有 3 个常年贴边）──
+    position_pct: float | None = Field(
+        default=None,
+        description="读数在标定带里的**未截断**位置（%）；可 <0 或 >100 —— "
+        "线性评分把它截断到 0/100，于是「刚好贴边」与「远远在外」长得一样；"
+        "保留未截断位置才能看出**有多极端**",
+    )
+    saturated: str | None = Field(
+        default=None,
+        description="'bottom' / 'top' / null —— 该因子是否**贴边**（滚动窗口的极值）。"
+        "实测 6 个因子里有 3 个常年贴边 ⇒ 面的分数实际由它们主导",
+    )
+    lag_days: int | None = Field(default=None, description="读数的观测日距今多少**日历日**")
+    stale_by_lag: bool = Field(
+        default=False, description="滞后是否已超过该因子的 max_lag_days（月度因子 45 天）"
+    )
 
 
 class MoneyFlowIndexOut(BaseModel):

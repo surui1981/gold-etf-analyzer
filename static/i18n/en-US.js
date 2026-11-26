@@ -1773,4 +1773,14 @@ window.PM_I18N_en_US = {
   "crisis.chip_fit_n": "Fit cycles",
   "crisis.beyond_template": "⚠ **The endpoint is beyond the template's coverage** (the template stops at t={maxT}, your endpoint is at t={end}) ⇒ the last {n} months of the extrapolation are **clamped** — there is no historical information there; the shape comes from the interpolator's end clamp. This endpoint is not 'derived from the shape' — it is 'the template's last shape flattened, times the drift'.",
   "crisis.ref_note": "None of these {n} cycles enter the equal-weight average (the template uses only the {f} fit cycles). {w} of them are from before 2000 (dashed) — gold was administratively fixed under Bretton Woods / the fixed-rate regime, so they are **of the least relevance**; the other {o} are modern-market cycles that were not selected (for comparison).",
+  /* ── V0.128.5：基准对照（闭眼猜能拿多少）── */
+  "scoring.hit_mini_bench": "Baseline (coin flip)",
+  "scoring.hit_mini_bench_desc": "Best of always-up / always-down / always-flat over the same window",
+  "scoring.hit_mini_bench_which": "{label} ({n} samples)",
+  "scoring.bench_up": "Always up",
+  "scoring.bench_down": "Always down",
+  "scoring.bench_flat": "Always flat",
+  "scoring.bench_better": "The last 30 days' hit rate {rate} is {gap} points above the coin-flip baseline {bench} — the index did add information over this window.",
+  "scoring.bench_worse": "⚠ The last 30 days' hit rate {rate} is **below** the coin-flip baseline {bench} — the index did no better than guessing over this window ({n} samples; common in one-sided markets).",
+  "scoring.bench_equal": "The last 30 days' hit rate {rate} matches the coin-flip baseline {bench} — the index added no information over this window.",
 };

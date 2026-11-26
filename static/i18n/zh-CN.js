@@ -1778,4 +1778,14 @@ window.PM_I18N_ZH_CN = {
   "crisis.chip_fit_n": "拟合集轮数",
   "crisis.beyond_template": "⚠ **终点已超出模板覆盖**（模板只到 t={maxT}，你的终点在 t={end}）⇒ 外推的最后 {n} 个月是**平台外推**：那里没有任何历史信息，曲线形状由插值器的端点夹取决定 —— 这个终点不是「形态参照出来的」，只是「把模板最后的形状拉平再乘漂移」。",
   "crisis.ref_note": "这 {n} 轮**都不参与等权平均**（模板只用拟合集那 {f} 轮）。其中 {w} 轮来自 2000 年以前（虚线）—— 固定汇率/布雷顿森林体系下的金价被行政管制，**参考性最低**；另 {o} 轮是现代市场但未入选（对照用）。",
+  /* ── V0.128.5：基准对照（闭眼猜能拿多少）── */
+  "scoring.hit_mini_bench": "对照基准（闭眼猜）",
+  "scoring.hit_mini_bench_desc": "同区间「恒看涨/恒看跌/恒看平」的最高者",
+  "scoring.hit_mini_bench_which": "{label}（{n} 个样本）",
+  "scoring.bench_up": "恒看涨",
+  "scoring.bench_down": "恒看跌",
+  "scoring.bench_flat": "恒看平",
+  "scoring.bench_better": "最近 30 天命中率 {rate} 比「闭眼猜」{bench} 高 {gap} 个百分点 —— 这段区间里指数确实提供了额外信息。",
+  "scoring.bench_worse": "⚠ 最近 30 天命中率 {rate} **低于**「闭眼猜」的 {bench} —— 这段区间里指数还不如闭眼猜（样本 {n} 个，单边行情下尤其常见）。",
+  "scoring.bench_equal": "最近 30 天命中率 {rate} 与「闭眼猜」{bench} 持平 —— 这段区间里指数没有提供额外信息。",
 };

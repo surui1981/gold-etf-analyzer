@@ -225,6 +225,50 @@ ok("金价数值是合理的美元/盎司量级",
   }),
   JSON.stringify(withPrice));
 
+// ─── E. 三项改进（V0.128.5）必须被门禁守住 ───
+// ⚠ 用户 2026-11-26 要求执行三项改进（消息面不在其中，由用户自行细分）：
+//   ① 贴边饱和显式化 ② 月度因子滞后收紧 ③ 命中率基准对照
+console.log("\n【E】三项改进：贴边显式化 / 滞后标注 / 基准对照");
+
+// E-① + E-②：trend 页的资金流因子
+await page.goto(`${BASE}/static/trend.html`, { waitUntil: "networkidle2", timeout: 60000 });
+await new Promise((r) => setTimeout(r, 4500));
+const flowUi = await page.evaluate(() => {
+  const rows = Array.from(document.querySelectorAll("#flowFactors .macro-row"));
+  return rows.map((r) => ({
+    name: (r.querySelector(".nm")?.textContent || "").replace(/\s+/g, " ").trim(),
+    desc: (r.nextElementSibling?.textContent || "").replace(/\s+/g, " ").trim(),
+  }));
+});
+ok("资金流因子有渲染", flowUi.length >= 6, `实际 ${flowUi.length}`);
+// ① 至少要标出「贴边·极值」的因子（实测 3/6 贴边）
+ok("贴边因子被显式标出（贴顶/贴底·极值）",
+  flowUi.some((f) => /贴顶·极值|贴底·极值/.test(f.name)),
+  flowUi.map((f) => f.name).join(" / "));
+// ① 带内位置（未截断）必须显示 ⇒ 读者能看出「有多极端」
+ok("显示带内位置（未截断）",
+  flowUi.some((f) => /带内位置\s*-?\d+/.test(f.desc)),
+  flowUi.map((f) => f.desc.slice(0, 40)).join(" | "));
+// ② 月度因子必须显示滞后天数
+ok("月度因子显示滞后天数",
+  flowUi.some((f) => /月度.*滞后\s*\d+\s*天/.test(f.name)),
+  flowUi.map((f) => f.name).join(" / "));
+
+// E-③：scoring 页命中分析 tab 的基准对照
+await page.goto(`${BASE}/static/scoring.html`, { waitUntil: "networkidle2", timeout: 60000 });
+await page.waitForSelector('[data-tab="hit"]', { timeout: 20000 });
+await page.click('[data-tab="hit"]');
+await new Promise((r) => setTimeout(r, 4000));
+const bench = await page.evaluate(() => ({
+  value: (document.getElementById("hitMiniBench")?.textContent || "").trim(),
+  desc: (document.getElementById("hitMiniBenchDesc")?.textContent || "").trim(),
+  note: (document.getElementById("hitBenchNote")?.textContent || "").trim(),
+  noteHidden: document.getElementById("hitBenchNote")?.hidden,
+}));
+ok("基准卡有数值", /\d/.test(bench.value), bench.value);
+ok("基准卡说明是哪种闭眼猜", bench.desc.length > 0, bench.desc);
+ok("基准对照给出结论（高于/低于/持平基准）", bench.noteHidden === false && bench.note.length > 0, bench.note.slice(0, 120));
+
 await browser.close();
 console.log(`\n${"=".repeat(56)}`);
 console.log(`  结果：${pass} passed, ${fail} failed`);

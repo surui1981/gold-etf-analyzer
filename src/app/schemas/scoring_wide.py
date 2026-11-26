@@ -16,7 +16,7 @@ import json
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.utils.logger import get_logger
 
@@ -177,6 +177,28 @@ class ScoringHitCalibrationBucket(BaseModel):
     hit_rate: float
 
 
+class ScoringBenchmarkOut(BaseModel):
+    """**基准对照**：闭眼猜能拿多少命中率（V0.128.5 新增）。
+
+    ⚠ 为什么必须给：命中率单看一个数没有意义 ——
+    在一段单边下跌里「恒看跌」能拿 74%，指数拿 72% 看着也不错，
+    但其实指数**还不如闭眼猜**。⇒ 基准要并排显示。
+    """
+
+    sample_size: int = 0
+    always_up_rate: float | None = Field(default=None, description="恒看涨（实际涨的比例）")
+    always_down_rate: float | None = Field(default=None, description="恒看跌（实际跌的比例）")
+    always_flat_rate: float | None = Field(
+        default=None, description="恒看平（|涨跌| 在中性带内的比例）"
+    )
+    best_constant_rate: float | None = Field(
+        default=None, description="三种常数策略里的最高者 = 「闭眼猜的上限」"
+    )
+    best_constant_label: str | None = Field(
+        default=None, description="最高的那一种是哪个（always_up / always_down / always_flat）"
+    )
+
+
 class ScoringHitStatsOut(BaseModel):
     """``/api/v1/scoring/hit-stats`` 响应。"""
 
@@ -186,6 +208,9 @@ class ScoringHitStatsOut(BaseModel):
     by_direction: list[ScoringHitDirectionStat]
     by_month: list[ScoringSummaryBucket]  # 复用 bucket schema
     calibration: list[ScoringHitCalibrationBucket]
+    benchmark: ScoringBenchmarkOut | None = Field(
+        default=None, description="★ 基准对照（V0.128.5）：闭眼猜能拿多少"
+    )
 
 
 # ──────────── hit-stats-all 4 horizon 聚合（V0.96.0）────────────
@@ -217,6 +242,10 @@ class ScoringHitStatsAllOut(BaseModel):
     to_date: date
     by_horizon: dict[str, ScoringHitStatsAllHorizon]  # {"t0": ..., "t1": ..., "t3": ..., "t5": ...}
     mini_card: ScoringHitStatsAllMiniCard
+    benchmark: dict[str, ScoringBenchmarkOut] = Field(
+        default_factory=dict,
+        description="★ 每个 horizon 的基准对照（V0.128.5）：闭眼猜能拿多少命中率",
+    )
 
 
 # ──────────── by-tag 聚合 ────────────

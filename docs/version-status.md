@@ -1,6 +1,6 @@
 # 应用版本状态（单一真源）
 
-> **基线：V0.128.4** ｜ **最近更新**：2026-11-24 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.4`）**
+> **基线：V0.128.5** ｜ **最近更新**：2026-11-26 ｜ **状态**：代码一致，**服务已重启**（运行中 = `0.128.5`）**
 >
 > 这份文档回答一个问题：**「这个应用现在到底是哪个版本？」**
 > 答案散落在 6 个地方（4 处代码版本号 + CHANGELOG + git tag + release notes），
@@ -9,7 +9,7 @@
 
 ## 一句话结论
 
-**当前版本 = 0.128.4**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.4`**
+**当前版本 = 0.128.5**，代码里 4 处版本号完全一致，**运行中的 8888 服务也报 `0.128.5`**
 （已用 systemd 重启 ⇒ 「代码 = 服务」）。
 **V0.117.0 是「规划中」，一行代码都还没写**（它是改进方向记录，不是交付）。
 
@@ -19,20 +19,20 @@
 
 | 位置 | 文件 | 值 | 谁读它 |
 |---|---|---|---|
-| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.4` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
-| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.4` | `pip` / `uv` 装包 |
-| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.4` | `uv sync --frozen`（CI） |
-| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.4` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
+| 运行时真源 | [src/app/__init__.py](../src/app/__init__.py) `__version__` | `0.128.5` | FastAPI `version=` → `/openapi.json` 的 `info.version` |
+| 包元数据 | [pyproject.toml](../pyproject.toml) `[project].version` | `0.128.5` | `pip` / `uv` 装包 |
+| 锁文件 | [uv.lock](../uv.lock) `package.gold-etf-analyzer` | `0.128.5` | `uv sync --frozen`（CI） |
+| PWA 缓存 | [static/sw.js](../static/sw.js) `const VERSION` | `v0.128.5` | Service Worker 缓存名 `gold-shell-*` / `gold-runtime-*` |
 
 **运行中验证**（主入口 `192.168.0.204:8888`）：
 
 ```
-GET /openapi.json  →  info.version = 0.128.4   ← 与代码一致 ✅
+GET /openapi.json  →  info.version = 0.128.5   ← 与代码一致 ✅
 GET /              →  307 → /static/trend.html → 200
 ```
 
 > ✅ **服务已用 systemd 重启**（`gold-etf-analyzer.service`，2026-11-07 10:06 首次拉起、
-> 2026-11-24 重启加载 V0.128.4）。这台机器上 8888 本来就是 systemd 托管的，
+> 2026-11-26 重启加载 V0.128.5）。这台机器上 8888 本来就是 systemd 托管的，
 > **不需要**手动 `kill` + `setsid` 起进程 —— 用下面这条即可：
 
 ```bash
@@ -281,7 +281,20 @@ CI 的 `uv sync --frozen` 查 `pyproject.toml` ↔ `uv.lock`），
 > 而 `daily_macro_factors` 里明明存着前几轮抓到的真值。
 > 详见 [releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md](releases/milestones/m5-four-faces-and-ai-usability-v0.116-v0.120.md)。
 
-### 本轮：V0.128.4（2026-11-24 发版 · 修「scoring 页金价数据不更新」）
+### 本轮：V0.128.5（2026-11-26 发版 · 资金流跟踪三项改进）
+
+| 项 | 状态 |
+|---|---|
+| 起因 | ✅ 对综合指数做**实测评估**（生产真实数据）⇒ 发现三个结构性问题；用户拍板执行三项改进（**消息面不在其中，由用户自行细分**） |
+| ① 贴边显式化 | ✅ 实测 6 个因子里 **3 个常年贴边**（ETF 0 分 / 融资余额 100 分 / M1-M2 0 分）⇒ 面的分数由它们决定，其余 46% 权重的 53–57 分不产生区分。⚠ 根因：线性评分**截断**到 0/100 ⇒ 「刚好贴边」与「远远在外」长得一样（实测融资余额实际在带的 **127.5%** 处）⇒ 新增 `position_pct`（**未截断**位置）+ `saturated` ⇒ 页面标「贴顶·极值 / 贴底·极值」+ 带内位置 |
+| ② 月度滞后收紧 | ✅ `max_lag_days` 此前**只被上报、没参与判定** ⇒ **26 天前**的月度读数能拿满分贡献而无人看见，而这三个占 **46% 权重** ⇒ 收紧到 **45 天** + 页面显示「滞后 N 天」（超期用警示样式） |
+| ③ 命中率基准对照 | ✅ 命中率**单看一个数没意义**：单边下跌里「恒看跌」拿 **74%**，指数 72% 看着不错但**不如闭眼猜** ⇒ 新增 `compute_hit_benchmark()`（恒看涨/恒看跌/恒看平，只依赖实际涨跌，与 `judge_hit` 同口径）⇒ scoring 页命中分析 tab 新增第 4 张卡 + 一行结论（**低于**基准时明确写出）。⚠ 实测当前区间：**50.0% vs 基准 67.7% ⇒ 低 17.7pp**（页面已标红） |
+| 门禁 | ✅ `_verify_scoring_robust.mjs` 新增【E】**7 条** ⇒ **21/0**；新增单测 **16 条**（`_band_position` / `_lag_days` / 月度滞后上限 / 基准计算 / 权重回归）⇒ **16 passed** |
+| 反向验证 | ✅ 三条全部**真正变红**：去掉贴边判定 ⇒ 1 条红；滞后徽标置空 ⇒ 1 条红；不渲染基准 ⇒ 2 条红（还原后 21/0 全绿） |
+| ⚠️ 消息面 | ✅ **未改**（用户 2026-11-26 说明要自行细分修改） |
+| `__version__` | ✅ 已 bump 到 `0.128.5`（4 处同步） |
+
+### 上一轮：V0.128.4（2026-11-24 发版 · 修「scoring 页金价数据不更新」）
 
 | 项 | 状态 |
 |---|---|

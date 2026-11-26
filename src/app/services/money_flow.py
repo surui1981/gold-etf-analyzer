@@ -176,7 +176,10 @@ MONEY_FLOW_FACTOR_RULES: list[dict] = [
         "best": 130327.72,
         "worst": -252038.76,
         "cadence": "monthly",
-        "max_lag_days": 60,
+        # ⚠ V0.128.5：60 → **45** 天。60 天意味着「一个半月前的读数」仍算新鲜；
+        #   月度数据天然滞后 3–4 周，再放宽到 60 天 ⇒ 整个月度面（46% 权重）
+        #   描述的其实是「上上个月」。45 天 ≈ 1.5 个月 ⇒ 超期即降级。
+        "max_lag_days": 45,
         "window_days": 1826,
         "min_samples": 36,
     },
@@ -189,7 +192,7 @@ MONEY_FLOW_FACTOR_RULES: list[dict] = [
         "best": -4.2966,
         "worst": 6.0334,
         "cadence": "monthly",
-        "max_lag_days": 60,
+        "max_lag_days": 45,  # ⚠ V0.128.5：60 → 45（见 us_liq_net 处的说明）
         "window_days": 1826,
         "min_samples": 36,
     },
@@ -202,7 +205,7 @@ MONEY_FLOW_FACTOR_RULES: list[dict] = [
         "best": -11.2,
         "worst": -3.1,
         "cadence": "monthly",
-        "max_lag_days": 60,
+        "max_lag_days": 45,  # ⚠ V0.128.5：60 → 45（见 us_liq_net 处的说明）
         "window_days": 1826,
         "min_samples": 36,
     },
@@ -242,6 +245,47 @@ def clear_money_flow_cache() -> None:
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 100.0) -> float:
     return max(lo, min(hi, value))
+
+
+def _band_position(value: float, rule: dict) -> tuple[float, str | None]:
+    """读数在「带」里的位置 + 是否**贴边**。
+
+    Returns:
+        ``(position_pct, saturated)``：
+        - ``position_pct`` = 未截断的位置（**可以 <0 或 >100**）——
+          线性评分把它截断到 0/100，于是「刚好贴边」与「远远在外」**长得一样**；
+          这里保留未截断的位置 ⇒ 页面能显示「有多极端」。
+        - ``saturated`` = ``"bottom"`` / ``"top"`` / ``None``（未贴边）。
+
+    ⚠ V0.128.5：实测 6 个因子里有 **3 个**常年贴边（ETF 净申赎 0 分、融资余额 100 分、
+      M1-M2 0 分）⇒ 资金流面的分数实际由 3 个饱和读数决定，其余 46% 权重的
+      53–57 分几乎不产生区分 ⇒ 必须在页面上**显式标出**。
+    """
+    best, worst = rule["best"], rule["worst"]
+    if best == worst:
+        return 50.0, None
+    span = best - worst
+    pos = (value - worst) / span * 100.0
+    if pos <= 0.0:
+        return pos, "bottom"
+    if pos >= 100.0:
+        return pos, "top"
+    return pos, None
+
+
+def _lag_days(reading, max_lag_days: int) -> int | None:
+    """读数滞后多少**日历日**（按观测日算；没有观测日 ⇒ None）。
+
+    ⚠ V0.128.5：``max_lag_days`` 此前**只被上报、没参与判定** ⇒ 一个 26 天前的
+    月度读数可以拿满分贡献而不被任何人看见 ⇒ 现在把滞后天数算出来并上报。
+    """
+    obs = getattr(reading, "obs_date", None)
+    if obs is None:
+        return None
+    try:
+        return (date.today() - obs).days
+    except Exception:  # pragma: no cover - 观测日异常时不该炸掉整面
+        return None
 
 
 def _friendly_score(value: float, rule: dict) -> float:
@@ -653,6 +697,14 @@ class MoneyFlowService:
             rule_eff = dict(rule)
             rule_eff["best"], rule_eff["worst"] = thresholds[key]
             score = _friendly_score(reading.value, rule_eff)
+            # ⚠ V0.128.5：贴边（截断到 0/100）与「有多极端」分开记录 ⇒ 页面能显式标出
+            position_pct, saturated = _band_position(reading.value, rule_eff)
+            lag_days = _lag_days(reading, int(rule["max_lag_days"]))
+            max_lag = int(rule["max_lag_days"])
+            # ⚠ 超期的读数**不再是"新鲜观测"** —— 但**不**降级成 lkg（那是"取不到"，
+            #   这里恰恰取到了，只是观测日太久远）⇒ 用独立的 lag_days 字段如实上报，
+            #   让页面显示「数据日 + 滞后天数」，并由前端提示。
+            stale_by_lag = lag_days is not None and lag_days > max_lag
             total += score * weight
             total_weight += weight
             if key in WEEKLY_FACTORS:
@@ -682,7 +734,16 @@ class MoneyFlowService:
                     direction=direction,
                     weight=weight,
                     contribution=0.0,
-                    detail=f"{rule['name']} {reading.value:g} {rule['unit']}，黄金友好度 {score:.0f}/100",
+                    # ⚠ V0.128.5 新增三个字段（页面据此显式化，不靠用户自己推断）
+                    position_pct=round(position_pct, 1),
+                    saturated=saturated,
+                    lag_days=lag_days,
+                    stale_by_lag=stale_by_lag,
+                    detail=(
+                        f"{rule['name']} {reading.value:g} {rule['unit']}，黄金友好度 {score:.0f}/100"
+                        + ("（处于滚动窗口极值）" if saturated else "")
+                        + (f"（数据滞后 {lag_days} 天）" if stale_by_lag else "")
+                    ),
                 )
             )
 

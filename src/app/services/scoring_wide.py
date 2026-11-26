@@ -21,7 +21,7 @@ import statistics
 from collections import defaultdict
 from datetime import date, timedelta
 
-from app.models.review import DEFAULT_REVIEW_TARGET, REVIEW_HORIZONS
+from app.models.review import DEFAULT_REVIEW_TARGET, NEUTRAL_BAND_PCT, REVIEW_HORIZONS
 from app.models.scoring_wide import ScoringDailyWide
 from app.repositories.news import NewsScoreRepository
 from app.repositories.review import GoldPriceRepository
@@ -29,6 +29,7 @@ from app.repositories.snapshot import SnapshotRepository
 from app.schemas.common import DirectionSignal
 from app.schemas.review import BASIS_TAGS
 from app.schemas.scoring_wide import (
+    ScoringBenchmarkOut,
     ScoringByTagOut,
     ScoringHitCalibrationBucket,
     ScoringHitDirectionStat,
@@ -70,6 +71,49 @@ def _price_direction_of(change_pct: float) -> str:
     if change_pct < 0:
         return "down"
     return "flat"
+
+
+def compute_hit_benchmark(changes: list[float]) -> dict:
+    """**基准对照**：闭眼猜能拿多少命中率。
+
+    ⚠ V0.128.5 新增。动机：命中率**单看一个数没有意义** ——
+    在一段单边下跌里，「恒看跌」能拿到 74%，指数拿 72% 看着也不错，
+    但其实**指数还不如闭眼猜**。⇒ 必须把基准并排显示出来。
+
+    三种常数策略（都只依赖**实际涨跌**，不看指数）：
+    - 恒看涨：实际涨的比例（``judge_hit`` 的看多命中条件是 > 0）
+    - 恒看跌：实际跌的比例
+    - 恒看平：|涨跌幅| ≤ 中性带的比例（与 ``judge_hit`` 同一口径）
+
+    ⚠ 三者是**独立的、会重叠**的（涨 0.1% 既算「恒看涨」命中也算「恒看平」命中）
+    —— 刻意如此：每个策略各自都是一种真实可用的「闭眼下注方式」。
+
+    ``best_constant_rate`` = 三者最大 ⇒ 「闭眼猜的上限」，
+    指数命中率减去它 = 指数**真正**贡献的超额。
+    """
+    if not changes:
+        return {
+            "sample_size": 0,
+            "always_up_rate": None,
+            "always_down_rate": None,
+            "always_flat_rate": None,
+            "best_constant_rate": None,
+            "best_constant_label": None,
+        }
+    n = len(changes)
+    up = sum(1 for c in changes if c > 0)
+    down = sum(1 for c in changes if c < 0)
+    flat = sum(1 for c in changes if abs(c) <= NEUTRAL_BAND_PCT)
+    rates = {"always_up": up / n, "always_down": down / n, "always_flat": flat / n}
+    best_label = max(rates, key=lambda k: rates[k])
+    return {
+        "sample_size": n,
+        "always_up_rate": round(rates["always_up"], 3),
+        "always_down_rate": round(rates["always_down"], 3),
+        "always_flat_rate": round(rates["always_flat"], 3),
+        "best_constant_rate": round(rates[best_label], 3),
+        "best_constant_label": best_label,
+    }
 
 
 def _bucket_direction_stats(rows: list[ScoringDailyWide]) -> tuple[int, int, int]:
@@ -518,6 +562,16 @@ class ScoringWideService:
             if (v := cal_map.get(label, []))
         ]
 
+        # ⚠ V0.128.5：基准对照（闭眼猜能拿多少）—— 命中率必须与它并排看
+        change_col = {
+            "t0": "actual_change_pct_t0",
+            "t1": "actual_change_pct_t1",
+            "t3": "actual_change_pct_t3",
+            "t5": "actual_change_pct_t5",
+        }[horizon]
+        changes = [float(c) for c in (getattr(r, change_col) for r in ready) if c is not None]
+        benchmark = ScoringBenchmarkOut(**compute_hit_benchmark(changes))
+
         return ScoringHitStatsOut(
             horizon=horizon,
             sample_size=total,
@@ -525,6 +579,7 @@ class ScoringWideService:
             by_direction=by_direction,
             by_month=by_month,
             calibration=calibration,
+            benchmark=benchmark,
         )
 
     # ──────────── 读端点：hit-stats-all · 4 horizon 聚合 (V0.96.0) ────────────
@@ -544,9 +599,23 @@ class ScoringWideService:
         rows = await self._repo.list_in_range(start, end, user_id=user_id)
 
         hit_col_map = {"t0": "hit_t0", "t1": "hit_t1", "t3": "hit_t3", "t5": "hit_t5"}
+        change_col_map = {
+            "t0": "actual_change_pct_t0",
+            "t1": "actual_change_pct_t1",
+            "t3": "actual_change_pct_t3",
+            "t5": "actual_change_pct_t5",
+        }
         by_horizon: dict[str, ScoringHitStatsAllHorizon] = {}
+        benchmarks: dict[str, ScoringBenchmarkOut] = {}
         for horizon, hit_col in hit_col_map.items():
             ready = [r for r in rows if getattr(r, hit_col) is not None]
+            # ⚠ V0.128.5：每个 horizon 各自算基准（不同 horizon 的涨跌分布不同）
+            changes = [
+                float(c)
+                for c in (getattr(r, change_col_map[horizon]) for r in ready)
+                if c is not None
+            ]
+            benchmarks[horizon] = ScoringBenchmarkOut(**compute_hit_benchmark(changes))
             buckets_map: dict[str, list[ScoringDailyWide]] = defaultdict(list)
             for r in ready:
                 key = self._bucket_key(r.date, "month")
@@ -585,6 +654,7 @@ class ScoringWideService:
             to_date=end,
             by_horizon=by_horizon,
             mini_card=mini_card,
+            benchmark=benchmarks,
         )
 
     def _compute_mini_card(

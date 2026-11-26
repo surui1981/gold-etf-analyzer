@@ -25,7 +25,7 @@
 //   ⚠ home.html / home.js / i18n 三语字典都改了 ⇒ 必须 bump VERSION（SHELL_CACHE 按版本号分桶，
 //     不 bump 就永远回放旧缓存）；zh-TW/en-US 不在 SHELL_ASSETS，靠 activate 的 stale 名单清理
 // V0.124.0 正式发版：宏观面证据复算（**第一次真正被测量** · 生产代码改动仅新增 1 个服务模块 + 回填脚本）：① **历史深度**：生产库 `daily_macro_factors` 从 201 天 / 4 个低频因子近空 → **11 因子 × 5 年 × 日历日 ≈ 2 万行**（point-in-time 重建，口径见 `services/macro_history.py`）② **发布时滞模型**（从生产表逐行反推、22 个采集日 × 3 源核对通过）：H.15/FRED = 下一个工作日 + 1 天、Yahoo = +1 天、低频四源 = 实测常量（us_gov_debt 122 / eu_gov_debt 119 / cn_gov_debt 665 / cb_gold 39 自然日）③ **第一次真正的三问复测**（生产打分口径 + 20 年重建 + h=60/20 + GLD/518880）：**16 个读数全部未通过**（macro_all / macro_daily / macro_lowfreq / zscore_all 候选）⇒ 宏观面 35% 权重是「**描述当下**」的读数，**不是前瞻指标** ⇒ **权重与因子方向一律不动**（roadmap C6 明令）④ 新增可复算脚本 `scripts/verify_macro_face.py` + 共用管线 `scripts/_evidence_core.py` + **23 条离线测试**（含正/负对照：合成真信号必须判过、白噪声必须判不过）⑤ **X1 交叉验证**：脚本重建 ≡ 生产表**逐行相等**（生产回填与证据脚本共用 `services/macro_history.py::build_observations` 单一真源）
-const VERSION = "v0.128.4";  // V0.128.4 · 修「scoring 页金价数据不更新」：① 价格日历新增**每日自动刷新**调度（此前只在跑回测/研判时按需回填 ⇒ 日历停摆）② 刷完自动重建受影响的 scoring_daily_wide 行（补 gold_ny_close）③ 页面该列恢复真实数值。⚠ 本版**改了** static/i18n 之外的后端与门禁，但版本号仍按发版同步（记忆「发版 sw.js VERSION 同步」）。
+const VERSION = "v0.128.5";  // V0.128.5 · 资金流跟踪三项改进：① **贴边饱和显式化**（position_pct 未截断位置 + saturated 极值标记）② **月度因子滞后上限 60→45 天**（并显示滞后天数）③ **命中率基准对照**（闭眼猜能拿多少，并排显示）。⚠ 本版改了 static/trend.html + static/scoring.html/js + 3 个 i18n 字典 ⇒ 必须 bump VERSION。
 
 const SHELL_CACHE = `gold-shell-${VERSION}`;
 const RUNTIME_CACHE = `gold-runtime-${VERSION}`;

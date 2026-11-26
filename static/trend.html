@@ -818,13 +818,25 @@ function render(d) {
         ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="月频因子，滚动分位窗口 ${f.window_days ?? "—"} 日">月度</span>`
         : "";
     const srcBadge = f.source ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="数据源">${f.source}</span>` : "";
+    // ⚠ V0.128.5：**贴边饱和**显式化 —— 滚动分位的带是自适应的，读数落在带外会被截断到
+    //   0/100，于是「刚好贴边」与「远远在外」长得一样。⇒ 标出极值 + 显示未截断位置。
+    const satChip = f.saturated
+      ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:600" title="该因子读数落在滚动分位窗口的极值上，友好度被截断到 0/100 —— 它几乎不随行情变化，面的分数会主要由它决定">${f.saturated === "top" ? "贴顶·极值" : "贴底·极值"}</span>`
+      : "";
+    // ⚠ V0.128.5：**滞后天数**显式化 —— 月度因子天然滞后 3-4 周（max_lag_days 45 天）。
+    const lagChip = f.stale_by_lag
+      ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#fff4e5;color:#946300;font-size:10px;font-weight:600" title="读数的观测日距今已超过该因子的 max_lag_days（${f.max_lag_days ?? "—"} 天）—— 它描述的是过去，不是现在">滞后 ${f.lag_days} 天</span>`
+      : (f.lag_days != null && f.cadence === "monthly"
+        ? `<span class="src" style="margin-left:5px;padding:1px 6px;border-radius:8px;background:#e9ecef;color:var(--muted);font-size:10px;font-weight:500" title="月度因子的观测日距今天数（上限 ${f.max_lag_days ?? "—"} 天）">滞后 ${f.lag_days} 天</span>`
+        : "");
+    const posTxt = f.position_pct != null ? ` · 带内位置 ${Number(f.position_pct).toFixed(0)}%` : "";
     return `<div class="macro-row">
-      <span class="nm" style="width:150px">${f.name ?? "—"}${tierChip}${cadenceChip}</span>
+      <span class="nm" style="width:150px">${f.name ?? "—"}${tierChip}${cadenceChip}${satChip}${lagChip}</span>
       <span class="val">${f.value ?? "—"} ${f.unit ?? ""}</span>
       <span class="bar"><i style="width:${(f.score ?? 0)}%;background:${c}"></i></span>
       <span class="dt">${f.data_date ?? "—"}</span>
     </div>
-    <div class="desc" style="font-size:10.5px;color:var(--muted);margin:-2px 0 4px 150px">${srcBadge} 友好度 ${f.score?.toFixed(0) ?? "—"}/100 · 面内权重 ${((f.weight ?? 0) * 100).toFixed(0)}%</div>`;
+    <div class="desc" style="font-size:10.5px;color:var(--muted);margin:-2px 0 4px 150px">${srcBadge} 友好度 ${f.score?.toFixed(0) ?? "—"}/100${posTxt} · 面内权重 ${((f.weight ?? 0) * 100).toFixed(0)}%</div>`;
   }).join("");
 
   // 消息面评估

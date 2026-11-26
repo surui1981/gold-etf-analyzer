@@ -11,6 +11,19 @@
 
   const API_BASE = '/api/v1/scoring';
   const T = (key, fallback) => (window.I18n ? I18n.t(key) : null) || fallback || key;
+  // ⚠ V0.128.5：带**占位符参数**的翻译。
+  //   本文件原有的 T() 不传 params ⇒ 带 {x} 的文案会漏出字面量；
+  //   字典缺该 key 时 I18n.t 返回 key 本身 ⇒ 兜底串也要自己替换占位符。
+  const Tp = (key, fallback, params) => {
+    let out = (window.I18n ? I18n.t(key, params) : null);
+    if (!out || out === key) out = fallback || key;
+    if (params) {
+      for (const k of Object.keys(params)) {
+        out = out.split('{' + k + '}').join(params[k]);
+      }
+    }
+    return out;
+  };
 
   function init() {
     // 默认范围：近 90 天
@@ -196,6 +209,7 @@
 
   function renderHitCards(data) {
     const mc = (data && data.mini_card) || {};
+    renderHitBenchmark(data);
     const bestH = mc.best_horizon;
     const el30 = document.getElementById('hitMini30d');
     const elMom = document.getElementById('hitMiniMom');
@@ -221,6 +235,74 @@
       elBest.textContent = '—';
       elMom.className = 'value';
     }
+  }
+
+  // ⚠ V0.128.5：★ 基准对照（闭眼猜能拿多少命中率）
+  //   命中率单看一个数没有意义 —— 在单边行情里「恒看跌」能拿 74%，
+  //   指数拿 72% 看着也不错，但它其实**不如闭眼猜**。
+  //   ⇒ 把三种常数策略（恒看涨/恒看跌/恒看平）的最高者并排显示，
+  //   并在低于基准时明确写出来（不藏在脚注里）。
+  function renderHitBenchmark(data) {
+    const el = document.getElementById('hitMiniBench');
+    const desc = document.getElementById('hitMiniBenchDesc');
+    const note = document.getElementById('hitBenchNote');
+    if (!el || !desc || !note) return;
+    const bm = (data && data.benchmark) || {};
+    // 4 个 horizon 各有基准 ⇒ 取「最优 horizon」那个（或样本最多的）
+    let pickH = null;
+    if (mc_best_horizon(data)) pickH = mc_best_horizon(data);
+    if (!pickH || !bm[pickH]) {
+      const keys = Object.keys(bm);
+      if (keys.length) pickH = keys.sort().pop();
+    }
+    const b = pickH ? bm[pickH] : null;
+    if (!b || b.sample_size == null || b.best_constant_rate == null) {
+      el.textContent = '—';
+      desc.textContent = T('scoring.hit_mini_bench_desc', '同区间「恒看涨/恒看跌/恒看平」的最高者');
+      note.hidden = true;
+      return;
+    }
+    const labels = { always_up: T('scoring.bench_up', '恒看涨'), always_down: T('scoring.bench_down', '恒看跌'), always_flat: T('scoring.bench_flat', '恒看平') };
+    el.textContent = fmtPct(b.best_constant_rate);
+    desc.textContent = Tp('scoring.hit_mini_bench_which', '{label}（{n} 个样本）', {
+      label: labels[b.best_constant_label] || b.best_constant_label || '—',
+      n: b.sample_size,
+    });
+
+    // 与最佳 horizon 的命中率对比 ⇒ 明确说「超过 / 不如」闭眼猜
+    const rate = mc_last30_best(data);
+    if (rate != null) {
+      const gap = rate - b.best_constant_rate;
+      const better = gap > 0.005;
+      const worse = gap < -0.005;
+      note.hidden = false;
+      note.className = 'cf-bench-note' + (worse ? ' is-warn' : '');
+      note.textContent = better
+        ? Tp('scoring.bench_better', '最近 30 天命中率 {rate} 比「闭眼猜」{bench} 高 {gap} 个百分点 —— 这段区间里指数确实提供了额外信息。', {
+            rate: fmtPct(rate), bench: fmtPct(b.best_constant_rate), gap: (gap * 100).toFixed(1),
+          })
+        : worse
+          ? Tp('scoring.bench_worse', '⚠ 最近 30 天命中率 {rate} **低于**「闭眼猜」的 {bench} —— 这段区间里指数还不如闭眼猜（样本 {n} 个，单边行情下尤其常见）。', {
+              rate: fmtPct(rate), bench: fmtPct(b.best_constant_rate), n: b.sample_size,
+            })
+          : Tp('scoring.bench_equal', '最近 30 天命中率 {rate} 与「闭眼猜」{bench} 持平 —— 这段区间里指数没有提供额外信息。', {
+              rate: fmtPct(rate), bench: fmtPct(b.best_constant_rate),
+            });
+    } else {
+      note.hidden = true;
+    }
+  }
+
+  function mc_best_horizon(data) {
+    const mc = (data && data.mini_card) || {};
+    return mc.best_horizon || null;
+  }
+  function mc_last30_best(data) {
+    const mc = (data && data.mini_card) || {};
+    const h = mc.best_horizon;
+    if (!h || !mc.last_30d) return null;
+    const v = mc.last_30d[h];
+    return v == null ? null : v;
   }
 
   // V0.94.0：预测评估卡
