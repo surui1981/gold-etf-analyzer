@@ -1043,8 +1043,9 @@ await Promise.all(pending);
   const sceneCount = (sceneBlock.match(/^\s{6}key:\s*"/gm) || []).length;
   ok("topnav.js :: 8 个顶级场景", sceneCount === 8, `actual=${sceneCount}`);
 
+  // ⚠ V0.128.3：决策场景新增第 6 个子页「形态拟合」(/crisis-fit) ⇒ 子页 14 → 15
   const paths = (sceneBlock.match(/path:\s*"/g) || []).length;
-  ok("topnav.js :: 8 场景 + 14 子页 = 22 个导航目标", paths === 22, `actual=${paths}`);
+  ok("topnav.js :: 8 场景 + 15 子页 = 23 个导航目标", paths === 23, `actual=${paths}`);
 
   // V0.112.0：命令面板的命令清单从这里派生。SCENES 若不再导出，open() 时拿不到
   // 导航结构，面板会静默退化成「只有刷新/帮助两条」—— 那是个不会报错的坏状态，

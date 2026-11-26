@@ -33,7 +33,9 @@ let s = await page.evaluate(() => {
   return {
     open: p.hasAttribute("open"),
     navRows: document.querySelectorAll(".topnav .topnav-row").length,
-    freshMountExists: !!document.querySelector("#statusPanel #freshnessInline"),
+    // ⚠ V0.85「健康摘要 chip」重构后：summary 里装的是 **#healthSummary**（数据健康 chip），
+    //   **不再有 #freshnessInline**（那个挂载点已随重构移除）⇒ 断言跟着改口径。
+    freshMountExists: !!document.querySelector("#statusPanel #healthSummary"),
     pillText: document.querySelector("#statusPanel .status-warn-pill")?.textContent.replace(/\s+/g, " ").trim(),
     bodyVisible: getComputedStyle(document.querySelector("#statusPanel .status-body")).display !== "none",
   };
@@ -41,11 +43,15 @@ let s = await page.evaluate(() => {
 console.log(JSON.stringify(s, null, 2));
 console.assert(!s.open, "默认应折叠");
 console.assert(s.navRows === 1, "顶 nav 1 行");
-console.assert(s.freshMountExists, "freshnessInline 在 summary 内");
+console.assert(s.freshMountExists, "数据健康 chip(#healthSummary) 在 summary 内");
 console.assert(!s.bodyVisible, "body 默认隐藏");
 
-console.log("\n=== 测试 2：点击 summary 展开 ===");
-await page.click("#statusPanel > summary");
+console.log("\n=== 测试 2：点击展开 ===");
+// ⚠ V0.85.0 起 summary 的**第一个子元素是数据健康 chip（<a href="/data-health">）**
+//   ⇒ 点 summary 中心 = 点链接 = 跳走（**这是设计**，不是 bug）。
+//   ⇒ 真实手势是点**警示 pill**（展开看警示）⇒ 门禁改成点 pill，
+//   并另外断言 chip 确实是通往 /data-health 的链接（V0.85 的契约）。
+await page.click("#statusPanel .status-warn-pill");
 await new Promise(r => setTimeout(r, 300));
 s = await page.evaluate(() => {
   const p = document.getElementById("statusPanel");
@@ -65,6 +71,10 @@ console.assert(s.open, "点击后应展开");
 console.assert(s.bodyVisible, "body 展开后可见");
 console.assert(s.liCount === 5, "5 条警示");
 console.assert(s.dismissA11y === "warnDismissHint", "a11y 绑定");
+// V0.85 契约：数据健康 chip 是链接 ⇒ 点它跳 /data-health（而不是展开 disclosure）
+const chipHref = await page.evaluate(() =>
+  document.querySelector("#statusPanel #healthSummary")?.getAttribute("href") || "");
+console.assert(chipHref === "/data-health", "数据健康 chip 指向 /data-health");
 
 console.log("\n=== 测试 3：勾选 dismiss → 折叠 + 写 sessionStorage ===");
 await page.click("#statusPanel [data-warn-dismiss]");
